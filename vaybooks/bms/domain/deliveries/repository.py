@@ -1,0 +1,13 @@
+from typing import List, Optional, Protocol
+
+from vaybooks.bms.domain.deliveries.entities import Delivery
+
+
+class DeliveryRepository(Protocol):
+    def save(self, delivery: Delivery) -> Delivery: ...
+
+    def find_by_id(self, delivery_id: str) -> Optional[Delivery]: ...
+
+    def list_by_order(self, order_id: str) -> List[Delivery]: ...
+
+    def list_all(self) -> List[Delivery]: ...

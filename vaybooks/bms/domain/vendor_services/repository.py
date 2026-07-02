@@ -1,0 +1,13 @@
+from typing import List, Optional, Protocol
+
+from vaybooks.bms.domain.vendor_services.entities import VendorService
+
+
+class VendorServiceRepository(Protocol):
+    def save(self, service: VendorService) -> VendorService: ...
+
+    def find_by_id(self, service_id: str) -> Optional[VendorService]: ...
+
+    def find_by_name(self, name: str) -> Optional[VendorService]: ...
+
+    def list_all(self, active_only: bool = True) -> List[VendorService]: ...
