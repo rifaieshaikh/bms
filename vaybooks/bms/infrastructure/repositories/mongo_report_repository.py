@@ -1,9 +1,9 @@
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import List
 
 from pymongo.database import Database
 
-from vaybooks.bms.domain.shared.enums import OrderStatus
+from vaybooks.bms.domain.shared.enums import CustomizationItemStatus, OrderStatus
 from vaybooks.bms.infrastructure.db.bson_utils import to_bson_value
 
 
@@ -227,6 +227,128 @@ class MongoReportRepository:
         result = list(self._db.vouchers.aggregate(pipeline))
         return result[0]["total"] if result else 0.0
 
+    def count_orders_created(self, start: date, end: date) -> int:
+        return self._db.customization_orders.count_documents(
+            {"order_date": {"$gte": to_bson_value(start), "$lte": to_bson_value(end)}}
+        )
+
+    def sum_expenses_total(self, start: date, end: date) -> float:
+        pipeline = [
+            {
+                "$match": {
+                    "expense_date": {
+                        "$gte": to_bson_value(start),
+                        "$lte": to_bson_value(end),
+                    }
+                }
+            },
+            {"$group": {"_id": None, "total": {"$sum": "$total_purchase_price"}}},
+        ]
+        result = list(self._db.expenses.aggregate(pipeline))
+        return result[0]["total"] if result else 0.0
+
+    def sum_invoice_margin(self, start: date, end: date) -> float:
+        pipeline = [
+            {
+                "$match": {
+                    "invoice_date": {
+                        "$gte": to_bson_value(start),
+                        "$lte": to_bson_value(end),
+                    }
+                }
+            },
+            {"$group": {"_id": None, "total": {"$sum": "$margin_amount"}}},
+        ]
+        result = list(self._db.invoices.aggregate(pipeline))
+        return result[0]["total"] if result else 0.0
+
+    def sum_payment_voucher_amount(
+        self, voucher_type: str, start: date, end: date
+    ) -> float:
+        # Vendor/salary payments are 4-line double-entry vouchers where the paid
+        # amount appears on two debit lines, so sum(debits) / 2 == amount.
+        pipeline = [
+            {
+                "$match": {
+                    "voucher_type": voucher_type,
+                    "voucher_date": {
+                        "$gte": to_bson_value(start),
+                        "$lte": to_bson_value(end),
+                    },
+                }
+            },
+            {"$unwind": "$lines"},
+            {"$group": {"_id": None, "debits": {"$sum": "$lines.debit_amount"}}},
+        ]
+        result = list(self._db.vouchers.aggregate(pipeline))
+        return (result[0]["debits"] / 2.0) if result else 0.0
+
+    def count_items_created(self, start: date, end: date) -> int:
+        # Per-item created_at is a full datetime, so span the whole end day.
+        start_dt = datetime.combine(start, time.min)
+        end_dt = datetime.combine(end, time.max)
+        pipeline = [
+            {"$unwind": "$customization_items"},
+            {
+                "$match": {
+                    "customization_items.created_at": {"$gte": start_dt, "$lte": end_dt}
+                }
+            },
+            {"$count": "total"},
+        ]
+        result = list(self._db.customization_orders.aggregate(pipeline))
+        return result[0]["total"] if result else 0
+
+    def count_items_delivered(self, start: date, end: date) -> int:
+        pipeline = [
+            {
+                "$match": {
+                    "delivery_date": {
+                        "$gte": to_bson_value(start),
+                        "$lte": to_bson_value(end),
+                    }
+                }
+            },
+            {"$project": {"n": {"$size": {"$ifNull": ["$bill_ids", []]}}}},
+            {"$group": {"_id": None, "total": {"$sum": "$n"}}},
+        ]
+        result = list(self._db.deliveries.aggregate(pipeline))
+        return result[0]["total"] if result else 0
+
+    def item_delivery_snapshot(self) -> dict:
+        """Point-in-time counts of items not yet delivered."""
+        delivered_ids = self._db.deliveries.distinct("bill_ids")
+        pipeline = [
+            {"$match": {"order_status": {"$ne": OrderStatus.CANCELLED.value}}},
+            {"$unwind": "$customization_items"},
+            {"$match": {"customization_items.item_id": {"$nin": delivered_ids}}},
+            {
+                "$group": {
+                    "_id": None,
+                    "not_delivered": {"$sum": 1},
+                    "awaiting": {
+                        "$sum": {
+                            "$cond": [
+                                {
+                                    "$eq": [
+                                        "$customization_items.item_status",
+                                        CustomizationItemStatus.COMPLETED.value,
+                                    ]
+                                },
+                                1,
+                                0,
+                            ]
+                        }
+                    },
+                }
+            },
+        ]
+        result = list(self._db.customization_orders.aggregate(pipeline))
+        return {
+            "not_delivered": result[0]["not_delivered"] if result else 0,
+            "awaiting": result[0]["awaiting"] if result else 0,
+        }
+
     def get_all_expenses(self) -> List[dict]:
         return list(self._db.expenses.find())
 
@@ -242,8 +364,128 @@ class MongoReportRepository:
     def get_all_orders(self) -> List[dict]:
         return list(self._db.customization_orders.find())
 
+    def get_item_profitability(
+        self, start: date | None = None, end: date | None = None
+    ) -> List[dict]:
+        """One row per customization item whose MPH is frozen (delivered +
+        invoiced), highest margin-per-hour first."""
+        snapshot_match: dict = {"customization_items.mph_snapshot_at": {"$ne": None}}
+        if start is not None and end is not None:
+            start_dt = datetime.combine(start, time.min)
+            end_dt = datetime.combine(end, time.max)
+            snapshot_match["customization_items.mph_snapshot_at"] = {
+                "$gte": start_dt,
+                "$lte": end_dt,
+            }
+        pipeline = [
+            {"$unwind": "$customization_items"},
+            {"$match": snapshot_match},
+            {
+                "$project": {
+                    "_id": 0,
+                    "order_number": 1,
+                    "customer_name": 1,
+                    "bill_number": "$customization_items.bill_number",
+                    "description": "$customization_items.description",
+                    "sell_amount": "$customization_items.sell_amount",
+                    "expense_selling_total": "$customization_items.expense_selling_total",
+                    "expense_purchase_total": "$customization_items.expense_purchase_total",
+                    "in_house_hours": "$customization_items.in_house_hours",
+                    "margin_amount": "$customization_items.margin_amount",
+                    "margin_per_hour": "$customization_items.margin_per_hour",
+                    "delivered_on": "$customization_items.mph_snapshot_at",
+                }
+            },
+            {"$sort": {"margin_per_hour": -1}},
+        ]
+        return list(self._db.customization_orders.aggregate(pipeline))
+
+    def get_time_entries(
+        self,
+        start: date,
+        end: date,
+        worker: str | None = None,
+        activity_name: str | None = None,
+    ) -> List[dict]:
+        query: dict = {
+            "work_date": {
+                "$gte": to_bson_value(start),
+                "$lte": to_bson_value(end),
+            }
+        }
+        if worker:
+            query["worker_name"] = {"$regex": worker, "$options": "i"}
+        if activity_name:
+            query["activity_name"] = {"$regex": activity_name, "$options": "i"}
+        return list(self._db.time_entries.find(query).sort("work_date", -1))
+
+    def get_expenses(
+        self,
+        start: date,
+        end: date,
+        expense_source: str | None = None,
+    ) -> List[dict]:
+        query: dict = {
+            "expense_date": {
+                "$gte": to_bson_value(start),
+                "$lte": to_bson_value(end),
+            }
+        }
+        if expense_source:
+            query["expense_source"] = expense_source
+        return list(self._db.expenses.find(query).sort("expense_date", -1))
+
+    def get_orders_for_activity_pending(self) -> List[dict]:
+        return list(
+            self._db.customization_orders.find(
+                {"order_status": {"$nin": _INACTIVE_STATUSES + [OrderStatus.CANCELLED.value]}},
+                {
+                    "order_number": 1,
+                    "customer_name": 1,
+                    "order_status": 1,
+                    "expected_delivery_date": 1,
+                    "order_activities": 1,
+                },
+            )
+        )
+
+    def get_customer_orders(
+        self,
+        customer_id: str,
+        start: date | None = None,
+        end: date | None = None,
+    ) -> List[dict]:
+        query: dict = {"customer_id": customer_id}
+        if start is not None and end is not None:
+            query["order_date"] = {
+                "$gte": to_bson_value(start),
+                "$lte": to_bson_value(end),
+            }
+        return list(
+            self._db.customization_orders.find(query).sort("order_date", -1)
+        )
+
+    def get_completed_orders(
+        self, start: date, end: date, statuses: List[str]
+    ) -> List[dict]:
+        query = {
+            "order_status": {"$in": statuses},
+            "delivery_date": {
+                "$gte": to_bson_value(start),
+                "$lte": to_bson_value(end),
+            },
+        }
+        projection = {
+            **_CARD_PROJECTION,
+            "order_date": 1,
+            "delivery_date": 1,
+        }
+        return [
+            self._normalize_order(d)
+            for d in self._db.customization_orders.find(query, projection).sort(
+                "delivery_date", -1
+            )
+        ]
+
     def get_all_vouchers(self) -> List[dict]:
         return list(self._db.vouchers.find())
-
-    def get_customer_orders(self, customer_id: str) -> List[dict]:
-        return list(self._db.customization_orders.find({"customer_id": customer_id}))

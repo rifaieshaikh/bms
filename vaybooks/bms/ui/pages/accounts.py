@@ -5,16 +5,39 @@ import streamlit as st
 
 from vaybooks.bms.domain.shared.enums import AccountType, VoucherType
 from vaybooks.bms.ui.components.voucher_form import voucher_form
+from vaybooks.bms.ui.dialog_utils import (
+    clear_all_dialog_flags,
+    clear_dialog_flags,
+    make_dismiss_handler,
+)
+from vaybooks.bms.ui.pagination import (
+    CARD_PAGE_SIZE,
+    TRIAL_BALANCE_PAGE_SIZE,
+    VOUCHER_PAGE_SIZE,
+    paginate_list,
+    render_page_controls,
+)
 
 CREATE_ACC = "acc_create_dialog"
 EDIT_ACC = "acc_edit_dialog"
 LEDGER_ACC = "acc_ledger_dialog"
 
-ACCOUNTS_PAGE_SIZE = 12  # 4 rows of 3 cards
+ACCOUNTS_PAGE_SIZE = CARD_PAGE_SIZE
 RCPT = "acc_receipt_dialog"
 PAY = "acc_payment_dialog"
 SAL = "acc_salary_dialog"
+INV_CUST = "acc_cust_inv_dialog"
+INV_SALES = "acc_sales_inv_dialog"
 JOURNAL = "acc_journal_dialog"
+
+
+def _clear_other_invoice_dialog_flags(keep: str) -> None:
+    """Only one invoice dialog may be armed; drop the sibling flag."""
+    clear_dialog_flags(*(k for k in (INV_CUST, INV_SALES) if k != keep))
+
+
+def _clear_other_payment_dialog_flags(keep: str) -> None:
+    clear_dialog_flags(*(k for k in (PAY, SAL) if k != keep))
 
 
 def _format_balance(balance: float) -> str:
@@ -46,7 +69,7 @@ def _voucher_matches(voucher, query: str) -> bool:
 
 
 # --- dialogs -----------------------------------------------------------------
-@st.dialog("Create Account")
+@st.dialog("Create Account", on_dismiss=make_dismiss_handler(CREATE_ACC))
 def _create_account_dialog(accounting_service):
     name = st.text_input("Account Name")
     acc_type = st.selectbox("Account Type", [t.value for t in AccountType])
@@ -77,7 +100,7 @@ def _create_account_dialog(accounting_service):
         st.rerun()
 
 
-@st.dialog("Edit Account")
+@st.dialog("Edit Account", on_dismiss=make_dismiss_handler(EDIT_ACC))
 def _edit_account_dialog(accounting_service):
     account = accounting_service.get_account(st.session_state.get(EDIT_ACC))
     if not account:
@@ -125,7 +148,7 @@ def _edit_account_dialog(accounting_service):
         st.rerun()
 
 
-@st.dialog("Account Ledger", width="large")
+@st.dialog("Account Ledger", width="large", on_dismiss=make_dismiss_handler(LEDGER_ACC))
 def _ledger_dialog(accounting_service):
     account = accounting_service.get_account(st.session_state.get(LEDGER_ACC))
     if not account:
@@ -161,7 +184,7 @@ def _ledger_dialog(accounting_service):
         st.rerun()
 
 
-@st.dialog("Record Receipt")
+@st.dialog("Record Receipt", on_dismiss=make_dismiss_handler(RCPT))
 def _receipt_dialog(accounting_service):
     target = st.session_state.get(RCPT)
     voucher = None if target in (None, "new") else accounting_service.get_voucher(target)
@@ -213,7 +236,7 @@ def _receipt_dialog(accounting_service):
         st.rerun()
 
 
-@st.dialog("Record Vendor Payment")
+@st.dialog("Record Vendor Payment", on_dismiss=make_dismiss_handler(PAY))
 def _payment_dialog(services):
     accounting_service = services["accounting"]
     vendor_service = services["vendors"]
@@ -299,7 +322,7 @@ def _payment_dialog(services):
         st.rerun()
 
 
-@st.dialog("Record Salary")
+@st.dialog("Record Salary", on_dismiss=make_dismiss_handler(SAL))
 def _salary_dialog(accounting_service):
     target = st.session_state.get(SAL)
     voucher = None if target in (None, "new") else accounting_service.get_voucher(target)
@@ -358,7 +381,146 @@ def _salary_dialog(accounting_service):
         st.rerun()
 
 
-@st.dialog("New Journal Entry", width="large")
+def _invoice_gross_amount(voucher) -> float:
+    return max((line.credit_amount for line in voucher.lines), default=0.0)
+
+
+def _invoice_discount_amount(voucher, discount_account_id: str | None) -> float:
+    if not discount_account_id:
+        return 0.0
+    for line in voucher.lines:
+        if line.account_id == discount_account_id and line.debit_amount > 0:
+            return line.debit_amount
+    return 0.0
+
+
+@st.dialog(
+    "Record Customization Invoice",
+    width="large",
+    on_dismiss=make_dismiss_handler(INV_CUST),
+)
+def _customization_invoice_dialog(accounting_service):
+    _standalone_invoice_dialog(
+        accounting_service,
+        INV_CUST,
+        VoucherType.CUSTOMIZATION_INVOICE,
+        accounting_service.get_customization_account,
+        "Customization",
+    )
+
+
+@st.dialog(
+    "Record Sales Invoice",
+    width="large",
+    on_dismiss=make_dismiss_handler(INV_SALES),
+)
+def _sales_invoice_dialog(accounting_service):
+    _standalone_invoice_dialog(
+        accounting_service,
+        INV_SALES,
+        VoucherType.SALES_INVOICE,
+        accounting_service.get_sales_account,
+        "Sales",
+    )
+
+
+def _standalone_invoice_dialog(
+    accounting_service,
+    flag_key: str,
+    voucher_type: VoucherType,
+    income_account_getter,
+    income_label: str,
+):
+    target = st.session_state.get(flag_key)
+    voucher = None if target in (None, "new") else accounting_service.get_voucher(target)
+    if voucher and voucher.voucher_type != voucher_type:
+        st.error("This entry is not the expected invoice type.")
+        if st.button("Close"):
+            st.session_state.pop(flag_key, None)
+            st.rerun()
+        return
+
+    income_account = income_account_getter()
+    customers = [a for a in accounting_service.list_accounts() if a.linked_customer_id]
+    discount_account = accounting_service.get_discount_account()
+    if not income_account:
+        st.error(f'No "{income_label}" revenue account found.')
+        if st.button("Close"):
+            st.session_state.pop(flag_key, None)
+            st.rerun()
+        return
+    if not customers:
+        st.error("Need at least one customer account.")
+        if st.button("Close"):
+            st.session_state.pop(flag_key, None)
+            st.rerun()
+        return
+
+    cust_opts = {a.account_name: a.id for a in customers}
+    existing_cust = voucher.lines[0].account_id if voucher else None
+    existing_gross = _invoice_gross_amount(voucher) if voucher else 0.0
+    existing_discount = (
+        _invoice_discount_amount(voucher, discount_account.id if discount_account else None)
+        if voucher
+        else 0.0
+    )
+
+    cust = st.selectbox(
+        "Customer Account", list(cust_opts.keys()),
+        index=_index_of(cust_opts, existing_cust),
+    )
+    amount = st.number_input("Invoice Amount (gross)", min_value=0.0, value=float(existing_gross))
+    dcols = st.columns(2)
+    discount_pct = dcols[0].number_input(
+        "Discount %", min_value=0.0, max_value=100.0, value=0.0, step=1.0,
+        key=f"{flag_key}_disc_pct",
+    )
+    manual_discount = dcols[1].number_input(
+        "Discount Amount", min_value=0.0, value=float(existing_discount),
+        key=f"{flag_key}_disc_amt",
+    )
+    if discount_pct > 0:
+        discount_amount = round(amount * discount_pct / 100, 2)
+    else:
+        discount_amount = round(manual_discount, 2)
+    discount_amount = min(discount_amount, amount)
+    if discount_amount > 0:
+        st.caption(
+            f"Gross ₹{amount:,.0f} − Discount ₹{discount_amount:,.0f} = "
+            f"**Net ₹{amount - discount_amount:,.0f}**"
+        )
+
+    v_date = st.date_input("Date", value=date.today())
+    desc = st.text_input("Description", value=voucher.description if voucher else "")
+    st.caption(f"Revenue credited to: **{income_account.account_name}**")
+    if discount_amount > 0 and not discount_account:
+        st.warning('No "Discount Allowed" account found for the discount debit.')
+
+    cols = st.columns(2)
+    if cols[0].button("Save", type="primary", use_container_width=True):
+        try:
+            discount_id = discount_account.id if discount_amount > 0 and discount_account else None
+            if voucher:
+                accounting_service.update_sales_invoice(
+                    voucher.id, cust_opts[cust], income_account.id, amount, desc, v_date,
+                    discount_amount=discount_amount, discount_account_id=discount_id,
+                )
+            else:
+                accounting_service.create_sales_invoice(
+                    cust_opts[cust], income_account.id, amount, desc, v_date,
+                    discount_amount=discount_amount, discount_account_id=discount_id,
+                    voucher_type=voucher_type,
+                )
+            st.session_state.pop(flag_key, None)
+            st.rerun()
+        except Exception as exc:
+            st.error(str(exc))
+    if cols[1].button("Cancel", use_container_width=True):
+        st.session_state.pop(flag_key, None)
+        st.rerun()
+
+
+@st.dialog("New Journal Entry", width="large", on_dismiss=make_dismiss_handler(JOURNAL))
 def _journal_dialog(accounting_service):
     accounts = accounting_service.list_accounts()
     desc = st.text_input("Journal Description", key="acc_jrnl_desc")
@@ -384,18 +546,13 @@ def _journal_dialog(accounting_service):
 # --- tabs --------------------------------------------------------------------
 def _render_accounts_tab(accounting_service):
     if st.button("+ Create Account", type="primary", key="btn_create_acc"):
-        st.session_state[CREATE_ACC] = True
-        st.rerun()
+        clear_all_dialog_flags()
+        _create_account_dialog(accounting_service)
 
     query = st.text_input(
         "Search accounts", key="acc_search_accounts",
         placeholder="Account name or type",
     ).strip().lower()
-
-    # Reset to the first page whenever the filter changes.
-    if st.session_state.get("acc_last_query") != query:
-        st.session_state["acc_page"] = 0
-        st.session_state["acc_last_query"] = query
 
     accounts = accounting_service.list_accounts(active_only=False)
     if not accounts:
@@ -410,10 +567,13 @@ def _render_accounts_tab(accounting_service):
         st.caption("No matching accounts.")
         return
 
-    total_pages = (len(accounts) + ACCOUNTS_PAGE_SIZE - 1) // ACCOUNTS_PAGE_SIZE
-    page = min(st.session_state.get("acc_page", 0), total_pages - 1)
-    st.session_state["acc_page"] = page
-    page_accounts = accounts[page * ACCOUNTS_PAGE_SIZE : (page + 1) * ACCOUNTS_PAGE_SIZE]
+    page_accounts, page, total_pages = paginate_list(
+        accounts,
+        page_key="acc_page",
+        page_size=ACCOUNTS_PAGE_SIZE,
+        filter_key="acc_search_accounts",
+        filter_value=query,
+    )
 
     cols = st.columns(3)
     for i, acc in enumerate(page_accounts):
@@ -430,29 +590,27 @@ def _render_accounts_tab(accounting_service):
                 st.session_state[EDIT_ACC] = acc.id
                 st.rerun()
 
-    if total_pages > 1:
-        prev_c, mid_c, next_c = st.columns([1, 2, 1])
-        if prev_c.button("← Prev", disabled=page == 0, use_container_width=True, key="acc_prev"):
-            st.session_state["acc_page"] = page - 1
-            st.rerun()
-        mid_c.markdown(
-            f"<div style='text-align:center'>Page {page + 1} of {total_pages} "
-            f"· {len(accounts)} accounts</div>",
-            unsafe_allow_html=True,
-        )
-        if next_c.button(
-            "Next →", disabled=page == total_pages - 1, use_container_width=True, key="acc_next"
-        ):
-            st.session_state["acc_page"] = page + 1
-            st.rerun()
+    render_page_controls(
+        page, total_pages, len(accounts),
+        page_key="acc_page", prev_key="acc_prev", next_key="acc_next",
+        label="accounts",
+    )
 
 
-def _render_voucher_list(vouchers, flag_key, edit_prefix, query=""):
+def _render_voucher_list(vouchers, flag_key, edit_prefix, query="", page_key="acc_voucher_page"):
     vouchers = [v for v in vouchers if _voucher_matches(v, query)]
     if not vouchers:
         st.caption("No matching entries." if query else "Nothing recorded yet.")
         return
-    for v in sorted(vouchers, key=lambda x: x.voucher_date, reverse=True):
+    sorted_vouchers = sorted(vouchers, key=lambda x: x.voucher_date, reverse=True)
+    page_vouchers, page, total_pages = paginate_list(
+        sorted_vouchers,
+        page_key=page_key,
+        page_size=VOUCHER_PAGE_SIZE,
+        filter_key=f"{page_key}_filter",
+        filter_value=query,
+    )
+    for v in page_vouchers:
         amount = v.total_debit
         with st.container(border=True):
             st.markdown(f"**{v.voucher_number}** — ₹{amount:,.0f}")
@@ -460,19 +618,87 @@ def _render_voucher_list(vouchers, flag_key, edit_prefix, query=""):
             if st.button("Edit", key=f"{edit_prefix}_{v.id}"):
                 st.session_state[flag_key] = v.id
                 st.rerun()
+    render_page_controls(
+        page, total_pages, len(sorted_vouchers),
+        page_key=page_key,
+        prev_key=f"{page_key}_prev",
+        next_key=f"{page_key}_next",
+        label="entries",
+    )
+
+
+def _render_invoices_tab(accounting_service):
+    btns = st.columns(2)
+    if btns[0].button(
+        "+ Record Customization Invoice", type="primary", key="btn_rec_cust_inv"
+    ):
+        _clear_other_invoice_dialog_flags(INV_CUST)
+        _customization_invoice_dialog(accounting_service)
+    if btns[1].button("+ Record Sales Invoice", type="primary", key="btn_rec_sales_inv"):
+        _clear_other_invoice_dialog_flags(INV_SALES)
+        _sales_invoice_dialog(accounting_service)
+
+    query = st.text_input(
+        "Search invoices",
+        key="inv_search",
+        placeholder="Customer, voucher no. or notes",
+    ).strip().lower()
+
+    customization = accounting_service.list_vouchers_by_type(
+        VoucherType.CUSTOMIZATION_INVOICE
+    )
+    sales = accounting_service.list_vouchers_by_type(VoucherType.SALES_INVOICE)
+    combined = [v for v in customization + sales if _voucher_matches(v, query)]
+    if not combined:
+        st.caption("No matching invoices." if query else "No invoices recorded yet.")
+        return
+
+    sorted_combined = sorted(combined, key=lambda x: x.voucher_date, reverse=True)
+    page_vouchers, page, total_pages = paginate_list(
+        sorted_combined,
+        page_key="acc_inv_page",
+        page_size=VOUCHER_PAGE_SIZE,
+        filter_key="inv_search",
+        filter_value=query,
+    )
+    for v in page_vouchers:
+        gross = _invoice_gross_amount(v)
+        customer_name = v.lines[0].account_name if v.lines else "—"
+        is_customization = v.voucher_type == VoucherType.CUSTOMIZATION_INVOICE
+        tag = "Customization" if is_customization else "Sales"
+        flag_key = INV_CUST if is_customization else INV_SALES
+        edit_prefix = "edit_cust_inv" if is_customization else "edit_sales_inv"
+        order_ref = f" · Order linked" if v.reference_order_id else ""
+        with st.container(border=True):
+            st.markdown(f"**{v.voucher_number}** — ₹{gross:,.0f}  ·  _{tag}_")
+            st.caption(
+                f"{_fmt_date(v.voucher_date)} | Customer: {customer_name}{order_ref}"
+            )
+            if v.description:
+                st.caption(v.description)
+            if st.button("Edit", key=f"{edit_prefix}_{v.id}"):
+                _clear_other_invoice_dialog_flags(flag_key)
+                st.session_state[flag_key] = v.id
+                st.rerun()
+
+    render_page_controls(
+        page, total_pages, len(sorted_combined),
+        page_key="acc_inv_page", prev_key="acc_inv_prev", next_key="acc_inv_next",
+        label="invoices",
+    )
 
 
 def _render_receipts_tab(accounting_service):
     if st.button("+ Record Receipt", type="primary", key="btn_rec_rcpt"):
-        st.session_state[RCPT] = "new"
-        st.rerun()
+        clear_all_dialog_flags()
+        _receipt_dialog(accounting_service)
     query = st.text_input(
         "Search by account", key="rcpt_search",
         placeholder="Account name, voucher no. or notes",
     ).strip().lower()
     _render_voucher_list(
         accounting_service.list_vouchers_by_type(VoucherType.RECEIPT),
-        RCPT, "edit_rcpt", query=query,
+        RCPT, "edit_rcpt", query=query, page_key="acc_rcpt_page",
     )
 
 
@@ -481,11 +707,11 @@ def _render_payments_tab(services):
     service_config = services["vendor_services"]
     btns = st.columns(2)
     if btns[0].button("+ Record Vendor Payment", type="primary", key="btn_rec_pay"):
-        st.session_state[PAY] = "new"
-        st.rerun()
+        _clear_other_payment_dialog_flags(PAY)
+        _payment_dialog(services)
     if btns[1].button("+ Record Salary", type="primary", key="btn_rec_sal"):
-        st.session_state[SAL] = "new"
-        st.rerun()
+        _clear_other_payment_dialog_flags(SAL)
+        _salary_dialog(accounting_service)
     query = st.text_input(
         "Search by vendor, service or account", key="pay_search",
         placeholder="Vendor, service, voucher no. or notes",
@@ -505,7 +731,15 @@ def _render_payments_tab(services):
     if not combined:
         st.caption("No matching payments." if query else "No payments recorded yet.")
         return
-    for v in sorted(combined, key=lambda x: x.voucher_date, reverse=True):
+    sorted_combined = sorted(combined, key=lambda x: x.voucher_date, reverse=True)
+    page_vouchers, page, total_pages = paginate_list(
+        sorted_combined,
+        page_key="acc_pay_page",
+        page_size=VOUCHER_PAGE_SIZE,
+        filter_key="pay_search",
+        filter_value=query,
+    )
+    for v in page_vouchers:
         # Both types share line order: [expense Dr, party Cr, party Dr, paying Cr].
         amount = v.lines[0].debit_amount if v.lines else 0.0
         party_name = v.lines[1].account_name if len(v.lines) > 1 else "—"
@@ -524,11 +758,17 @@ def _render_payments_tab(services):
                 st.session_state[flag_key] = v.id
                 st.rerun()
 
+    render_page_controls(
+        page, total_pages, len(sorted_combined),
+        page_key="acc_pay_page", prev_key="acc_pay_prev", next_key="acc_pay_next",
+        label="payments",
+    )
+
 
 def _render_journal_tab(accounting_service):
     if st.button("+ New Journal Entry", type="primary", key="btn_new_jrnl"):
-        st.session_state[JOURNAL] = True
-        st.rerun()
+        clear_all_dialog_flags()
+        _journal_dialog(accounting_service)
     query = st.text_input(
         "Search by account", key="jrnl_search",
         placeholder="Account name, voucher no. or notes",
@@ -541,7 +781,15 @@ def _render_journal_tab(accounting_service):
     if not journals:
         st.caption("No matching entries." if query else "No journal entries yet.")
         return
-    for v in sorted(journals, key=lambda x: x.voucher_date, reverse=True):
+    sorted_journals = sorted(journals, key=lambda x: x.voucher_date, reverse=True)
+    page_journals, page, total_pages = paginate_list(
+        sorted_journals,
+        page_key="acc_jrnl_page",
+        page_size=VOUCHER_PAGE_SIZE,
+        filter_key="jrnl_search",
+        filter_value=query,
+    )
+    for v in page_journals:
         with st.container(border=True):
             st.markdown(f"**{v.voucher_number}** — ₹{v.total_debit:,.0f}")
             st.caption(f"{_fmt_date(v.voucher_date)} | {v.description or '—'}")
@@ -552,6 +800,12 @@ def _render_journal_tab(accounting_service):
                     else f"Cr ₹{line.credit_amount:,.0f}"
                 )
                 st.caption(f"• {line.account_name}: {side}")
+
+    render_page_controls(
+        page, total_pages, len(sorted_journals),
+        page_key="acc_jrnl_page", prev_key="acc_jrnl_prev", next_key="acc_jrnl_next",
+        label="entries",
+    )
 
 
 def _render_trial_balance_tab(accounting_service):
@@ -578,47 +832,36 @@ def _render_trial_balance_tab(accounting_service):
     cols[1].metric("Total Credit", f"₹{total_credit:,.2f}")
     cols[2].metric("Status", "Balanced ✓" if balanced else "Unbalanced ✗")
 
-    category_order = [t.value for t in AccountType]
-    rows = []
-    for category in category_order:
-        group = [r for r in trial if r["account_type"] == category]
-        if not group:
-            continue
-        rows.append({"Account": f"— {category} —", "Debit": "", "Credit": ""})
-        sub_debit = sub_credit = 0.0
-        for r in group:
-            sub_debit += r["debit"]
-            sub_credit += r["credit"]
-            rows.append(
-                {
-                    "Account": f"   {r['account_name']}",
-                    "Debit": f"{r['debit']:,.2f}" if r["debit"] else "",
-                    "Credit": f"{r['credit']:,.2f}" if r["credit"] else "",
-                }
-            )
-        rows.append(
-            {
-                "Account": f"Subtotal — {category}",
-                "Debit": f"{round(sub_debit, 2):,.2f}",
-                "Credit": f"{round(sub_credit, 2):,.2f}",
-            }
-        )
-    rows.append(
-        {
-            "Account": "TOTAL",
-            "Debit": f"{total_debit:,.2f}",
-            "Credit": f"{total_credit:,.2f}",
-        }
+    page_trial, page, total_pages = paginate_list(
+        trial,
+        page_key="acc_tb_page",
+        page_size=TRIAL_BALANCE_PAGE_SIZE,
+        filter_key="tb_search",
+        filter_value=query,
     )
+    rows = [
+        {
+            "Account": r["account_name"],
+            "Type": r["account_type"],
+            "Debit": f"{r['debit']:,.2f}" if r["debit"] else "",
+            "Credit": f"{r['credit']:,.2f}" if r["credit"] else "",
+        }
+        for r in page_trial
+    ]
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    render_page_controls(
+        page, total_pages, len(trial),
+        page_key="acc_tb_page", prev_key="acc_tb_prev", next_key="acc_tb_next",
+        label="accounts",
+    )
 
 
 def render(services: dict):
     st.title("Accounts")
     accounting_service = services["accounting"]
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(
-        ["Accounts", "Receipts", "Payments", "Journal", "Trial Balance"]
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+        ["Accounts", "Receipts", "Payments", "Invoices", "Journal", "Trial Balance"]
     )
     with tab1:
         _render_accounts_tab(accounting_service)
@@ -627,15 +870,16 @@ def render(services: dict):
     with tab3:
         _render_payments_tab(services)
     with tab4:
-        _render_journal_tab(accounting_service)
+        _render_invoices_tab(accounting_service)
     with tab5:
+        _render_journal_tab(accounting_service)
+    with tab6:
         _render_trial_balance_tab(accounting_service)
 
     # Popups opened at page top level (page is not itself a dialog).
     # Only one dialog may open per run, so this is a strict if/elif chain.
-    if st.session_state.get(CREATE_ACC):
-        _create_account_dialog(accounting_service)
-    elif st.session_state.get(EDIT_ACC):
+    # "New" dialogs are called directly from buttons; only edit flows use flags here.
+    if st.session_state.get(EDIT_ACC):
         _edit_account_dialog(accounting_service)
     elif st.session_state.get(LEDGER_ACC):
         _ledger_dialog(accounting_service)
@@ -645,5 +889,7 @@ def render(services: dict):
         _payment_dialog(services)
     elif st.session_state.get(SAL):
         _salary_dialog(accounting_service)
-    elif st.session_state.get(JOURNAL):
-        _journal_dialog(accounting_service)
+    elif st.session_state.get(INV_CUST):
+        _customization_invoice_dialog(accounting_service)
+    elif st.session_state.get(INV_SALES):
+        _sales_invoice_dialog(accounting_service)

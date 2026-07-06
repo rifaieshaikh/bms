@@ -292,7 +292,12 @@ class AccountingDomainService:
         discount_amount: float = 0.0,
         discount_account_id: Optional[str] = None,
         discount_account_name: Optional[str] = None,
+        voucher_type=None,
     ) -> Voucher:
+        from vaybooks.bms.domain.shared.enums import VoucherType
+
+        if voucher_type is None:
+            voucher_type = VoucherType.SALES_INVOICE
         # `amount` is the gross invoice value (credited to income in full).
         if amount <= 0:
             raise ValidationError("Invoice amount must be positive")
@@ -336,7 +341,7 @@ class AccountingDomainService:
         )
         return Voucher(
             voucher_number=voucher_number,
-            voucher_type=VoucherType.SALES_INVOICE,
+            voucher_type=voucher_type,
             voucher_date=voucher_date,
             description=description,
             lines=lines,

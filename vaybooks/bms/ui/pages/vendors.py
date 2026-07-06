@@ -2,6 +2,13 @@ from datetime import date
 
 import streamlit as st
 
+from vaybooks.bms.ui.dialog_utils import (
+    clear_all_dialog_flags,
+    make_dismiss_handler,
+    register_armed_dialog,
+)
+from vaybooks.bms.ui.pagination import CARD_PAGE_SIZE, paginate_list, render_page_controls
+
 V_ADD = "vendor_add_dialog"
 V_EDIT = "vendor_edit_dialog"
 V_VIEW = "vendor_view"
@@ -9,7 +16,7 @@ V_PAY = "vendor_pay_dialog"
 
 
 # --- dialogs -----------------------------------------------------------------
-@st.dialog("Add Vendor", width="medium")
+@st.dialog("Add Vendor", width="medium", on_dismiss=make_dismiss_handler(V_ADD))
 def _add_vendor_dialog(vendor_service):
     name = st.text_input("Vendor Name", key="v_add_name")
     phone = st.text_input("Phone Number", key="v_add_phone")
@@ -36,7 +43,7 @@ def _add_vendor_dialog(vendor_service):
         st.rerun()
 
 
-@st.dialog("Edit Vendor", width="medium")
+@st.dialog("Edit Vendor", width="medium", on_dismiss=make_dismiss_handler(V_EDIT))
 def _edit_vendor_dialog(vendor_service):
     vendor = vendor_service.get_vendor_detail(st.session_state.get(V_EDIT))
     if not vendor:
@@ -66,7 +73,7 @@ def _edit_vendor_dialog(vendor_service):
         st.rerun()
 
 
-@st.dialog("Pay Vendor", width="medium")
+@st.dialog("Pay Vendor", width="medium", on_dismiss=make_dismiss_handler(V_PAY))
 def _pay_vendor_dialog(services, vendor_id: str):
     accounting = services["accounting"]
     service_config = services["vendor_services"]
@@ -175,8 +182,8 @@ def _render_vendor_detail(services, vendor_id: str):
             st.caption(f"Notes: {vendor.notes}")
 
     if st.button("+ Record Payment", type="primary", key="vendor_rec_pay"):
-        st.session_state[V_PAY] = "new"
-        st.rerun()
+        clear_all_dialog_flags()
+        _pay_vendor_dialog(services, vendor.id)
 
     st.markdown("**Payments**")
     service_names = {
@@ -198,7 +205,9 @@ def _render_vendor_detail(services, vendor_id: str):
                     st.caption(f"Service: {service_label}")
                 st.caption(f"{v.voucher_date:%Y-%m-%d} | {v.description or '—'}")
                 if st.button("Edit", key=f"edit_vpay_{v.id}"):
+                    clear_all_dialog_flags()
                     st.session_state[V_PAY] = v.id
+                    register_armed_dialog(V_PAY)
                     st.rerun()
 
     if st.session_state.get(V_PAY):
@@ -216,30 +225,41 @@ def _render_vendor_list(services):
         )
     with header[1]:
         if st.button("Add Vendor", type="primary", use_container_width=True):
-            st.session_state[V_ADD] = True
-            st.rerun()
+            clear_all_dialog_flags()
+            _add_vendor_dialog(vendor_service)
 
     vendors = vendor_service.search_vendors(query)
     if not vendors:
         st.info("No vendors found.")
     else:
+        page_vendors, page, total_pages = paginate_list(
+            vendors,
+            page_key="vendor_page",
+            page_size=CARD_PAGE_SIZE,
+            filter_key="vendor_search",
+            filter_value=query,
+        )
         cols = st.columns(3)
-        for i, vendor in enumerate(vendors):
+        for i, vendor in enumerate(page_vendors):
             with cols[i % 3].container(border=True):
                 st.markdown(f"**{vendor.vendor_name}**")
                 st.write(vendor.phone_number)
                 btns = st.columns(2)
                 if btns[0].button("Edit", key=f"v_edit_{vendor.id}", use_container_width=True):
+                    clear_all_dialog_flags()
                     st.session_state[V_EDIT] = vendor.id
+                    register_armed_dialog(V_EDIT)
                     st.rerun()
                 if btns[1].button("Payments", key=f"v_pay_{vendor.id}", use_container_width=True):
                     st.session_state[V_VIEW] = vendor.id
                     st.rerun()
+        render_page_controls(
+            page, total_pages, len(vendors),
+            page_key="vendor_page", prev_key="vendor_prev", next_key="vendor_next",
+            label="vendors",
+        )
 
-    # Mutually-exclusive dialogs (only one may open per run).
-    if st.session_state.get(V_ADD):
-        _add_vendor_dialog(vendor_service)
-    elif st.session_state.get(V_EDIT):
+    if st.session_state.get(V_EDIT):
         _edit_vendor_dialog(vendor_service)
 
 

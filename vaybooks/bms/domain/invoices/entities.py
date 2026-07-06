@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 from uuid import uuid4
 
 from vaybooks.bms.domain.shared.date_utils import utc_now
@@ -14,6 +14,8 @@ class Invoice:
     invoice_date: date
     invoice_amount: float
     bill_ids: List[str] = field(default_factory=list)
+    # Gross price entered per item (bill_id -> amount). Enables per-item MPH.
+    item_amounts: Dict[str, float] = field(default_factory=dict)
     discount_amount: float = 0.0
     total_expense_purchase_price: float = 0.0
     total_expense_selling_price: float = 0.0

@@ -51,6 +51,7 @@ class OrderDomainService:
         description: str,
         activity_configs: List[ActivityConfig],
         required_map: dict,
+        expected_delivery_date=None,
     ) -> CustomizationItem:
         bill_number = bill_number.strip().upper()
         if not bill_number:
@@ -62,7 +63,11 @@ class OrderDomainService:
                 f"Bill number {bill_number} already belongs to another order"
             )
 
-        item = CustomizationItem(bill_number=bill_number, description=description.strip())
+        item = CustomizationItem(
+            bill_number=bill_number,
+            description=description.strip(),
+            expected_delivery_date=expected_delivery_date or order.expected_delivery_date,
+        )
         if not existing:
             entry = BillRegistryEntry(
                 bill_number=bill_number,
@@ -280,6 +285,7 @@ class OrderDomainService:
         item_id: str,
         bill_number: str,
         description: str,
+        expected_delivery_date=None,
     ) -> CustomizationItem:
         item = order.get_item_by_id(item_id)
         if not item:
@@ -305,6 +311,8 @@ class OrderDomainService:
 
         item.bill_number = bill_number
         item.description = description.strip()
+        if expected_delivery_date is not None:
+            item.expected_delivery_date = expected_delivery_date
         item.updated_at = utc_now()
         order.updated_at = utc_now()
         return item

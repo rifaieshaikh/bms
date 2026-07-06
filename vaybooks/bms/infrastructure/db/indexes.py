@@ -45,6 +45,14 @@ def ensure_indexes(db):
     _create_index(db.customization_orders, "phone_number")
     _create_index(db.customization_orders, "order_status")
     _create_index(db.customization_orders, "expected_delivery_date")
+    _create_index(db.customization_orders, "order_date")
+    _create_index(db.customization_orders, "delivery_date")
+    _create_index(db.customization_orders, "customization_items.mph_snapshot_at")
+    _create_index(db.customization_orders, [("customer_id", 1), ("order_date", -1)])
+    _create_index(
+        db.customization_orders,
+        [("order_status", 1), ("expected_delivery_date", 1)],
+    )
 
     _create_index(db.bill_registry, "bill_number", unique=True)
     _create_index(db.bill_registry, "order_id")
@@ -57,19 +65,23 @@ def ensure_indexes(db):
     _create_index(db.time_entries, "bill_number")
     _create_index(db.time_entries, "activity_id")
     _create_index(db.time_entries, "work_date")
+    _create_index(db.time_entries, [("work_date", 1), ("activity_id", 1)])
 
     _create_index(db.expenses, "order_id")
     _create_index(db.expenses, "bill_number")
     _create_index(db.expenses, "activity_id")
     _create_index(db.expenses, "bill_id")
     _create_index(db.expenses, "expense_date")
+    _create_index(db.expenses, [("expense_date", 1), ("expense_source", 1)])
 
     _create_index(db.invoices, "order_id")
     _create_index(db.invoices, "bill_ids")
     _create_index(db.invoices, "invoice_number", unique=True, sparse=True)
+    _create_index(db.invoices, "invoice_date")
 
     _create_index(db.deliveries, "order_id")
     _create_index(db.deliveries, "bill_ids")
+    _create_index(db.deliveries, "delivery_date")
 
     _create_index(db.vouchers, "voucher_number", unique=True)
     _create_index(db.vouchers, "voucher_date")

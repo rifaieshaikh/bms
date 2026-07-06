@@ -30,31 +30,60 @@ def _dashboard_summary(_reports):
     return _reports.get_dashboard_summary()
 
 
+def _kpi_row(summary):
+    r1 = st.columns(4)
+    r1[0].metric("🧾 Active Orders", _summary_int(summary, "active_orders"), border=True)
+    r1[1].metric(
+        "⚙️ In Progress", _summary_int(summary, "pending_activity_orders"), border=True
+    )
+    r1[2].metric("✅ Completed", _completed_count(summary), border=True)
+    r1[3].metric(
+        "📋 Pending Activities",
+        _summary_int(summary, "total_pending_activities"),
+        border=True,
+    )
+
+    r2 = st.columns(4)
+    r2[0].metric(
+        "📦 Delivered (Month)", _summary_int(summary, "delivered_this_month"), border=True
+    )
+    r2[1].metric(
+        "💰 Advance (Month)",
+        f"₹{_summary_float(summary, 'total_advance_this_month'):,.0f}",
+        border=True,
+    )
+    r2[2].metric(
+        "🧾 Invoiced (Month)",
+        f"₹{_summary_float(summary, 'total_invoice_this_month'):,.0f}",
+        border=True,
+    )
+    r2[3].metric(
+        "⏳ Bills Pending Invoice",
+        _summary_int(summary, "bills_pending_invoice"),
+        border=True,
+    )
+
+
 def render(services: dict):
     st.title("Dashboard")
     with st.spinner("Loading dashboard..."):
         summary = _dashboard_summary(services["reports"])
 
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Active Orders", _summary_int(summary, "active_orders"))
-    c2.metric("In Progress", _summary_int(summary, "pending_activity_orders"))
-    c3.metric("Completed", _completed_count(summary))
-    c4.metric("Pending Activities", _summary_int(summary, "total_pending_activities"))
+    _kpi_row(summary)
+    st.divider()
 
-    c5, c6, c7, c8 = st.columns(4)
-    c5.metric("Delivered This Month", _summary_int(summary, "delivered_this_month"))
-    c6.metric("Advance This Month", f"₹{_summary_float(summary, 'total_advance_this_month'):,.0f}")
-    c7.metric(
-        "Invoice Amount This Month",
-        f"₹{_summary_float(summary, 'total_invoice_this_month'):,.0f}",
-    )
-    c8.metric("Bills Pending Invoice", _summary_int(summary, "bills_pending_invoice"))
-
-    order_action_cards("Today's ETD Orders", _summary_list(summary, "etd_today"), "etd")
-    order_action_cards("Overdue Orders", _summary_list(summary, "overdue_orders"), "overdue")
     order_action_cards(
-        "In Progress Orders", _summary_list(summary, "in_progress_orders"), "progress"
+        "Today's ETD Orders", _summary_list(summary, "etd_today"), "etd", accent="orange"
     )
     order_action_cards(
-        "Recently Completed", _summary_list(summary, "recently_completed"), "completed"
+        "Overdue Orders", _summary_list(summary, "overdue_orders"), "overdue", accent="red"
+    )
+    order_action_cards(
+        "In Progress", _summary_list(summary, "in_progress_orders"), "progress", accent="blue"
+    )
+    order_action_cards(
+        "Recently Completed",
+        _summary_list(summary, "recently_completed"),
+        "completed",
+        accent="green",
     )

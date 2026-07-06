@@ -2,6 +2,7 @@ import streamlit as st
 
 from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.components.item_detail_panel import customization_item_detail_panel
+from vaybooks.bms.ui.pagination import CARD_PAGE_SIZE, paginate_list, render_page_controls
 from vaybooks.bms.ui.session_keys import VIEW_ORDER_ID
 
 EDITING_ITEM = "editing_customization_item"
@@ -48,6 +49,14 @@ def _item_summary_card(services: dict, item: dict, index: int):
         )
         st.write(f"Item status: {item['item_status']}")
         st.write(f"Order status: {item['order_status']}")
+
+        if item.get("mph_snapshot_at"):
+            mph = item.get("margin_per_hour")
+            mph_txt = f"\u20b9{mph:,.0f}/h" if mph is not None else "— (no hours)"
+            margin = item.get("margin_amount") or 0
+            st.markdown(f"**MPH:** {mph_txt}  |  Margin \u20b9{margin:,.0f}")
+        else:
+            st.caption("MPH pending (invoice + delivery)")
 
         if st.button(
             "Edit Item",
@@ -101,9 +110,21 @@ def render(services: dict):
         st.info("No customization items found.")
         return
 
-    for row_start in range(0, min(len(items), 150), 3):
-        row_items = items[row_start : row_start + 3]
+    page_items, page, total_pages = paginate_list(
+        items,
+        page_key="items_page",
+        page_size=CARD_PAGE_SIZE,
+        filter_key="items_search",
+        filter_value=query,
+    )
+    for row_start in range(0, len(page_items), 3):
+        row_items = page_items[row_start : row_start + 3]
         cols = st.columns(len(row_items))
         for col_index, (col, item) in enumerate(zip(cols, row_items)):
             with col:
                 _item_summary_card(services, item, row_start + col_index)
+    render_page_controls(
+        page, total_pages, len(items),
+        page_key="items_page", prev_key="items_prev", next_key="items_next",
+        label="items",
+    )

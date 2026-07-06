@@ -1,5 +1,5 @@
 from datetime import date
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from vaybooks.bms.domain.accounting.repository import CounterRepository
 from vaybooks.bms.domain.expenses.repository import ExpenseRepository
@@ -9,6 +9,7 @@ from vaybooks.bms.domain.invoices.services import InvoiceDomainService
 from vaybooks.bms.domain.orders.repository import OrderRepository
 from vaybooks.bms.domain.orders.services import OrderDomainService
 from vaybooks.bms.domain.shared.date_utils import utc_now
+from vaybooks.bms.domain.shared.enums import VoucherType
 
 
 class InvoiceAppService:
@@ -30,20 +31,25 @@ class InvoiceAppService:
         self._domain = InvoiceDomainService(invoice_repo)
         self._order_domain = OrderDomainService(order_repo, None)
 
-    def _resolve_income_account_id(self, income_account_id: Optional[str]) -> str:
-        if income_account_id:
-            return income_account_id
-        income_accounts = self._accounting.get_income_accounts()
-        if not income_accounts:
-            raise ValueError(
-                "No income account configured to credit the sale. "
-                "Create one in the Accounts page."
-            )
-        # Prefer an account named "Sales", otherwise the first income account.
-        for account in income_accounts:
-            if account.account_name.strip().lower() == "sales":
-                return account.id
-        return income_accounts[0].id
+    def _snapshot_item_mph(self, order, invoices: List[Invoice]) -> None:
+        """Freeze per-item MPH for items that are both invoiced and delivered.
+        Backfills items delivered before their invoice was created."""
+        deliveries = (
+            self._delivery_repo.list_by_order(order.id) if self._delivery_repo else []
+        )
+        if not deliveries:
+            return
+        expenses = self._expense_repo.find_by_order(order.id)
+        self._domain.snapshot_order_items(order, invoices, deliveries, expenses)
+
+    def _resolve_customization_account_id(self) -> str:
+        account = self._accounting.get_customization_account()
+        if account:
+            return account.id
+        raise ValueError(
+            'No "Customization" revenue account found. '
+            "Restart the app to seed defaults or create one in Accounts."
+        )
 
     def _resolve_discount_account_id(self) -> str:
         account = self._accounting.get_discount_account()
@@ -58,9 +64,8 @@ class InvoiceAppService:
         order,
         invoice: Invoice,
         post_entry: bool,
-        income_account_id: Optional[str],
     ) -> None:
-        """Create, update, or void the Dr Customer / Dr Discount / Cr Sales voucher."""
+        """Create, update, or void the Dr Customer / Dr Discount / Cr Customization voucher."""
         if self._accounting is None:
             return
         existing = self._accounting.find_sales_voucher_by_invoice(invoice.id)
@@ -72,7 +77,7 @@ class InvoiceAppService:
         customer_account = self._accounting.get_customer_account(order.customer_id)
         if not customer_account:
             raise ValueError("No customer account found for this order")
-        income_id = self._resolve_income_account_id(income_account_id)
+        income_id = self._resolve_customization_account_id()
         discount = round(invoice.discount_amount or 0.0, 2)
         discount_account_id = (
             self._resolve_discount_account_id() if discount > 0 else None
@@ -88,6 +93,7 @@ class InvoiceAppService:
                 invoice.invoice_date,
                 discount_amount=discount,
                 discount_account_id=discount_account_id,
+                voucher_type=VoucherType.CUSTOMIZATION_INVOICE,
             )
         else:
             self._accounting.create_sales_invoice(
@@ -100,6 +106,7 @@ class InvoiceAppService:
                 reference_invoice_id=invoice.id,
                 discount_amount=discount,
                 discount_account_id=discount_account_id,
+                voucher_type=VoucherType.CUSTOMIZATION_INVOICE,
             )
 
     def generate_invoice(
@@ -109,6 +116,7 @@ class InvoiceAppService:
         invoice_amount: float,
         invoice_date: Optional[date] = None,
         allow_already_invoiced: bool = False,
+        item_amounts: Optional[Dict[str, float]] = None,
     ) -> Invoice:
         order = self._order_repo.find_by_id(order_id)
         expenses = self._expense_repo.find_by_order(order_id)
@@ -125,6 +133,7 @@ class InvoiceAppService:
             expenses=expenses,
             existing_invoices=existing,
             allow_already_invoiced=allow_already_invoiced,
+            item_amounts=item_amounts,
         )
 
         invoices = existing + [invoice]
@@ -132,6 +141,7 @@ class InvoiceAppService:
             self._delivery_repo.list_by_order(order_id) if self._delivery_repo else []
         )
         self._order_domain.recalculate_status(order, invoices, deliveries)
+        self._snapshot_item_mph(order, invoices)
         order.updated_at = utc_now()
         self._order_repo.save(order)
         return invoice
@@ -145,8 +155,8 @@ class InvoiceAppService:
         invoice_date: Optional[date] = None,
         allow_already_invoiced: bool = False,
         post_entry: bool = False,
-        income_account_id: Optional[str] = None,
         discount_amount: float = 0.0,
+        item_amounts: Optional[Dict[str, float]] = None,
     ) -> Invoice:
         if not invoice_number or not invoice_number.strip():
             raise ValueError("Invoice number is required")
@@ -165,15 +175,17 @@ class InvoiceAppService:
             existing_invoices=existing,
             allow_already_invoiced=allow_already_invoiced,
             discount_amount=discount_amount,
+            item_amounts=item_amounts,
         )
 
-        self._sync_sales_posting(order, invoice, post_entry, income_account_id)
+        self._sync_sales_posting(order, invoice, post_entry)
 
         invoices = existing + [invoice]
         deliveries = (
             self._delivery_repo.list_by_order(order_id) if self._delivery_repo else []
         )
         self._order_domain.recalculate_status(order, invoices, deliveries)
+        self._snapshot_item_mph(order, invoices)
         order.updated_at = utc_now()
         self._order_repo.save(order)
         return invoice
@@ -187,8 +199,8 @@ class InvoiceAppService:
         invoice_date: Optional[date] = None,
         allow_already_invoiced: bool = True,
         post_entry: bool = False,
-        income_account_id: Optional[str] = None,
         discount_amount: float = 0.0,
+        item_amounts: Optional[Dict[str, float]] = None,
     ) -> Invoice:
         invoice = self._invoice_repo.find_by_id(invoice_id)
         if not invoice:
@@ -221,6 +233,11 @@ class InvoiceAppService:
 
         invoice.invoice_number = invoice_number.strip()
         invoice.bill_ids = list(bill_ids)
+        invoice.item_amounts = {
+            b: round(float(v), 2)
+            for b, v in (item_amounts or {}).items()
+            if b in bill_id_set
+        }
         invoice.invoice_amount = invoice_amount
         invoice.discount_amount = discount_amount
         invoice.invoice_date = invoice_date or invoice.invoice_date
@@ -232,14 +249,16 @@ class InvoiceAppService:
         invoice.updated_at = utc_now()
         saved = self._invoice_repo.save(invoice)
 
-        self._sync_sales_posting(order, saved, post_entry, income_account_id)
+        self._sync_sales_posting(order, saved, post_entry)
 
         deliveries = (
             self._delivery_repo.list_by_order(invoice.order_id)
             if self._delivery_repo
             else []
         )
-        self._order_domain.recalculate_status(order, others + [saved], deliveries)
+        invoices = others + [saved]
+        self._order_domain.recalculate_status(order, invoices, deliveries)
+        self._snapshot_item_mph(order, invoices)
         order.updated_at = utc_now()
         self._order_repo.save(order)
         return saved
@@ -266,3 +285,31 @@ class InvoiceAppService:
         scoped = [e for e in expenses if e.bill_id and e.bill_id in bill_id_set]
         net = max(invoice_amount - (discount_amount or 0.0), 0.0)
         return self._domain.calculate_mph(net, scoped)
+
+    def preview_item_mph(
+        self,
+        order_id: str,
+        item_amounts: Dict[str, float],
+        discount_amount: float = 0.0,
+    ) -> List[dict]:
+        """Per-item margin preview for the invoice dialog. Discount is allocated
+        proportionally to each item's gross price."""
+        if not item_amounts:
+            return []
+        expenses = self._expense_repo.find_by_order(order_id)
+        exp_by_bill: Dict[str, list] = {}
+        for e in expenses:
+            if e.bill_id:
+                exp_by_bill.setdefault(e.bill_id, []).append(e)
+        total_gross = sum(item_amounts.values())
+        discount = discount_amount or 0.0
+        rows = []
+        for bill_id, gross in item_amounts.items():
+            if total_gross > 0:
+                share = gross / total_gross
+            else:
+                share = 1.0 / len(item_amounts)
+            net = round(gross - discount * share, 2)
+            data = self._domain.calculate_item_mph(net, exp_by_bill.get(bill_id, []))
+            rows.append({"bill_id": bill_id, "net": net, **data})
+        return rows

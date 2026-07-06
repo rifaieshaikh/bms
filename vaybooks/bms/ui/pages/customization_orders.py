@@ -1,14 +1,17 @@
-from datetime import date
+from datetime import date, timedelta
 
 import streamlit as st
 
 from vaybooks.bms.application.dtos import CreateOrderRequest
 from vaybooks.bms.domain.shared.enums import VoucherType
-from vaybooks.bms.ui.components.item_detail_panel import (
-    clear_all_dialog_flags,
-    customization_item_detail_panel,
-)
+from vaybooks.bms.ui.components.item_detail_panel import customization_item_detail_panel
 from vaybooks.bms.ui.components.order_card import order_cards
+from vaybooks.bms.ui.dialog_utils import (
+    clear_all_dialog_flags,
+    dismiss_armed_dialogs,
+    register_armed_dialog,
+)
+from vaybooks.bms.ui.pagination import CARD_PAGE_SIZE, paginate_list, render_page_controls
 from vaybooks.bms.ui.session_keys import VIEW_ORDER_ID
 
 
@@ -92,7 +95,19 @@ def _new_order_dialog(services: dict):
 
     notes = st.text_area("Notes", key="new_ord_notes")
 
+    order_etd = st.date_input(
+        "Expected Delivery Date (ETD)",
+        value=date.today() + timedelta(days=7),
+        key="new_ord_etd",
+    )
+
+    def _mark_item_etd_override(idx: int):
+        rows = st.session_state.new_order_item_rows
+        if idx < len(rows):
+            rows[idx]["etd_overridden"] = True
+
     st.markdown("### Customization Items")
+    st.caption("Each item defaults to the order ETD; change it per item as needed.")
     item_rows = []
     for index, row in enumerate(st.session_state.new_order_item_rows):
         st.markdown(f"**Item {index + 1}**")
@@ -106,6 +121,17 @@ def _new_order_dialog(services: dict):
             "Item Description",
             value=row["item_description"],
             key=f"new_item_desc_{index}",
+        )
+
+        # Items that the user hasn't manually changed track the order ETD.
+        etd_key = f"new_item_etd_{index}"
+        if not row.get("etd_overridden"):
+            st.session_state[etd_key] = order_etd
+        row["expected_delivery_date"] = st.date_input(
+            "Item ETD",
+            key=etd_key,
+            on_change=_mark_item_etd_override,
+            args=(index,),
         )
 
         required_map = {}
@@ -161,6 +187,7 @@ def _new_order_dialog(services: dict):
                 customer_name=name,
                 phone_number=mobile,
                 customization_items=item_rows,
+                expected_delivery_date=order_etd,
                 advance_amount=advance,
                 receiving_account_id=receiving_account_id,
                 notes=notes,
@@ -208,7 +235,7 @@ def _render_items_tab(services: dict, order, invoices: list, deliveries: list):
 
 
 # --- invoice dialog ----------------------------------------------------------
-@st.dialog("Record Invoice", width="large")
+@st.dialog("Record Invoice", width="large", on_dismiss=dismiss_armed_dialogs)
 def _invoice_dialog(services: dict, order_id: str):
     invoice_service = services["invoices"]
     order = services["orders"].get_order_detail(order_id)
@@ -234,10 +261,26 @@ def _invoice_dialog(services: dict, order_id: str):
     )
     selected = st.multiselect("Items", list(options.keys()), default=default_labels)
     bill_ids = [options[lbl] for lbl in selected]
-    amount = st.number_input(
-        "Invoice Amount (gross)", min_value=0.0,
-        value=float(invoice.invoice_amount) if invoice else 0.0,
-    )
+
+    # Per-item pricing drives item-wise MPH. The invoice total is their sum.
+    existing_prices = dict(invoice.item_amounts) if invoice and invoice.item_amounts else {}
+    if invoice and not existing_prices and invoice.bill_ids:
+        each = round(float(invoice.invoice_amount) / len(invoice.bill_ids), 2)
+        existing_prices = {b: each for b in invoice.bill_ids}
+    label_by_bill = {iid: lbl for lbl, iid in options.items()}
+    item_amounts: dict = {}
+    if bill_ids:
+        st.markdown("**Item prices (gross)**")
+        for bill_id in bill_ids:
+            item_amounts[bill_id] = st.number_input(
+                f"{label_by_bill.get(bill_id, bill_id)}",
+                min_value=0.0,
+                value=float(existing_prices.get(bill_id, 0.0)),
+                key=f"inv_price_{order.id}_{bill_id}",
+            )
+    amount = round(sum(item_amounts.values()), 2)
+    if bill_ids:
+        st.caption(f"Invoice total (gross): \u20b9{amount:,.0f}")
 
     # Discount: enter a percentage (drives the amount) or an absolute amount.
     dcols = st.columns(2)
@@ -274,53 +317,51 @@ def _invoice_dialog(services: dict, order_id: str):
             f"Margin (on net): ₹{preview.get('margin_amount', 0):,.0f} | "
             f"MPH: {preview.get('margin_per_hour')}"
         )
+        item_previews = invoice_service.preview_item_mph(
+            order.id, item_amounts, discount_amount
+        )
+        if item_previews:
+            with st.expander("Per-item margin preview", expanded=False):
+                for row in item_previews:
+                    lbl = label_by_bill.get(row["bill_id"], row["bill_id"])
+                    mph_txt = (
+                        f"₹{row['margin_per_hour']:,.0f}/h"
+                        if row["margin_per_hour"] is not None
+                        else "— (no in-house hours)"
+                    )
+                    st.caption(
+                        f"**{lbl}** — Net ₹{row['net']:,.0f} | "
+                        f"Margin ₹{row['margin_amount']:,.0f} | MPH {mph_txt}"
+                    )
 
-    # Accounting posting: Dr Customer / Cr Sales.
+    # Accounting posting: Dr Customer / Cr Customization.
     accounting = services["accounting"]
     existing_voucher = (
         accounting.find_sales_voucher_by_invoice(invoice.id) if invoice else None
     )
     st.divider()
     post_entry = st.checkbox(
-        "Post accounting entry (Dr Customer / Dr Discount / Cr Sales)",
+        "Post accounting entry (Dr Customer / Dr Discount / Cr Customization)",
         value=bool(existing_voucher) if invoice else True,
     )
-    income_account_id = None
     if post_entry:
-        income_accounts = accounting.get_income_accounts()
-        if not income_accounts:
-            st.warning("No income account exists. Create one in the Accounts page.")
+        customization = accounting.get_customization_account()
+        if customization:
+            st.caption(f"Revenue credited to: **{customization.account_name}**")
         else:
-            income_options = {a.account_name: a.id for a in income_accounts}
-            existing_income_id = (
-                next(
-                    (l.account_id for l in existing_voucher.lines if l.credit_amount > 0),
-                    None,
+            st.warning(
+                'No "Customization" revenue account found. Restart the app to seed '
+                "defaults or create one in Accounts."
+            )
+        if discount_amount > 0:
+            discount_account = accounting.get_discount_account()
+            if discount_account:
+                st.caption(f"Discount debited to: **{discount_account.account_name}**")
+            else:
+                st.warning(
+                    'No "Discount Allowed" account found. Create one in the '
+                    "Accounts page to post the discount."
                 )
-                if existing_voucher
-                else None
-            )
-            default_idx = _index_of(income_options, existing_income_id) if existing_income_id else (
-                list(income_options.values()).index(
-                    next(
-                        (a.id for a in income_accounts if a.account_name.lower() == "sales"),
-                        income_accounts[0].id,
-                    )
-                )
-            )
-            income_name = st.selectbox(
-                "Credit to (Income account)", list(income_options.keys()), index=default_idx
-            )
-            income_account_id = income_options[income_name]
-            if discount_amount > 0:
-                discount_account = accounting.get_discount_account()
-                if discount_account:
-                    st.caption(f"Discount debited to: **{discount_account.account_name}**")
-                else:
-                    st.warning(
-                        'No "Discount Allowed" account found. Create one in the '
-                        "Accounts page to post the discount."
-                    )
 
     cols = st.columns(2)
     if cols[0].button("Save", type="primary", use_container_width=True):
@@ -329,15 +370,15 @@ def _invoice_dialog(services: dict, order_id: str):
                 invoice_service.update_invoice(
                     invoice.id, invoice_number, bill_ids, amount, inv_date,
                     allow_already_invoiced=override,
-                    post_entry=post_entry, income_account_id=income_account_id,
-                    discount_amount=discount_amount,
+                    post_entry=post_entry,
+                    discount_amount=discount_amount, item_amounts=item_amounts,
                 )
             else:
                 invoice_service.record_invoice(
                     order.id, invoice_number, bill_ids, amount, inv_date,
                     allow_already_invoiced=override,
-                    post_entry=post_entry, income_account_id=income_account_id,
-                    discount_amount=discount_amount,
+                    post_entry=post_entry,
+                    discount_amount=discount_amount, item_amounts=item_amounts,
                 )
             st.session_state.pop(flag_key, None)
             st.rerun()
@@ -351,8 +392,7 @@ def _invoice_dialog(services: dict, order_id: str):
 def _render_invoices_tab(services: dict, order, invoices: list):
     if st.button("+ Record Invoice", key=f"rec_inv_{order.id}", type="primary"):
         clear_all_dialog_flags()
-        st.session_state[_inv_flag(order.id)] = "new"
-        st.rerun()
+        _invoice_dialog(services, order.id)
     if not invoices:
         st.caption("No invoices yet.")
         return
@@ -384,12 +424,14 @@ def _render_invoices_tab(services: dict, order, invoices: list):
                 )
             if st.button("Edit", key=f"edit_inv_{invoice.id}"):
                 clear_all_dialog_flags()
-                st.session_state[_inv_flag(order.id)] = invoice.id
+                flag = _inv_flag(order.id)
+                st.session_state[flag] = invoice.id
+                register_armed_dialog(flag)
                 st.rerun()
 
 
 # --- delivery dialog ---------------------------------------------------------
-@st.dialog("Record Delivery", width="large")
+@st.dialog("Record Delivery", width="large", on_dismiss=dismiss_armed_dialogs)
 def _delivery_dialog(services: dict, order_id: str):
     delivery_service = services["deliveries"]
     order = services["orders"].get_order_detail(order_id)
@@ -439,8 +481,7 @@ def _delivery_dialog(services: dict, order_id: str):
 def _render_deliveries_tab(services: dict, order, deliveries: list):
     if st.button("+ Record Delivery", key=f"rec_del_{order.id}", type="primary"):
         clear_all_dialog_flags()
-        st.session_state[_del_flag(order.id)] = "new"
-        st.rerun()
+        _delivery_dialog(services, order.id)
     if not deliveries:
         st.caption("No deliveries yet.")
         return
@@ -457,12 +498,14 @@ def _render_deliveries_tab(services: dict, order, deliveries: list):
                 st.caption(delivery.delivery_notes)
             if st.button("Edit", key=f"edit_del_{delivery.id}"):
                 clear_all_dialog_flags()
-                st.session_state[_del_flag(order.id)] = delivery.id
+                flag = _del_flag(order.id)
+                st.session_state[flag] = delivery.id
+                register_armed_dialog(flag)
                 st.rerun()
 
 
 # --- receipt dialog ----------------------------------------------------------
-@st.dialog("Record Receipt", width="large")
+@st.dialog("Record Receipt", width="large", on_dismiss=dismiss_armed_dialogs)
 def _receipt_dialog(services: dict, order_id: str):
     accounting = services["accounting"]
     order = services["orders"].get_order_detail(order_id)
@@ -527,8 +570,7 @@ def _render_receipts_tab(services: dict, order):
     accounting = services["accounting"]
     if st.button("+ Record Receipt", key=f"rec_rcpt_{order.id}", type="primary"):
         clear_all_dialog_flags()
-        st.session_state[_rcpt_flag(order.id)] = "new"
-        st.rerun()
+        _receipt_dialog(services, order.id)
     receipts = [
         v
         for v in accounting.list_vouchers_by_order(order.id)
@@ -544,12 +586,14 @@ def _render_receipts_tab(services: dict, order):
             st.caption(f"{voucher.voucher_date:%Y-%m-%d} | {voucher.description or '—'}")
             if st.button("Edit", key=f"edit_rcpt_{voucher.id}"):
                 clear_all_dialog_flags()
-                st.session_state[_rcpt_flag(order.id)] = voucher.id
+                flag = _rcpt_flag(order.id)
+                st.session_state[flag] = voucher.id
+                register_armed_dialog(flag)
                 st.rerun()
 
 
 # --- payment dialog ----------------------------------------------------------
-@st.dialog("Record Vendor Payment", width="large")
+@st.dialog("Record Vendor Payment", width="large", on_dismiss=dismiss_armed_dialogs)
 def _payment_dialog(services: dict, order_id: str):
     accounting = services["accounting"]
     vendor_service = services["vendors"]
@@ -642,8 +686,7 @@ def _render_payments_tab(services: dict, order):
     }
     if st.button("+ Record Vendor Payment", key=f"rec_pay_{order.id}", type="primary"):
         clear_all_dialog_flags()
-        st.session_state[_pay_flag(order.id)] = "new"
-        st.rerun()
+        _payment_dialog(services, order.id)
     payments = accounting.list_order_vendor_payments(order.id)
     if not payments:
         st.caption("No payments recorded yet.")
@@ -661,7 +704,9 @@ def _render_payments_tab(services: dict, order):
             st.caption(f"{voucher.voucher_date:%Y-%m-%d} | {voucher.description or '—'}")
             if st.button("Edit", key=f"edit_pay_{voucher.id}"):
                 clear_all_dialog_flags()
-                st.session_state[_pay_flag(order.id)] = voucher.id
+                flag = _pay_flag(order.id)
+                st.session_state[flag] = voucher.id
+                register_armed_dialog(flag)
                 st.rerun()
 
 
@@ -682,7 +727,7 @@ def _customer_credit(services: dict, order, invoices: list, exclude_voucher_id=N
     return round(receipts - invoiced - refunds, 2)
 
 
-@st.dialog("Record Refund", width="large")
+@st.dialog("Record Refund", width="large", on_dismiss=dismiss_armed_dialogs)
 def _refund_dialog(services: dict, order_id: str):
     accounting = services["accounting"]
     order = services["orders"].get_order_detail(order_id)
@@ -754,8 +799,7 @@ def _render_refunds_tab(services: dict, order):
     accounting = services["accounting"]
     if st.button("+ Record Refund", key=f"rec_refund_{order.id}", type="primary"):
         clear_all_dialog_flags()
-        st.session_state[_refund_flag(order.id)] = "new"
-        st.rerun()
+        _refund_dialog(services, order.id)
     refunds = [
         v
         for v in accounting.list_vouchers_by_order(order.id)
@@ -771,7 +815,9 @@ def _render_refunds_tab(services: dict, order):
             st.caption(f"{voucher.voucher_date:%Y-%m-%d} | {voucher.description or '—'}")
             if st.button("Edit", key=f"edit_refund_{voucher.id}"):
                 clear_all_dialog_flags()
-                st.session_state[_refund_flag(order.id)] = voucher.id
+                flag = _refund_flag(order.id)
+                st.session_state[flag] = voucher.id
+                register_armed_dialog(flag)
                 st.rerun()
 
 
@@ -857,6 +903,31 @@ def _render_order_view(services: dict, order_id: str):
         if order.notes:
             st.caption(f"Notes: {order.notes}")
 
+        st.divider()
+        etd_cols = st.columns([2, 3, 1])
+        new_etd = etd_cols[0].date_input(
+            "Expected Delivery Date (ETD)",
+            value=order.expected_delivery_date,
+            key=f"order_etd_{order.id}",
+        )
+        propagate = etd_cols[1].checkbox(
+            "Also update items still using the order date",
+            value=True,
+            key=f"order_etd_prop_{order.id}",
+        )
+        etd_cols[2].markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        if etd_cols[2].button(
+            "Update", key=f"order_etd_btn_{order.id}", use_container_width=True
+        ):
+            try:
+                order_service.update_order_delivery_date(
+                    order.id, new_etd, propagate_to_items=propagate
+                )
+                st.toast("Delivery date updated")
+                st.rerun()
+            except Exception as exc:
+                st.error(str(exc))
+
     _render_order_financials(services, order, invoices)
 
     tab_items, tab_inv, tab_del, tab_rcpt, tab_pay, tab_refund = st.tabs(
@@ -932,4 +1003,17 @@ def render(services: dict):
     else:
         orders = services["order_repo"].list_all()
 
-    order_cards(orders[:100])
+    filter_token = f"{customer_filter_id or ''}|{query}"
+    page_orders, page, total_pages = paginate_list(
+        orders,
+        page_key="orders_page",
+        page_size=CARD_PAGE_SIZE,
+        filter_key="orders_filter",
+        filter_value=filter_token,
+    )
+    order_cards(page_orders)
+    render_page_controls(
+        page, total_pages, len(orders),
+        page_key="orders_page", prev_key="orders_prev", next_key="orders_next",
+        label="orders",
+    )

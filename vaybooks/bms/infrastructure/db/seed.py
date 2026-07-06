@@ -55,6 +55,7 @@ DEFAULT_ACCOUNTS = [
     ("Cash", AccountType.ASSET, True),
     ("Bank", AccountType.ASSET, True),
     ("Sales", AccountType.REVENUE, False),
+    ("Customization", AccountType.REVENUE, False),
     ("Discount Allowed", AccountType.EXPENSE, False),
     ("Stitching Expense", AccountType.EXPENSE, False),
     ("Hand Work Expense", AccountType.EXPENSE, False),

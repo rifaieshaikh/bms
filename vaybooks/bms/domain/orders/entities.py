@@ -13,6 +13,18 @@ class CustomizationItem:
     description: str = ""
     item_id: str = field(default_factory=lambda: uuid4().hex)
     item_status: CustomizationItemStatus = CustomizationItemStatus.PENDING
+    # Per-item ETD. Defaults to the order ETD when not explicitly set; older
+    # items without one fall back to the order ETD at display time.
+    expected_delivery_date: Optional[date] = None
+    # Per-item profitability snapshot, frozen once the item is both invoiced
+    # and delivered. `mph_snapshot_at` being set marks the numbers as final.
+    sell_amount: float = 0.0
+    expense_selling_total: float = 0.0
+    expense_purchase_total: float = 0.0
+    in_house_hours: float = 0.0
+    margin_amount: Optional[float] = None
+    margin_per_hour: Optional[float] = None
+    mph_snapshot_at: Optional[datetime] = None
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
 

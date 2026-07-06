@@ -4,6 +4,7 @@ from typing import List, Optional
 from vaybooks.bms.domain.deliveries.entities import Delivery
 from vaybooks.bms.domain.deliveries.repository import DeliveryRepository
 from vaybooks.bms.domain.deliveries.services import DeliveryDomainService
+from vaybooks.bms.domain.invoices.services import InvoiceDomainService
 from vaybooks.bms.domain.orders.entities import CustomizationOrder
 from vaybooks.bms.domain.orders.repository import OrderRepository
 from vaybooks.bms.domain.orders.services import OrderDomainService
@@ -16,12 +17,23 @@ class DeliveryAppService:
         delivery_repo: DeliveryRepository,
         order_repo: OrderRepository,
         invoice_repo,
+        expense_repo=None,
     ):
         self._delivery_repo = delivery_repo
         self._order_repo = order_repo
         self._invoice_repo = invoice_repo
+        self._expense_repo = expense_repo
         self._domain = DeliveryDomainService(delivery_repo)
         self._order_domain = OrderDomainService(order_repo, None)
+
+    def _snapshot_item_mph(self, order, invoices, deliveries) -> None:
+        """Freeze per-item MPH for items now delivered + invoiced."""
+        if self._expense_repo is None:
+            return
+        expenses = self._expense_repo.find_by_order(order.id)
+        InvoiceDomainService.snapshot_order_items(
+            order, invoices, deliveries, expenses
+        )
 
     def record_delivery(
         self,
@@ -44,6 +56,7 @@ class DeliveryAppService:
         invoices = self._invoice_repo.list_by_order(order_id)
         deliveries = self._delivery_repo.list_by_order(order_id) + [delivery]
         self._order_domain.recalculate_status(order, invoices, deliveries)
+        self._snapshot_item_mph(order, invoices, deliveries)
         order.updated_at = utc_now()
         self._order_repo.save(order)
         return delivery
@@ -76,6 +89,7 @@ class DeliveryAppService:
         invoices = self._invoice_repo.list_by_order(delivery.order_id)
         deliveries = self._delivery_repo.list_by_order(delivery.order_id)
         self._order_domain.recalculate_status(order, invoices, deliveries)
+        self._snapshot_item_mph(order, invoices, deliveries)
         order.updated_at = utc_now()
         self._order_repo.save(order)
         return saved

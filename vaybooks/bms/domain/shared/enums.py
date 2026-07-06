@@ -58,6 +58,7 @@ class VoucherType(str, Enum):
     PAYMENT = "Payment"
     JOURNAL = "Journal"
     SALES_INVOICE = "Sales Invoice"
+    CUSTOMIZATION_INVOICE = "Customization Invoice"
     PURCHASE_EXPENSE = "Purchase Expense"
     ADVANCE = "Advance"
     REFUND = "Refund"

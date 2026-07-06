@@ -2,6 +2,7 @@ import streamlit as st
 
 from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.components.customer_card import customer_card
+from vaybooks.bms.ui.pagination import CARD_PAGE_SIZE, paginate_list, render_page_controls
 
 
 @st.dialog("Add Customer", width="medium")
@@ -73,9 +74,16 @@ def render(services: dict):
         return
 
     order_counts = order_service.order_counts_by_customer()
+    page_customers, page, total_pages = paginate_list(
+        customers,
+        page_key="cust_page",
+        page_size=CARD_PAGE_SIZE,
+        filter_key="cust_search",
+        filter_value=query,
+    )
 
     cols = st.columns(3)
-    for index, customer in enumerate(customers):
+    for index, customer in enumerate(page_customers):
         order_count = order_counts.get(customer.id, 0)
         with cols[index % 3]:
             edit_clicked, view_orders_clicked = customer_card(
@@ -89,3 +97,9 @@ def render(services: dict):
                     st.switch_page(navigation.customization_orders_page)
                 else:
                     st.error("Orders page is not available.")
+
+    render_page_controls(
+        page, total_pages, len(customers),
+        page_key="cust_page", prev_key="cust_prev", next_key="cust_next",
+        label="customers",
+    )

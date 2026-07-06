@@ -102,7 +102,9 @@ def get_services():
             delivery_repo,
             accounting_service=accounting_service,
         ),
-        "deliveries": DeliveryAppService(delivery_repo, order_repo, invoice_repo),
+        "deliveries": DeliveryAppService(
+            delivery_repo, order_repo, invoice_repo, expense_repo
+        ),
         "accounting": accounting_service,
         "reports": ReportAppService(report_repo),
         "export": ExportAppService(report_repo),

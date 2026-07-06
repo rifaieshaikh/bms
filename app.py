@@ -12,6 +12,7 @@ from vaybooks.bms.ui.pages import (
     reports,
 )
 from vaybooks.bms.ui.pages import activities, customization_items, customization_orders
+from vaybooks.bms.ui.pages import mtd_dashboard
 
 st.set_page_config(
     page_title="Zahcci Customization Orders",
@@ -69,6 +70,11 @@ page_groups = {
             _page(accounts),
             title="Accounts",
             icon=":material/account_balance:",
+        ),
+        st.Page(
+            _page(mtd_dashboard),
+            title="MTD Dashboard",
+            icon=":material/calendar_month:",
         ),
         st.Page(
             _page(reports),

@@ -10,6 +10,11 @@ from vaybooks.bms.domain.orders.entities import (
 )
 from vaybooks.bms.domain.shared.date_utils import minutes_to_hours
 from vaybooks.bms.domain.shared.enums import ActivityStatus, ExpenseSource
+from vaybooks.bms.ui.dialog_utils import (
+    clear_all_dialog_flags,
+    dismiss_armed_dialogs,
+    register_armed_dialog,
+)
 
 
 def _money(value: float) -> str:
@@ -39,32 +44,6 @@ def _complete_flag_key(key_prefix: str) -> str:
 
 def _change_status_flag_key(key_prefix: str) -> str:
     return f"change_status_flow_{key_prefix}"
-
-
-# Streamlit permits only one dialog per script run. All dialog-open flags share
-# these prefixes; clearing them before opening a new dialog guarantees mutual
-# exclusion even when a previous dialog was dismissed via the ✕ (which never
-# runs its Cancel handler and would otherwise leave a stale flag behind).
-_ALL_DIALOG_FLAG_PREFIXES = (
-    "add_activity_flag_",
-    "remove_activity_flag_",
-    "time_dialog_",
-    "expense_dialog_",
-    "complete_flow_",
-    "change_status_flow_",
-    "inv_dialog_",
-    "del_dialog_",
-    "rcpt_dialog_",
-    "pay_dialog_",
-    "refund_dialog_",
-)
-
-
-def clear_all_dialog_flags() -> None:
-    """Drop every dialog-open flag so at most one dialog can open per run."""
-    for key in list(st.session_state.keys()):
-        if key.startswith(_ALL_DIALOG_FLAG_PREFIXES):
-            st.session_state.pop(key, None)
 
 
 def _activity_time_minutes(services, order_id, item_id, activity_id) -> int:
@@ -125,24 +104,54 @@ def _render_order_card(order, item, invoices, deliveries):
         delivered = bill_is_delivered(item.item_id, deliveries)
         flags[2].write(("✅ " if delivered else "❌ ") + ("Delivered" if delivered else "Not delivered"))
 
+        _render_item_mph(item, invoiced, delivered)
+
+
+def _render_item_mph(item, invoiced: bool, delivered: bool):
+    """Show the frozen per-item profitability snapshot."""
+    st.divider()
+    if item.mph_snapshot_at:
+        mph = item.margin_per_hour
+        mph_txt = f"{_money(mph)}/h" if mph is not None else "—"
+        m = st.columns(4)
+        m[0].metric("Revenue (net)", _money(item.sell_amount))
+        m[1].metric("Margin", _money(item.margin_amount or 0))
+        m[2].metric("In-house hours", f"{item.in_house_hours:.2f}")
+        m[3].metric("MPH", mph_txt)
+        st.caption(
+            "Item MPH frozen on delivery "
+            f"({item.mph_snapshot_at:%d %b %Y})."
+            + ("" if item.margin_per_hour is not None else " No in-house hours logged.")
+        )
+    else:
+        st.caption(
+            "Item MPH is calculated once the item is both invoiced and delivered."
+        )
+
 
 # --- inline item edit --------------------------------------------------------
 def _render_item_edit_inline(services, order, item, key_prefix):
     order_service = services["orders"]
     with st.container(border=True):
         st.markdown("**Item details**")
-        cols = st.columns([1, 2, 1])
+        cols = st.columns([1, 2, 1, 1])
         bill_number = cols[0].text_input(
             "Bill Number", value=item.bill_number, key=f"edit_bill_{key_prefix}"
         )
         description = cols[1].text_input(
             "Item Description", value=item.description, key=f"edit_desc_{key_prefix}"
         )
-        cols[2].markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-        if cols[2].button("Save", key=f"save_item_{key_prefix}", use_container_width=True):
+        item_etd = cols[2].date_input(
+            "Item ETD",
+            value=item.expected_delivery_date or order.expected_delivery_date,
+            key=f"edit_etd_{key_prefix}",
+        )
+        cols[3].markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        if cols[3].button("Save", key=f"save_item_{key_prefix}", use_container_width=True):
             try:
                 order_service.update_customization_item(
-                    order.id, item.item_id, bill_number, description
+                    order.id, item.item_id, bill_number, description,
+                    expected_delivery_date=item_etd,
                 )
                 st.toast("Item saved")
                 st.rerun()
@@ -160,7 +169,7 @@ def _on_status_change(services, order_id, order_activity_id, widget_key, err_key
         st.session_state[err_key] = str(exc)
 
 
-@st.dialog("Add Activity")
+@st.dialog("Add Activity", on_dismiss=dismiss_armed_dialogs)
 def _add_activity_dialog(services: dict, order_id: str, item_id: str, flag_key: str):
     order_service = services["orders"]
     activity_service = services["activities"]
@@ -192,7 +201,7 @@ def _add_activity_dialog(services: dict, order_id: str, item_id: str, flag_key: 
         st.rerun()
 
 
-@st.dialog("Remove Activity")
+@st.dialog("Remove Activity", on_dismiss=dismiss_armed_dialogs)
 def _remove_activity_dialog(services: dict, order_id: str, order_activity_id: str, flag_key: str):
     order_service = services["orders"]
     order = order_service.get_order_detail(order_id)
@@ -289,7 +298,7 @@ def _complete_activity_body(services, order, item, activity, key_prefix, flag_ke
         st.rerun()
 
 
-@st.dialog("Complete Activity")
+@st.dialog("Complete Activity", on_dismiss=dismiss_armed_dialogs)
 def _complete_activity_dialog(services, order_id, key_prefix):
     flag_key = _complete_flag_key(key_prefix)
     target = st.session_state.get(flag_key)
@@ -326,7 +335,7 @@ def _change_status_body(services, order, activity, key_prefix, flag_key):
         st.rerun()
 
 
-@st.dialog("Change Status")
+@st.dialog("Change Status", on_dismiss=dismiss_armed_dialogs)
 def _change_status_dialog(services, order_id, key_prefix):
     flag_key = _change_status_flag_key(key_prefix)
     target = st.session_state.get(flag_key)
@@ -351,7 +360,9 @@ def _render_activity_card(services, order, item, activity, key_prefix, allow_dia
             st.success(COMPLETED_ACTIVITY_STATUS)
             if st.button("Change Status", key=f"chg_btn_{suffix}", use_container_width=True):
                 clear_all_dialog_flags()
-                st.session_state[_change_status_flag_key(key_prefix)] = activity.order_activity_id
+                flag = _change_status_flag_key(key_prefix)
+                st.session_state[flag] = activity.order_activity_id
+                register_armed_dialog(flag)
                 st.rerun()
             return
 
@@ -378,13 +389,17 @@ def _render_activity_card(services, order, item, activity, key_prefix, allow_dia
         btns = st.columns(2) if not is_locked else [st]
         if btns[0].button("Complete", key=f"comp_{suffix}", type="primary", use_container_width=True):
             clear_all_dialog_flags()
-            st.session_state[_complete_flag_key(key_prefix)] = activity.order_activity_id
+            flag = _complete_flag_key(key_prefix)
+            st.session_state[flag] = activity.order_activity_id
+            register_armed_dialog(flag)
             st.rerun()
         if not is_locked:
             if btns[1].button("Remove", key=f"rem_{suffix}", use_container_width=True):
                 if allow_dialogs:
                     clear_all_dialog_flags()
-                    st.session_state[_remove_flag_key(key_prefix)] = activity.order_activity_id
+                    flag = _remove_flag_key(key_prefix)
+                    st.session_state[flag] = activity.order_activity_id
+                    register_armed_dialog(flag)
                 else:
                     st.session_state[f"inline_remove_{key_prefix}"] = activity.order_activity_id
                 st.rerun()
@@ -446,10 +461,12 @@ def _render_activity_management(services, order, item, key_prefix, allow_dialogs
     if st.button("+ Add Activity", key=f"open_add_act_{key_prefix}", type="primary"):
         if allow_dialogs:
             clear_all_dialog_flags()
-            st.session_state[_add_flag_key(key_prefix)] = True
+            _add_activity_dialog(
+                services, order.id, item.item_id, _add_flag_key(key_prefix)
+            )
         else:
             st.session_state[f"inline_add_{key_prefix}"] = True
-        st.rerun()
+            st.rerun()
 
     if not allow_dialogs:
         _render_inline_add_activity(services, order, item, key_prefix)
@@ -558,7 +575,7 @@ def _save_time(services, order, item, data, entry, flag_key=None):
     return True
 
 
-@st.dialog("Record Time")
+@st.dialog("Record Time", on_dismiss=dismiss_armed_dialogs)
 def _time_dialog(services, order_id, item_id, key_prefix):
     flag_key = _time_flag_key(key_prefix)
     target = st.session_state.get(flag_key)
@@ -615,8 +632,7 @@ def _render_time_management(services, order, item, key_prefix, allow_dialogs):
             st.warning("Add an activity to this item first.")
         elif allow_dialogs:
             clear_all_dialog_flags()
-            st.session_state[_time_flag_key(key_prefix)] = "new"
-            st.rerun()
+            _time_dialog(services, order.id, item.item_id, key_prefix)
         else:
             st.session_state[f"inline_time_{key_prefix}"] = "new"
             st.rerun()
@@ -660,7 +676,9 @@ def _render_time_management(services, order, item, key_prefix, allow_dialogs):
                     if acts[0].button("Edit", key=f"edit_time_{entry.id}", use_container_width=True):
                         if allow_dialogs:
                             clear_all_dialog_flags()
-                            st.session_state[_time_flag_key(key_prefix)] = entry.id
+                            flag = _time_flag_key(key_prefix)
+                            st.session_state[flag] = entry.id
+                            register_armed_dialog(flag)
                         else:
                             st.session_state[f"inline_time_{key_prefix}"] = entry.id
                         st.rerun()
@@ -734,7 +752,7 @@ def _save_expense(services, order, item, data, expense, flag_key=None):
     return True
 
 
-@st.dialog("Add Expense")
+@st.dialog("Add Expense", on_dismiss=dismiss_armed_dialogs)
 def _expense_dialog(services, order_id, item_id, key_prefix):
     flag_key = _expense_flag_key(key_prefix)
     target = st.session_state.get(flag_key)
@@ -789,8 +807,7 @@ def _render_expense_management(services, order, item, key_prefix, allow_dialogs)
     if st.button("+ Add Expense", key=f"add_exp_{key_prefix}", type="primary"):
         if allow_dialogs:
             clear_all_dialog_flags()
-            st.session_state[_expense_flag_key(key_prefix)] = "new"
-            st.rerun()
+            _expense_dialog(services, order.id, item.item_id, key_prefix)
         else:
             st.session_state[f"inline_exp_{key_prefix}"] = "new"
             st.rerun()
@@ -837,7 +854,9 @@ def _render_expense_management(services, order, item, key_prefix, allow_dialogs)
                     if acts[0].button("Edit", key=f"edit_exp_{expense.id}", use_container_width=True):
                         if allow_dialogs:
                             clear_all_dialog_flags()
-                            st.session_state[_expense_flag_key(key_prefix)] = expense.id
+                            flag = _expense_flag_key(key_prefix)
+                            st.session_state[flag] = expense.id
+                            register_armed_dialog(flag)
                         else:
                             st.session_state[f"inline_exp_{key_prefix}"] = expense.id
                         st.rerun()
@@ -888,9 +907,7 @@ def customization_item_detail_panel(
     # Only one dialog may open per run, so this is a strict if/elif chain.
     if allow_activity_dialogs:
         remove_target = st.session_state.get(_remove_flag_key(key_prefix))
-        if st.session_state.get(_add_flag_key(key_prefix)):
-            _add_activity_dialog(services, order.id, item.item_id, _add_flag_key(key_prefix))
-        elif remove_target:
+        if remove_target:
             _remove_activity_dialog(services, order.id, remove_target, _remove_flag_key(key_prefix))
         elif st.session_state.get(_complete_flag_key(key_prefix)):
             _complete_activity_dialog(services, order.id, key_prefix)

@@ -51,7 +51,7 @@ class AccountingAppService:
 
     # Accounts resolved by name/type elsewhere (invoice & discount posting). Their
     # name and type are locked so renaming/retyping can't silently break posting.
-    PROTECTED_ACCOUNT_NAMES = {"sales", "discount allowed"}
+    PROTECTED_ACCOUNT_NAMES = {"sales", "customization", "discount allowed"}
 
     def is_protected_account(self, account: Account) -> bool:
         return account.account_name.strip().lower() in self.PROTECTED_ACCOUNT_NAMES
@@ -337,6 +337,18 @@ class AccountingAppService:
             if a.account_type == AccountType.REVENUE
         ]
 
+    def get_customization_account(self) -> Optional[Account]:
+        for account in self._account_repo.list_all():
+            if account.account_name.strip().lower() == "customization":
+                return account
+        return None
+
+    def get_sales_account(self) -> Optional[Account]:
+        for account in self._account_repo.list_all():
+            if account.account_name.strip().lower() == "sales":
+                return account
+        return None
+
     def find_sales_voucher_by_invoice(self, invoice_id: str) -> Optional[Voucher]:
         return self._voucher_repo.find_by_invoice(invoice_id)
 
@@ -351,6 +363,7 @@ class AccountingAppService:
         reference_invoice_id: Optional[str] = None,
         discount_amount: float = 0.0,
         discount_account_id: Optional[str] = None,
+        voucher_type: VoucherType = VoucherType.SALES_INVOICE,
     ) -> Voucher:
         customer = self._account_repo.find_by_id(customer_account_id)
         income = self._account_repo.find_by_id(income_account_id)
@@ -375,6 +388,7 @@ class AccountingAppService:
             discount_amount=discount_amount,
             discount_account_id=discount.id if discount else None,
             discount_account_name=discount.account_name if discount else None,
+            voucher_type=voucher_type,
         )
         return self._domain.save_voucher(voucher)
 
@@ -388,6 +402,7 @@ class AccountingAppService:
         voucher_date: Optional[date] = None,
         discount_amount: float = 0.0,
         discount_account_id: Optional[str] = None,
+        voucher_type: Optional[VoucherType] = None,
     ) -> Voucher:
         old = self._voucher_repo.find_by_id(voucher_id)
         if not old:
@@ -414,6 +429,7 @@ class AccountingAppService:
             discount_amount=discount_amount,
             discount_account_id=discount.id if discount else None,
             discount_account_name=discount.account_name if discount else None,
+            voucher_type=voucher_type or old.voucher_type,
         )
         voucher.id = old.id
         return self._domain.update_voucher(voucher)

@@ -100,6 +100,7 @@ class OrderAppService:
                 item_data.get("item_description", ""),
                 activity_configs,
                 item_data.get("required_activities", request.required_activities),
+                expected_delivery_date=item_data.get("expected_delivery_date"),
             )
 
         self._order_domain.validate_order(order)
@@ -177,6 +178,10 @@ class OrderAppService:
                         "description": item.description,
                         "item_status": item.item_status.value,
                         "order_status": order.order_status.value,
+                        "sell_amount": item.sell_amount,
+                        "margin_amount": item.margin_amount,
+                        "margin_per_hour": item.margin_per_hour,
+                        "mph_snapshot_at": item.mph_snapshot_at,
                     }
                 )
         return rows
@@ -320,16 +325,42 @@ class OrderAppService:
         """Map of customer_id -> order count for all customers (one query)."""
         return self._order_repo.counts_by_customer()
 
+    def update_order_delivery_date(
+        self,
+        order_id: str,
+        expected_delivery_date,
+        propagate_to_items: bool = True,
+    ) -> CustomizationOrder:
+        order = self._order_repo.find_by_id(order_id)
+        if not order:
+            raise ValueError("Order not found")
+        if not expected_delivery_date:
+            raise ValueError("Expected delivery date is required")
+        old_etd = order.expected_delivery_date
+        order.expected_delivery_date = expected_delivery_date
+        if propagate_to_items:
+            # Only items still following the order date (never individually
+            # overridden) move with it; per-item overrides are preserved.
+            for item in order.customization_items:
+                if item.expected_delivery_date in (None, old_etd):
+                    item.expected_delivery_date = expected_delivery_date
+                    item.updated_at = utc_now()
+        order.updated_at = utc_now()
+        self._recalculate_order(order)
+        return self._order_repo.save(order)
+
     def update_customization_item(
         self,
         order_id: str,
         item_id: str,
         bill_number: str,
         description: str,
+        expected_delivery_date=None,
     ) -> CustomizationOrder:
         order = self._order_repo.find_by_id(order_id)
         self._order_domain.update_customization_item(
-            order, item_id, bill_number, description
+            order, item_id, bill_number, description,
+            expected_delivery_date=expected_delivery_date,
         )
         self._recalculate_order(order)
         return self._order_repo.save(order)

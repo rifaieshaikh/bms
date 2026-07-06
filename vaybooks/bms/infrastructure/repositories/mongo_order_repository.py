@@ -60,6 +60,14 @@ class MongoOrderRepository:
             "bill_number": item.bill_number,
             "description": item.description,
             "item_status": item.item_status.value,
+            "expected_delivery_date": to_bson_value(item.expected_delivery_date),
+            "sell_amount": item.sell_amount,
+            "expense_selling_total": item.expense_selling_total,
+            "expense_purchase_total": item.expense_purchase_total,
+            "in_house_hours": item.in_house_hours,
+            "margin_amount": item.margin_amount,
+            "margin_per_hour": item.margin_per_hour,
+            "mph_snapshot_at": item.mph_snapshot_at,
             "created_at": item.created_at,
             "updated_at": item.updated_at,
         }
@@ -72,6 +80,14 @@ class MongoOrderRepository:
             item_status=CustomizationItemStatus(
                 doc.get("item_status", CustomizationItemStatus.PENDING.value)
             ),
+            expected_delivery_date=from_bson_date(doc.get("expected_delivery_date")),
+            sell_amount=doc.get("sell_amount", 0) or 0,
+            expense_selling_total=doc.get("expense_selling_total", 0) or 0,
+            expense_purchase_total=doc.get("expense_purchase_total", 0) or 0,
+            in_house_hours=doc.get("in_house_hours", 0) or 0,
+            margin_amount=doc.get("margin_amount"),
+            margin_per_hour=doc.get("margin_per_hour"),
+            mph_snapshot_at=doc.get("mph_snapshot_at"),
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
         )
