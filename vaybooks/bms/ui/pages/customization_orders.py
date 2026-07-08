@@ -55,6 +55,26 @@ def _completed_item_options(order, extra_ids=None) -> dict:
     return labels
 
 
+def _select_items_checklist(options: dict, key_prefix: str, default_ids=None) -> list:
+    """Render completed items as checkboxes and return the selected bill ids.
+
+    Streamlit's multiselect dropdown list can render clipped/blank inside an
+    ``st.dialog``; a checkbox list stays fully visible.
+    """
+    default_ids = set(default_ids or [])
+    st.markdown("**Items**")
+    selected: list[str] = []
+    for label, item_id in options.items():
+        checked = st.checkbox(
+            label,
+            value=item_id in default_ids,
+            key=f"{key_prefix}_{item_id}",
+        )
+        if checked:
+            selected.append(item_id)
+    return selected
+
+
 def _default_item_rows():
     return [
         {
@@ -256,13 +276,11 @@ def _invoice_dialog(services: dict, order_id: str):
             st.session_state.pop(flag_key, None)
             st.rerun()
         return
-    default_labels = (
-        [lbl for lbl, iid in options.items() if iid in set(invoice.bill_ids)]
-        if invoice
-        else []
+    bill_ids = _select_items_checklist(
+        options,
+        f"inv_items_{order.id}",
+        default_ids=invoice.bill_ids if invoice else None,
     )
-    selected = st.multiselect("Items", list(options.keys()), default=default_labels)
-    bill_ids = [options[lbl] for lbl in selected]
 
     # Per-item pricing drives item-wise MPH. The invoice total is their sum.
     existing_prices = dict(invoice.item_amounts) if invoice and invoice.item_amounts else {}
@@ -467,13 +485,11 @@ def _delivery_dialog(services: dict, order_id: str):
             st.session_state.pop(flag_key, None)
             st.rerun()
         return
-    default_labels = (
-        [lbl for lbl, iid in options.items() if iid in set(delivery.bill_ids)]
-        if delivery
-        else []
+    bill_ids = _select_items_checklist(
+        options,
+        f"del_items_{order.id}",
+        default_ids=delivery.bill_ids if delivery else None,
     )
-    selected = st.multiselect("Items", list(options.keys()), default=default_labels)
-    bill_ids = [options[lbl] for lbl in selected]
     del_date = st.date_input(
         "Delivery Date", value=delivery.delivery_date if delivery else date.today()
     )
