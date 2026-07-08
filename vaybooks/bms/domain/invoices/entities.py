@@ -13,6 +13,7 @@ class Invoice:
     invoice_number: str
     invoice_date: date
     invoice_amount: float
+    total_amount: float = 0.0
     bill_ids: List[str] = field(default_factory=list)
     # Gross price entered per item (bill_id -> amount). Enables per-item MPH.
     item_amounts: Dict[str, float] = field(default_factory=dict)

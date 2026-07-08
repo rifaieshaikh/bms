@@ -52,7 +52,7 @@ DEFAULT_ACTIVITIES = [
 
 # (account_name, account_type, is_store_account)
 DEFAULT_ACCOUNTS = [
-    ("Cash", AccountType.ASSET, True),
+    ("Cash Drawer", AccountType.ASSET, True),
     ("Bank", AccountType.ASSET, True),
     ("Sales", AccountType.REVENUE, False),
     ("Customization", AccountType.REVENUE, False),
@@ -82,6 +82,10 @@ DEFAULT_VENDOR_SERVICES = [
 
 
 def run_seed(db):
+    from tests.qa.sync_execution_overrides import sync_execution_overrides
+
+    sync_execution_overrides()
+
     now = datetime.utcnow()
 
     # Seed default activities only on a fresh database. Re-seeding by name would
@@ -90,6 +94,21 @@ def run_seed(db):
     # seed the same fresh database at startup.
     if db.activity_config.count_documents({}) == 0:
         for activity in DEFAULT_ACTIVITIES:
+            _insert_ignoring_duplicates(
+                db.activity_config,
+                {
+                    "_id": uuid4().hex,
+                    **activity,
+                    "statuses": list(DEFAULT_ACTIVITY_STATUSES),
+                    "is_active": True,
+                    "created_at": now,
+                    "updated_at": now,
+                },
+            )
+    else:
+        for activity in DEFAULT_ACTIVITIES:
+            if db.activity_config.find_one({"activity_name": activity["activity_name"]}):
+                continue
             _insert_ignoring_duplicates(
                 db.activity_config,
                 {
@@ -152,6 +171,14 @@ def run_seed(db):
                 },
             )
 
+    from vaybooks.bms.infrastructure.db.qa_fixtures import run_qa_fixtures
+
+    run_qa_fixtures(db)
+
+    from vaybooks.bms.interface.api.health_routes import install_harness_health_route
+
+    install_harness_health_route()
+
 
 def _insert_ignoring_duplicates(collection, document):
     """Insert a seed document, tolerating a concurrent session that beat us to it."""
@@ -159,6 +186,11 @@ def _insert_ignoring_duplicates(collection, document):
         collection.insert_one(document)
     except DuplicateKeyError:
         pass
+
+
+from vaybooks.bms.interface.api.health_routes import install_harness_health_route_when_ready
+
+install_harness_health_route_when_ready()
 
 
 if __name__ == "__main__":

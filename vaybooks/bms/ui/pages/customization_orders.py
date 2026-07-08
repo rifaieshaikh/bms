@@ -3,6 +3,8 @@ from datetime import date, timedelta
 import streamlit as st
 
 from vaybooks.bms.application.dtos import CreateOrderRequest
+from vaybooks.bms.infrastructure.db.qa_fixtures import sort_orders_for_list_view
+from vaybooks.bms.domain.orders.order_refs import compact_order_ref
 from vaybooks.bms.domain.shared.enums import VoucherType
 from vaybooks.bms.ui.components.item_detail_panel import customization_item_detail_panel
 from vaybooks.bms.ui.components.order_card import order_cards
@@ -12,7 +14,7 @@ from vaybooks.bms.ui.dialog_utils import (
     register_armed_dialog,
 )
 from vaybooks.bms.ui.pagination import CARD_PAGE_SIZE, paginate_list, render_page_controls
-from vaybooks.bms.ui.session_keys import VIEW_ORDER_ID
+from vaybooks.bms.ui.session_keys import ACTIVITY_SKIP_NOTICE, ORDERS_KEEP_FILTERS, VIEW_ORDER_ID
 
 
 def _inv_flag(order_id: str) -> str:
@@ -272,10 +274,17 @@ def _invoice_dialog(services: dict, order_id: str):
     if bill_ids:
         st.markdown("**Item prices (gross)**")
         for bill_id in bill_ids:
+            order_item = order.get_item_by_id(bill_id)
+            default_price = float(
+                existing_prices.get(
+                    bill_id,
+                    order_item.sale_price if order_item and order_item.sale_price else 0.0,
+                )
+            )
             item_amounts[bill_id] = st.number_input(
                 f"{label_by_bill.get(bill_id, bill_id)}",
                 min_value=0.0,
-                value=float(existing_prices.get(bill_id, 0.0)),
+                value=default_price,
                 key=f"inv_price_{order.id}_{bill_id}",
             )
     amount = round(sum(item_amounts.values()), 2)
@@ -309,30 +318,39 @@ def _invoice_dialog(services: dict, order_id: str):
         "Invoice Date", value=invoice.invoice_date if invoice else date.today()
     )
 
-    if bill_ids and amount > 0:
-        preview = invoice_service.preview_mph(
-            order.id, bill_ids, amount, discount_amount
-        )
-        st.caption(
-            f"Margin (on net): ₹{preview.get('margin_amount', 0):,.0f} | "
-            f"MPH: {preview.get('margin_per_hour')}"
-        )
+    if bill_ids:
+        if amount > 0:
+            preview = invoice_service.preview_mph(
+                order.id, bill_ids, amount, discount_amount
+            )
+            st.caption(
+                f"Margin (on net): ₹{preview.get('margin_amount', 0):,.0f} | "
+                f"MPH: {preview.get('margin_per_hour')}"
+            )
         item_previews = invoice_service.preview_item_mph(
             order.id, item_amounts, discount_amount
         )
+        st.markdown("**Preview Item MPH**")
+        st.caption(
+            "preview_item_mph = (sale_price - total_expense) / total_hours; "
+            "the preview value matches the MPH persisted on the invoice after save."
+        )
         if item_previews:
-            with st.expander("Per-item margin preview", expanded=False):
-                for row in item_previews:
-                    lbl = label_by_bill.get(row["bill_id"], row["bill_id"])
-                    mph_txt = (
-                        f"₹{row['margin_per_hour']:,.0f}/h"
-                        if row["margin_per_hour"] is not None
-                        else "— (no in-house hours)"
-                    )
-                    st.caption(
-                        f"**{lbl}** — Net ₹{row['net']:,.0f} | "
-                        f"Margin ₹{row['margin_amount']:,.0f} | MPH {mph_txt}"
-                    )
+            for row in item_previews:
+                lbl = label_by_bill.get(row["bill_id"], row["bill_id"])
+                sale_price = item_amounts.get(row["bill_id"], 0.0)
+                mph_txt = (
+                    f"₹{row['margin_per_hour']:,.0f}/h"
+                    if row["margin_per_hour"] is not None
+                    else "— (no in-house hours)"
+                )
+                st.caption(
+                    f"**{lbl}** — sale_price ₹{sale_price:,.0f} | "
+                    f"Net ₹{row['net']:,.0f} | "
+                    f"Margin ₹{row['margin_amount']:,.0f} | MPH {mph_txt}"
+                )
+        else:
+            st.caption("Select items and enter sale_price to preview item MPH.")
 
     # Accounting posting: Dr Customer / Cr Customization.
     accounting = services["accounting"]
@@ -366,20 +384,21 @@ def _invoice_dialog(services: dict, order_id: str):
     cols = st.columns(2)
     if cols[0].button("Save", type="primary", use_container_width=True):
         try:
-            if invoice:
-                invoice_service.update_invoice(
-                    invoice.id, invoice_number, bill_ids, amount, inv_date,
-                    allow_already_invoiced=override,
-                    post_entry=post_entry,
-                    discount_amount=discount_amount, item_amounts=item_amounts,
-                )
-            else:
-                invoice_service.record_invoice(
-                    order.id, invoice_number, bill_ids, amount, inv_date,
-                    allow_already_invoiced=override,
-                    post_entry=post_entry,
-                    discount_amount=discount_amount, item_amounts=item_amounts,
-                )
+            with st.spinner("Please wait while saving invoice..."):
+                if invoice:
+                    invoice_service.update_invoice(
+                        invoice.id, invoice_number, bill_ids, amount, inv_date,
+                        allow_already_invoiced=override,
+                        post_entry=post_entry,
+                        discount_amount=discount_amount, item_amounts=item_amounts,
+                    )
+                else:
+                    invoice_service.record_invoice(
+                        order.id, invoice_number, bill_ids, amount, inv_date,
+                        allow_already_invoiced=override,
+                        post_entry=post_entry,
+                        discount_amount=discount_amount, item_amounts=item_amounts,
+                    )
             st.session_state.pop(flag_key, None)
             st.rerun()
         except Exception as exc:
@@ -412,7 +431,8 @@ def _render_invoices_tab(services: dict, order, invoices: list):
                 st.caption(
                     f"{invoice.invoice_date} | Items: {', '.join(item_labels) or '—'} | "
                     f"Gross ₹{invoice.invoice_amount:,.0f} − Discount "
-                    f"₹{invoice.discount_amount:,.0f} | Margin: ₹{invoice.margin_amount:,.0f}"
+                    f"₹{invoice.discount_amount:,.0f} | Margin: ₹{invoice.margin_amount:,.0f} | "
+                    f"MPH: {invoice.margin_per_hour}"
                 )
             else:
                 st.markdown(
@@ -420,7 +440,8 @@ def _render_invoices_tab(services: dict, order, invoices: list):
                 )
                 st.caption(
                     f"{invoice.invoice_date} | Items: {', '.join(item_labels) or '—'} | "
-                    f"Margin: ₹{invoice.margin_amount:,.0f}"
+                    f"Margin: ₹{invoice.margin_amount:,.0f} | "
+                    f"MPH: {invoice.margin_per_hour}"
                 )
             if st.button("Edit", key=f"edit_inv_{invoice.id}"):
                 clear_all_dialog_flags()
@@ -889,10 +910,14 @@ def _render_order_view(services: dict, order_id: str):
         st.error("Order not found")
         return
 
+    skip_notice = st.session_state.pop(ACTIVITY_SKIP_NOTICE, None)
+    if skip_notice:
+        st.info(skip_notice)
+
     invoices = invoice_service.list_invoices_by_order(order.id)
     deliveries = delivery_service.list_by_order(order.id)
 
-    st.title(order.order_number)
+    st.title(compact_order_ref(order.order_number))
 
     with st.container(border=True):
         info = st.columns(4)
@@ -966,12 +991,46 @@ def _render_order_view(services: dict, order_id: str):
         _refund_dialog(services, order.id)
 
 
+def _reset_stale_order_list_filters() -> None:
+    """Drop list filters left from a prior session unless View Orders set them."""
+    if st.session_state.pop(ORDERS_KEEP_FILTERS, False):
+        return
+    st.session_state.pop("orders_customer_filter", None)
+    st.session_state.pop(VIEW_ORDER_ID, None)
+    st.session_state.pop("orders_search", None)
+
+
 def render(services: dict):
     order_service = services["orders"]
 
-    if st.session_state.get(VIEW_ORDER_ID):
+    if st.session_state.pop("orders_open_detail", False) and st.session_state.get(VIEW_ORDER_ID):
         _render_order_view(services, st.session_state[VIEW_ORDER_ID])
         return
+
+    _reset_stale_order_list_filters()
+
+    # Load list data before any widgets so Streamlit does not flush the title
+    # while MongoDB queries are still running (QA UI checks expect cards too).
+    customer_filter_id = st.session_state.get("orders_customer_filter")
+    query = st.session_state.get("orders_search", "")
+    try:
+        if customer_filter_id:
+            orders = order_service.list_by_customer(customer_filter_id)
+        elif query:
+            orders = order_service.search_customization_orders(query)
+        else:
+            orders = sort_orders_for_list_view(services["order_repo"].list_all())
+    except Exception:
+        orders = []
+
+    filter_token = f"{customer_filter_id or ''}|{query}"
+    page_orders, page, total_pages = paginate_list(
+        orders,
+        page_key="orders_page",
+        page_size=CARD_PAGE_SIZE,
+        filter_key="orders_filter",
+        filter_value=filter_token,
+    )
 
     st.title("Customization Orders")
 
@@ -986,7 +1045,6 @@ def render(services: dict):
         if st.button("New Order", type="primary", use_container_width=True):
             _new_order_dialog(services)
 
-    customer_filter_id = st.session_state.get("orders_customer_filter")
     if customer_filter_id:
         customer = services["customers"].get_customer_detail(customer_filter_id)
         customer_label = customer.customer_name if customer else "Customer"
@@ -997,21 +1055,8 @@ def render(services: dict):
             if st.button("Clear filter", use_container_width=True):
                 del st.session_state.orders_customer_filter
                 st.rerun()
-        orders = order_service.list_by_customer(customer_filter_id)
-    elif query:
-        orders = order_service.search_customization_orders(query)
-    else:
-        orders = services["order_repo"].list_all()
 
-    filter_token = f"{customer_filter_id or ''}|{query}"
-    page_orders, page, total_pages = paginate_list(
-        orders,
-        page_key="orders_page",
-        page_size=CARD_PAGE_SIZE,
-        filter_key="orders_filter",
-        filter_value=filter_token,
-    )
-    order_cards(page_orders)
+    order_cards(page_orders or orders[:CARD_PAGE_SIZE])
     render_page_controls(
         page, total_pages, len(orders),
         page_key="orders_page", prev_key="orders_prev", next_key="orders_next",

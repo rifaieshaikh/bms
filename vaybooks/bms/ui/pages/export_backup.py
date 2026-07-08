@@ -1,3 +1,5 @@
+import json
+
 import streamlit as st
 
 
@@ -30,6 +32,11 @@ def render(services: dict):
 
     st.divider()
     backup_json = export_service.export_full_backup_json()
+    try:
+        json.loads(backup_json)
+        st.success("Backup JSON parses successfully")
+    except json.JSONDecodeError:
+        st.error("Backup JSON could not be parsed")
     st.download_button(
         "Download Full Backup (JSON)",
         backup_json,

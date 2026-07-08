@@ -42,7 +42,9 @@ class VendorAppService:
         return self._vendor_repo.search(query)
 
     def get_vendor_detail(self, vendor_id: str) -> Optional[Vendor]:
-        return self._vendor_repo.find_by_id(vendor_id)
+        if not vendor_id:
+            return None
+        return self._vendor_repo.find_by_id(str(vendor_id))
 
     def update_vendor(
         self,
@@ -56,6 +58,7 @@ class VendorAppService:
         vendor = self._vendor_repo.find_by_id(vendor_id)
         if not vendor:
             raise ValueError("Vendor not found")
+        self._vendor_domain.validate_phone_number(phone_number)
         vendor.update(
             vendor_name=vendor_name.strip(),
             phone_number=phone_number.strip(),

@@ -17,6 +17,16 @@ class TimeTrackingRepository(Protocol):
 
     def find_by_bill_number(self, bill_number: str) -> List[TimeEntry]: ...
 
+    def search(
+        self,
+        bill_number: Optional[str] = None,
+        order_number: Optional[str] = None,
+        worker_name: Optional[str] = None,
+        activity_name: Optional[str] = None,
+        work_date_from: Optional[date] = None,
+        work_date_to: Optional[date] = None,
+    ) -> List[TimeEntry]: ...
+
     def list_all(self) -> List[TimeEntry]: ...
 
     def delete(self, entry_id: str) -> None: ...

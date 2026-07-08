@@ -10,11 +10,18 @@ from vaybooks.bms.domain.orders.entities import (
 )
 from vaybooks.bms.domain.shared.date_utils import minutes_to_hours
 from vaybooks.bms.domain.shared.enums import ActivityStatus, ExpenseSource
+from vaybooks.bms.ui.components.time_entry_dialogs import (
+    item_activities,
+    item_time_dialog,
+    save_time_entry,
+    time_form_fields,
+)
 from vaybooks.bms.ui.dialog_utils import (
     clear_all_dialog_flags,
     dismiss_armed_dialogs,
     register_armed_dialog,
 )
+from vaybooks.bms.ui.session_keys import ACTIVITY_SKIP_NOTICE
 
 
 def _money(value: float) -> str:
@@ -64,7 +71,7 @@ def _activity_expenses(services, item_id, activity_id):
 
 # --- helpers -----------------------------------------------------------------
 def _item_activities(order: CustomizationOrder, item: CustomizationItem):
-    return order.activities_for_item(item.item_id)
+    return item_activities(order, item)
 
 
 def _expense_source_for_activity(services: dict, activity_id: str) -> str:
@@ -265,7 +272,7 @@ def _complete_activity_body(services, order, item, activity, key_prefix, flag_ke
     )
     cc = st.columns(2)
     rate = cc[0].number_input(
-        "Rate", min_value=0.0, value=default_rate, key=f"cmpl_rate_{key_prefix}"
+        "Price", value=default_rate, key=f"cmpl_rate_{key_prefix}"
     )
     qty = cc[1].number_input(
         "Qty", min_value=0.0, value=float(default_qty), key=f"cmpl_qty_{key_prefix}"
@@ -278,21 +285,24 @@ def _complete_activity_body(services, order, item, activity, key_prefix, flag_ke
     if cols[0].button(
         "Save Expense & Complete", key=f"cmpl_save_{key_prefix}", type="primary", use_container_width=True
     ):
-        try:
-            source = _expense_source_for_activity(services, activity.activity_id)
-            expense_service.add_expense(
-                order_id=order.id, expense_date=date.today(), expense_name=name,
-                expense_source=source, purchase_price=rate, selling_price=rate,
-                quantity=qty, bill_id=item.item_id, activity_id=activity.activity_id,
-                notes=notes,
-            )
-            services["orders"].complete_activity(
-                activity.order_activity_id, "Staff", add_expense=False
-            )
-            st.session_state.pop(flag_key, None)
-            st.rerun()
-        except Exception as exc:
-            st.error(str(exc))
+        if rate <= 0:
+            st.error("Price must be a positive value")
+        else:
+            try:
+                source = _expense_source_for_activity(services, activity.activity_id)
+                expense_service.add_expense(
+                    order_id=order.id, expense_date=date.today(), expense_name=name,
+                    expense_source=source, purchase_price=rate, selling_price=rate,
+                    quantity=qty, bill_id=item.item_id, activity_id=activity.activity_id,
+                    notes=notes,
+                )
+                services["orders"].complete_activity(
+                    activity.order_activity_id, "Staff", add_expense=False
+                )
+                st.session_state.pop(flag_key, None)
+                st.rerun()
+            except Exception as exc:
+                st.error(str(exc))
     if cols[1].button("Cancel", key=f"cmpl_cancel_{key_prefix}", use_container_width=True):
         st.session_state.pop(flag_key, None)
         st.rerun()
@@ -352,6 +362,7 @@ def _render_activity_card(services, order, item, activity, key_prefix, allow_dia
     order_service = services["orders"]
     suffix = f"{key_prefix}_{activity.order_activity_id}"
     is_completed = activity.activity_status == ActivityStatus.COMPLETED
+    is_skipped = activity.activity_status == ActivityStatus.SKIPPED
 
     with st.container(border=True):
         st.markdown(f"**{activity.activity_name}**")
@@ -364,6 +375,10 @@ def _render_activity_card(services, order, item, activity, key_prefix, allow_dia
                 st.session_state[flag] = activity.order_activity_id
                 register_armed_dialog(flag)
                 st.rerun()
+            return
+
+        if is_skipped:
+            st.info(f"Activity {activity.activity_name} skipped")
             return
 
         statuses = order_service.get_activity_statuses(activity.activity_id)
@@ -386,7 +401,12 @@ def _render_activity_card(services, order, item, activity, key_prefix, allow_dia
             st.error(st.session_state[err_key])
 
         is_locked = activity.activity_id in locked
-        btns = st.columns(2) if not is_locked else [st]
+        if is_locked:
+            btns = [st]
+        elif activity.is_required:
+            btns = st.columns(3)
+        else:
+            btns = st.columns(2)
         if btns[0].button("Complete", key=f"comp_{suffix}", type="primary", use_container_width=True):
             clear_all_dialog_flags()
             flag = _complete_flag_key(key_prefix)
@@ -394,7 +414,20 @@ def _render_activity_card(services, order, item, activity, key_prefix, allow_dia
             register_armed_dialog(flag)
             st.rerun()
         if not is_locked:
-            if btns[1].button("Remove", key=f"rem_{suffix}", use_container_width=True):
+            skip_col = 1 if activity.is_required else None
+            if skip_col is not None and btns[skip_col].button(
+                "Skip", key=f"skip_{suffix}", use_container_width=True
+            ):
+                try:
+                    order_service.skip_activity(activity.order_activity_id, "Staff")
+                    st.session_state[ACTIVITY_SKIP_NOTICE] = (
+                        f"Activity {activity.activity_name} skipped"
+                    )
+                    st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
+            rem_col = 2 if activity.is_required else 1
+            if btns[rem_col].button("Remove", key=f"rem_{suffix}", use_container_width=True):
                 if allow_dialogs:
                     clear_all_dialog_flags()
                     flag = _remove_flag_key(key_prefix)
@@ -514,91 +547,7 @@ def _render_activity_management(services, order, item, key_prefix, allow_dialogs
 
 
 # --- time dialogs / management ----------------------------------------------
-def _time_form_fields(item_activities, key_prefix, entry=None):
-    activity_map = {a.activity_name: a.activity_id for a in item_activities}
-    names = list(activity_map.keys())
-    default_index = 0
-    if entry is not None and entry.activity_name in names:
-        default_index = names.index(entry.activity_name)
-    activity_name = st.selectbox(
-        "Activity", names, index=default_index, key=f"time_act_{key_prefix}"
-    ) if names else None
-    work_date = st.date_input(
-        "Work Date", value=entry.work_date if entry else date.today(), key=f"time_date_{key_prefix}"
-    )
-    cols = st.columns(2)
-    start_time = cols[0].text_input(
-        "Start (HH:MM)", value=entry.start_time if entry else "10:00", key=f"time_start_{key_prefix}"
-    )
-    end_time = cols[1].text_input(
-        "End (HH:MM)", value=entry.end_time if entry else "13:00", key=f"time_end_{key_prefix}"
-    )
-    worker = st.text_input(
-        "Worker Name", value=entry.worker_name if entry else "", key=f"time_worker_{key_prefix}"
-    )
-    notes = st.text_area(
-        "Notes", value=entry.notes if entry else "", key=f"time_notes_{key_prefix}"
-    )
-    return {
-        "activity_id": activity_map.get(activity_name) if activity_name else None,
-        "activity_name": activity_name,
-        "work_date": work_date,
-        "start_time": start_time,
-        "end_time": end_time,
-        "worker_name": worker,
-        "notes": notes,
-    }
-
-
-def _save_time(services, order, item, data, entry, flag_key=None):
-    time_service = services["time_tracking"]
-    if entry is not None:
-        if not data["activity_id"]:
-            st.error("Select an activity for this time entry")
-            return False
-        time_service.update_time_entry(
-            entry.id, data["work_date"], data["start_time"], data["end_time"],
-            data["worker_name"], data["notes"],
-            activity_id=data["activity_id"], activity_name=data["activity_name"],
-        )
-    else:
-        if not data["activity_id"]:
-            st.error("Add an activity to this item before recording time")
-            return False
-        time_service.record_time_entry(
-            order_id=order.id, bill_id=item.item_id, activity_id=data["activity_id"],
-            work_date=data["work_date"], start_time=data["start_time"], end_time=data["end_time"],
-            worker_name=data["worker_name"], notes=data["notes"],
-        )
-    if flag_key:
-        st.session_state.pop(flag_key, None)
-    return True
-
-
-@st.dialog("Record Time", on_dismiss=dismiss_armed_dialogs)
-def _time_dialog(services, order_id, item_id, key_prefix):
-    flag_key = _time_flag_key(key_prefix)
-    target = st.session_state.get(flag_key)
-    order = services["orders"].get_order_detail(order_id)
-    item = order.get_item_by_id(item_id) if order else None
-    if not item:
-        st.error("Item not found")
-        return
-    entry = None if target in (None, "new") else services["time_tracking"].get_entry(target)
-    data = _time_form_fields(_item_activities(order, item), f"dlg_{key_prefix}", entry)
-    cols = st.columns(2)
-    if cols[0].button("Save", type="primary", use_container_width=True):
-        try:
-            if _save_time(services, order, item, data, entry, flag_key):
-                st.rerun()
-        except Exception as exc:
-            st.error(str(exc))
-    if cols[1].button("Cancel", use_container_width=True):
-        st.session_state.pop(flag_key, None)
-        st.rerun()
-
-
-def _render_time_summary(entries, item_activities):
+def _render_time_summary(entries, item_activities_list):
     st.markdown("**Time summary**")
     totals = {}
     for e in entries:
@@ -632,7 +581,9 @@ def _render_time_management(services, order, item, key_prefix, allow_dialogs):
             st.warning("Add an activity to this item first.")
         elif allow_dialogs:
             clear_all_dialog_flags()
-            _time_dialog(services, order.id, item.item_id, key_prefix)
+            item_time_dialog(
+                services, order.id, item.item_id, key_prefix, _time_flag_key(key_prefix)
+            )
         else:
             st.session_state[f"inline_time_{key_prefix}"] = "new"
             st.rerun()
@@ -642,11 +593,13 @@ def _render_time_management(services, order, item, key_prefix, allow_dialogs):
         entry = None if target == "new" else time_service.get_entry(target)
         with st.container(border=True):
             st.markdown("**Record / Edit Time**")
-            data = _time_form_fields(item_activities, f"inl_{key_prefix}", entry)
+            data = time_form_fields(item_activities, f"inl_{key_prefix}", entry)
             cols = st.columns(2)
             if cols[0].button("Save", key=f"inl_time_save_{key_prefix}", type="primary"):
                 try:
-                    if _save_time(services, order, item, data, entry, f"inline_time_{key_prefix}"):
+                    if save_time_entry(
+                        services, order, item, data, entry, f"inline_time_{key_prefix}"
+                    ):
                         st.rerun()
                 except Exception as exc:
                     st.error(str(exc))
@@ -705,7 +658,7 @@ def _expense_form_fields(item_activities, key_prefix, expense=None):
     ) if names else None
     cols = st.columns(2)
     rate = cols[0].number_input(
-        "Rate", min_value=0.0, value=float(expense.purchase_price) if expense else 0.0,
+        "Price", value=float(expense.purchase_price) if expense else 0.0,
         key=f"exp_rate_{key_prefix}",
     )
     qty = cols[1].number_input(
@@ -732,6 +685,9 @@ def _save_expense(services, order, item, data, expense, flag_key=None):
     expense_service = services["expenses"]
     if not data["expense_name"].strip():
         st.error("Expense name is required")
+        return False
+    if data["rate"] <= 0:
+        st.error("Price must be a positive value")
         return False
     source = _expense_source_for_activity(services, data["activity_id"])
     if expense is not None:
@@ -914,6 +870,12 @@ def customization_item_detail_panel(
         elif st.session_state.get(_change_status_flag_key(key_prefix)):
             _change_status_dialog(services, order.id, key_prefix)
         elif st.session_state.get(_time_flag_key(key_prefix)):
-            _time_dialog(services, order.id, item.item_id, key_prefix)
+            item_time_dialog(
+                services,
+                order.id,
+                item.item_id,
+                key_prefix,
+                _time_flag_key(key_prefix),
+            )
         elif st.session_state.get(_expense_flag_key(key_prefix)):
             _expense_dialog(services, order.id, item.item_id, key_prefix)

@@ -10,6 +10,7 @@ from vaybooks.bms.domain.orders.repository import OrderRepository
 from vaybooks.bms.domain.orders.services import OrderDomainService
 from vaybooks.bms.domain.shared.date_utils import utc_now
 from vaybooks.bms.domain.shared.enums import VoucherType
+from vaybooks.bms.domain.shared.exceptions import ValidationError
 
 
 class InvoiceAppService:
@@ -121,10 +122,20 @@ class InvoiceAppService:
         order = self._order_repo.find_by_id(order_id)
         expenses = self._expense_repo.find_by_order(order_id)
         existing = self._invoice_repo.list_by_order(order_id)
+
+        self._domain.validate_bill_ids(
+            order,
+            bill_ids,
+            existing,
+            allow_already_invoiced=allow_already_invoiced,
+        )
+        if invoice_amount <= 0:
+            raise ValidationError("Invoice amount is required")
+
         invoice_number = self._counter_repo.next("invoice_number")
         inv_date = invoice_date or date.today()
 
-        invoice = self._domain.generate_invoice(
+        invoice = self._domain.build_invoice(
             order=order,
             invoice_number=invoice_number,
             invoice_date=inv_date,
@@ -135,8 +146,9 @@ class InvoiceAppService:
             allow_already_invoiced=allow_already_invoiced,
             item_amounts=item_amounts,
         )
+        saved = self._invoice_repo.save(invoice)
 
-        invoices = existing + [invoice]
+        invoices = existing + [saved]
         deliveries = (
             self._delivery_repo.list_by_order(order_id) if self._delivery_repo else []
         )
@@ -144,7 +156,7 @@ class InvoiceAppService:
         self._snapshot_item_mph(order, invoices)
         order.updated_at = utc_now()
         self._order_repo.save(order)
-        return invoice
+        return saved
 
     def record_invoice(
         self,
@@ -163,9 +175,19 @@ class InvoiceAppService:
         order = self._order_repo.find_by_id(order_id)
         expenses = self._expense_repo.find_by_order(order_id)
         existing = self._invoice_repo.list_by_order(order_id)
+
+        self._domain.validate_bill_ids(
+            order,
+            bill_ids,
+            existing,
+            allow_already_invoiced=allow_already_invoiced,
+        )
+        if invoice_amount <= 0:
+            raise ValidationError("Invoice amount is required")
+
         inv_date = invoice_date or date.today()
 
-        invoice = self._domain.generate_invoice(
+        invoice = self._domain.build_invoice(
             order=order,
             invoice_number=invoice_number.strip(),
             invoice_date=inv_date,
@@ -177,10 +199,11 @@ class InvoiceAppService:
             discount_amount=discount_amount,
             item_amounts=item_amounts,
         )
+        saved = self._invoice_repo.save(invoice)
 
-        self._sync_sales_posting(order, invoice, post_entry)
+        self._sync_sales_posting(order, saved, post_entry)
 
-        invoices = existing + [invoice]
+        invoices = existing + [saved]
         deliveries = (
             self._delivery_repo.list_by_order(order_id) if self._delivery_repo else []
         )
@@ -188,7 +211,7 @@ class InvoiceAppService:
         self._snapshot_item_mph(order, invoices)
         order.updated_at = utc_now()
         self._order_repo.save(order)
-        return invoice
+        return saved
 
     def update_invoice(
         self,

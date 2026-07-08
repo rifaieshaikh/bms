@@ -15,6 +15,7 @@ from vaybooks.bms.domain.invoices.repository import InvoiceRepository
 from vaybooks.bms.domain.orders.entities import CustomizationItem, CustomizationOrder
 from vaybooks.bms.domain.orders.repository import BillRegistryRepository, OrderRepository
 from vaybooks.bms.domain.orders.services import OrderDomainService
+from vaybooks.bms.domain.orders.order_refs import compact_order_ref
 from vaybooks.bms.domain.shared.date_utils import today, utc_now
 from vaybooks.bms.domain.time_tracking.repository import TimeTrackingRepository
 
@@ -190,12 +191,14 @@ class OrderAppService:
         if not query.strip():
             return self.list_all_customization_items()
         needle = query.strip().lower()
+        compact_needle = compact_order_ref(needle)
         return [
             row
             for row in self.list_all_customization_items()
             if needle in row["bill_number"].lower()
             or needle in row["description"].lower()
             or needle in row["order_number"].lower()
+            or compact_needle in compact_order_ref(row["order_number"]).lower()
             or needle in row["customer_name"].lower()
         ]
 

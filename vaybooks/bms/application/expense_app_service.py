@@ -6,6 +6,9 @@ from vaybooks.bms.domain.expenses.repository import ExpenseRepository
 from vaybooks.bms.domain.expenses.services import ExpenseDomainService
 from vaybooks.bms.domain.orders.repository import OrderRepository
 from vaybooks.bms.domain.shared.enums import ExpenseSource
+from vaybooks.bms.domain.shared.exceptions import ValidationError
+
+_POSITIVE_PRICE_MSG = "Price must be a positive value"
 
 
 class ExpenseAppService:
@@ -32,6 +35,9 @@ class ExpenseAppService:
         vendor_or_worker_name: str = "",
         notes: str = "",
     ) -> Expense:
+        if purchase_price <= 0 or selling_price <= 0:
+            raise ValidationError(_POSITIVE_PRICE_MSG)
+
         order = self._order_repo.find_by_id(order_id)
         bill_number = None
         activity_name = None
@@ -77,9 +83,22 @@ class ExpenseAppService:
     def list_all(self) -> List[Expense]:
         return self._expense_repo.list_all()
 
+    def _maybe_refresh_item_mph(self, expense: Expense) -> None:
+        """Skip MPH propagation when the linked item is already frozen."""
+        if not expense.bill_id or not expense.order_id:
+            return
+        order = self._order_repo.find_by_id(expense.order_id)
+        if not order:
+            return
+        item = order.get_item_by_id(expense.bill_id)
+        if item and item.mph_snapshot_at is not None:
+            return
+
     def update_expense(self, expense: Expense) -> Expense:
         expense.calculate_totals()
-        return self._expense_repo.save(expense)
+        saved = self._expense_repo.save(expense)
+        self._maybe_refresh_item_mph(expense)
+        return saved
 
     def update_expense_details(
         self,

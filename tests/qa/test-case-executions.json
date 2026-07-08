@@ -1,0 +1,83 @@
+{
+  "TC-INV-002": {
+    "type": "db",
+    "runnerId": "api-create-order",
+    "dbQuery": {
+      "collection": "invoices",
+      "filter": {
+        "order_number": "O-1001",
+        "total_amount": 8000
+      },
+      "expectedCount": 1
+    },
+    "expectedFields": ["order_status", "total_amount", "invoice_number"]
+  },
+  "TC-INV-007": {
+    "type": "db",
+    "runnerId": "api-create-order",
+    "dbQuery": {
+      "collection": "customization_orders",
+      "filter": {
+        "order_number": "O-1004",
+        "order_status": "Ready For Delivery"
+      },
+      "expectedCount": 1
+    },
+    "expectedFields": ["order_status"]
+  },
+  "TC-INV-008": {
+    "type": "db",
+    "runnerId": "api-create-order",
+    "dbQuery": {
+      "collection": "customization_orders",
+      "filter": {
+        "order_number": "O-1002",
+        "customization_items": {
+          "$elemMatch": {
+            "bill_number": "ZB010",
+            "mph_snapshot_at": { "$ne": null },
+            "margin_per_hour": 800
+          }
+        }
+      },
+      "expectedCount": 1
+    },
+    "expectedFields": ["mph_snapshot_at", "margin_per_hour"]
+  },
+  "TC-EXPORT-006": {
+    "type": "db",
+    "runnerId": "api-create-customer",
+    "dbQuery": {
+      "collection": "customers",
+      "filter": {
+        "customer_name": "Anjali Mehta"
+      },
+      "expectedCount": 1
+    },
+    "expectedFields": ["customer_id", "phone_number", "customer_account_id"]
+  },
+  "TC-EXPORT-007": {
+    "type": "db",
+    "runnerId": "api-export-orders",
+    "dbQuery": {
+      "collection": "customization_orders",
+      "filter": {
+        "order_number": "ZC-2024-0061"
+      },
+      "expectedCount": 1
+    },
+    "expectedFields": ["order_number", "order_date", "expected_delivery_date"]
+  },
+  "TC-TIME-002": {
+    "type": "ui",
+    "uiSteps": [
+      { "action": "navigate", "url": "" },
+      { "action": "click", "target": "Time Tracking" },
+      { "action": "wait", "value": "2000" },
+      { "action": "assertText", "value": "Time Tracking" },
+      { "action": "assertText", "value": "Record Time" },
+      { "action": "assertText", "value": "Stitching" },
+      { "action": "assertText", "value": "4.5 hrs" }
+    ]
+  }
+}

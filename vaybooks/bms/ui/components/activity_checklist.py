@@ -3,6 +3,7 @@ import streamlit as st
 from vaybooks.bms.application.order_app_service import OrderAppService
 from vaybooks.bms.domain.orders.entities import CustomizationOrder
 from vaybooks.bms.domain.shared.enums import ActivityStatus
+from vaybooks.bms.ui.session_keys import ACTIVITY_SKIP_NOTICE
 
 
 def activity_checklist(
@@ -40,6 +41,11 @@ def activity_checklist(
                     st.error(str(e))
 
             if cols[3].button("Skip", key=f"skip_{key_suffix}"):
-                order_service.skip_activity(activity.order_activity_id, "Staff")
-                st.success(f"Skipped {activity.activity_name}")
-                st.rerun()
+                try:
+                    order_service.skip_activity(activity.order_activity_id, "Staff")
+                    st.session_state[ACTIVITY_SKIP_NOTICE] = (
+                        f"Activity {activity.activity_name} skipped"
+                    )
+                    st.rerun()
+                except Exception as e:
+                    st.error(str(e))

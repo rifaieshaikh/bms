@@ -1,20 +1,28 @@
+from dataclasses import asdict
+
 import streamlit as st
 
 from vaybooks.bms.ui.components.dashboard_cards import order_action_cards
 
 
+def _summary_value(summary, name: str, default):
+    if isinstance(summary, dict):
+        return summary.get(name, default)
+    return getattr(summary, name, default)
+
+
 def _summary_int(summary, name: str, default: int = 0) -> int:
-    value = getattr(summary, name, default)
+    value = _summary_value(summary, name, default)
     return default if value is None else value
 
 
 def _summary_float(summary, name: str, default: float = 0.0) -> float:
-    value = getattr(summary, name, default)
+    value = _summary_value(summary, name, default)
     return default if value is None else value
 
 
 def _summary_list(summary, name: str) -> list:
-    return getattr(summary, name, []) or []
+    return _summary_value(summary, name, []) or []
 
 
 def _completed_count(summary) -> int:
@@ -27,7 +35,7 @@ def _completed_count(summary) -> int:
 def _dashboard_summary(_reports):
     # _reports is prefixed with "_" so Streamlit skips hashing the (unhashable)
     # service object; the summary is recomputed at most once every 30s.
-    return _reports.get_dashboard_summary()
+    return asdict(_reports.get_dashboard_summary())
 
 
 def _kpi_row(summary):

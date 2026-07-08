@@ -124,6 +124,8 @@ class InvoiceDomainService:
 
         changed = False
         for item in order.customization_items:
+            if item.mph_snapshot_at is not None:
+                continue  # frozen — never recalculate from live time/expense data
             if item.item_id not in delivered:
                 continue
             net = cls.item_net_revenue(item.item_id, invoices)
@@ -140,6 +142,30 @@ class InvoiceDomainService:
             item.updated_at = utc_now()
             changed = True
         return changed
+
+    @staticmethod
+    def compute_total_amount(
+        order: CustomizationOrder,
+        bill_ids: List[str],
+        item_amounts: Optional[Dict[str, float]] = None,
+        invoice_amount: float = 0.0,
+    ) -> float:
+        """Sum per-item sale prices for the selected bills."""
+        bill_id_set = set(bill_ids)
+        if item_amounts:
+            return round(
+                sum(float(item_amounts.get(b, 0.0)) for b in bill_ids if b in bill_id_set),
+                2,
+            )
+
+        total = 0.0
+        for bill_id in bill_ids:
+            item = order.get_item_by_id(bill_id)
+            if item is not None:
+                total += float(item.sale_price or 0.0)
+        if total > 0:
+            return round(total, 2)
+        return round(float(invoice_amount), 2)
 
     def validate_bill_ids(
         self,
@@ -169,7 +195,7 @@ class InvoiceDomainService:
                     "Enable override to invoice again."
                 )
 
-    def generate_invoice(
+    def build_invoice(
         self,
         order: CustomizationOrder,
         invoice_number: str,
@@ -205,15 +231,48 @@ class InvoiceDomainService:
             for b, v in (item_amounts or {}).items()
             if b in bill_id_set
         }
-        invoice = Invoice(
+        total_amount = self.compute_total_amount(
+            order,
+            bill_ids,
+            item_amounts=item_amounts,
+            invoice_amount=invoice_amount,
+        )
+        return Invoice(
             order_id=order.id,
             order_number=order.order_number,
             invoice_number=invoice_number,
             invoice_date=invoice_date,
             invoice_amount=invoice_amount,
+            total_amount=total_amount,
             bill_ids=list(bill_ids),
             item_amounts=item_amounts,
             discount_amount=discount_amount,
             **mph_data,
+        )
+
+    def generate_invoice(
+        self,
+        order: CustomizationOrder,
+        invoice_number: str,
+        invoice_date: date,
+        invoice_amount: float,
+        bill_ids: List[str],
+        expenses: List[Expense],
+        existing_invoices: List[Invoice] | None = None,
+        allow_already_invoiced: bool = False,
+        discount_amount: float = 0.0,
+        item_amounts: Optional[Dict[str, float]] = None,
+    ) -> Invoice:
+        invoice = self.build_invoice(
+            order=order,
+            invoice_number=invoice_number,
+            invoice_date=invoice_date,
+            invoice_amount=invoice_amount,
+            bill_ids=bill_ids,
+            expenses=expenses,
+            existing_invoices=existing_invoices,
+            allow_already_invoiced=allow_already_invoiced,
+            discount_amount=discount_amount,
+            item_amounts=item_amounts,
         )
         return self._invoice_repo.save(invoice)

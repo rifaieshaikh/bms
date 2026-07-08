@@ -36,6 +36,13 @@ def _matches_search(row: dict, query: str, *fields: str) -> bool:
     return False
 
 
+def _passes_min_mph(mph: float | None, min_mph: float) -> bool:
+    """Inclusive min MPH filter: keep rows where mph >= min_mph."""
+    if mph is None:
+        return False
+    return round(mph, 2) >= min_mph
+
+
 _as_date = as_date
 
 
@@ -139,47 +146,46 @@ class ReportAppService:
 
         """Operational + financial metrics for an arbitrary date range (MTD)."""
 
-        item_snapshot = self._repo.item_delivery_snapshot()
-
-        return {
-
-            "orders_created": self._repo.count_orders_created(start, end),
-
-            "delivered": self._repo.count_delivered_this_month(start, end),
-
-            "pending_activities": self._repo.get_pending_activities_count(),
-
-            "bills_pending_invoice": self._repo.get_bills_pending_invoice_count(),
-
-            "items_created": self._repo.count_items_created(start, end),
-
-            "items_delivered": self._repo.count_items_delivered(start, end),
-
-            "items_pending": item_snapshot["not_delivered"],
-
-            "items_awaiting_delivery": item_snapshot["awaiting"],
-
-            "invoiced": self._repo.get_monthly_invoice_total(start, end),
-
-            "receipts": self._repo.get_monthly_advance_total(start, end),
-
-            "expenses": self._repo.sum_expenses_total(start, end),
-
-            "gross_margin": self._repo.sum_invoice_margin(start, end),
-
-            "vendor_payments": self._repo.sum_payment_voucher_amount(
-
-                VoucherType.VENDOR_PAYMENT.value, start, end
-
-            ),
-
-            "salary_payments": self._repo.sum_payment_voucher_amount(
-
-                VoucherType.SALARY_PAYMENT.value, start, end
-
-            ),
-
+        summary: dict[str, Any] = {
+            "order_count": 0,
+            "revenue": 0,
+            "total_revenue": 0,
+            "expenses": 0,
+            "mph": None,
         }
+
+        item_snapshot = self._repo.item_delivery_snapshot()
+        order_count = self._repo.count_orders_created(start, end)
+        total_revenue = self._repo.get_monthly_invoice_total(start, end)
+        expenses = self._repo.sum_expenses_total(start, end)
+
+        summary.update(
+            {
+                "orders_created": order_count,
+                "order_count": order_count,
+                "delivered": self._repo.count_delivered_this_month(start, end),
+                "pending_activities": self._repo.get_pending_activities_count(),
+                "bills_pending_invoice": self._repo.get_bills_pending_invoice_count(),
+                "items_created": self._repo.count_items_created(start, end),
+                "items_delivered": self._repo.count_items_delivered(start, end),
+                "items_pending": item_snapshot["not_delivered"],
+                "items_awaiting_delivery": item_snapshot["awaiting"],
+                "invoiced": total_revenue,
+                "revenue": total_revenue,
+                "total_revenue": total_revenue,
+                "receipts": self._repo.get_monthly_advance_total(start, end),
+                "expenses": expenses,
+                "gross_margin": self._repo.sum_invoice_margin(start, end),
+                "vendor_payments": self._repo.sum_payment_voucher_amount(
+                    VoucherType.VENDOR_PAYMENT.value, start, end
+                ),
+                "salary_payments": self._repo.sum_payment_voucher_amount(
+                    VoucherType.SALARY_PAYMENT.value, start, end
+                ),
+            }
+        )
+
+        return summary
 
 
 
@@ -241,7 +247,7 @@ class ReportAppService:
 
             mph = row.get("margin_per_hour")
 
-            if filters.min_mph is not None and (mph is None or mph < filters.min_mph):
+            if filters.min_mph is not None and not _passes_min_mph(mph, filters.min_mph):
 
                 continue
 
@@ -331,7 +337,7 @@ class ReportAppService:
 
             mph = round(bucket["total_margin"] / hours, 2) if hours > 0 else None
 
-            if filters.min_mph is not None and (mph is None or mph < filters.min_mph):
+            if filters.min_mph is not None and not _passes_min_mph(mph, filters.min_mph):
 
                 continue
 

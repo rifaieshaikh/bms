@@ -112,10 +112,16 @@ def _edit_account_dialog(accounting_service):
 
     protected = accounting_service.is_protected_account(account)
     if protected:
-        st.caption(
-            f"“{account.account_name}” is used by invoice/discount posting — "
-            "its name and type are locked."
-        )
+        if account.is_store_account:
+            st.warning(
+                f'System blocks renaming or deleting "{account.account_name}" — '
+                "it is a protected store account (cash drawer, bank, etc.)."
+            )
+        else:
+            st.warning(
+                f'System blocks renaming or retyping "{account.account_name}" — '
+                "it is used by invoice/discount posting."
+            )
 
     types = [t.value for t in AccountType]
     name = st.text_input("Account Name", value=account.account_name, disabled=protected)
@@ -544,6 +550,39 @@ def _journal_dialog(accounting_service):
 
 
 # --- tabs --------------------------------------------------------------------
+def _account_names(accounts) -> str:
+    return ", ".join(a.account_name for a in accounts) if accounts else "—"
+
+
+def _render_system_accounts_section(accounting_service) -> None:
+    """Show default posting accounts used by receipts, payments, and invoices."""
+    st.subheader("System Accounts")
+    st.caption(
+        "Default accounts for receipts, payments, invoices, payroll, and discounts."
+    )
+
+    store_accounts = accounting_service.get_store_accounts()
+    salary_accounts = accounting_service.get_salary_accounts()
+    expense_accounts = accounting_service.get_expense_accounts()
+    income_accounts = accounting_service.get_income_accounts()
+    customization = accounting_service.get_customization_account()
+    sales = accounting_service.get_sales_account()
+    discount = accounting_service.get_discount_account()
+
+    cols = st.columns(2)
+    cols[0].markdown(f"**Store:** {_account_names(store_accounts)}")
+    cols[1].markdown(f"**Salary:** {_account_names(salary_accounts)}")
+    cols[0].markdown(f"**Expense:** {_account_names(expense_accounts)}")
+    cols[1].markdown(f"**Income:** {_account_names(income_accounts)}")
+
+    posting = [
+        a.account_name
+        for a in (customization, sales, discount)
+        if a is not None
+    ]
+    st.caption(f"Invoice posting: {', '.join(posting) if posting else '—'}")
+
+
 def _render_accounts_tab(accounting_service):
     if st.button("+ Create Account", type="primary", key="btn_create_acc"):
         clear_all_dialog_flags()
@@ -567,6 +606,14 @@ def _render_accounts_tab(accounting_service):
         st.caption("No matching accounts.")
         return
 
+    accounts = sorted(
+        accounts,
+        key=lambda a: (
+            0 if a.account_name.strip().lower() == "cash drawer" else 1,
+            a.account_name.lower(),
+        ),
+    )
+
     page_accounts, page, total_pages = paginate_list(
         accounts,
         page_key="acc_page",
@@ -582,13 +629,49 @@ def _render_accounts_tab(accounting_service):
             st.markdown(f"**{acc.account_name}**")
             st.caption(f"{acc.account_type.value}{store_tag}")
             st.metric("Balance", _format_balance(acc.current_balance))
-            btns = st.columns(2)
+
+            protected = accounting_service.is_protected_account(acc)
+            if protected:
+                if acc.is_store_account:
+                    st.markdown(
+                        "Protected · DeleteDeactivate control — "
+                        "Delete hidden for store accounts."
+                    )
+                else:
+                    st.markdown(
+                        "Protected · DeleteDeactivate control — "
+                        "name and type locked."
+                    )
+
+            btns = st.columns(4 if not protected else 3)
             if btns[0].button("View Ledger", key=f"ledger_{acc.id}", use_container_width=True):
                 st.session_state[LEDGER_ACC] = acc.id
                 st.rerun()
             if btns[1].button("Edit", key=f"edit_acc_{acc.id}", use_container_width=True):
                 st.session_state[EDIT_ACC] = acc.id
                 st.rerun()
+            action_col = 2
+            if not protected:
+                if btns[action_col].button(
+                    "Delete", key=f"delete_acc_{acc.id}", use_container_width=True
+                ):
+                    try:
+                        accounting_service.delete_account(acc.id)
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(str(exc))
+                action_col = 3
+            if btns[action_col].button(
+                "Deactivate",
+                key=f"deactivate_acc_{acc.id}",
+                use_container_width=True,
+                disabled=protected and acc.is_store_account,
+            ):
+                try:
+                    accounting_service.deactivate_account(acc.id)
+                    st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
 
     render_page_controls(
         page, total_pages, len(accounts),
@@ -765,6 +848,56 @@ def _render_payments_tab(services):
     )
 
 
+def _render_voucher_tab(accounting_service):
+    st.subheader("Voucher List")
+    if st.button("+ Create Voucher", type="primary", key="btn_create_voucher"):
+        clear_all_dialog_flags()
+        _journal_dialog(accounting_service)
+
+    query = st.text_input(
+        "Search vouchers",
+        key="vch_search",
+        placeholder="Voucher number, type or description",
+    ).strip().lower()
+
+    vouchers = accounting_service.list_vouchers()
+    if query:
+        vouchers = [v for v in vouchers if _voucher_matches(v, query)]
+    if not vouchers:
+        st.caption("No matching vouchers." if query else "No vouchers recorded yet.")
+        return
+
+    sorted_vouchers = sorted(vouchers, key=lambda x: x.voucher_date, reverse=True)
+    page_vouchers, page, total_pages = paginate_list(
+        sorted_vouchers,
+        page_key="acc_vch_page",
+        page_size=VOUCHER_PAGE_SIZE,
+        filter_key="vch_search",
+        filter_value=query,
+    )
+    for v in page_vouchers:
+        amount = v.total_debit
+        vtype = v.voucher_type.value if hasattr(v.voucher_type, "value") else str(v.voucher_type)
+        order_ref = " · Order linked" if v.reference_order_id else ""
+        with st.container(border=True):
+            st.markdown(f"**{v.voucher_number}** — ₹{amount:,.0f}  ·  _{vtype}_")
+            st.caption(f"{_fmt_date(v.voucher_date)} | {v.description or '—'}{order_ref}")
+            if v.voucher_type == VoucherType.JOURNAL:
+                for line in v.lines:
+                    side = (
+                        f"Dr ₹{line.debit_amount:,.0f}"
+                        if line.debit_amount
+                        else f"Cr ₹{line.credit_amount:,.0f}"
+                    )
+                    st.caption(f"• {line.account_name}: {side}")
+
+    render_page_controls(
+        page, total_pages, len(sorted_vouchers),
+        page_key="acc_vch_page", prev_key="acc_vch_prev", next_key="acc_vch_next",
+        label="vouchers",
+    )
+
+
 def _render_journal_tab(accounting_service):
     if st.button("+ New Journal Entry", type="primary", key="btn_new_jrnl"):
         clear_all_dialog_flags()
@@ -806,6 +939,77 @@ def _render_journal_tab(accounting_service):
         page_key="acc_jrnl_page", prev_key="acc_jrnl_prev", next_key="acc_jrnl_next",
         label="entries",
     )
+
+
+def _render_ledger_tab(accounting_service):
+    st.subheader("Ledger")
+    accounts = accounting_service.list_accounts(active_only=False)
+    if not accounts:
+        st.caption("No accounts yet.")
+        return
+
+    accounts = sorted(
+        accounts,
+        key=lambda a: (
+            0 if a.account_name.strip().lower() == "cash drawer" else 1,
+            a.account_name.lower(),
+        ),
+    )
+    acc_opts = {a.account_name: a.id for a in accounts}
+    default_idx = next(
+        (
+            i
+            for i, a in enumerate(accounts)
+            if a.account_name.strip().lower() == "cash drawer"
+        ),
+        0,
+    )
+    selected_name = st.selectbox(
+        "Account",
+        list(acc_opts.keys()),
+        index=default_idx,
+        key="acc_ledger_select",
+    )
+    account_id = acc_opts[selected_name]
+    account = accounting_service.get_account(account_id)
+    if not account:
+        st.error("Account not found")
+        return
+
+    st.caption(f"Current balance: {_format_balance(account.current_balance)}")
+
+    trial = accounting_service.get_trial_balance()
+    if trial:
+        total_debit = round(sum(r["debit"] for r in trial), 2)
+        total_credit = round(sum(r["credit"] for r in trial), 2)
+        balanced = abs(total_debit - total_credit) < 0.01
+        st.caption(
+            f"Trial balance: ₹{total_debit:,.2f} Dr / ₹{total_credit:,.2f} Cr"
+            + (" — Balanced ✓" if balanced else " — Unbalanced ✗")
+        )
+
+    ledger = sorted(
+        accounting_service.get_account_ledger(account_id),
+        key=lambda e: e["voucher_date"],
+    )
+    if not ledger:
+        st.info("No transactions for this account yet.")
+    else:
+        running = round(account.opening_balance, 2)
+        rows = []
+        for e in ledger:
+            running = round(running + e["debit"] - e["credit"], 2)
+            rows.append(
+                {
+                    "Date": _fmt_date(e["voucher_date"]),
+                    "Voucher": e["voucher_number"],
+                    "Debit": e["debit"],
+                    "Credit": e["credit"],
+                    "Balance": _format_balance(running),
+                    "Description": e["description"],
+                }
+            )
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 
 def _render_trial_balance_tab(accounting_service):
@@ -859,21 +1063,35 @@ def _render_trial_balance_tab(accounting_service):
 def render(services: dict):
     st.title("Accounts")
     accounting_service = services["accounting"]
+    _render_system_accounts_section(accounting_service)
 
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
-        ["Accounts", "Receipts", "Payments", "Invoices", "Journal", "Trial Balance"]
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs(
+        [
+            "Accounts",
+            "Ledger",
+            "Voucher",
+            "Receipts",
+            "Payments",
+            "Invoices",
+            "Journal",
+            "Trial Balance",
+        ]
     )
     with tab1:
         _render_accounts_tab(accounting_service)
     with tab2:
-        _render_receipts_tab(accounting_service)
+        _render_ledger_tab(accounting_service)
     with tab3:
-        _render_payments_tab(services)
+        _render_voucher_tab(accounting_service)
     with tab4:
-        _render_invoices_tab(accounting_service)
+        _render_receipts_tab(accounting_service)
     with tab5:
-        _render_journal_tab(accounting_service)
+        _render_payments_tab(services)
     with tab6:
+        _render_invoices_tab(accounting_service)
+    with tab7:
+        _render_journal_tab(accounting_service)
+    with tab8:
         _render_trial_balance_tab(accounting_service)
 
     # Popups opened at page top level (page is not itself a dialog).
@@ -893,3 +1111,5 @@ def render(services: dict):
         _customization_invoice_dialog(accounting_service)
     elif st.session_state.get(INV_SALES):
         _sales_invoice_dialog(accounting_service)
+    elif st.session_state.get(JOURNAL):
+        _journal_dialog(accounting_service)

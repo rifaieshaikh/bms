@@ -1,0 +1,72 @@
+[
+  {
+    "testCaseId": "SIDEBAR-CLEANUP",
+    "scenarioId": "SC-UI-NAV",
+    "module": "UI / Navigation",
+    "testTitle": "Verify sidebar shows only branding, section labels, and navigation links",
+    "preconditions": "Streamlit app running on configured baseUrl",
+    "testDataRequired": "None",
+    "stepsToExecute": [
+      "Navigate to base URL",
+      "Verify VayBooks branding in sidebar",
+      "Verify section labels Operations, Finance, and Settings",
+      "Confirm no QA expected-result paragraphs under nav links"
+    ],
+    "expectedResult": "Sidebar shows VayBooks branding, section labels, and page links without QA boilerplate",
+    "actualResult": "",
+    "status": "Not Run",
+    "severityIfFailed": "High",
+    "evidenceLink": "",
+    "automationStatus": "Automated",
+    "testType": "UI",
+    "priority": "High",
+    "execution": {
+      "type": "ui",
+      "uiSteps": [
+        { "action": "navigate" },
+        { "action": "wait", "value": "2000" },
+        { "action": "assertText", "value": "VayBooks" },
+        { "action": "assertText", "value": "Operations" },
+        { "action": "assertText", "value": "Finance" },
+        { "action": "assertText", "value": "Settings" },
+        { "action": "assertText", "value": "Dashboard" }
+      ]
+    }
+  },
+  {
+    "testCaseId": "ORDERS-UI-CLEANUP",
+    "scenarioId": "SC-UI-ORD",
+    "module": "Customization Orders",
+    "testTitle": "Verify Customization Orders list shows staff-facing copy without QA boilerplate",
+    "preconditions": "Streamlit app running on configured baseUrl with seeded orders",
+    "testDataRequired": "Seeded orders O-1001, O-1002 from QA fixtures",
+    "stepsToExecute": [
+      "Navigate to base URL",
+      "Open Customization Orders page",
+      "Confirm order cards show order number, customer, status, items, advance, and bills",
+      "Confirm no orderstatus machine tokens or QA expected-result paragraphs"
+    ],
+    "expectedResult": "Order list shows staff-facing copy only: order number, customer, phone, readable status line, item count, advance, and bills — no QA paragraphs or orderstatus tokens",
+    "actualResult": "",
+    "status": "Not Run",
+    "severityIfFailed": "High",
+    "evidenceLink": "",
+    "automationStatus": "Automated",
+    "testType": "UI",
+    "priority": "High",
+    "execution": {
+      "type": "ui",
+      "uiSteps": [
+        { "action": "navigate" },
+        { "action": "wait", "value": "2000" },
+        { "action": "click", "target": "Customization Orders" },
+        { "action": "wait", "value": "2000" },
+        { "action": "assertText", "value": "Customization Orders" },
+        { "action": "assertText", "value": "Status:" },
+        { "action": "assertText", "value": "View Order" },
+        { "action": "assertText", "value": "O1001" },
+        { "action": "assertText", "value": "Ananya Rao" }
+      ]
+    }
+  }
+]

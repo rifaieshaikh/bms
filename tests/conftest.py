@@ -1,16 +1,18 @@
 """In-memory fake repositories for unit tests."""
 
 from copy import deepcopy
-from datetime import datetime
+from datetime import date, datetime
 from typing import Dict, List, Optional
 from uuid import uuid4
 
 from vaybooks.bms.domain.accounting.entities import Account, Voucher
 from vaybooks.bms.domain.activities.entities import ActivityConfig
 from vaybooks.bms.domain.customers.entities import Customer
+from vaybooks.bms.domain.deliveries.entities import Delivery
 from vaybooks.bms.domain.expenses.entities import Expense
 from vaybooks.bms.domain.invoices.entities import Invoice
 from vaybooks.bms.domain.orders.entities import CustomizationOrder
+from vaybooks.bms.domain.orders.order_refs import order_ref_search_variants
 from vaybooks.bms.domain.orders.value_objects import BillRegistryEntry
 from vaybooks.bms.domain.shared.enums import AccountType, ActivityType, OrderStatus
 from vaybooks.bms.domain.time_tracking.entities import TimeEntry
@@ -70,6 +72,9 @@ class FakeAccountRepository:
         acc = self._store[account_id]
         acc.current_balance += debit - credit
 
+    def delete(self, account_id: str) -> None:
+        self._store.pop(account_id, None)
+
 
 class FakeVoucherRepository:
     def __init__(self):
@@ -110,13 +115,17 @@ class FakeOrderRepository:
         return order
 
     def find_by_id(self, order_id: str) -> Optional[CustomizationOrder]:
-        o = self._store.get(order_id)
-        return deepcopy(o) if o else None
+        for candidate in order_ref_search_variants(order_id) or [order_id]:
+            o = self._store.get(candidate)
+            if o is not None:
+                return deepcopy(o)
+        return None
 
     def find_by_order_number(self, order_number: str) -> Optional[CustomizationOrder]:
-        for o in self._store.values():
-            if o.order_number == order_number:
-                return deepcopy(o)
+        for candidate in order_ref_search_variants(order_number) or [order_number]:
+            for o in self._store.values():
+                if o.order_number == candidate:
+                    return deepcopy(o)
         return None
 
     def find_by_order_activity_id(self, order_activity_id: str) -> Optional[CustomizationOrder]:
@@ -205,6 +214,35 @@ class FakeTimeTrackingRepository:
     def find_by_bill_number(self, bill_number: str) -> List[TimeEntry]:
         return [e for e in self._store.values() if e.bill_number == bill_number]
 
+    def search(
+        self,
+        bill_number: Optional[str] = None,
+        order_number: Optional[str] = None,
+        worker_name: Optional[str] = None,
+        activity_name: Optional[str] = None,
+        work_date_from: Optional[date] = None,
+        work_date_to: Optional[date] = None,
+    ) -> List[TimeEntry]:
+        entries = list(self._store.values())
+        if bill_number:
+            needle = bill_number.upper()
+            entries = [e for e in entries if needle in e.bill_number.upper()]
+        if order_number:
+            needle = order_number.lower()
+            entries = [e for e in entries if needle in e.order_number.lower()]
+        if worker_name:
+            needle = worker_name.lower()
+            entries = [
+                e for e in entries if needle in (e.worker_name or "").lower()
+            ]
+        if activity_name:
+            entries = [e for e in entries if e.activity_name == activity_name]
+        if work_date_from is not None:
+            entries = [e for e in entries if e.work_date >= work_date_from]
+        if work_date_to is not None:
+            entries = [e for e in entries if e.work_date <= work_date_to]
+        return sorted(entries, key=lambda e: e.work_date, reverse=True)
+
     def list_all(self) -> List[TimeEntry]:
         return list(self._store.values())
 
@@ -234,6 +272,24 @@ class FakeExpenseRepository:
 
     def delete(self, expense_id: str) -> None:
         self._store.pop(expense_id, None)
+
+
+class FakeDeliveryRepository:
+    def __init__(self):
+        self._store: Dict[str, Delivery] = {}
+
+    def save(self, delivery: Delivery) -> Delivery:
+        self._store[delivery.id] = delivery
+        return delivery
+
+    def find_by_id(self, delivery_id: str) -> Optional[Delivery]:
+        return self._store.get(delivery_id)
+
+    def list_by_order(self, order_id: str) -> List[Delivery]:
+        return [d for d in self._store.values() if d.order_id == order_id]
+
+    def list_all(self) -> List[Delivery]:
+        return list(self._store.values())
 
 
 class FakeInvoiceRepository:

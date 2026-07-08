@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import List, Optional
 
+from bson import ObjectId
 from pymongo.database import Database
 
 from vaybooks.bms.domain.vendors.entities import Vendor
@@ -24,7 +25,7 @@ class MongoVendorRepository:
 
     def _from_doc(self, doc: dict) -> Vendor:
         return Vendor(
-            id=doc["_id"],
+            id=str(doc["_id"]),
             vendor_name=doc["vendor_name"],
             phone_number=doc["phone_number"],
             alternate_phone_number=doc.get("alternate_phone_number"),
@@ -40,7 +41,12 @@ class MongoVendorRepository:
         return vendor
 
     def find_by_id(self, vendor_id: str) -> Optional[Vendor]:
-        doc = self._collection.find_one({"_id": vendor_id})
+        if not vendor_id:
+            return None
+        normalized = str(vendor_id)
+        doc = self._collection.find_one({"_id": normalized})
+        if not doc and ObjectId.is_valid(normalized):
+            doc = self._collection.find_one({"_id": ObjectId(normalized)})
         return self._from_doc(doc) if doc else None
 
     def find_by_phone(self, phone: str) -> Optional[Vendor]:

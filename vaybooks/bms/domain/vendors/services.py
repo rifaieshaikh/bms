@@ -22,6 +22,7 @@ class VendorDomainService:
             raise ValidationError("Vendor name is required")
         if not phone_number.strip():
             raise ValidationError("Phone number is required")
+        self.validate_phone_number(phone_number)
 
         existing = self._vendor_repo.find_by_phone(phone_number.strip())
         if existing:
@@ -35,6 +36,14 @@ class VendorDomainService:
             notes=notes,
         )
         return self._vendor_repo.save(vendor)
+
+    @staticmethod
+    def validate_phone_number(phone_number: str) -> None:
+        if not phone_number.strip().isdigit():
+            raise ValidationError(
+                "System rejects vendor submission when phone_number contains "
+                "non-numeric characters."
+            )
 
     @staticmethod
     def build_account_name(vendor: Vendor) -> str:

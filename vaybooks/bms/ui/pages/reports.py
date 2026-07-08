@@ -1,8 +1,12 @@
+from datetime import date
+
 import pandas as pd
 import streamlit as st
 
 from vaybooks.bms.ui.components import report_filters as rf
 from vaybooks.bms.ui.pagination import REPORT_PAGE_SIZE, paginate_list, render_page_controls
+
+AGGREGATED_PERIOD_LABEL = "Aggregated Totals for period"
 
 REPORT_TYPES = [
     "Item Profitability (MPH)",
@@ -14,6 +18,22 @@ REPORT_TYPES = [
     "Overdue Orders",
     "Completed Orders",
 ]
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _period_summary(_report_service, start: date, end: date):
+    return _report_service.get_period_summary(start, end)
+
+
+def _render_aggregated_period_summary(report_service, start: date, end: date) -> None:
+    st.subheader(AGGREGATED_PERIOD_LABEL)
+    st.caption(f"{start:%d %b %Y} → {end:%d %b %Y}")
+    summary = _period_summary(report_service, start, end)
+    cols = st.columns(3)
+    cols[0].metric("Orders", summary.get("order_count", 0))
+    cols[1].metric("Invoiced", f"₹{summary.get('invoiced', 0):,.0f}")
+    cols[2].metric("Expenses", f"₹{summary.get('expenses', 0):,.0f}")
+    st.divider()
 
 
 def _render_report_table(data: list, report_key: str, filter_token: str):
@@ -81,6 +101,9 @@ def render(services: dict):
 
     if report_type == "Item Profitability (MPH)":
         filters = rf.render_item_profitability_filters()
+        _render_aggregated_period_summary(
+            report_service, filters.date_range.start, filters.date_range.end
+        )
         token = rf.filter_token(
             report_key,
             filters.date_range.token_part(),
@@ -93,6 +116,9 @@ def render(services: dict):
 
     elif report_type == "Margin Per Hour (MPH)":
         filters = rf.render_order_mph_filters()
+        _render_aggregated_period_summary(
+            report_service, filters.date_range.start, filters.date_range.end
+        )
         token = rf.filter_token(
             report_key,
             filters.date_range.token_part(),

@@ -54,6 +54,8 @@ class AccountingAppService:
     PROTECTED_ACCOUNT_NAMES = {"sales", "customization", "discount allowed"}
 
     def is_protected_account(self, account: Account) -> bool:
+        if account.is_store_account:
+            return True
         return account.account_name.strip().lower() in self.PROTECTED_ACCOUNT_NAMES
 
     def update_account(
@@ -63,6 +65,7 @@ class AccountingAppService:
         account_type: str,
         is_store_account: bool,
         is_salary_account: Optional[bool] = None,
+        is_active: Optional[bool] = None,
     ) -> Account:
         account = self._account_repo.find_by_id(account_id)
         if not account:
@@ -90,8 +93,40 @@ class AccountingAppService:
         account.is_store_account = is_store_account
         if is_salary_account is not None:
             account.is_salary_account = is_salary_account
+        if is_active is not None:
+            account.is_active = is_active
         account.updated_at = datetime.utcnow()
         return self._account_repo.save(account)
+
+    def deactivate_account(self, account_id: str) -> Account:
+        account = self._account_repo.find_by_id(account_id)
+        if not account:
+            raise ValueError("Account not found")
+        return self.update_account(
+            account_id,
+            account.account_name,
+            account.account_type.value,
+            account.is_store_account,
+            account.is_salary_account,
+            is_active=False,
+        )
+
+    def delete_account(self, account_id: str) -> None:
+        account = self._account_repo.find_by_id(account_id)
+        if not account:
+            raise ValueError("Account not found")
+        if self.is_protected_account(account):
+            raise ValueError(
+                f'"{account.account_name}" is a protected account and cannot be deleted.'
+            )
+        if self.get_account_ledger(account_id):
+            raise ValueError(
+                "Cannot delete an account that has transactions. Deactivate it instead."
+            )
+        delete = getattr(self._account_repo, "delete", None)
+        if delete is None:
+            raise ValueError("Account deletion is not supported")
+        delete(account_id)
 
     def list_accounts(self, active_only: bool = True) -> List[Account]:
         return self._account_repo.list_all(active_only=active_only)

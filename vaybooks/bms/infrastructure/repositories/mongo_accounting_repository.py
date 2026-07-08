@@ -78,6 +78,9 @@ class MongoAccountRepository:
             },
         )
 
+    def delete(self, account_id: str) -> None:
+        self._collection.delete_one({"_id": account_id})
+
 
 class MongoVoucherRepository:
     def __init__(self, db: Database):

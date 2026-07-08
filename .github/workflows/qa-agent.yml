@@ -1,0 +1,117 @@
+name: QA Agent
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  qa-agent:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bms
+
+    steps:
+      - name: Checkout bms
+        uses: actions/checkout@v4
+        with:
+          path: bms
+
+      # Option A: qa-agent as sibling in monorepo (zahcci/qa-agent + zahcci/bms)
+      - name: Checkout qa-agent (monorepo layout)
+        if: false  # Enable when using parent zahcci repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/zahcci
+          path: qa-agent
+          sparse-checkout: qa-agent
+
+      # Option B: Copy qa-agent into bms for CI (simplest for bms-only repo)
+      # Place qa-agent inside bms/qa-agent and set working-directory accordingly.
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install bms dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install qa-agent dependencies
+        working-directory: ../qa-agent
+        run: |
+          npm ci
+          pip install -r python-harness/requirements.txt
+
+      - name: Initialize test database
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          MONGODB_DATABASE: zahcci_customization_test
+        run: |
+          python -m vaybooks.bms.infrastructure.db.indexes
+          python -m vaybooks.bms.infrastructure.db.seed
+
+      - name: Start Streamlit
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          MONGODB_DATABASE: zahcci_customization_test
+        run: |
+          mkdir -p .streamlit
+          cat > .streamlit/secrets.toml << EOF
+          MONGODB_URI = "${{ secrets.MONGODB_URI }}"
+          MONGODB_DATABASE = "zahcci_customization_test"
+          EOF
+          streamlit run app.py --server.headless true &
+          sleep 15
+
+      - name: Generate QA scenarios and test cases
+        working-directory: ../qa-agent
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          npm run qa:generate-scenarios
+          npm run qa:generate-test-cases
+
+      - name: Apply QA execution overrides
+        run: python -m tests.qa.sync_execution_overrides
+
+      - name: Run QA agent
+        working-directory: ../qa-agent
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          MONGODB_DATABASE: zahcci_customization_test
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          QA_FAIL_ON_CRITICAL: "false"
+        run: npm run qa:execute
+
+      - name: Upload QA reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-reports
+          path: |
+            qa-output/reports/
+            qa-output/evidence/
+
+      - name: Fail on Critical test failures
+        working-directory: ../qa-agent
+        env:
+          QA_FAIL_ON_CRITICAL: "true"
+        run: |
+          node -e "
+          const fs = require('fs');
+          const data = JSON.parse(fs.readFileSync('../qa-output/execution-results/execution-results.json','utf8'));
+          const critical = data.results.filter(r => r.status === 'Failed' && r.severityIfFailed === 'Critical');
+          if (critical.length) {
+            console.error('Critical failures:', critical.map(r => r.testCaseId).join(', '));
+            process.exit(1);
+          }
+          "

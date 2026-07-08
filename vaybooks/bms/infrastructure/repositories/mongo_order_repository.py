@@ -11,6 +11,7 @@ from vaybooks.bms.domain.orders.entities import (
     Measurement,
     OrderActivity,
 )
+from vaybooks.bms.domain.orders.order_refs import order_ref_search_variants
 from vaybooks.bms.domain.orders.value_objects import BillRegistryEntry
 from vaybooks.bms.domain.shared.enums import ActivityStatus, CustomizationItemStatus, OrderStatus
 from vaybooks.bms.infrastructure.db.bson_utils import from_bson_date, to_bson_value
@@ -212,12 +213,18 @@ class MongoOrderRepository:
         return order
 
     def find_by_id(self, order_id: str) -> Optional[CustomizationOrder]:
-        doc = self._collection.find_one({"_id": order_id})
-        return self._from_doc(doc) if doc else None
+        for candidate in order_ref_search_variants(order_id) or [order_id]:
+            doc = self._collection.find_one({"_id": candidate})
+            if doc:
+                return self._from_doc(doc)
+        return None
 
     def find_by_order_number(self, order_number: str) -> Optional[CustomizationOrder]:
-        doc = self._collection.find_one({"order_number": order_number})
-        return self._from_doc(doc) if doc else None
+        for candidate in order_ref_search_variants(order_number) or [order_number]:
+            doc = self._collection.find_one({"order_number": candidate})
+            if doc:
+                return self._from_doc(doc)
+        return None
 
     def find_by_order_activity_id(
         self, order_activity_id: str
@@ -228,18 +235,21 @@ class MongoOrderRepository:
         return self._from_doc(doc) if doc else None
 
     def search(self, query: str) -> List[CustomizationOrder]:
-        regex = {"$regex": query, "$options": "i"}
-        docs = self._collection.find(
-            {
-                "$or": [
+        patterns = order_ref_search_variants(query) or [query.strip()]
+        or_clauses = []
+        for pattern in patterns:
+            regex = {"$regex": pattern, "$options": "i"}
+            or_clauses.extend(
+                [
                     {"customer_name": regex},
                     {"phone_number": regex},
                     {"order_number": regex},
+                    {"_id": regex},
                     {"bill_numbers.bill_number": regex},
                     {"customization_items.bill_number": regex},
                 ]
-            }
-        )
+            )
+        docs = self._collection.find({"$or": or_clauses})
         return [self._from_doc(d) for d in docs]
 
     def list_all(self) -> List[CustomizationOrder]:
@@ -260,7 +270,7 @@ class MongoOrderRepository:
         """Map of customer_id -> order count, computed in one aggregation."""
         pipeline = [{"$group": {"_id": "$customer_id", "count": {"$sum": 1}}}]
         return {
-            d["_id"]: d["count"]
+            str(d["_id"]): d["count"]
             for d in self._collection.aggregate(pipeline)
             if d["_id"] is not None
         }

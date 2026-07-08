@@ -47,6 +47,9 @@ def voucher_form(accounts: list, key_prefix: str = "vch"):
     if balanced:
         st.success(f"Balanced: Debit {total_debit:.2f} = Credit {total_credit:.2f}")
     else:
-        st.error(f"Unbalanced: Debit {total_debit:.2f} vs Credit {total_credit:.2f}")
+        st.error(
+            f"System blocks posting — unbalanced totals: "
+            f"Debit {total_debit:.2f} vs Credit {total_credit:.2f}"
+        )
 
     return lines, balanced

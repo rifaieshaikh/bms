@@ -12,7 +12,7 @@ from vaybooks.bms.ui.pages import (
     reports,
 )
 from vaybooks.bms.ui.pages import activities, customization_items, customization_orders
-from vaybooks.bms.ui.pages import mtd_dashboard
+from vaybooks.bms.ui.pages import mtd_dashboard, time_tracking
 
 st.set_page_config(
     page_title="Zahcci Customization Orders",
@@ -63,6 +63,11 @@ page_groups = {
             _page(customization_items),
             title="Customization Items",
             icon=":material/inventory_2:",
+        ),
+        st.Page(
+            _page(time_tracking),
+            title="Time Tracking",
+            icon=":material/schedule:",
         ),
     ],
     "Finance": [

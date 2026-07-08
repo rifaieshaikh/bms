@@ -1,7 +1,45 @@
 import json
+from datetime import date, datetime
 from io import StringIO
+from typing import Any
+
+from bson import ObjectId
+from bson.decimal128 import Decimal128
 
 from vaybooks.bms.infrastructure.repositories.mongo_report_repository import MongoReportRepository
+
+
+def _serialize_bson(value: Any) -> Any:
+    """Recursively convert BSON/Python types to JSON-serializable primitives."""
+    if isinstance(value, ObjectId):
+        return str(value)
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, Decimal128):
+        return str(value)
+    if isinstance(value, dict):
+        return {key: _serialize_bson(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_serialize_bson(item) for item in value]
+    return value
+
+
+def default_serializer(value: Any) -> Any:
+    """Serialize BSON/Python types for CSV/JSON export without leaking raw reprs."""
+    if isinstance(value, (ObjectId, datetime, date, Decimal128, dict, list)):
+        return _serialize_bson(value)
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
+def _serialize_cell(value: Any) -> str:
+    if value is None:
+        return ""
+    serialized = default_serializer(value)
+    if isinstance(serialized, (dict, list)):
+        return json.dumps(serialized)
+    return str(serialized)
 
 
 class ExportAppService:
@@ -15,9 +53,12 @@ class ExportAppService:
         writer = csv.DictWriter(output, fieldnames=fields, extrasaction="ignore")
         writer.writeheader()
         for doc in docs:
-            row = {f: doc.get(f, "") for f in fields}
-            if "_id" in doc and "id" in fields:
-                row["id"] = doc["_id"]
+            row = {field: _serialize_cell(doc.get(field, "")) for field in fields}
+            if "_id" in doc:
+                if "id" in fields:
+                    row["id"] = _serialize_cell(doc["_id"])
+                if "customer_id" in fields:
+                    row["customer_id"] = _serialize_cell(doc["_id"])
             writer.writerow(row)
         return output.getvalue()
 
@@ -26,12 +67,13 @@ class ExportAppService:
         return self._docs_to_csv(
             docs,
             [
-                "id",
+                "customer_id",
                 "customer_name",
                 "phone_number",
                 "alternate_phone_number",
                 "address",
                 "notes",
+                "customer_account_id",
             ],
         )
 
@@ -41,11 +83,12 @@ class ExportAppService:
         for doc in docs:
             rows.append(
                 {
-                    "id": doc["_id"],
+                    "id": doc.get("_id"),
                     "order_number": doc.get("order_number"),
                     "customer_name": doc.get("customer_name"),
                     "phone_number": doc.get("phone_number"),
                     "order_status": doc.get("order_status"),
+                    "order_date": doc.get("order_date"),
                     "expected_delivery_date": doc.get("expected_delivery_date"),
                     "advance_amount": doc.get("advance_amount"),
                 }
@@ -58,6 +101,7 @@ class ExportAppService:
                 "customer_name",
                 "phone_number",
                 "order_status",
+                "order_date",
                 "expected_delivery_date",
                 "advance_amount",
             ],
@@ -125,9 +169,4 @@ class ExportAppService:
             "vouchers": self._repo.get_all_vouchers(),
         }
 
-        def default_serializer(obj):
-            if hasattr(obj, "isoformat"):
-                return obj.isoformat()
-            return str(obj)
-
-        return json.dumps(backup, default=default_serializer, indent=2)
+        return json.dumps(_serialize_bson(backup), indent=2)

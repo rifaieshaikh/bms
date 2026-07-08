@@ -4,6 +4,7 @@ from typing import List, Optional
 from pymongo.database import Database
 
 from vaybooks.bms.domain.deliveries.entities import Delivery
+from vaybooks.bms.domain.orders.order_refs import order_ref_search_variants
 from vaybooks.bms.infrastructure.db.bson_utils import from_bson_date, to_bson_value
 
 
@@ -46,7 +47,11 @@ class MongoDeliveryRepository:
         return self._from_doc(doc) if doc else None
 
     def list_by_order(self, order_id: str) -> List[Delivery]:
-        return [self._from_doc(d) for d in self._collection.find({"order_id": order_id})]
+        for candidate in order_ref_search_variants(order_id) or [order_id]:
+            docs = list(self._collection.find({"order_id": candidate}))
+            if docs:
+                return [self._from_doc(d) for d in docs]
+        return []
 
     def list_all(self) -> List[Delivery]:
         return [self._from_doc(d) for d in self._collection.find()]

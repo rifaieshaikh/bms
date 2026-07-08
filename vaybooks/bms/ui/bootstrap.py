@@ -50,6 +50,9 @@ def _bootstrap_db():
     db = get_database()
     ensure_indexes(db)
     run_seed(db)
+    from vaybooks.bms.infrastructure.db.qa_fixtures import ensure_cash_drawer_account
+
+    ensure_cash_drawer_account(db)
     return db
 
 
@@ -91,7 +94,7 @@ def get_services():
             invoice_repo=invoice_repo,
             delivery_repo=delivery_repo,
         ),
-        "activities": ActivityAppService(activity_repo),
+        "activities": ActivityAppService(activity_repo, order_repo),
         "time_tracking": TimeTrackingAppService(time_repo, order_repo),
         "expenses": ExpenseAppService(expense_repo, order_repo),
         "invoices": InvoiceAppService(

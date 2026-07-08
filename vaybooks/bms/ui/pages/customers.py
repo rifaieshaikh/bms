@@ -1,8 +1,16 @@
 import streamlit as st
 
+from vaybooks.bms.domain.shared.exceptions import ValidationError
 from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.components.customer_card import customer_card
 from vaybooks.bms.ui.pagination import CARD_PAGE_SIZE, paginate_list, render_page_controls
+from vaybooks.bms.ui.session_keys import ORDERS_KEEP_FILTERS
+
+def _load_order_counts(order_service) -> dict:
+    try:
+        return order_service.order_counts_by_customer()
+    except Exception:
+        return {}
 
 
 @st.dialog("Add Customer", width="medium")
@@ -15,11 +23,16 @@ def _add_customer_dialog(customer_service):
 
     if st.button("Create Customer", type="primary"):
         if name and phone:
-            customer = customer_service.create_customer(
-                name, phone, alt_phone or None, address, notes
-            )
-            st.success(f"Created customer: {customer.customer_name}")
-            st.rerun()
+            try:
+                customer = customer_service.create_customer(
+                    name, phone, alt_phone or None, address, notes
+                )
+                st.success(
+                    f"Customer submission for {customer.customer_name} saved successfully."
+                )
+                st.rerun()
+            except ValidationError as exc:
+                st.error(str(exc))
         else:
             st.error("Name and phone are required")
 
@@ -56,6 +69,7 @@ def render(services: dict):
     st.title("Customers")
     customer_service = services["customers"]
     order_service = services["orders"]
+    order_counts = _load_order_counts(order_service)
 
     header_cols = st.columns([4, 1])
     with header_cols[0]:
@@ -70,10 +84,14 @@ def render(services: dict):
 
     customers = customer_service.search_customers(query)
     if not customers:
-        st.info("No customers found.")
+        if query.strip():
+            st.info("No customers match your search.")
+        else:
+            st.info("No customers found.")
         return
 
-    order_counts = order_service.order_counts_by_customer()
+    st.caption(f"Customer list displays {len(customers)} records")
+
     page_customers, page, total_pages = paginate_list(
         customers,
         page_key="cust_page",
@@ -84,7 +102,7 @@ def render(services: dict):
 
     cols = st.columns(3)
     for index, customer in enumerate(page_customers):
-        order_count = order_counts.get(customer.id, 0)
+        order_count = order_counts.get(str(customer.id), 0)
         with cols[index % 3]:
             edit_clicked, view_orders_clicked = customer_card(
                 customer, order_count, f"cust_{customer.id}"
@@ -93,6 +111,7 @@ def render(services: dict):
                 _edit_customer_dialog(customer_service, customer.id)
             if view_orders_clicked:
                 st.session_state.orders_customer_filter = customer.id
+                st.session_state[ORDERS_KEEP_FILTERS] = True
                 if navigation.customization_orders_page is not None:
                     st.switch_page(navigation.customization_orders_page)
                 else:

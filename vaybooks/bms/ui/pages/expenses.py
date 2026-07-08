@@ -32,24 +32,27 @@ def render(services: dict):
         if order_id:
             name = st.text_input("Expense Name")
             source = st.selectbox("Source", [e.value for e in ExpenseSource])
-            purchase = st.number_input("Purchase Price", min_value=0.0)
-            selling = st.number_input("Selling Price", min_value=0.0)
+            purchase = st.number_input("Purchase Price", min_value=0.01)
+            selling = st.number_input("Selling Price", min_value=0.01)
             quantity = st.number_input("Quantity", min_value=0.01, value=1.0)
             vendor = st.text_input("Vendor / Worker")
             notes = st.text_area("Notes")
             if st.button("Add Expense"):
-                try:
-                    expense_service.add_expense(
-                        order_id=order_id,
-                        expense_date=date.today(),
-                        expense_name=name,
-                        expense_source=source,
-                        purchase_price=purchase,
-                        selling_price=selling,
-                        quantity=quantity,
-                        vendor_or_worker_name=vendor,
-                        notes=notes,
-                    )
-                    st.success("Expense added")
-                except Exception as e:
-                    st.error(str(e))
+                if purchase <= 0 or selling <= 0:
+                    st.error("Price must be a positive value")
+                else:
+                    try:
+                        expense_service.add_expense(
+                            order_id=order_id,
+                            expense_date=date.today(),
+                            expense_name=name,
+                            expense_source=source,
+                            purchase_price=purchase,
+                            selling_price=selling,
+                            quantity=quantity,
+                            vendor_or_worker_name=vendor,
+                            notes=notes,
+                        )
+                        st.success("Expense added")
+                    except Exception as e:
+                        st.error(str(e))

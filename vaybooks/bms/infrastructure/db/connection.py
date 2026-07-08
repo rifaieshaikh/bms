@@ -1,5 +1,15 @@
+import os
+
 import streamlit as st
 from pymongo import MongoClient
+
+
+def _mongo_uri() -> str:
+    return os.environ.get("MONGODB_URI") or st.secrets["MONGODB_URI"]
+
+
+def _mongo_database() -> str:
+    return os.environ.get("MONGODB_DATABASE") or st.secrets["MONGODB_DATABASE"]
 
 
 @st.cache_resource
@@ -11,7 +21,7 @@ def get_mongo_client():
     thread-safe, so sharing it is safe.
     """
     return MongoClient(
-        st.secrets["MONGODB_URI"],
+        _mongo_uri(),
         serverSelectionTimeoutMS=5000,
         maxPoolSize=50,
         retryWrites=True,
@@ -20,7 +30,7 @@ def get_mongo_client():
 
 def get_database():
     client = get_mongo_client()
-    return client[st.secrets["MONGODB_DATABASE"]]
+    return client[_mongo_database()]
 
 
 def get_database_from_uri(uri: str, database_name: str):

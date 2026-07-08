@@ -1,4 +1,7 @@
 .streamlit/secrets.toml
+qa-output/
+dev-orchestrator-output/
+tasks/
 __pycache__/
 *.pyc
 .env

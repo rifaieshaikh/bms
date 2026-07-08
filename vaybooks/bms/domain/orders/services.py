@@ -4,7 +4,7 @@ from typing import List, Optional
 from vaybooks.bms.domain.activities.entities import ActivityConfig
 from vaybooks.bms.domain.deliveries.entities import Delivery
 from vaybooks.bms.domain.invoices.entities import Invoice
-from vaybooks.bms.domain.orders.bill_status import all_bills_invoiced_and_delivered
+from vaybooks.bms.domain.order_status import resolve_order_status
 from vaybooks.bms.domain.orders.entities import (
     COMPLETED_ACTIVITY_STATUS,
     CREATED_ACTIVITY_STATUS,
@@ -56,6 +56,11 @@ class OrderDomainService:
         bill_number = bill_number.strip().upper()
         if not bill_number:
             raise ValidationError("Bill number is required")
+
+        if order.get_items_by_bill_number(bill_number):
+            raise BillNumberExistsError(
+                f"Bill number {bill_number} is already used in this order"
+            )
 
         existing = self._bill_registry_repo.find_by_bill_number(bill_number)
         if existing and existing.order_id != order.id:
@@ -156,26 +161,7 @@ class OrderDomainService:
         deliveries: Optional[List[Delivery]] = None,
     ) -> OrderStatus:
         order.refresh_item_statuses()
-        if order.order_status == OrderStatus.CANCELLED:
-            return order.order_status
-
-        if invoices is not None and deliveries is not None:
-            if all_bills_invoiced_and_delivered(order, invoices, deliveries):
-                order.order_status = OrderStatus.COMPLETED
-            elif order.order_status in (
-                OrderStatus.COMPLETED,
-                OrderStatus.DELIVERED,
-                OrderStatus.INVOICE_GENERATED,
-                OrderStatus.READY_FOR_DELIVERY,
-            ):
-                order.order_status = OrderStatus.IN_PROGRESS
-        elif order.all_required_done():
-            if order.order_status == OrderStatus.IN_PROGRESS:
-                order.order_status = OrderStatus.READY_FOR_DELIVERY
-        else:
-            if order.order_status == OrderStatus.READY_FOR_DELIVERY:
-                order.order_status = OrderStatus.IN_PROGRESS
-
+        order.order_status = resolve_order_status(order, invoices, deliveries)
         order.updated_at = utc_now()
         return order.order_status
 
@@ -296,6 +282,13 @@ class OrderDomainService:
             raise ValidationError("Bill number is required")
 
         if bill_number != item.bill_number:
+            if any(
+                i.item_id != item_id
+                for i in order.get_items_by_bill_number(bill_number)
+            ):
+                raise BillNumberExistsError(
+                    f"Bill number {bill_number} is already used in this order"
+                )
             existing = self._bill_registry_repo.find_by_bill_number(bill_number)
             if existing and existing.order_id != order.id:
                 raise BillNumberExistsError(

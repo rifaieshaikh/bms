@@ -2,6 +2,7 @@ from datetime import date
 
 import streamlit as st
 
+from vaybooks.bms.domain.shared.exceptions import ValidationError
 from vaybooks.bms.ui.dialog_utils import (
     clear_all_dialog_flags,
     make_dismiss_handler,
@@ -36,6 +37,8 @@ def _add_vendor_dialog(vendor_service):
                 st.session_state.pop(V_ADD, None)
                 st.success(f"Created vendor: {vendor.vendor_name}")
                 st.rerun()
+            except ValidationError as exc:
+                st.error(str(exc))
             except Exception as exc:
                 st.error(str(exc))
     if cols[1].button("Cancel", use_container_width=True):
@@ -66,6 +69,8 @@ def _edit_vendor_dialog(vendor_service):
             st.session_state.pop(V_EDIT, None)
             st.success("Vendor updated")
             st.rerun()
+        except ValidationError as exc:
+            st.error(str(exc))
         except Exception as exc:
             st.error(str(exc))
     if cols[1].button("Cancel", use_container_width=True):
@@ -160,14 +165,14 @@ def _render_vendor_detail(services, vendor_id: str):
     accounting = services["accounting"]
     vendor = vendor_service.get_vendor_detail(vendor_id)
     if not vendor:
-        st.error("Vendor not found")
-        st.session_state.pop(V_VIEW, None)
+        st.warning("Vendor detail not found")
         return
 
     if st.button("← Back to vendors", key="vendor_back"):
         st.session_state.pop(V_VIEW, None)
         st.rerun()
 
+    st.subheader("Vendor Detail")
     st.title(vendor.vendor_name)
     with st.container(border=True):
         info = st.columns(3)
@@ -176,6 +181,8 @@ def _render_vendor_detail(services, vendor_id: str):
         vendor_account = accounting.get_vendor_account(vendor.id)
         balance = vendor_account.current_balance if vendor_account else 0.0
         info[2].write(f"**Payable:** ₹{abs(balance):,.0f}")
+        if vendor_account:
+            st.caption(f"System Account: {vendor_account.account_name}")
         if vendor.address:
             st.caption(f"Address: {vendor.address}")
         if vendor.notes:
@@ -185,7 +192,6 @@ def _render_vendor_detail(services, vendor_id: str):
         clear_all_dialog_flags()
         _pay_vendor_dialog(services, vendor.id)
 
-    st.markdown("**Payments**")
     service_names = {
         s.id: s.service_name
         for s in services["vendor_services"].list_services(active_only=False)
@@ -193,6 +199,20 @@ def _render_vendor_detail(services, vendor_id: str):
     payments = (
         accounting.list_vendor_payments(vendor_account.id) if vendor_account else []
     )
+    associated_services = sorted(
+        {
+            service_names[v.reference_service_id]
+            for v in payments
+            if v.reference_service_id and v.reference_service_id in service_names
+        }
+    )
+    st.markdown("**Outsourced service association**")
+    if associated_services:
+        st.write(", ".join(associated_services))
+    else:
+        st.caption("No outsourced services linked via payments yet.")
+
+    st.markdown("**Payments**")
     if not payments:
         st.caption("No payments recorded yet.")
     else:
@@ -229,6 +249,7 @@ def _render_vendor_list(services):
             _add_vendor_dialog(vendor_service)
 
     vendors = vendor_service.search_vendors(query)
+    st.caption(f"Vendor list displays {len(vendors)} records")
     if not vendors:
         st.info("No vendors found.")
     else:
@@ -251,7 +272,7 @@ def _render_vendor_list(services):
                     register_armed_dialog(V_EDIT)
                     st.rerun()
                 if btns[1].button("Payments", key=f"v_pay_{vendor.id}", use_container_width=True):
-                    st.session_state[V_VIEW] = vendor.id
+                    st.session_state[V_VIEW] = str(vendor.id)
                     st.rerun()
         render_page_controls(
             page, total_pages, len(vendors),

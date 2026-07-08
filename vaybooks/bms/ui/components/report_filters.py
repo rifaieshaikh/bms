@@ -73,7 +73,10 @@ def _min_number(label: str, key: str) -> float | None:
 def render_item_profitability_filters() -> ItemProfitabilityFilter:
     render_quick_period("item_profit")
     date_range = render_date_range("item_profit")
-    st.caption(f"Delivered / snapshotted {date_range.start:%d %b %Y} → {date_range.end:%d %b %Y}")
+    st.caption(
+        f"Delivered / snapshotted {date_range.start:%d %b %Y} → {date_range.end:%d %b %Y}. "
+        "Bill-level MPH per item; order rollup uses aggregated totals."
+    )
     c1, c2 = st.columns(2)
     with c1:
         customer = _text_search("Customer", "item_cust")
@@ -96,7 +99,10 @@ def render_item_profitability_filters() -> ItemProfitabilityFilter:
 def render_order_mph_filters() -> OrderMphFilter:
     render_quick_period("order_mph")
     date_range = render_date_range("order_mph")
-    st.caption(f"Items delivered in period {date_range.start:%d %b %Y} → {date_range.end:%d %b %Y}")
+    st.caption(
+        f"Items delivered in period {date_range.start:%d %b %Y} → {date_range.end:%d %b %Y}. "
+        "Order MPH is aggregated across bills (not a simple average of bill-level MPH)."
+    )
     customer = _text_search("Customer", "order_mph_cust")
     min_mph = _min_number("Min order MPH (₹/h)", "order_min_mph")
     return OrderMphFilter(date_range=date_range, customer_query=customer, min_mph=min_mph)

@@ -2,6 +2,10 @@ from datetime import date
 
 import streamlit as st
 
+from vaybooks.bms.application.report_filters import DateRange, OrderMphFilter
+from vaybooks.bms.domain.orders.order_refs import compact_order_ref
+from vaybooks.bms.ui.pages.reports import AGGREGATED_PERIOD_LABEL
+
 
 @st.cache_data(ttl=60, show_spinner=False)
 def _period_summary(_reports, start: date, end: date):
@@ -67,3 +71,12 @@ def render(services: dict):
         "🚚 Vendor Payments", f"₹{summary['vendor_payments']:,.0f}", border=True
     )
     fin2[2].metric("👷 Salary Paid", f"₹{summary['salary_payments']:,.0f}", border=True)
+
+    st.subheader(AGGREGATED_PERIOD_LABEL)
+    mph_rows = services["reports"].mph_report(OrderMphFilter(date_range=DateRange(start, end)))
+    if mph_rows:
+        for row in mph_rows:
+            order_ref = compact_order_ref(row.get("order_number") or "")
+            mph = row.get("margin_per_hour")
+            mph_txt = f"₹{mph:,.0f}/h" if mph is not None else "—"
+            st.caption(f"{order_ref} aggregated order MPH {mph_txt}")

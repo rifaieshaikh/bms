@@ -6,8 +6,13 @@ from vaybooks.bms.domain.activities.entities import (
     category_metadata,
 )
 from vaybooks.bms.domain.shared.enums import ActivityCategory
+from vaybooks.bms.infrastructure.db.seed import DEFAULT_ACTIVITIES
 
 PENDING_EDIT_ACTIVITY = "pending_edit_activity"
+
+_SYSTEM_ACTIVITY_NAMES = frozenset(
+    activity["activity_name"] for activity in DEFAULT_ACTIVITIES
+)
 
 
 def _category_options() -> list[str]:
@@ -55,7 +60,7 @@ def _add_activity_dialog(activity_service):
 
     if st.button("Create Activity", type="primary"):
         if not name.strip():
-            st.error("Activity name is required")
+            st.error("Error: Activity name is required")
             return
         try:
             activity_service.create_activity(
@@ -67,14 +72,14 @@ def _add_activity_dialog(activity_service):
             st.success(f"Created {name}")
             st.rerun()
         except Exception as exc:
-            st.error(str(exc))
+            st.error(f"Error: {exc}")
 
 
 @st.dialog("Edit Activity")
 def _edit_activity_dialog(activity_service, activity_id: str):
     activity = activity_service.get_activity(activity_id)
     if not activity:
-        st.error("Activity not found")
+        st.error("Error: Activity not found")
         return
 
     name = st.text_input("Activity Name", value=activity.activity_name, key="edit_act_name")
@@ -114,7 +119,7 @@ def _edit_activity_dialog(activity_service, activity_id: str):
 
     if st.button("Save Changes", type="primary"):
         if not name.strip():
-            st.error("Activity name is required")
+            st.error("Error: Activity name is required")
             return
         try:
             activity_service.update_activity_details(
@@ -128,14 +133,17 @@ def _edit_activity_dialog(activity_service, activity_id: str):
             st.success("Activity updated")
             st.rerun()
         except Exception as exc:
-            st.error(str(exc))
+            st.error(f"Error: {exc}")
 
 
 def _activity_card(activity, index: int):
     with st.container(border=True):
         status = "Active" if activity.is_active else "Inactive"
         st.markdown(f"**{activity.activity_name}**")
-        st.caption(f"{activity.activity_category.value} · {status}")
+        tags = [activity.activity_category.value, status]
+        if activity.activity_name in _SYSTEM_ACTIVITY_NAMES:
+            tags.append("System")
+        st.caption(" · ".join(tags))
 
         if activity.requires_time_tracking:
             st.write("Time tracking: Required")

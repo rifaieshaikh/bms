@@ -25,7 +25,7 @@ class CustomerAppService:
         address: str = "",
         notes: str = "",
     ) -> Customer:
-        customer = self._customer_domain.find_or_create(
+        customer = self._customer_domain.create(
             customer_name=customer_name,
             phone_number=phone_number,
             alternate_phone_number=alternate_phone_number,
@@ -71,7 +71,14 @@ class CustomerAppService:
         phone_number: str,
         **kwargs,
     ) -> Customer:
-        return self.create_customer(customer_name, phone_number, **kwargs)
+        customer = self._customer_domain.find_or_create(
+            customer_name=customer_name,
+            phone_number=phone_number,
+            **kwargs,
+        )
+        account_name = CustomerDomainService.build_account_name(customer)
+        self._accounting_domain.ensure_customer_account(customer.id, account_name)
+        return customer
 
     def list_all_customers(self) -> List[Customer]:
         return self._customer_repo.list_all()

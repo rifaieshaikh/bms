@@ -24,8 +24,11 @@ class TimeTrackingDomainService:
         end_time: str,
         worker_name: str = "",
         notes: str = "",
+        ends_next_day: bool = False,
     ) -> TimeEntry:
-        duration = calculate_duration_minutes(start_time, end_time)
+        duration = calculate_duration_minutes(
+            start_time, end_time, ends_next_day=ends_next_day
+        )
         entry = TimeEntry(
             order_id=order_id,
             order_number=order_number,

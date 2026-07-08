@@ -19,6 +19,11 @@ class CustomizationItem:
     # Per-item profitability snapshot, frozen once the item is both invoiced
     # and delivered. `mph_snapshot_at` being set marks the numbers as final.
     sell_amount: float = 0.0
+
+    @property
+    def sale_price(self) -> float:
+        """Per-item sale price used when computing invoice totals."""
+        return self.sell_amount
     expense_selling_total: float = 0.0
     expense_purchase_total: float = 0.0
     in_house_hours: float = 0.0

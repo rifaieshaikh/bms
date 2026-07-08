@@ -101,3 +101,32 @@ def test_mph_report_min_mph_filter():
     )
     assert len(rows) == 1
     assert rows[0]["order_number"] == "ORD-2"
+
+
+def test_mph_report_min_mph_inclusive_at_boundary():
+    items = [
+        {
+            "order_number": "ORD-150",
+            "customer_name": "Kavya",
+            "margin_amount": 1500.0,
+            "in_house_hours": 10.0,
+            "delivered_on": date(2026, 1, 1),
+        },
+        {
+            "order_number": "ORD-149",
+            "customer_name": "Meera",
+            "margin_amount": 1490.0,
+            "in_house_hours": 10.0,
+            "delivered_on": date(2026, 1, 1),
+        },
+    ]
+    service = ReportAppService(_FakeProfitabilityRepo(items))
+    rows = service.mph_report(
+        OrderMphFilter(
+            date_range=DateRange(date(2026, 1, 1), date(2026, 1, 31)),
+            min_mph=150.0,
+        )
+    )
+    assert len(rows) == 1
+    assert rows[0]["order_number"] == "ORD-150"
+    assert rows[0]["margin_per_hour"] == 150.0

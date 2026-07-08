@@ -18,6 +18,10 @@ class IncompleteTimeEntriesError(DomainError):
     """Time entries are incomplete for activity completion."""
 
 
+class ActivityInUseError(DomainError):
+    """Activity is referenced by an order and cannot be deactivated."""
+
+
 class DuplicateCustomerAccountError(DomainError):
     """Customer account already exists."""
 

@@ -70,6 +70,41 @@ class MongoTimeTrackingRepository:
         docs = self._collection.find({"bill_number": bill_number.upper()})
         return [self._from_doc(d) for d in docs]
 
+    def search(
+        self,
+        bill_number: Optional[str] = None,
+        order_number: Optional[str] = None,
+        worker_name: Optional[str] = None,
+        activity_name: Optional[str] = None,
+        work_date_from: Optional[date] = None,
+        work_date_to: Optional[date] = None,
+    ) -> List[TimeEntry]:
+        query = {}
+        if bill_number:
+            query["bill_number"] = {
+                "$regex": bill_number.upper(),
+                "$options": "i",
+            }
+        if order_number:
+            query["order_number"] = {"$regex": order_number, "$options": "i"}
+        if worker_name:
+            query["worker_name"] = {"$regex": worker_name, "$options": "i"}
+        if activity_name:
+            query["activity_name"] = activity_name
+        if work_date_from is not None or work_date_to is not None:
+            date_clause = {}
+            if work_date_from is not None:
+                date_clause["$gte"] = to_bson_value(work_date_from)
+            if work_date_to is not None:
+                date_clause["$lte"] = to_bson_value(work_date_to)
+            query["work_date"] = date_clause
+        if not query:
+            return self.list_all()
+        return [
+            self._from_doc(d)
+            for d in self._collection.find(query).sort("work_date", -1)
+        ]
+
     def list_all(self) -> List[TimeEntry]:
         return [self._from_doc(d) for d in self._collection.find()]
 
