@@ -1,5 +1,5 @@
 
-def test_accounts_page_shows_system_accounts_section():
+def test_accounts_page_lists_all_accounts():
     def _page():
         from unittest.mock import MagicMock
 
@@ -48,20 +48,15 @@ def test_accounts_page_shows_system_accounts_section():
 
     rendered = " ".join(
         getattr(el, "value", "") or ""
-        for el in at.get("markdown") + at.get("header") + at.get("caption") + at.get("info")
+        for el in at.get("markdown") + at.get("header") + at.get("subheader")
+        + at.get("caption") + at.get("info")
     )
-    tab_labels = " ".join(getattr(el, "label", "") or "" for el in at.get("tab"))
-    page_text = f"{rendered} {tab_labels}"
-    assert "System" in page_text
-    assert "displays" in page_text
-    assert "message" in page_text
-    assert "Store:" in page_text
-    assert "Salary:" in page_text
-    assert "Cash Drawer" in page_text
-    assert "Salary Payable" in page_text
+    # All accounts (including system ones) appear in the filterable list.
+    assert "Cash Drawer" in rendered
+    assert "Salary Payable" in rendered
 
 
-def test_accounts_page_shows_voucher_label():
+def test_vouchers_route_shows_voucher():
     def _page():
         from datetime import datetime
         from unittest.mock import MagicMock
@@ -69,7 +64,7 @@ def test_accounts_page_shows_voucher_label():
         from vaybooks.bms.application.accounting_app_service import AccountingAppService
         from vaybooks.bms.domain.accounting.entities import Voucher, VoucherLine
         from vaybooks.bms.domain.shared.enums import VoucherType
-        from vaybooks.bms.ui.pages import accounts
+        from vaybooks.bms.ui.pages.finance import vouchers
         from tests.conftest import (
             FakeAccountRepository,
             FakeCounterRepository,
@@ -97,7 +92,7 @@ def test_accounts_page_shows_voucher_label():
             "vendors": MagicMock(list_all_vendors=MagicMock(return_value=[])),
             "vendor_services": MagicMock(list_services=MagicMock(return_value=[])),
         }
-        accounts.render(services)
+        vouchers.render(services)
 
     from streamlit.testing.v1 import AppTest
 
@@ -109,34 +104,52 @@ def test_accounts_page_shows_voucher_label():
         getattr(el, "value", "") or ""
         for el in at.get("markdown") + at.get("header") + at.get("info")
     )
-    tab_labels = " ".join(getattr(el, "label", "") or "" for el in at.get("tab"))
-    page_text = f"{rendered} {tab_labels}"
-    assert "Voucher" in page_text
-    assert "posts" in page_text
-    assert "successfully" in page_text
+    assert "Voucher" in rendered
+    assert "VCH-0001" in rendered
 
 
-def test_accounts_page_blocks_unbalanced_journal_message():
+def test_trial_balance_route_shows_balance_status():
     def _page():
+        from datetime import datetime
         from unittest.mock import MagicMock
 
         from vaybooks.bms.application.accounting_app_service import AccountingAppService
-        from vaybooks.bms.ui.pages import accounts
+        from vaybooks.bms.domain.accounting.entities import Account, Voucher, VoucherLine
+        from vaybooks.bms.domain.shared.enums import AccountType, VoucherType
+        from vaybooks.bms.ui.pages.finance import trial_balance
         from tests.conftest import (
             FakeAccountRepository,
             FakeCounterRepository,
             FakeVoucherRepository,
         )
 
+        account_repo = FakeAccountRepository()
+        account_repo.save(Account(id="a1", account_name="Expense",
+                                  account_type=AccountType.EXPENSE))
+        account_repo.save(Account(id="a2", account_name="Cash",
+                                  account_type=AccountType.ASSET))
+        voucher_repo = FakeVoucherRepository()
+        voucher_repo.save(
+            Voucher(
+                voucher_number="JRN-0001",
+                voucher_type=VoucherType.JOURNAL,
+                voucher_date=datetime(2024, 6, 30),
+                description="Balanced journal",
+                lines=[
+                    VoucherLine("a1", "Expense", debit_amount=15000),
+                    VoucherLine("a2", "Cash", credit_amount=15000),
+                ],
+            )
+        )
         accounting = AccountingAppService(
-            FakeAccountRepository(), FakeVoucherRepository(), FakeCounterRepository()
+            account_repo, voucher_repo, FakeCounterRepository()
         )
         services = {
             "accounting": accounting,
             "vendors": MagicMock(list_all_vendors=MagicMock(return_value=[])),
             "vendor_services": MagicMock(list_services=MagicMock(return_value=[])),
         }
-        accounts.render(services)
+        trial_balance.render(services)
 
     from streamlit.testing.v1 import AppTest
 
@@ -146,10 +159,10 @@ def test_accounts_page_blocks_unbalanced_journal_message():
 
     rendered = " ".join(
         getattr(el, "value", "") or ""
-        for el in at.get("markdown") + at.get("header") + at.get("info")
+        for el in at.get("markdown") + at.get("metric")
+        + at.get("header") + at.get("info")
     )
-    assert "blocks" in rendered.lower()
-    assert "unbalanced" in rendered.lower()
+    assert "Balanced" in rendered
 
 
 def test_accounts_page_shows_delete_and_deactivate_for_non_protected_account():
@@ -191,7 +204,7 @@ def test_accounts_page_shows_delete_and_deactivate_for_non_protected_account():
     assert not at.exception
 
     button_text = "".join(getattr(el, "label", "") or "" for el in at.get("button"))
-    assert "DeleteDeactivate" in button_text
+    assert "DeleteDisable" in button_text
 
 
 def test_accounts_page_hides_delete_for_protected_store_account():
@@ -235,18 +248,20 @@ def test_accounts_page_hides_delete_for_protected_store_account():
 
     labels = [getattr(el, "label", "") or "" for el in at.get("button")]
     assert "Delete" not in labels
-    assert "Deactivate" in labels
+    assert "Disable" in labels
 
 
-def test_accounts_page_ledger_tab_renders_ledger_header_with_account():
+def test_account_detail_route_renders_ledger_for_account():
     def _page():
         from datetime import datetime
         from unittest.mock import MagicMock
 
+        import streamlit as st
+
         from vaybooks.bms.application.accounting_app_service import AccountingAppService
         from vaybooks.bms.domain.accounting.entities import Account, Voucher, VoucherLine
         from vaybooks.bms.domain.shared.enums import AccountType, VoucherType
-        from vaybooks.bms.ui.pages import accounts
+        from vaybooks.bms.ui.pages import account_detail
         from tests.conftest import (
             FakeAccountRepository,
             FakeCounterRepository,
@@ -278,12 +293,13 @@ def test_accounts_page_ledger_tab_renders_ledger_header_with_account():
         accounting = AccountingAppService(
             account_repo, voucher_repo, FakeCounterRepository()
         )
+        st.query_params["id"] = "acc-cash"
         services = {
             "accounting": accounting,
             "vendors": MagicMock(list_all_vendors=MagicMock(return_value=[])),
             "vendor_services": MagicMock(list_services=MagicMock(return_value=[])),
         }
-        accounts.render(services)
+        account_detail.render(services)
 
     from streamlit.testing.v1 import AppTest
 
@@ -291,15 +307,8 @@ def test_accounts_page_ledger_tab_renders_ledger_header_with_account():
     at.run(timeout=15)
     assert not at.exception
 
-    tab_labels = " ".join(getattr(el, "label", "") or "" for el in at.get("tab"))
-    headers = " ".join(getattr(el, "value", "") or "" for el in at.get("header"))
-    page_text = f"{tab_labels} {headers}"
-    assert "Ledger" in page_text
-
-    selectboxes = at.get("selectbox")
-    account_select = next(
-        (el for el in selectboxes if getattr(el, "label", "") == "Account"),
-        None,
+    rendered = " ".join(
+        getattr(el, "value", "") or ""
+        for el in at.get("title") + at.get("markdown") + at.get("caption")
     )
-    assert account_select is not None
-    assert account_select.value == "Cash Drawer"
+    assert "Cash Drawer" in rendered

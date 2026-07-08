@@ -3,18 +3,16 @@ def test_customization_orders_list_page_renders():
     def _page():
         from unittest.mock import MagicMock
 
-        from vaybooks.bms.ui.pages import customization_orders
+        from vaybooks.bms.ui.pages import customization_orders_list
 
-        order_repo = MagicMock(list_all=MagicMock(return_value=[]))
         services = {
             "orders": MagicMock(
                 search_customization_orders=MagicMock(return_value=[]),
                 list_by_customer=MagicMock(return_value=[]),
             ),
-            "order_repo": order_repo,
-            "customers": MagicMock(),
+            "customers": MagicMock(list_all_customers=MagicMock(return_value=[])),
         }
-        customization_orders.render(services)
+        customization_orders_list.render(services)
 
     from streamlit.testing.v1 import AppTest
 
@@ -29,7 +27,7 @@ def test_customization_orders_list_page_renders():
     assert "Customization Orders" in rendered
 
 
-def test_order_detail_view_persists_after_rerun():
+def test_order_detail_route_renders_from_query_id():
     def _page():
         from datetime import date
         from unittest.mock import MagicMock
@@ -38,8 +36,7 @@ def test_order_detail_view_persists_after_rerun():
 
         from vaybooks.bms.domain.orders.entities import CustomizationItem, CustomizationOrder
         from vaybooks.bms.domain.shared.enums import OrderStatus
-        from vaybooks.bms.ui.pages import customization_orders
-        from vaybooks.bms.ui.session_keys import VIEW_ORDER_ID
+        from vaybooks.bms.ui.pages import customization_order_detail
 
         order = CustomizationOrder(
             id="ord-test-1",
@@ -54,7 +51,7 @@ def test_order_detail_view_persists_after_rerun():
             ],
             order_status=OrderStatus.IN_PROGRESS,
         )
-        st.session_state[VIEW_ORDER_ID] = order.id
+        st.query_params["id"] = order.id
 
         order_service = MagicMock()
         order_service.get_order_detail.return_value = order
@@ -81,7 +78,7 @@ def test_order_detail_view_persists_after_rerun():
             "vendors": MagicMock(list_vendors=MagicMock(return_value=[])),
             "vendor_services": MagicMock(list_services=MagicMock(return_value=[])),
         }
-        customization_orders.render(services)
+        customization_order_detail.render(services)
 
     from streamlit.testing.v1 import AppTest
 
@@ -92,10 +89,5 @@ def test_order_detail_view_persists_after_rerun():
     at.run(timeout=15)
     assert not at.exception
 
-    rendered = " ".join(
-        getattr(el, "value", "") or ""
-        for el in at.get("markdown") + at.get("header") + at.get("title") + at.get("info")
-    )
     buttons = " ".join(getattr(el, "label", "") or "" for el in at.button)
     assert "Back to orders" in buttons
-    assert "Customization Orders" not in rendered

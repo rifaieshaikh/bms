@@ -169,6 +169,7 @@ class InvoiceAppService:
         post_entry: bool = False,
         discount_amount: float = 0.0,
         item_amounts: Optional[Dict[str, float]] = None,
+        item_discounts: Optional[Dict[str, float]] = None,
     ) -> Invoice:
         if not invoice_number or not invoice_number.strip():
             raise ValueError("Invoice number is required")
@@ -198,6 +199,7 @@ class InvoiceAppService:
             allow_already_invoiced=allow_already_invoiced,
             discount_amount=discount_amount,
             item_amounts=item_amounts,
+            item_discounts=item_discounts,
         )
         saved = self._invoice_repo.save(invoice)
 
@@ -224,6 +226,7 @@ class InvoiceAppService:
         post_entry: bool = False,
         discount_amount: float = 0.0,
         item_amounts: Optional[Dict[str, float]] = None,
+        item_discounts: Optional[Dict[str, float]] = None,
     ) -> Invoice:
         invoice = self._invoice_repo.find_by_id(invoice_id)
         if not invoice:
@@ -232,11 +235,6 @@ class InvoiceAppService:
             raise ValueError("Invoice number is required")
         if invoice_amount <= 0:
             raise ValueError("Invoice amount is required")
-        discount_amount = round(discount_amount or 0.0, 2)
-        if discount_amount < 0:
-            raise ValueError("Discount cannot be negative")
-        if discount_amount > invoice_amount:
-            raise ValueError("Discount cannot exceed the invoice amount")
 
         order = self._order_repo.find_by_id(invoice.order_id)
         expenses = self._expense_repo.find_by_order(invoice.order_id)
@@ -250,17 +248,37 @@ class InvoiceAppService:
         )
 
         bill_id_set = set(bill_ids)
-        scoped = [e for e in expenses if e.bill_id and e.bill_id in bill_id_set]
-        # Margin realized on net (after discount).
-        mph = self._domain.calculate_mph(invoice_amount - discount_amount, scoped)
-
-        invoice.invoice_number = invoice_number.strip()
-        invoice.bill_ids = list(bill_ids)
-        invoice.item_amounts = {
+        item_amounts = {
             b: round(float(v), 2)
             for b, v in (item_amounts or {}).items()
             if b in bill_id_set
         }
+        # Per-item discounts are authoritative; a bare order discount is split
+        # proportionally to item gross amounts.
+        if item_discounts:
+            item_discounts = {
+                b: round(float(v), 2)
+                for b, v in item_discounts.items()
+                if b in bill_id_set
+            }
+        else:
+            item_discounts = self._domain.allocate_discount_proportionally(
+                item_amounts, round(discount_amount or 0.0, 2)
+            )
+        discount_amount = round(sum(item_discounts.values()), 2)
+        if discount_amount < 0:
+            raise ValueError("Discount cannot be negative")
+        if discount_amount > invoice_amount:
+            raise ValueError("Discount cannot exceed the invoice amount")
+
+        scoped = [e for e in expenses if e.bill_id and e.bill_id in bill_id_set]
+        # MPH excludes discount: margin is measured on the gross amount.
+        mph = self._domain.calculate_mph(invoice_amount, scoped)
+
+        invoice.invoice_number = invoice_number.strip()
+        invoice.bill_ids = list(bill_ids)
+        invoice.item_amounts = item_amounts
+        invoice.item_discounts = item_discounts
         invoice.invoice_amount = invoice_amount
         invoice.discount_amount = discount_amount
         invoice.invoice_date = invoice_date or invoice.invoice_date
@@ -306,17 +324,23 @@ class InvoiceAppService:
         expenses = self._expense_repo.find_by_order(order_id)
         bill_id_set = set(bill_ids)
         scoped = [e for e in expenses if e.bill_id and e.bill_id in bill_id_set]
-        net = max(invoice_amount - (discount_amount or 0.0), 0.0)
-        return self._domain.calculate_mph(net, scoped)
+        # MPH excludes discount: margin is measured on the gross amount.
+        return self._domain.calculate_mph(max(invoice_amount, 0.0), scoped)
 
     def preview_item_mph(
         self,
         order_id: str,
         item_amounts: Dict[str, float],
-        discount_amount: float = 0.0,
+        item_discounts: Optional[Dict[str, float]] = None,
+        exclude_invoice_id: Optional[str] = None,
     ) -> List[dict]:
-        """Per-item margin preview for the invoice dialog. Discount is allocated
-        proportionally to each item's gross price."""
+        """Per-item margin preview for the invoice dialog.
+
+        MPH is computed on cumulative *gross* revenue (this invoice plus any
+        prior invoices for the same item), so discounts never affect MPH and
+        re-invoicing is additive. Each row also carries the previously invoiced
+        net amount and this invoice's discount/net for display.
+        """
         if not item_amounts:
             return []
         expenses = self._expense_repo.find_by_order(order_id)
@@ -324,15 +348,34 @@ class InvoiceAppService:
         for e in expenses:
             if e.bill_id:
                 exp_by_bill.setdefault(e.bill_id, []).append(e)
-        total_gross = sum(item_amounts.values())
-        discount = discount_amount or 0.0
+        existing = self._invoice_repo.list_by_order(order_id)
+        item_discounts = item_discounts or {}
         rows = []
         for bill_id, gross in item_amounts.items():
-            if total_gross > 0:
-                share = gross / total_gross
-            else:
-                share = 1.0 / len(item_amounts)
-            net = round(gross - discount * share, 2)
-            data = self._domain.calculate_item_mph(net, exp_by_bill.get(bill_id, []))
-            rows.append({"bill_id": bill_id, "net": net, **data})
+            prev_gross = self._domain.item_gross_revenue(
+                bill_id, existing, exclude_invoice_id=exclude_invoice_id
+            )
+            prev_net = (
+                self._domain.item_net_revenue(
+                    bill_id, existing, exclude_invoice_id=exclude_invoice_id
+                )
+                or 0.0
+            )
+            cumulative_gross = round(prev_gross + gross, 2)
+            discount = round(float(item_discounts.get(bill_id, 0.0)), 2)
+            net = round(gross - discount, 2)
+            data = self._domain.calculate_item_mph(
+                cumulative_gross, exp_by_bill.get(bill_id, [])
+            )
+            rows.append(
+                {
+                    "bill_id": bill_id,
+                    "gross": round(gross, 2),
+                    "discount": discount,
+                    "net": net,
+                    "previously_invoiced": round(prev_net, 2),
+                    "cumulative_gross": cumulative_gross,
+                    **data,
+                }
+            )
         return rows

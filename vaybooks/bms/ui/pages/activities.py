@@ -7,6 +7,9 @@ from vaybooks.bms.domain.activities.entities import (
 )
 from vaybooks.bms.domain.shared.enums import ActivityCategory
 from vaybooks.bms.infrastructure.db.seed import DEFAULT_ACTIVITIES
+from vaybooks.bms.ui.components.list_view import render_list
+from vaybooks.bms.ui.styles import render_card_grid
+from vaybooks.bms.ui.list_schemas import ACTIVITIES
 
 PENDING_EDIT_ACTIVITY = "pending_edit_activity"
 
@@ -163,28 +166,35 @@ def _activity_card(activity, index: int):
             st.session_state[PENDING_EDIT_ACTIVITY] = activity.id
 
 
+def _load_activities(services, filters, sort):
+    try:
+        return services["activities"].list_activities(active_only=False)
+    except Exception:
+        return []
+
+
+def _render_cards(page_activities, services):
+    render_card_grid(
+        page_activities,
+        lambda activity, i: _activity_card(activity, i),
+        suffix="activities",
+    )
+
+
 def render(services: dict):
-    st.title("Activity Configuration")
     activity_service = services["activities"]
-
-    header_cols = st.columns([4, 1])
-    with header_cols[0]:
-        st.caption("Configure the activities that can be applied to customization items.")
-    with header_cols[1]:
-        if st.button("Add Activity", type="primary", use_container_width=True):
-            _add_activity_dialog(activity_service)
-
-    activities = activity_service.list_activities(active_only=False)
-    if not activities:
-        st.info("No activities configured yet.")
-        return
-
-    for row_start in range(0, len(activities), 3):
-        row = activities[row_start : row_start + 3]
-        cols = st.columns(len(row))
-        for col_index, (col, activity) in enumerate(zip(cols, row)):
-            with col:
-                _activity_card(activity, row_start + col_index)
+    bar = render_list(
+        ACTIVITIES,
+        services=services,
+        load_fn=_load_activities,
+        card_renderer=_render_cards,
+        primary_label="Add Activity",
+        primary_key="activities_add_btn",
+        count_label="activities",
+        empty_text="No activities configured yet.",
+    )
+    if bar["primary_clicked"]:
+        _add_activity_dialog(activity_service)
 
     pending = st.session_state.pop(PENDING_EDIT_ACTIVITY, None)
     if pending:

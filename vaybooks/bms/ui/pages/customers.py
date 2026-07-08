@@ -2,14 +2,9 @@ import streamlit as st
 
 from vaybooks.bms.domain.shared.exceptions import ValidationError
 from vaybooks.bms.ui.components.customer_card import customer_card
-from vaybooks.bms.ui.components.dashboard_cards import maybe_navigate_to_orders_page
-from vaybooks.bms.ui.pagination import CARD_PAGE_SIZE, paginate_list, render_page_controls
-
-def _load_order_counts(order_service) -> dict:
-    try:
-        return order_service.order_counts_by_customer()
-    except Exception:
-        return {}
+from vaybooks.bms.ui.components.list_view import render_list
+from vaybooks.bms.ui.styles import render_card_grid
+from vaybooks.bms.ui.list_schemas import CUSTOMERS
 
 
 @st.dialog("Add Customer", width="medium")
@@ -64,54 +59,40 @@ def _edit_customer_dialog(customer_service, customer_id: str):
             st.error(str(e))
 
 
-def render(services: dict):
-    st.title("Customers")
+def _load_customers(services, filters, sort):
+    customers = services["customers"].list_all_customers()
+    try:
+        counts = services["orders"].order_counts_by_customer()
+    except Exception:
+        counts = {}
+    for customer in customers:
+        setattr(customer, "order_count", counts.get(str(customer.id), 0))
+    return customers
+
+
+def _render_cards(page_customers, services):
     customer_service = services["customers"]
-    order_service = services["orders"]
-    order_counts = _load_order_counts(order_service)
 
-    header_cols = st.columns([4, 1])
-    with header_cols[0]:
-        query = st.text_input(
-            "Search by name or phone",
-            key="cust_search",
-            placeholder="Search customers...",
+    def _render(customer, _i):
+        edit_clicked = customer_card(
+            customer, getattr(customer, "order_count", 0), f"cust_{customer.id}"
         )
-    with header_cols[1]:
-        if st.button("Add Customer", type="primary", use_container_width=True):
-            _add_customer_dialog(customer_service)
+        if edit_clicked:
+            _edit_customer_dialog(customer_service, customer.id)
 
-    customers = customer_service.search_customers(query)
-    if not customers:
-        if query.strip():
-            st.info("No customers match your search.")
-        else:
-            st.info("No customers found.")
-        return
+    render_card_grid(page_customers, _render, suffix="customers")
 
-    st.caption(f"Customer list displays {len(customers)} records")
 
-    page_customers, page, total_pages = paginate_list(
-        customers,
-        page_key="cust_page",
-        page_size=CARD_PAGE_SIZE,
-        filter_key="cust_search",
-        filter_value=query,
+def render(services: dict):
+    bar = render_list(
+        CUSTOMERS,
+        services=services,
+        load_fn=_load_customers,
+        card_renderer=_render_cards,
+        primary_label="Add Customer",
+        primary_key="customers_add_btn",
+        count_label="customers",
+        empty_text="No customers found.",
     )
-
-    cols = st.columns(3)
-    for index, customer in enumerate(page_customers):
-        order_count = order_counts.get(str(customer.id), 0)
-        with cols[index % 3]:
-            edit_clicked = customer_card(
-                customer, order_count, f"cust_{customer.id}"
-            )
-            if edit_clicked:
-                _edit_customer_dialog(customer_service, customer.id)
-
-    render_page_controls(
-        page, total_pages, len(customers),
-        page_key="cust_page", prev_key="cust_prev", next_key="cust_next",
-        label="customers",
-    )
-    maybe_navigate_to_orders_page()
+    if bar["primary_clicked"]:
+        _add_customer_dialog(services["customers"])

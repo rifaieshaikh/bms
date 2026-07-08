@@ -2,7 +2,8 @@ from dataclasses import asdict
 
 import streamlit as st
 
-from vaybooks.bms.ui.components.dashboard_cards import order_action_cards, maybe_navigate_to_order_detail
+from vaybooks.bms.ui.components.dashboard_cards import order_action_cards
+from vaybooks.bms.ui.styles import metric_grid
 
 
 def _summary_value(summary, name: str, default):
@@ -39,36 +40,38 @@ def _dashboard_summary(_reports):
 
 
 def _kpi_row(summary):
-    r1 = st.columns(4)
-    r1[0].metric("🧾 Active Orders", _summary_int(summary, "active_orders"), border=True)
-    r1[1].metric(
-        "⚙️ In Progress", _summary_int(summary, "pending_activity_orders"), border=True
-    )
-    r1[2].metric("✅ Completed", _completed_count(summary), border=True)
-    r1[3].metric(
-        "📋 Pending Activities",
-        _summary_int(summary, "total_pending_activities"),
-        border=True,
-    )
-
-    r2 = st.columns(4)
-    r2[0].metric(
-        "📦 Delivered (Month)", _summary_int(summary, "delivered_this_month"), border=True
-    )
-    r2[1].metric(
-        "💰 Advance (Month)",
-        f"₹{_summary_float(summary, 'total_advance_this_month'):,.0f}",
-        border=True,
-    )
-    r2[2].metric(
-        "🧾 Invoiced (Month)",
-        f"₹{_summary_float(summary, 'total_invoice_this_month'):,.0f}",
-        border=True,
-    )
-    r2[3].metric(
-        "⏳ Bills Pending Invoice",
-        _summary_int(summary, "bills_pending_invoice"),
-        border=True,
+    metric_grid(
+        [
+            ("🧾 Active Orders", _summary_int(summary, "active_orders")),
+            ("⚙️ In Progress", _summary_int(summary, "pending_activity_orders")),
+            ("✅ Completed", _completed_count(summary)),
+            ("📋 Pending Activities", _summary_int(summary, "total_pending_activities")),
+            (
+                "📦 Delivered (Month)",
+                _summary_int(summary, "delivered_this_month"),
+            ),
+            (
+                "💰 Advance (Month)",
+                f"₹{_summary_float(summary, 'total_advance_this_month'):,.0f}",
+            ),
+            (
+                "🧾 Invoiced (Month)",
+                f"₹{_summary_float(summary, 'total_invoice_this_month'):,.0f}",
+            ),
+            (
+                "⏳ Bills Pending Invoice",
+                _summary_int(summary, "bills_pending_invoice"),
+            ),
+            (
+                "⌛ Items Not Delivered",
+                _summary_int(summary, "items_pending"),
+            ),
+            (
+                "🚚 Awaiting Delivery",
+                _summary_int(summary, "items_awaiting_delivery"),
+            ),
+        ],
+        suffix="dashboard_kpi",
     )
 
 
@@ -95,4 +98,3 @@ def render(services: dict):
         "completed",
         accent="green",
     )
-    maybe_navigate_to_order_detail()

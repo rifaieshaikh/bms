@@ -1,4 +1,5 @@
 streamlit>=1.48
+streamlit-js-eval
 pymongo
 pandas
 python-dotenv

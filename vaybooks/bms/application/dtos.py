@@ -34,6 +34,8 @@ class DashboardSummary:
     total_invoice_this_month: float = 0.0
     total_pending_activities: int = 0
     bills_pending_invoice: int = 0
+    items_pending: int = 0
+    items_awaiting_delivery: int = 0
     etd_today: List[dict] = field(default_factory=list)
     overdue_orders: List[dict] = field(default_factory=list)
     ready_orders: List[dict] = field(default_factory=list)

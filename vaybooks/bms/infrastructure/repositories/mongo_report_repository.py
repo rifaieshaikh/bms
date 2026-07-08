@@ -232,6 +232,71 @@ class MongoReportRepository:
             {"order_date": {"$gte": to_bson_value(start), "$lte": to_bson_value(end)}}
         )
 
+    def count_customers_created(self, start: date, end: date) -> int:
+        start_dt = datetime.combine(start, time.min)
+        end_dt = datetime.combine(end, time.max)
+        return self._db.customers.count_documents(
+            {"created_at": {"$gte": start_dt, "$lte": end_dt}}
+        )
+
+    def count_distinct_customers_with_orders(self, start: date, end: date) -> int:
+        pipeline = [
+            {
+                "$match": {
+                    "order_date": {
+                        "$gte": to_bson_value(start),
+                        "$lte": to_bson_value(end),
+                    }
+                }
+            },
+            {"$group": {"_id": "$customer_id"}},
+            {"$count": "total"},
+        ]
+        result = list(self._db.customization_orders.aggregate(pipeline))
+        return result[0]["total"] if result else 0
+
+    def count_repeat_customers_with_orders(self, start: date, end: date) -> int:
+        pipeline = [
+            {
+                "$match": {
+                    "order_date": {
+                        "$gte": to_bson_value(start),
+                        "$lte": to_bson_value(end),
+                    }
+                }
+            },
+            {"$group": {"_id": "$customer_id", "count": {"$sum": 1}}},
+            {"$match": {"count": {"$gte": 2}}},
+            {"$count": "total"},
+        ]
+        result = list(self._db.customization_orders.aggregate(pipeline))
+        return result[0]["total"] if result else 0
+
+    def count_distinct_customers_invoiced(self, start: date, end: date) -> int:
+        pipeline = [
+            {
+                "$match": {
+                    "invoice_date": {
+                        "$gte": to_bson_value(start),
+                        "$lte": to_bson_value(end),
+                    }
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "customization_orders",
+                    "localField": "order_id",
+                    "foreignField": "_id",
+                    "as": "order",
+                }
+            },
+            {"$unwind": "$order"},
+            {"$group": {"_id": "$order.customer_id"}},
+            {"$count": "total"},
+        ]
+        result = list(self._db.invoices.aggregate(pipeline))
+        return result[0]["total"] if result else 0
+
     def sum_expenses_total(self, start: date, end: date) -> float:
         pipeline = [
             {
@@ -418,6 +483,37 @@ class MongoReportRepository:
         if activity_name:
             query["activity_name"] = {"$regex": activity_name, "$options": "i"}
         return list(self._db.time_entries.find(query).sort("work_date", -1))
+
+    def labor_minutes_by_order(
+        self, start: date | None = None, end: date | None = None
+    ) -> dict:
+        """Sum of logged time-entry minutes per order_number.
+
+        This reflects *actual* labor logged in time_entries, unlike the item-level
+        ``in_house_hours`` snapshot which can be stale/zero. Optionally filtered by
+        work_date range.
+        """
+        match: dict = {}
+        if start is not None and end is not None:
+            match["work_date"] = {
+                "$gte": to_bson_value(start),
+                "$lte": to_bson_value(end),
+            }
+        pipeline: list = []
+        if match:
+            pipeline.append({"$match": match})
+        pipeline.append(
+            {
+                "$group": {
+                    "_id": "$order_number",
+                    "minutes": {"$sum": "$duration_minutes"},
+                }
+            }
+        )
+        return {
+            (row["_id"] or ""): int(row["minutes"] or 0)
+            for row in self._db.time_entries.aggregate(pipeline)
+        }
 
     def get_expenses(
         self,

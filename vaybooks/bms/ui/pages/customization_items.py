@@ -1,14 +1,10 @@
 import streamlit as st
 
-from vaybooks.bms.ui.components.dashboard_cards import (
-    maybe_navigate_to_order_detail,
-    maybe_navigate_to_orders_page,
-    queue_order_detail_navigation,
-    queue_orders_page_navigation,
-)
+from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.components.item_detail_panel import customization_item_detail_panel
-from vaybooks.bms.ui.pagination import CARD_PAGE_SIZE, paginate_list, render_page_controls
-from vaybooks.bms.ui.session_keys import EDITING_ITEM
+from vaybooks.bms.ui.components.list_view import render_list
+from vaybooks.bms.ui.styles import render_card_grid
+from vaybooks.bms.ui.list_schemas import ITEMS
 
 
 def _render_item_editor(services: dict, order_id: str, item_id: str):
@@ -17,7 +13,8 @@ def _render_item_editor(services: dict, order_id: str, item_id: str):
     delivery_service = services["deliveries"]
 
     if st.button("← Back to items", key="item_editor_back"):
-        st.session_state.pop(EDITING_ITEM, None)
+        navigation.go_back_to_list("items", "items_list")
+        return
 
     detail = order_service.get_customization_item_detail(order_id, item_id)
     if not detail:
@@ -61,74 +58,59 @@ def _item_summary_card(services: dict, item: dict, index: int):
             st.caption("MPH pending (invoice + delivery)")
 
         if st.button(
-            "Edit Item",
+            "Edit",
             key=f"item_edit_{index}_{item['item_id']}",
             type="primary",
             use_container_width=True,
         ):
-            st.session_state[EDITING_ITEM] = {
-                "order_id": item["order_id"],
-                "item_id": item["item_id"],
-            }
+            navigation.go_to_detail(
+                "item_detail", item["item_id"], order_id=item["order_id"]
+            )
 
-        st.button(
-            "View Order",
+        if st.button(
+            "View",
             key=f"item_view_{index}_{item['item_id']}",
             use_container_width=True,
-            on_click=queue_order_detail_navigation,
-            args=(str(item["order_id"]),),
-        )
+        ):
+            navigation.go_to_detail("order_detail", str(item["order_id"]))
+
+
+def _load_items(services, filters, sort):
+    try:
+        return services["orders"].list_all_customization_items()
+    except Exception:
+        return []
+
+
+def _render_cards(page_items, services):
+    render_card_grid(
+        page_items,
+        lambda item, i: _item_summary_card(services, item, i),
+        suffix="items",
+    )
 
 
 def render(services: dict):
-    st.title("Customization Items")
-    order_service = services["orders"]
-
-    editing = st.session_state.get(EDITING_ITEM)
-    if editing:
-        _render_item_editor(services, editing["order_id"], editing["item_id"])
-        return
-
-    header_cols = st.columns([4, 1])
-    with header_cols[0]:
-        query = st.text_input(
-            "Search items",
-            placeholder="Bill number, description, order number, customer...",
-            key="items_search",
-        )
-    with header_cols[1]:
-        st.button(
-            "View Orders",
-            use_container_width=True,
-            on_click=queue_orders_page_navigation,
-        )
-
-    if query:
-        items = order_service.search_customization_items(query)
-    else:
-        items = order_service.list_all_customization_items()
-
-    if not items:
-        st.info("No customization items found.")
-        return
-
-    page_items, page, total_pages = paginate_list(
-        items,
-        page_key="items_page",
-        page_size=CARD_PAGE_SIZE,
-        filter_key="items_search",
-        filter_value=query,
+    render_list(
+        ITEMS,
+        services=services,
+        load_fn=_load_items,
+        card_renderer=_render_cards,
+        count_label="items",
+        empty_text="No customization items found.",
     )
-    for row_start in range(0, len(page_items), 3):
-        row_items = page_items[row_start : row_start + 3]
-        cols = st.columns(len(row_items))
-        for col_index, (col, item) in enumerate(zip(cols, row_items)):
-            with col:
-                _item_summary_card(services, item, row_start + col_index)
-    render_page_controls(
-        page, total_pages, len(items),
-        page_key="items_page", prev_key="items_prev", next_key="items_next",
-        label="items",
+
+
+def render_item_detail(services: dict):
+    item_id = navigation.current_detail_id("item_detail")
+    order_id = st.query_params.get("order_id") or st.session_state.get(
+        "_item_detail_order_id"
     )
-    maybe_navigate_to_order_detail()
-    maybe_navigate_to_orders_page()
+    if order_id:
+        st.session_state["_item_detail_order_id"] = order_id
+    if not item_id or not order_id:
+        st.error("No item selected.")
+        if st.button("← Back to items"):
+            navigation.go_back_to_list("items", "items_list")
+        return
+    _render_item_editor(services, order_id, item_id)

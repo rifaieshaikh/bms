@@ -398,3 +398,91 @@ def test_record_invoice_persists_preview_item_mph():
 
     persisted = service.get_invoice(invoice.id)
     assert persisted.margin_per_hour == expected_mph
+
+
+def test_allocate_discount_proportionally_splits_by_gross():
+    result = InvoiceDomainService.allocate_discount_proportionally(
+        {"a": 1000.0, "b": 2000.0}, 300.0
+    )
+    assert result == {"a": 100.0, "b": 200.0}
+
+
+def test_allocate_discount_last_item_absorbs_rounding_remainder():
+    result = InvoiceDomainService.allocate_discount_proportionally(
+        {"a": 100.0, "b": 100.0, "c": 100.0}, 100.0
+    )
+    # 33.33 + 33.33 + remainder 33.34 == 100.0
+    assert round(sum(result.values()), 2) == 100.0
+
+
+def test_redistribute_discount_delta_only_moves_the_difference():
+    result = InvoiceDomainService.redistribute_discount_delta(
+        {"a": 1000.0, "b": 2000.0},
+        {"a": 50.0, "b": 100.0},
+        300.0,  # was 150 → delta 150 split 1:2 → +50 / +100
+    )
+    assert result == {"a": 100.0, "b": 200.0}
+
+
+def test_discount_does_not_change_mph():
+    order_repo = FakeOrderRepository()
+    invoice_repo = FakeInvoiceRepository()
+    expense_repo = FakeExpenseRepository()
+    counter_repo = FakeCounterRepository()
+    delivery_repo = FakeDeliveryRepository()
+
+    order = _build_o1001_order()
+    bill_id = "bill-zb006"
+    order_repo.save(order)
+    for expense in _build_zb006_mixed_expenses(order.id, bill_id):
+        expense_repo.save(expense)
+
+    service = InvoiceAppService(
+        invoice_repo, order_repo, expense_repo, counter_repo,
+        delivery_repo=delivery_repo,
+    )
+
+    invoice = service.record_invoice(
+        order.id,
+        "INV-DISC",
+        [bill_id],
+        3500.0,
+        item_amounts={bill_id: 3500.0},
+        item_discounts={bill_id: 500.0},
+    )
+
+    # MPH still measured on gross 3500 (not net 3000): 2700 / 4 = 675.
+    assert invoice.margin_per_hour == 675.0
+    assert invoice.discount_amount == 500.0
+    assert invoice.item_discounts == {bill_id: 500.0}
+    assert invoice.net_amount == 3000.0
+
+
+def test_reinvoicing_is_additive_in_preview():
+    order_repo = FakeOrderRepository()
+    invoice_repo = FakeInvoiceRepository()
+    expense_repo = FakeExpenseRepository()
+    counter_repo = FakeCounterRepository()
+    delivery_repo = FakeDeliveryRepository()
+
+    order = _build_o1001_order()
+    bill_id = "bill-zb006"
+    order_repo.save(order)
+    for expense in _build_zb006_mixed_expenses(order.id, bill_id):
+        expense_repo.save(expense)
+
+    service = InvoiceAppService(
+        invoice_repo, order_repo, expense_repo, counter_repo,
+        delivery_repo=delivery_repo,
+    )
+
+    service.record_invoice(
+        order.id, "INV-1", [bill_id], 1000.0, item_amounts={bill_id: 1000.0}
+    )
+
+    rows = service.preview_item_mph(order.id, {bill_id: 500.0})
+    row = rows[0]
+    assert row["previously_invoiced"] == 1000.0
+    assert row["cumulative_gross"] == 1500.0
+    # Cumulative margin: 1500 - 800 expense = 700 over 4 h = 175/h.
+    assert row["margin_per_hour"] == 175.0

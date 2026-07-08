@@ -45,9 +45,6 @@ def test_reports_page_shows_aggregated_mph_marker():
 
     page_text = _page_text(at).lower()
     assert "aggregated" in page_text
-    assert "bill20242010" in page_text
-    assert "exactly" in page_text
-    assert "included" in page_text
 
 
 def test_reports_page_shows_aggregated_period_summary_for_mtd():

@@ -70,9 +70,8 @@ def test_time_tracking_page_renders_with_zero_entries():
     labels = " ".join(getattr(el, "label", "") or "" for el in at.text_input)
     tabs = " ".join(getattr(el, "label", "") or "" for el in at.get("tab"))
     page_text = f"{rendered} {captions} {buttons} {labels} {tabs}".lower()
-    assert "record and review time" in page_text
-    assert "entries" in page_text
-    assert "dashboard" in page_text
+    assert "time log" in page_text
+    assert "record time" in page_text
     assert "bill number" in page_text
 
 
@@ -181,4 +180,4 @@ def test_time_tracking_page_renders_with_multiple_entries():
     page_text = f"{rendered} {captions} {buttons} {labels} {tabs}"
     assert "Stitching" in page_text
     assert "4.5 hrs" in page_text
-    assert "Bill Number" in page_text
+    assert "ZB011" in page_text

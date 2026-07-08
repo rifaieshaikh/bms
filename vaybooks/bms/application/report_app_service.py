@@ -20,6 +20,7 @@ from vaybooks.bms.application.report_filters import (
     TimeTrackingFilter,
 )
 
+from vaybooks.bms.domain.shared.date_utils import minutes_to_hours
 from vaybooks.bms.domain.shared.enums import OrderStatus, VoucherType
 
 from vaybooks.bms.infrastructure.db.bson_utils import as_date
@@ -86,6 +87,8 @@ class ReportAppService:
 
         in_progress = self._repo.get_orders_by_statuses(active_statuses, limit=60)
 
+        item_snapshot = self._repo.item_delivery_snapshot()
+
 
 
         return DashboardSummary(
@@ -121,6 +124,10 @@ class ReportAppService:
             total_pending_activities=self._repo.get_pending_activities_count(),
 
             bills_pending_invoice=self._repo.get_bills_pending_invoice_count(),
+
+            items_pending=item_snapshot["not_delivered"],
+
+            items_awaiting_delivery=item_snapshot["awaiting"],
 
             etd_today=self._repo.get_etd_today(today),
 
@@ -158,12 +165,46 @@ class ReportAppService:
         order_count = self._repo.count_orders_created(start, end)
         total_revenue = self._repo.get_monthly_invoice_total(start, end)
         expenses = self._repo.sum_expenses_total(start, end)
+        today = date.today()
+        active_statuses = [
+            OrderStatus.IN_PROGRESS.value,
+            OrderStatus.READY_FOR_DELIVERY.value,
+            OrderStatus.INVOICE_GENERATED.value,
+        ]
+        completed_statuses = [
+            OrderStatus.COMPLETED.value,
+            OrderStatus.DELIVERED.value,
+        ]
+        time_entries = self._repo.get_time_entries(start, end)
+        stitching_mins = sum(
+            int(e.get("duration_minutes") or 0)
+            for e in time_entries
+            if e.get("activity_name") == "Stitching"
+        )
+        hand_mins = sum(
+            int(e.get("duration_minutes") or 0)
+            for e in time_entries
+            if e.get("activity_name") == "Hand Work"
+        )
 
         summary.update(
             {
                 "orders_created": order_count,
                 "order_count": order_count,
+                "customers_created": self._repo.count_customers_created(start, end),
+                "customers_with_orders": self._repo.count_distinct_customers_with_orders(
+                    start, end
+                ),
+                "repeat_customers": self._repo.count_repeat_customers_with_orders(
+                    start, end
+                ),
+                "customers_invoiced": self._repo.count_distinct_customers_invoiced(
+                    start, end
+                ),
                 "delivered": self._repo.count_delivered_this_month(start, end),
+                "completed_orders": len(
+                    self._repo.get_completed_orders(start, end, completed_statuses)
+                ),
                 "pending_activities": self._repo.get_pending_activities_count(),
                 "bills_pending_invoice": self._repo.get_bills_pending_invoice_count(),
                 "items_created": self._repo.count_items_created(start, end),
@@ -182,6 +223,16 @@ class ReportAppService:
                 "salary_payments": self._repo.sum_payment_voucher_amount(
                     VoucherType.SALARY_PAYMENT.value, start, end
                 ),
+                "active_orders": self._repo.count_orders_by_statuses(
+                    active_statuses + [OrderStatus.COMPLETED.value]
+                ),
+                "in_progress_orders": self._repo.count_orders_by_statuses(active_statuses),
+                "overdue_orders": len(self._repo.get_overdue_orders(today)),
+                "etd_today": len(self._repo.get_etd_today(today)),
+                "stitching_hours": minutes_to_hours(stitching_mins),
+                "hand_work_hours": minutes_to_hours(hand_mins),
+                "total_time_hours": minutes_to_hours(stitching_mins + hand_mins),
+                "time_entry_count": len(time_entries),
             }
         )
 
@@ -262,6 +313,15 @@ class ReportAppService:
         return rows
 
 
+
+    def labor_hours_by_order(
+        self, start: date | None = None, end: date | None = None
+    ) -> dict:
+        """Actual logged labor hours per order_number (from time entries)."""
+        return {
+            order: minutes_to_hours(mins)
+            for order, mins in self._repo.labor_minutes_by_order(start, end).items()
+        }
 
     def mph_report(self, filters: OrderMphFilter) -> list:
 

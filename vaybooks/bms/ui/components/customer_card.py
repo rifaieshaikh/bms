@@ -1,7 +1,7 @@
 import streamlit as st
 
 from vaybooks.bms.domain.customers.entities import Customer
-from vaybooks.bms.ui.components.dashboard_cards import queue_customer_orders_navigation
+from vaybooks.bms.ui import navigation
 
 
 def customer_card(customer: Customer, order_count: int, key_prefix: str) -> bool:
@@ -13,17 +13,16 @@ def customer_card(customer: Customer, order_count: int, key_prefix: str) -> bool
         col1, col2 = st.columns(2)
         with col1:
             edit_clicked = st.button(
-                "Edit Customer",
+                "Edit",
                 key=f"{key_prefix}_edit",
                 use_container_width=True,
             )
         with col2:
-            st.button(
-                "View Orders",
-                key=f"{key_prefix}_orders",
+            if st.button(
+                "View",
+                key=f"{key_prefix}_view",
                 use_container_width=True,
-                on_click=queue_customer_orders_navigation,
-                args=(customer.id,),
-            )
+            ):
+                navigation.go_to_detail("customer_detail", customer.id)
 
     return edit_clicked

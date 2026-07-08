@@ -238,6 +238,25 @@ def _complete_activity_body(services, order, item, activity, key_prefix, flag_ke
 
     minutes = _activity_time_minutes(services, order.id, item.item_id, activity.activity_id)
     hours = minutes_to_hours(minutes)
+    if is_service and minutes == 0:
+        st.warning(
+            "Time tracking required. Please record time for "
+            f"**{activity.activity_name}** before completing it."
+        )
+        cols = st.columns(2)
+        if cols[0].button(
+            "Record Time", key=f"cmpl_rectime_{key_prefix}", type="primary",
+            use_container_width=True,
+        ):
+            st.session_state.pop(flag_key, None)
+            st.session_state[f"section_{key_prefix}"] = "Time"
+            st.rerun()
+        if cols[1].button(
+            "Close", key=f"cmpl_notime_close_{key_prefix}", use_container_width=True
+        ):
+            st.session_state.pop(flag_key, None)
+            st.rerun()
+        return
     if is_service:
         st.info(f"Hours spent on this activity: **{hours:.2f} h** ({minutes} min)")
 

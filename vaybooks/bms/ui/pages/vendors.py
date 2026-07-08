@@ -3,16 +3,18 @@ from datetime import date
 import streamlit as st
 
 from vaybooks.bms.domain.shared.exceptions import ValidationError
+from vaybooks.bms.ui import navigation
+from vaybooks.bms.ui.components.list_view import render_list
 from vaybooks.bms.ui.dialog_utils import (
     clear_all_dialog_flags,
     make_dismiss_handler,
     register_armed_dialog,
 )
-from vaybooks.bms.ui.pagination import CARD_PAGE_SIZE, paginate_list, render_page_controls
+from vaybooks.bms.ui.styles import render_card_grid
+from vaybooks.bms.ui.list_schemas import VENDORS
 
 V_ADD = "vendor_add_dialog"
 V_EDIT = "vendor_edit_dialog"
-V_VIEW = "vendor_view"
 V_PAY = "vendor_pay_dialog"
 
 
@@ -169,8 +171,8 @@ def _render_vendor_detail(services, vendor_id: str):
         return
 
     if st.button("← Back to vendors", key="vendor_back"):
-        st.session_state.pop(V_VIEW, None)
-        st.rerun()
+        navigation.go_back_to_list("vendors", "vendors_list")
+        return
 
     st.subheader("Vendor Detail")
     st.title(vendor.vendor_name)
@@ -234,59 +236,62 @@ def _render_vendor_detail(services, vendor_id: str):
         _pay_vendor_dialog(services, vendor.id)
 
 
-def _render_vendor_list(services):
-    vendor_service = services["vendors"]
+def _load_vendors(services, filters, sort):
+    vendors = services["vendors"].list_all_vendors()
+    accounting = services["accounting"]
+    for vendor in vendors:
+        try:
+            account = accounting.get_vendor_account(vendor.id)
+        except Exception:
+            account = None
+        setattr(vendor, "current_balance", account.current_balance if account else 0.0)
+    return vendors
 
-    header = st.columns([4, 1])
-    with header[0]:
-        query = st.text_input(
-            "Search by name or phone", key="vendor_search",
-            placeholder="Search vendors...",
-        )
-    with header[1]:
-        if st.button("Add Vendor", type="primary", use_container_width=True):
-            clear_all_dialog_flags()
-            _add_vendor_dialog(vendor_service)
 
-    vendors = vendor_service.search_vendors(query)
-    st.caption(f"Vendor list displays {len(vendors)} records")
-    if not vendors:
-        st.info("No vendors found.")
-    else:
-        page_vendors, page, total_pages = paginate_list(
-            vendors,
-            page_key="vendor_page",
-            page_size=CARD_PAGE_SIZE,
-            filter_key="vendor_search",
-            filter_value=query,
-        )
-        cols = st.columns(3)
-        for i, vendor in enumerate(page_vendors):
-            with cols[i % 3].container(border=True):
-                st.markdown(f"**{vendor.vendor_name}**")
-                st.write(vendor.phone_number)
-                btns = st.columns(2)
-                if btns[0].button("Edit", key=f"v_edit_{vendor.id}", use_container_width=True):
-                    clear_all_dialog_flags()
-                    st.session_state[V_EDIT] = vendor.id
-                    register_armed_dialog(V_EDIT)
-                    st.rerun()
-                if btns[1].button("Payments", key=f"v_pay_{vendor.id}", use_container_width=True):
-                    st.session_state[V_VIEW] = str(vendor.id)
-                    st.rerun()
-        render_page_controls(
-            page, total_pages, len(vendors),
-            page_key="vendor_page", prev_key="vendor_prev", next_key="vendor_next",
-            label="vendors",
-        )
+def _render_cards(page_vendors, services):
+    def _render(vendor, _i):
+        with st.container(border=True):
+            st.markdown(f"**{vendor.vendor_name}**")
+            st.write(vendor.phone_number)
+            balance = getattr(vendor, "current_balance", 0.0)
+            st.caption(f"Payable: ₹{abs(balance):,.0f}")
+            btns = st.columns(2)
+            if btns[0].button("Edit", key=f"v_edit_{vendor.id}",
+                              use_container_width=True):
+                clear_all_dialog_flags()
+                st.session_state[V_EDIT] = vendor.id
+                register_armed_dialog(V_EDIT)
+                st.rerun()
+            if btns[1].button("View", key=f"v_view_{vendor.id}",
+                              use_container_width=True):
+                navigation.go_to_detail("vendor_detail", vendor.id)
 
-    if st.session_state.get(V_EDIT):
-        _edit_vendor_dialog(vendor_service)
+    render_card_grid(page_vendors, _render, suffix="vendors")
 
 
 def render(services: dict):
-    if st.session_state.get(V_VIEW):
-        _render_vendor_detail(services, st.session_state[V_VIEW])
+    bar = render_list(
+        VENDORS,
+        services=services,
+        load_fn=_load_vendors,
+        card_renderer=_render_cards,
+        primary_label="Add Vendor",
+        primary_key="vendors_add_btn",
+        count_label="vendors",
+        empty_text="No vendors found.",
+    )
+    if bar["primary_clicked"]:
+        clear_all_dialog_flags()
+        _add_vendor_dialog(services["vendors"])
+    if st.session_state.get(V_EDIT):
+        _edit_vendor_dialog(services["vendors"])
+
+
+def render_vendor_detail(services: dict):
+    vendor_id = navigation.current_detail_id("vendor_detail")
+    if not vendor_id:
+        st.error("No vendor selected.")
+        if st.button("← Back to vendors"):
+            navigation.go_back_to_list("vendors", "vendors_list")
         return
-    st.title("Vendors")
-    _render_vendor_list(services)
+    _render_vendor_detail(services, vendor_id)

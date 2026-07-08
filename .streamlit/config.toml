@@ -1,5 +1,9 @@
 [theme]
 base = "light"
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F5F7FA"
-textColor = "#1A1A1A"
+primaryColor = "#7B2D4E"
+backgroundColor = "#FBF8F6"
+secondaryBackgroundColor = "#F3ECEF"
+textColor = "#2A1E24"
+linkColor = "#7B2D4E"
+font = "sans-serif"
+baseRadius = "0.6rem"

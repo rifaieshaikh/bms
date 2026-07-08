@@ -17,6 +17,9 @@ class Invoice:
     bill_ids: List[str] = field(default_factory=list)
     # Gross price entered per item (bill_id -> amount). Enables per-item MPH.
     item_amounts: Dict[str, float] = field(default_factory=dict)
+    # Discount applied per item (bill_id -> amount). Order-level discount is the
+    # sum of these and is distributed proportionally to item gross amounts.
+    item_discounts: Dict[str, float] = field(default_factory=dict)
     discount_amount: float = 0.0
     total_expense_purchase_price: float = 0.0
     total_expense_selling_price: float = 0.0
