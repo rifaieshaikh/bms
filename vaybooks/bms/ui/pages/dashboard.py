@@ -2,7 +2,7 @@ from dataclasses import asdict
 
 import streamlit as st
 
-from vaybooks.bms.ui.components.dashboard_cards import order_action_cards
+from vaybooks.bms.ui.components.dashboard_cards import order_action_cards, maybe_navigate_to_order_detail
 
 
 def _summary_value(summary, name: str, default):
@@ -95,3 +95,4 @@ def render(services: dict):
         "completed",
         accent="green",
     )
+    maybe_navigate_to_order_detail()

@@ -1,4 +1,7 @@
 PENDING_EDIT_ITEM = "pending_edit_customization_item"
+EDITING_ITEM = "editing_customization_item"
 VIEW_ORDER_ID = "view_order_id"
+PENDING_ORDERS_NAV = "pending_orders_navigation"
+PENDING_ORDERS_PAGE = "pending_orders_page_navigation"
 ORDERS_KEEP_FILTERS = "orders_keep_filters"
 ACTIVITY_SKIP_NOTICE = "activity_skip_notice"

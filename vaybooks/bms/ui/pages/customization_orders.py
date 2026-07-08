@@ -996,15 +996,15 @@ def _reset_stale_order_list_filters() -> None:
     if st.session_state.pop(ORDERS_KEEP_FILTERS, False):
         return
     st.session_state.pop("orders_customer_filter", None)
-    st.session_state.pop(VIEW_ORDER_ID, None)
     st.session_state.pop("orders_search", None)
 
 
 def render(services: dict):
     order_service = services["orders"]
 
-    if st.session_state.pop("orders_open_detail", False) and st.session_state.get(VIEW_ORDER_ID):
-        _render_order_view(services, st.session_state[VIEW_ORDER_ID])
+    order_id = st.session_state.get(VIEW_ORDER_ID)
+    if order_id:
+        _render_order_view(services, order_id)
         return
 
     _reset_stale_order_list_filters()

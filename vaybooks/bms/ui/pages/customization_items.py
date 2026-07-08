@@ -1,11 +1,14 @@
 import streamlit as st
 
-from vaybooks.bms.ui import navigation
+from vaybooks.bms.ui.components.dashboard_cards import (
+    maybe_navigate_to_order_detail,
+    maybe_navigate_to_orders_page,
+    queue_order_detail_navigation,
+    queue_orders_page_navigation,
+)
 from vaybooks.bms.ui.components.item_detail_panel import customization_item_detail_panel
 from vaybooks.bms.ui.pagination import CARD_PAGE_SIZE, paginate_list, render_page_controls
-from vaybooks.bms.ui.session_keys import VIEW_ORDER_ID
-
-EDITING_ITEM = "editing_customization_item"
+from vaybooks.bms.ui.session_keys import EDITING_ITEM
 
 
 def _render_item_editor(services: dict, order_id: str, item_id: str):
@@ -15,7 +18,6 @@ def _render_item_editor(services: dict, order_id: str, item_id: str):
 
     if st.button("← Back to items", key="item_editor_back"):
         st.session_state.pop(EDITING_ITEM, None)
-        st.rerun()
 
     detail = order_service.get_customization_item_detail(order_id, item_id)
     if not detail:
@@ -68,16 +70,14 @@ def _item_summary_card(services: dict, item: dict, index: int):
                 "order_id": item["order_id"],
                 "item_id": item["item_id"],
             }
-            st.rerun()
 
-        if st.button(
+        st.button(
             "View Order",
             key=f"item_view_{index}_{item['item_id']}",
             use_container_width=True,
-        ):
-            st.session_state[VIEW_ORDER_ID] = item["order_id"]
-            if navigation.customization_orders_page is not None:
-                st.switch_page(navigation.customization_orders_page)
+            on_click=queue_order_detail_navigation,
+            args=(str(item["order_id"]),),
+        )
 
 
 def render(services: dict):
@@ -97,9 +97,11 @@ def render(services: dict):
             key="items_search",
         )
     with header_cols[1]:
-        if st.button("View Orders", use_container_width=True):
-            if navigation.customization_orders_page is not None:
-                st.switch_page(navigation.customization_orders_page)
+        st.button(
+            "View Orders",
+            use_container_width=True,
+            on_click=queue_orders_page_navigation,
+        )
 
     if query:
         items = order_service.search_customization_items(query)
@@ -128,3 +130,5 @@ def render(services: dict):
         page_key="items_page", prev_key="items_prev", next_key="items_next",
         label="items",
     )
+    maybe_navigate_to_order_detail()
+    maybe_navigate_to_orders_page()

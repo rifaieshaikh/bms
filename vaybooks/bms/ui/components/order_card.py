@@ -20,7 +20,6 @@ def order_card(order: CustomizationOrder, key_prefix: str):
             st.write(f"Bills: {', '.join(bill_numbers[:4])}")
         if st.button("View Order", key=f"{key_prefix}_view", use_container_width=True):
             st.session_state[VIEW_ORDER_ID] = order.id
-            st.session_state["orders_open_detail"] = True
 
 
 def order_cards(orders: list[CustomizationOrder], key_prefix: str = "ord"):

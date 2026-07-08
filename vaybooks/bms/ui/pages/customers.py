@@ -1,10 +1,9 @@
 import streamlit as st
 
 from vaybooks.bms.domain.shared.exceptions import ValidationError
-from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.components.customer_card import customer_card
+from vaybooks.bms.ui.components.dashboard_cards import maybe_navigate_to_orders_page
 from vaybooks.bms.ui.pagination import CARD_PAGE_SIZE, paginate_list, render_page_controls
-from vaybooks.bms.ui.session_keys import ORDERS_KEEP_FILTERS
 
 def _load_order_counts(order_service) -> dict:
     try:
@@ -104,21 +103,15 @@ def render(services: dict):
     for index, customer in enumerate(page_customers):
         order_count = order_counts.get(str(customer.id), 0)
         with cols[index % 3]:
-            edit_clicked, view_orders_clicked = customer_card(
+            edit_clicked = customer_card(
                 customer, order_count, f"cust_{customer.id}"
             )
             if edit_clicked:
                 _edit_customer_dialog(customer_service, customer.id)
-            if view_orders_clicked:
-                st.session_state.orders_customer_filter = customer.id
-                st.session_state[ORDERS_KEEP_FILTERS] = True
-                if navigation.customization_orders_page is not None:
-                    st.switch_page(navigation.customization_orders_page)
-                else:
-                    st.error("Orders page is not available.")
 
     render_page_controls(
         page, total_pages, len(customers),
         page_key="cust_page", prev_key="cust_prev", next_key="cust_next",
         label="customers",
     )
+    maybe_navigate_to_orders_page()

@@ -3,7 +3,7 @@ from datetime import date, datetime
 import streamlit as st
 
 from vaybooks.bms.ui import navigation
-from vaybooks.bms.ui.session_keys import VIEW_ORDER_ID
+from vaybooks.bms.ui.session_keys import ORDERS_KEEP_FILTERS, PENDING_ORDERS_PAGE, PENDING_ORDERS_NAV, VIEW_ORDER_ID
 
 STATUS_COLORS = {
     "Draft": "gray",
@@ -22,10 +22,33 @@ def _fmt_date(value) -> str:
     return str(value) if value else "—"
 
 
-def _open_order(order_id: str):
+def queue_order_detail_navigation(order_id: str) -> None:
+    """Set session state from a widget callback; navigate in main script."""
     st.session_state[VIEW_ORDER_ID] = order_id
-    if navigation.customization_orders_page is not None:
-        st.switch_page(navigation.customization_orders_page)
+    st.session_state[PENDING_ORDERS_NAV] = True
+
+
+def maybe_navigate_to_order_detail() -> None:
+    """Call at end of page render — switch_page cannot run inside callbacks."""
+    if st.session_state.pop(PENDING_ORDERS_NAV, False):
+        if navigation.customization_orders_page is not None:
+            st.switch_page(navigation.customization_orders_page)
+
+
+def queue_orders_page_navigation() -> None:
+    st.session_state[PENDING_ORDERS_PAGE] = True
+
+
+def queue_customer_orders_navigation(customer_id: str) -> None:
+    st.session_state.orders_customer_filter = customer_id
+    st.session_state[ORDERS_KEEP_FILTERS] = True
+    queue_orders_page_navigation()
+
+
+def maybe_navigate_to_orders_page() -> None:
+    if st.session_state.pop(PENDING_ORDERS_PAGE, False):
+        if navigation.customization_orders_page is not None:
+            st.switch_page(navigation.customization_orders_page)
 
 
 def order_action_cards(
@@ -46,7 +69,8 @@ def order_action_cards(
     shown = orders[:max_cards]
     cols = st.columns(3)  # fixed grid so cards stay a consistent width
     for i, o in enumerate(shown):
-        order_id = o.get("id") or o.get("_id")
+        raw_id = o.get("id") or o.get("_id")
+        order_id = str(raw_id) if raw_id is not None else ""
         status = o.get("order_status", "")
         color = "red" if accent == "red" else STATUS_COLORS.get(status, "gray")
         with cols[i % 3]:
@@ -56,13 +80,14 @@ def order_action_cards(
                 if status:
                     st.badge(status, color=color)
                 st.write(f"📅 {_fmt_date(o.get('expected_delivery_date'))}")
-                st.button(
-                    "Open →",
-                    key=f"{key_prefix}_{order_id}",
-                    use_container_width=True,
-                    on_click=_open_order,
-                    args=(order_id,),
-                )
+                if order_id:
+                    st.button(
+                        "Open →",
+                        key=f"{key_prefix}_{order_id}",
+                        use_container_width=True,
+                        on_click=queue_order_detail_navigation,
+                        args=(order_id,),
+                    )
 
     if total > max_cards:
         st.caption(f"+ {total - max_cards} more")

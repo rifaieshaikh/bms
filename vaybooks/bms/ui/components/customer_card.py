@@ -1,9 +1,10 @@
 import streamlit as st
 
 from vaybooks.bms.domain.customers.entities import Customer
+from vaybooks.bms.ui.components.dashboard_cards import queue_customer_orders_navigation
 
 
-def customer_card(customer: Customer, order_count: int, key_prefix: str) -> tuple[bool, bool]:
+def customer_card(customer: Customer, order_count: int, key_prefix: str) -> bool:
     with st.container(border=True):
         st.markdown(f"**{customer.customer_name}**")
         st.write(customer.phone_number)
@@ -17,10 +18,12 @@ def customer_card(customer: Customer, order_count: int, key_prefix: str) -> tupl
                 use_container_width=True,
             )
         with col2:
-            view_orders_clicked = st.button(
+            st.button(
                 "View Orders",
                 key=f"{key_prefix}_orders",
                 use_container_width=True,
+                on_click=queue_customer_orders_navigation,
+                args=(customer.id,),
             )
 
-    return edit_clicked, view_orders_clicked
+    return edit_clicked
