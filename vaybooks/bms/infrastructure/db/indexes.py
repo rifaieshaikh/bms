@@ -61,6 +61,10 @@ def ensure_indexes(db):
 
     _create_index(db.vendor_services, "service_name", unique=True)
 
+    _create_index(db.workers, "worker_name")
+    _create_index(db.workers, "is_active")
+    _create_index(db.workers, "activity_ids")
+
     _create_index(db.time_entries, "order_id")
     _create_index(db.time_entries, "bill_number")
     _create_index(db.time_entries, "activity_id")

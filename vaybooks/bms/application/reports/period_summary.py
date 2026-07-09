@@ -45,7 +45,7 @@ def build_period_summary(
     hand_mins = sum(
         int(e.get("duration_minutes") or 0)
         for e in time_entries
-        if e.get("activity_name") == "Hand Work"
+        if e.get("activity_name") == "Handwork"
     )
     summary.update(
         {

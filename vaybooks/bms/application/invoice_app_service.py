@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 from vaybooks.bms.domain.accounting.repository import CounterRepository
 from vaybooks.bms.domain.expenses.repository import ExpenseRepository
@@ -42,6 +42,62 @@ class InvoiceAppService:
             return
         expenses = self._expense_repo.find_by_order(order.id)
         self._domain.snapshot_order_items(order, invoices, deliveries, expenses)
+
+    def refresh_mph(
+        self,
+        order_id: str,
+        *,
+        force_bill_ids: Optional[Set[str]] = None,
+    ) -> None:
+        """Recompute invoice MPH fields and force-refresh item MPH snapshots.
+
+        - Invoice MPH is always recomputed from latest expenses.
+        - Item MPH snapshots are recomputed for delivered+invoiced bills, even if
+          previously frozen, for the selected bill ids.
+        """
+        order = self._order_repo.find_by_id(order_id)
+        if not order:
+            return
+
+        invoices = self._invoice_repo.list_by_order(order_id)
+        deliveries = (
+            self._delivery_repo.list_by_order(order_id) if self._delivery_repo else []
+        )
+        expenses = self._expense_repo.find_by_order(order_id)
+
+        force = force_bill_ids
+        if force is None:
+            force = InvoiceDomainService.invoiced_bill_ids(invoices)
+
+        invoices_changed = False
+        for invoice in invoices:
+            bill_id_set = set(invoice.bill_ids or [])
+            scoped = [e for e in expenses if e.bill_id and e.bill_id in bill_id_set]
+            mph = self._domain.calculate_mph(invoice.invoice_amount, scoped)
+
+            if (
+                invoice.total_expense_purchase_price != mph["total_expense_purchase_price"]
+                or invoice.total_expense_selling_price != mph["total_expense_selling_price"]
+                or invoice.total_in_house_hours != mph["total_in_house_hours"]
+                or invoice.margin_amount != mph["margin_amount"]
+                or invoice.margin_per_hour != mph["margin_per_hour"]
+            ):
+                invoice.total_expense_purchase_price = mph["total_expense_purchase_price"]
+                invoice.total_expense_selling_price = mph["total_expense_selling_price"]
+                invoice.total_in_house_hours = mph["total_in_house_hours"]
+                invoice.margin_amount = mph["margin_amount"]
+                invoice.margin_per_hour = mph["margin_per_hour"]
+                invoice.updated_at = utc_now()
+                self._invoice_repo.save(invoice)
+                invoices_changed = True
+
+        items_changed = self._domain.snapshot_order_items(
+            order, invoices, deliveries, expenses, force_bill_ids=force
+        )
+
+        if invoices_changed or items_changed:
+            order.updated_at = utc_now()
+            self._order_repo.save(order)
 
     def _resolve_customization_account_id(self) -> str:
         account = self._accounting.get_customization_account()
@@ -154,6 +210,7 @@ class InvoiceAppService:
         )
         self._order_domain.recalculate_status(order, invoices, deliveries)
         self._snapshot_item_mph(order, invoices)
+        self.refresh_mph(order.id, force_bill_ids=set(bill_ids))
         order.updated_at = utc_now()
         self._order_repo.save(order)
         return saved
@@ -211,6 +268,7 @@ class InvoiceAppService:
         )
         self._order_domain.recalculate_status(order, invoices, deliveries)
         self._snapshot_item_mph(order, invoices)
+        self.refresh_mph(order.id, force_bill_ids=set(bill_ids))
         order.updated_at = utc_now()
         self._order_repo.save(order)
         return saved
@@ -300,6 +358,7 @@ class InvoiceAppService:
         invoices = others + [saved]
         self._order_domain.recalculate_status(order, invoices, deliveries)
         self._snapshot_item_mph(order, invoices)
+        self.refresh_mph(order.id, force_bill_ids=set(bill_ids))
         order.updated_at = utc_now()
         self._order_repo.save(order)
         return saved

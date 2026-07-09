@@ -16,6 +16,9 @@ def test_customers_list_route_renders():
         services = {
             "customers": MagicMock(list_all_customers=MagicMock(return_value=[])),
             "orders": MagicMock(order_counts_by_customer=MagicMock(return_value={})),
+            "accounting": MagicMock(
+                customer_balances_by_customer=MagicMock(return_value={})
+            ),
         }
         customers.render(services)
 

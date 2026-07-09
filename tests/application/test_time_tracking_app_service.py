@@ -100,7 +100,7 @@ def _seed_entries(time_repo: FakeTimeTrackingRepository, order: CustomizationOrd
             bill_id="bill-hand",
             bill_number="ZB014",
             activity_id="act-hand",
-            activity_name="Hand Work",
+            activity_name="Handwork",
             work_date=date.today(),
             start_time="10:00",
             end_time="12:00",
@@ -163,10 +163,10 @@ def test_search_entries_filters_by_activity():
     _seed_entries(time_repo, order)
 
     service = _time_service(order_repo, time_repo)
-    results = service.search_entries(activity_name="Hand Work")
+    results = service.search_entries(activity_name="Handwork")
 
     assert len(results) == 1
-    assert results[0].activity_name == "Hand Work"
+    assert results[0].activity_name == "Handwork"
 
 
 def test_search_entries_combined_filters_use_and_semantics():

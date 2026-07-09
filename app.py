@@ -17,6 +17,7 @@ from vaybooks.bms.ui.pages import customization_orders_list, customization_order
 from vaybooks.bms.ui.pages import customization_item_detail, customer_detail, vendor_detail
 from vaybooks.bms.ui.pages import account_detail
 from vaybooks.bms.ui.pages import mtd_dashboard, time_tracking
+from vaybooks.bms.ui.pages import workers
 from vaybooks.bms.ui.pages.finance import (
     accounting_invoices,
     journal as finance_journal,
@@ -117,6 +118,9 @@ services_page = st.Page(
     _page(vendor_services), title="Service Configuration", icon=":material/category:",
     url_path="services",
 )
+workers_page = st.Page(
+    _page(workers), title="Workers", icon=":material/badge:", url_path="workers",
+)
 
 # --- Hidden detail routes (deep-linkable, not in sidebar) --------------------
 order_detail_page = st.Page(
@@ -157,6 +161,7 @@ navigation.register("trial_balance_list", trial_balance_page)
 navigation.register("reports", reports_page)
 navigation.register("activities_list", activities_page)
 navigation.register("services_list", services_page)
+navigation.register("workers_list", workers_page)
 
 page_groups = {
     "": [dashboard_page, mtd_page],
@@ -181,6 +186,7 @@ page_groups = {
     "Settings": [
         activities_page,
         services_page,
+        workers_page,
     ],
 }
 

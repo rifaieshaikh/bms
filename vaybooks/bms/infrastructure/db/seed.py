@@ -9,23 +9,47 @@ from vaybooks.bms.domain.shared.enums import AccountType, ActivityCategory, Acti
 
 DEFAULT_ACTIVITIES = [
     {
+        "activity_name": "Cutting",
+        "activity_type": ActivityType.IN_HOUSE.value,
+        "activity_category": ActivityCategory.IN_HOUSE_SERVICE.value,
+        "is_in_house": True,
+        "requires_time_tracking": True,
+        "default_hourly_expense": 250,
+    },
+    {
         "activity_name": "Stitching",
         "activity_type": ActivityType.IN_HOUSE.value,
         "activity_category": ActivityCategory.IN_HOUSE_SERVICE.value,
         "is_in_house": True,
         "requires_time_tracking": True,
-        "default_hourly_expense": 500,
+        "default_hourly_expense": 250,
     },
     {
-        "activity_name": "Hand Work",
+        "activity_name": "Handwork",
         "activity_type": ActivityType.IN_HOUSE.value,
         "activity_category": ActivityCategory.IN_HOUSE_SERVICE.value,
         "is_in_house": True,
         "requires_time_tracking": True,
-        "default_hourly_expense": 500,
+        "default_hourly_expense": 300,
     },
     {
-        "activity_name": "Dying",
+        "activity_name": "Cutting and Stitching",
+        "activity_type": ActivityType.IN_HOUSE.value,
+        "activity_category": ActivityCategory.IN_HOUSE_SERVICE.value,
+        "is_in_house": True,
+        "requires_time_tracking": True,
+        "default_hourly_expense": 250,
+    },
+    {
+        "activity_name": "Material Purchase",
+        "activity_type": ActivityType.MATERIAL.value,
+        "activity_category": ActivityCategory.OUTSOURCED_MATERIAL.value,
+        "is_in_house": False,
+        "requires_time_tracking": False,
+        "default_hourly_expense": 0,
+    },
+    {
+        "activity_name": "Dyeing",
         "activity_type": ActivityType.OUTSOURCED.value,
         "activity_category": ActivityCategory.OUTSOURCED_SERVICE.value,
         "is_in_house": False,
@@ -40,14 +64,6 @@ DEFAULT_ACTIVITIES = [
         "requires_time_tracking": False,
         "default_hourly_expense": 0,
     },
-    {
-        "activity_name": "Material Purchase",
-        "activity_type": ActivityType.MATERIAL.value,
-        "activity_category": ActivityCategory.OUTSOURCED_MATERIAL.value,
-        "is_in_house": False,
-        "requires_time_tracking": False,
-        "default_hourly_expense": 0,
-    },
 ]
 
 # (account_name, account_type, is_store_account)
@@ -57,10 +73,13 @@ DEFAULT_ACCOUNTS = [
     ("Sales", AccountType.REVENUE, False),
     ("Customization", AccountType.REVENUE, False),
     ("Discount Allowed", AccountType.EXPENSE, False),
+    ("Cutting Expense", AccountType.EXPENSE, False),
     ("Stitching Expense", AccountType.EXPENSE, False),
-    ("Hand Work Expense", AccountType.EXPENSE, False),
+    ("Handwork Expense", AccountType.EXPENSE, False),
+    ("Cutting and Stitching Expense", AccountType.EXPENSE, False),
     ("Material Purchase Expense", AccountType.EXPENSE, False),
-    ("Outsourced Work Expense", AccountType.EXPENSE, False),
+    ("Dyeing Expense", AccountType.EXPENSE, False),
+    ("Embroidery Expense", AccountType.EXPENSE, False),
     ("Salary Expense", AccountType.EXPENSE, False),
     ("Advance From Customers", AccountType.LIABILITY, False),
 ]
@@ -75,9 +94,12 @@ COUNTERS = [
 # purchase/service posts to. Account names must exist in DEFAULT_ACCOUNTS.
 DEFAULT_VENDOR_SERVICES = [
     ("Material Purchase", "Material Purchase Expense"),
+    ("Dyeing", "Dyeing Expense"),
+    ("Embroidery", "Embroidery Expense"),
+    ("Cutting", "Cutting Expense"),
     ("Stitching", "Stitching Expense"),
-    ("Hand Work", "Hand Work Expense"),
-    ("Outsourced Work", "Outsourced Work Expense"),
+    ("Cutting & Stitching", "Cutting and Stitching Expense"),
+    ("Handwork", "Handwork Expense"),
 ]
 
 

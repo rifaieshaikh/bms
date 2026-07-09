@@ -65,6 +65,13 @@ class FakeAccountRepository:
                 return a
         return None
 
+    def customer_balances_by_customer(self) -> dict:
+        return {
+            str(a.linked_customer_id): a.current_balance
+            for a in self._store.values()
+            if a.linked_customer_id
+        }
+
     def list_all(self, active_only: bool = True) -> List[Account]:
         return list(self._store.values())
 

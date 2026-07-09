@@ -66,17 +66,16 @@ def _load_customers(services, filters, sort):
         counts = services["orders"].order_counts_by_customer()
     except Exception:
         counts = {}
-    for customer in customers:
-        setattr(customer, "order_count", counts.get(str(customer.id), 0))
-        try:
-            account = accounting.get_customer_account(customer.id) if accounting else None
-        except Exception:
-            account = None
-        setattr(
-            customer,
-            "current_balance",
-            account.current_balance if account else 0.0,
+    try:
+        balances = (
+            accounting.customer_balances_by_customer() if accounting else {}
         )
+    except Exception:
+        balances = {}
+    for customer in customers:
+        cid = str(customer.id)
+        setattr(customer, "order_count", counts.get(cid, 0))
+        setattr(customer, "current_balance", balances.get(cid, 0.0))
     return customers
 
 

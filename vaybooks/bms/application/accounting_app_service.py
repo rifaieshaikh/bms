@@ -358,6 +358,10 @@ class AccountingAppService:
     def get_customer_account(self, customer_id: str) -> Optional[Account]:
         return self._account_repo.find_customer_account(customer_id)
 
+    def customer_balances_by_customer(self) -> dict:
+        """Map of customer_id -> current_balance for all customers (one query)."""
+        return self._account_repo.customer_balances_by_customer()
+
     def get_expense_accounts(self) -> List[Account]:
         return [
             a

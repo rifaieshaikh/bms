@@ -60,7 +60,7 @@ class TimeTrackingDomainService:
 
     def get_summary(self, entries: List[TimeEntry]) -> dict:
         stitching = self.get_total_minutes(entries, activity_name="Stitching")
-        hand_work = self.get_total_minutes(entries, activity_name="Hand Work")
+        hand_work = self.get_total_minutes(entries, activity_name="Handwork")
         by_bill: dict = {}
         by_activity: dict = {}
         for entry in entries:

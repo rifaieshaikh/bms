@@ -18,17 +18,33 @@ class ExpenseAppService:
         self,
         expense_repo: ExpenseRepository,
         order_repo: OrderRepository,
+        invoice_service=None,
         invoice_repo=None,
         delivery_repo=None,
         time_repo=None,
     ):
         self._expense_repo = expense_repo
         self._order_repo = order_repo
+        self._invoice_service = invoice_service
         self._invoice_repo = invoice_repo
         self._delivery_repo = delivery_repo
         self._time_repo = time_repo
         self._domain = ExpenseDomainService(expense_repo)
         self._invoice_domain = InvoiceDomainService(invoice_repo)
+
+    def _refresh_mph(self, order_id: Optional[str], bill_id: Optional[str]) -> None:
+        """Ensure invoice + item MPH reflect latest expenses.
+
+        Prefers InvoiceAppService.refresh_mph when available; otherwise falls
+        back to the legacy per-item snapshot refresh.
+        """
+        if not order_id:
+            return
+        if self._invoice_service is not None:
+            force = {bill_id} if bill_id else None
+            self._invoice_service.refresh_mph(order_id, force_bill_ids=force)
+            return
+        self._recalculate_item_mph(order_id, bill_id)
 
     def _derive_linked_time(
         self,
@@ -103,7 +119,7 @@ class ExpenseAppService:
             vendor_or_worker_name=vendor_or_worker_name,
             notes=notes,
         )
-        self._recalculate_item_mph(order.id, bill_id)
+        self._refresh_mph(order.id, bill_id)
         return expense
 
     def get_expenses_by_order(self, order_id: str) -> List[Expense]:
@@ -156,7 +172,7 @@ class ExpenseAppService:
                 expense.linked_time_minutes = minutes
                 expense.linked_time_hours = hours
         saved = self._expense_repo.save(expense)
-        self._recalculate_item_mph(expense.order_id, expense.bill_id)
+        self._refresh_mph(expense.order_id, expense.bill_id)
         return saved
 
     def update_expense_details(
@@ -193,4 +209,4 @@ class ExpenseAppService:
         expense = self._expense_repo.find_by_id(expense_id)
         self._expense_repo.delete(expense_id)
         if expense:
-            self._recalculate_item_mph(expense.order_id, expense.bill_id)
+            self._refresh_mph(expense.order_id, expense.bill_id)

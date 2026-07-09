@@ -61,6 +61,17 @@ class MongoAccountRepository:
         doc = self._collection.find_one({"linked_customer_id": customer_id})
         return self._from_doc(doc) if doc else None
 
+    def customer_balances_by_customer(self) -> dict:
+        """Map of customer_id -> current_balance, one query."""
+        cursor = self._collection.find(
+            {"linked_customer_id": {"$type": "string"}},
+            {"linked_customer_id": 1, "current_balance": 1},
+        )
+        return {
+            str(doc["linked_customer_id"]): doc.get("current_balance", 0.0)
+            for doc in cursor
+        }
+
     def find_vendor_account(self, vendor_id: str) -> Optional[Account]:
         doc = self._collection.find_one({"linked_vendor_id": vendor_id})
         return self._from_doc(doc) if doc else None

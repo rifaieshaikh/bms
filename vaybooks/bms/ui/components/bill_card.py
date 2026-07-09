@@ -67,7 +67,11 @@ def bill_card(
                     act_name = st.selectbox(
                         "Activity", list(act_map.keys()), key=f"time_act_{bill.bill_id}"
                     )
-                    form_data = time_entry_form(f"time_{bill.bill_id}")
+                    form_data = time_entry_form(
+                        services,
+                        activity_id=act_map.get(act_name),
+                        key_prefix=f"time_{bill.bill_id}",
+                    )
                     if st.form_submit_button("Record Time"):
                         try:
                             time_service.record_time_entry(

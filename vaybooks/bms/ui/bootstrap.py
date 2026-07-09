@@ -19,6 +19,7 @@ from vaybooks.bms.application.time_tracking_app_service import TimeTrackingAppSe
 from vaybooks.bms.application.accounting_app_service import AccountingAppService
 from vaybooks.bms.application.activity_app_service import ActivityAppService
 from vaybooks.bms.application.vendor_service_app_service import VendorServiceAppService
+from vaybooks.bms.application.worker_app_service import WorkerAppService
 from vaybooks.bms.infrastructure.db.connection import get_database
 from vaybooks.bms.infrastructure.db.indexes import ensure_indexes
 from vaybooks.bms.infrastructure.db.seed import run_seed
@@ -32,6 +33,9 @@ from vaybooks.bms.infrastructure.repositories.mongo_customer_repository import M
 from vaybooks.bms.infrastructure.repositories.mongo_vendor_repository import MongoVendorRepository
 from vaybooks.bms.infrastructure.repositories.mongo_vendor_service_repository import (
     MongoVendorServiceRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_worker_repository import (
+    MongoWorkerRepository,
 )
 from vaybooks.bms.infrastructure.repositories.mongo_delivery_repository import MongoDeliveryRepository
 from vaybooks.bms.infrastructure.repositories.mongo_expense_repository import MongoExpenseRepository
@@ -75,6 +79,7 @@ def get_services():
     order_repo = MongoOrderRepository(db)
     bill_registry_repo = MongoBillRegistryRepository(db)
     activity_repo = MongoActivityRepository(db)
+    worker_repo = MongoWorkerRepository(db)
     time_repo = MongoTimeTrackingRepository(db)
     expense_repo = MongoExpenseRepository(db)
     invoice_repo = MongoInvoiceRepository(db)
@@ -102,6 +107,24 @@ def get_services():
         reports_customers,
     )
 
+    invoice_service = InvoiceAppService(
+        invoice_repo,
+        order_repo,
+        expense_repo,
+        counter_repo,
+        delivery_repo,
+        accounting_service=accounting_service,
+    )
+
+    expense_service = ExpenseAppService(
+        expense_repo,
+        order_repo,
+        invoice_service=invoice_service,
+        invoice_repo=invoice_repo,
+        delivery_repo=delivery_repo,
+        time_repo=time_repo,
+    )
+
     return {
         "customers": customer_service,
         "vendors": vendor_service,
@@ -120,22 +143,10 @@ def get_services():
             delivery_repo=delivery_repo,
         ),
         "activities": ActivityAppService(activity_repo, order_repo),
+        "workers": WorkerAppService(worker_repo),
         "time_tracking": TimeTrackingAppService(time_repo, order_repo),
-        "expenses": ExpenseAppService(
-            expense_repo,
-            order_repo,
-            invoice_repo=invoice_repo,
-            delivery_repo=delivery_repo,
-            time_repo=time_repo,
-        ),
-        "invoices": InvoiceAppService(
-            invoice_repo,
-            order_repo,
-            expense_repo,
-            counter_repo,
-            delivery_repo,
-            accounting_service=accounting_service,
-        ),
+        "expenses": expense_service,
+        "invoices": invoice_service,
         "deliveries": DeliveryAppService(
             delivery_repo, order_repo, invoice_repo, expense_repo
         ),

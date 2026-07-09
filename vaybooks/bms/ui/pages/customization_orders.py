@@ -144,7 +144,7 @@ def _new_order_dialog(services: dict):
             default_checked = row.get("required_activities", {}).get(
                 activity.activity_name,
                 activity.activity_name
-                in ("Stitching", "Hand Work", "Material Purchase"),
+                in ("Stitching", "Handwork", "Material Purchase"),
             )
             required_map[activity.activity_name] = st.checkbox(
                 f"{activity.activity_name} (Required)",

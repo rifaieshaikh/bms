@@ -322,7 +322,7 @@ def _build_zb006_mixed_expenses(order_id: str, bill_id: str) -> list[Expense]:
             order_id=order_id,
             order_number=order_id,
             expense_date=date.today(),
-            expense_name="Dying - Outsourced",
+            expense_name="Dyeing - Outsourced",
             expense_source=ExpenseSource.OUTSOURCED,
             purchase_price=800.0,
             selling_price=800.0,
@@ -332,7 +332,7 @@ def _build_zb006_mixed_expenses(order_id: str, bill_id: str) -> list[Expense]:
             linked_time_hours=0.0,
             bill_id=bill_id,
             bill_number="ZB006",
-            activity_name="Dying",
+            activity_name="Dyeing",
         ),
     ]
 

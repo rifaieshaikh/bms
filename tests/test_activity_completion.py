@@ -72,7 +72,7 @@ def test_ready_for_delivery_when_all_done():
     oa2 = OrderActivity(
         order_activity_id="oa2",
         activity_id="act2",
-        activity_name="Dying",
+        activity_name="Dyeing",
         is_required=True,
         activity_status=ActivityStatus.SKIPPED,
     )

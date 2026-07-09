@@ -51,6 +51,7 @@ def test_time_tracking_page_renders_with_zero_entries():
             "time_tracking": time_service,
             "orders": order_service,
             "activities": activity_service,
+            "workers": MagicMock(list_workers_by_activity=MagicMock(return_value=[])),
         }
 
         time_tracking.render(services)
@@ -159,6 +160,7 @@ def test_time_tracking_page_renders_with_multiple_entries():
             "time_tracking": time_service,
             "orders": order_service,
             "activities": activity_service,
+            "workers": MagicMock(list_workers_by_activity=MagicMock(return_value=[])),
         }
 
         time_tracking.render(services)

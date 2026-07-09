@@ -3,7 +3,13 @@ import streamlit as st
 from vaybooks.bms.domain.shared.date_utils import calculate_duration_minutes
 
 
-def time_entry_form(key_prefix: str = "time", field_errors: dict | None = None):
+def time_entry_form(
+    services: dict | None = None,
+    *,
+    activity_id: str | None = None,
+    key_prefix: str = "time",
+    field_errors: dict | None = None,
+):
     field_errors = field_errors or {}
     work_date = st.date_input("Work Date", key=f"{key_prefix}_date")
     start_time = st.text_input("Start Time (HH:MM)", value="", key=f"{key_prefix}_start")
@@ -16,7 +22,14 @@ def time_entry_form(key_prefix: str = "time", field_errors: dict | None = None):
         "Ends next day (overnight shift)",
         key=f"{key_prefix}_ends_next_day",
     )
-    worker_name = st.text_input("Worker Name", key=f"{key_prefix}_worker")
+    workers = (
+        services["workers"].list_workers_by_activity(activity_id)
+        if services and activity_id and services.get("workers")
+        else []
+    )
+    worker_options = [w.worker_name for w in workers] if workers else ["—"]
+    selected_worker = st.selectbox("Worker", worker_options, key=f"{key_prefix}_worker")
+    worker_name = "" if selected_worker == "—" else selected_worker
     notes = st.text_area("Notes", key=f"{key_prefix}_notes")
 
     duration = None

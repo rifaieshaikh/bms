@@ -19,6 +19,7 @@ def item_activities(order, item):
 
 def time_form_fields(
     item_activities_list,
+    services,
     key_prefix,
     entry=None,
     *,
@@ -38,6 +39,7 @@ def time_form_fields(
         if names
         else None
     )
+    activity_id = activity_map.get(activity_name) if activity_name else None
     work_date = st.date_input(
         "Work Date",
         value=entry.work_date if entry else date.today(),
@@ -65,11 +67,22 @@ def time_form_fields(
             value=False,
             key=f"time_overnight_{key_prefix}",
         )
-    worker = st.text_input(
-        "Worker Name",
-        value=entry.worker_name if entry else "",
+    workers = (
+        services["workers"].list_workers_by_activity(activity_id)
+        if activity_id and services.get("workers")
+        else []
+    )
+    worker_options = [w.worker_name for w in workers] if workers else ["—"]
+    default_worker_index = 0
+    if entry is not None and entry.worker_name and entry.worker_name in worker_options:
+        default_worker_index = worker_options.index(entry.worker_name)
+    selected_worker = st.selectbox(
+        "Worker",
+        worker_options,
+        index=default_worker_index,
         key=f"time_worker_{key_prefix}",
     )
+    worker = "" if selected_worker == "—" else selected_worker
     notes = st.text_area(
         "Notes", value=entry.notes if entry else "", key=f"time_notes_{key_prefix}"
     )
@@ -88,7 +101,7 @@ def time_form_fields(
             st.error(str(exc))
 
     return {
-        "activity_id": activity_map.get(activity_name) if activity_name else None,
+        "activity_id": activity_id,
         "activity_name": activity_name,
         "work_date": work_date,
         "start_time": start_time,
@@ -174,6 +187,7 @@ def record_time_dialog(services: dict):
     field_errors = st.session_state.get(TIME_PAGE_FIELD_ERRORS, {})
     data = time_form_fields(
         activities,
+        services,
         "page_new",
         field_errors=field_errors,
         include_overnight=True,
@@ -225,6 +239,7 @@ def edit_time_dialog(services: dict, entry_id: str):
     field_errors = st.session_state.get(TIME_PAGE_FIELD_ERRORS, {})
     data = time_form_fields(
         activities,
+        services,
         f"page_edit_{entry_id}",
         entry=entry,
         field_errors=field_errors,
@@ -268,7 +283,7 @@ def item_time_dialog(services, order_id, item_id, key_prefix, flag_key):
         st.error("Item not found")
         return
     entry = None if target in (None, "new") else services["time_tracking"].get_entry(target)
-    data = time_form_fields(item_activities(order, item), f"dlg_{key_prefix}", entry)
+    data = time_form_fields(item_activities(order, item), services, f"dlg_{key_prefix}", entry)
     cols = st.columns(2)
     if cols[0].button("Save", type="primary", use_container_width=True):
         try:
