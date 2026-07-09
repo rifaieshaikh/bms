@@ -1,14 +1,13 @@
-; MongoDB wizard custom pages for VayBooks-BMS installer
+// MongoDB wizard custom pages for VayBooks-BMS installer
 
 var
   MongoPage: TWizardPage;
-  MongoModeRadio: TRadioButton;
-  MongoRemoteRadio: TRadioButton;
-  MongoLocalRadio: TRadioButton;
-  MongoUriLabel: TLabel;
-  MongoUriEdit: TEdit;
-  DbNameLabel: TLabel;
-  DbNameEdit: TEdit;
+  MongoRemoteRadio: TNewRadioButton;
+  MongoLocalRadio: TNewRadioButton;
+  MongoUriLabel: TNewStaticText;
+  MongoUriEdit: TNewEdit;
+  DbNameLabel: TNewStaticText;
+  DbNameEdit: TNewEdit;
 
 procedure InitializeMongoWizardPages;
 var
@@ -27,7 +26,7 @@ begin
   InfoText.Top := 0;
   InfoText.Width := MongoPage.SurfaceWidth;
 
-  MongoRemoteRadio := TRadioButton.Create(MongoPage);
+  MongoRemoteRadio := TNewRadioButton.Create(MongoPage);
   MongoRemoteRadio.Parent := MongoPage.Surface;
   MongoRemoteRadio.Caption := 'Use existing MongoDB connection';
   MongoRemoteRadio.Left := 0;
@@ -35,33 +34,33 @@ begin
   MongoRemoteRadio.Width := MongoPage.SurfaceWidth;
   MongoRemoteRadio.Checked := True;
 
-  MongoUriLabel := TLabel.Create(MongoPage);
+  MongoUriLabel := TNewStaticText.Create(MongoPage);
   MongoUriLabel.Parent := MongoPage.Surface;
   MongoUriLabel.Caption := 'Connection String:';
   MongoUriLabel.Left := 20;
   MongoUriLabel.Top := 70;
 
-  MongoUriEdit := TEdit.Create(MongoPage);
+  MongoUriEdit := TNewEdit.Create(MongoPage);
   MongoUriEdit.Parent := MongoPage.Surface;
   MongoUriEdit.Left := 20;
   MongoUriEdit.Top := 90;
   MongoUriEdit.Width := MongoPage.SurfaceWidth - 40;
   MongoUriEdit.Text := 'mongodb+srv://user:password@cluster.mongodb.net/';
 
-  DbNameLabel := TLabel.Create(MongoPage);
+  DbNameLabel := TNewStaticText.Create(MongoPage);
   DbNameLabel.Parent := MongoPage.Surface;
   DbNameLabel.Caption := 'Database Name:';
   DbNameLabel.Left := 20;
   DbNameLabel.Top := 120;
 
-  DbNameEdit := TEdit.Create(MongoPage);
+  DbNameEdit := TNewEdit.Create(MongoPage);
   DbNameEdit.Parent := MongoPage.Surface;
   DbNameEdit.Left := 20;
   DbNameEdit.Top := 140;
   DbNameEdit.Width := MongoPage.SurfaceWidth - 40;
   DbNameEdit.Text := 'zahcci_customization';
 
-  MongoLocalRadio := TRadioButton.Create(MongoPage);
+  MongoLocalRadio := TNewRadioButton.Create(MongoPage);
   MongoLocalRadio.Parent := MongoPage.Surface;
   MongoLocalRadio.Caption := 'Install MongoDB locally (mongodb://localhost:27017)';
   MongoLocalRadio.Left := 0;
