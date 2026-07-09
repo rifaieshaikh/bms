@@ -64,3 +64,18 @@ class VoucherType(str, Enum):
     REFUND = "Refund"
     VENDOR_PAYMENT = "Vendor Payment"
     SALARY_PAYMENT = "Salary Payment"
+
+
+class StockMovementType(str, Enum):
+    RECEIVE = "Receive"
+    ISSUE = "Issue"
+    ADJUST_IN = "Adjust In"
+    ADJUST_OUT = "Adjust Out"
+    SALE = "Sale"
+    PURCHASE_RECEIVE = "Purchase Receive"
+
+
+class StockReferenceType(str, Enum):
+    MANUAL = "Manual"
+    SALES_INVOICE = "Sales Invoice"
+    PURCHASE = "Purchase"

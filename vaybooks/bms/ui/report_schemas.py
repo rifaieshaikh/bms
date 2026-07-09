@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from vaybooks.bms.domain.shared.enums import ExpenseSource, OrderStatus
+from vaybooks.bms.domain.shared.enums import ExpenseSource, OrderStatus, StockMovementType
 from vaybooks.bms.ui import filtering as F
 from vaybooks.bms.ui.filtering import FilterField, ListSchema, SortOption
 from vaybooks.bms.ui.pagination import REPORT_PAGE_SIZE
@@ -564,6 +564,104 @@ LABOR_VS_MPH = ListSchema(
     page_size=REPORT_PAGE_SIZE,
 )
 
+STOCK_ON_HAND = ListSchema(
+    entity_key="report_stock_on_hand",
+    title="Stock on Hand",
+    filter_fields=[
+        FilterField(
+            "category_id",
+            "Category",
+            F.ENTITY_SELECT,
+            options_loader="inventory_categories",
+        ),
+        FilterField("search", "Product / SKU", F.EXACT, placeholder="Contains…"),
+        FilterField("min_qty", "Min qty", F.NUMBER_MIN, record_attr="qty"),
+        FilterField(
+            "active_only",
+            "Active only",
+            F.CHECKBOX,
+            default_active=True,
+        ),
+    ],
+    sort_options=[
+        SortOption("qty", "Stock qty"),
+        SortOption("stock_value", "Stock value"),
+        SortOption("product_name", "Product name"),
+        SortOption("sku", "SKU"),
+        SortOption("category", "Category"),
+    ],
+    default_sort="qty",
+    page_size=REPORT_PAGE_SIZE,
+)
+
+LOW_STOCK = ListSchema(
+    entity_key="report_low_stock",
+    title="Low Stock Alert",
+    filter_fields=[
+        FilterField(
+            "category_id",
+            "Category",
+            F.ENTITY_SELECT,
+            options_loader="inventory_categories",
+        ),
+        FilterField("threshold", "Low-stock threshold", F.NUMBER_MIN),
+        FilterField(
+            "include_out_of_stock",
+            "Include out of stock",
+            F.CHECKBOX,
+            default_active=True,
+        ),
+    ],
+    sort_options=[
+        SortOption("qty", "Stock qty"),
+        SortOption("product_name", "Product name"),
+        SortOption("sku", "SKU"),
+        SortOption("category", "Category"),
+    ],
+    default_sort="qty",
+    page_size=REPORT_PAGE_SIZE,
+)
+
+STOCK_MOVEMENTS = ListSchema(
+    entity_key="report_stock_movements",
+    title="Stock Movements",
+    filter_fields=[
+        FilterField(
+            "date_range",
+            "Period",
+            F.DATE_RANGE,
+            default=_mtd,
+        ),
+        FilterField(
+            "product_id",
+            "Product",
+            F.ENTITY_SELECT,
+            options_loader="inventory_products",
+        ),
+        FilterField(
+            "category_id",
+            "Category",
+            F.ENTITY_SELECT,
+            options_loader="inventory_categories",
+        ),
+        FilterField(
+            "movement_type",
+            "Movement type",
+            F.SELECT,
+            options=_enum_opts(StockMovementType),
+        ),
+    ],
+    sort_options=[
+        SortOption("movement_date", "Date (newest)"),
+        SortOption("product_name", "Product name"),
+        SortOption("movement_type", "Movement type"),
+        SortOption("qty_out", "Qty out"),
+        SortOption("qty_in", "Qty in"),
+    ],
+    default_sort="movement_date",
+    page_size=REPORT_PAGE_SIZE,
+)
+
 REPORT_CATEGORIES: dict[str, list[str]] = {
     "Business Insights": [
         "Period Financial Summary",
@@ -597,6 +695,11 @@ REPORT_CATEGORIES: dict[str, list[str]] = {
     "Customers": [
         "Customer Order History",
     ],
+    "Inventory": [
+        "Stock on Hand",
+        "Low Stock Alert",
+        "Stock Movements",
+    ],
 }
 
 SCHEMA_BY_REPORT_TYPE = {
@@ -622,6 +725,9 @@ SCHEMA_BY_REPORT_TYPE = {
     "Employee Productivity": WORKER_PRODUCTIVITY,
     "Labor vs MPH": LABOR_VS_MPH,
     "Customer Order History": CUSTOMER_HISTORY,
+    "Stock on Hand": STOCK_ON_HAND,
+    "Low Stock Alert": LOW_STOCK,
+    "Stock Movements": STOCK_MOVEMENTS,
 }
 
 CATEGORY_BY_REPORT_TYPE = {
@@ -636,6 +742,7 @@ CATEGORY_SERVICE_KEYS = {
     "Operations": "reports_operations",
     "Labor": "reports_labor",
     "Customers": "reports_customers",
+    "Inventory": "reports_inventory",
 }
 
 REPORT_TYPES = [

@@ -21,6 +21,12 @@ from vaybooks.bms.ui.pagination import (
     TRIAL_BALANCE_PAGE_SIZE,
     VOUCHER_PAGE_SIZE,
 )
+from vaybooks.bms.ui.inventory_list_schemas import (
+    INVENTORY_CATEGORIES,
+    INVENTORY_PRODUCTS,
+    INVENTORY_STOCK,
+    INVENTORY_STOCK_LEDGER,
+)
 
 
 def _enum_opts(enum_cls) -> list[tuple]:
@@ -73,6 +79,26 @@ def _services_by_id(services):
             for s in services["vendor_services"].list_services(active_only=False)]
 
 
+def _inventory_categories(services):
+    inventory = services.get("inventory")
+    if inventory is None:
+        return []
+    return [
+        (c.id, c.name)
+        for c in inventory.list_categories(active_only=False)
+    ]
+
+
+def _inventory_products(services):
+    inventory = services.get("inventory")
+    if inventory is None:
+        return []
+    return [
+        (p.id, f"{p.sku} — {p.name}")
+        for p in inventory.list_products(active_only=False)
+    ]
+
+
 OPTION_LOADERS = {
     "customers": _customers,
     "vendors": _vendors,
@@ -83,6 +109,8 @@ OPTION_LOADERS = {
     "expense_accounts": _expense_accounts,
     "activity_names": _activity_names,
     "services_by_id": _services_by_id,
+    "inventory_categories": _inventory_categories,
+    "inventory_products": _inventory_products,
 }
 
 
@@ -519,6 +547,8 @@ SCHEMAS = {
     s.entity_key: s
     for s in [
         ORDERS, ITEMS, CUSTOMERS, VENDORS, TIME, ACCOUNTS, VOUCHERS, RECEIPTS,
-        PAYMENTS, ACCOUNTING_INVOICES, STORE_SALES, JOURNAL, TRIAL_BALANCE, ACTIVITIES, SERVICES,
+        PAYMENTS, ACCOUNTING_INVOICES, STORE_SALES, JOURNAL, TRIAL_BALANCE, ACTIVITIES,
+        SERVICES, INVENTORY_CATEGORIES, INVENTORY_PRODUCTS, INVENTORY_STOCK,
+        INVENTORY_STOCK_LEDGER,
     ]
 }

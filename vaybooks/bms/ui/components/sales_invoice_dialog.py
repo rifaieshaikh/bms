@@ -49,6 +49,7 @@ def sales_record_dialog(services: dict) -> None:
 
     accounting_service = services["accounting"]
     customer_service = services["customers"]
+    inventory_service = services.get("inventory")
     sales_account = accounting_service.get_sales_account()
     store_accounts = accounting_service.get_store_accounts()
     discount_account = accounting_service.get_discount_account()
@@ -117,9 +118,26 @@ def sales_record_dialog(services: dict) -> None:
 
     st.markdown("**Line items**")
     line_items: list[dict] = list(st.session_state.get(_LINES_KEY, [default_line_item()]))
+    product_options: dict[str, str | None] = {"— Manual —": None}
+    if inventory_service:
+        for product in inventory_service.list_products(active_only=True):
+            product_options[f"{product.sku} — {product.name}"] = product.id
+
+    def _product_index(target_id) -> int:
+        ids = list(product_options.values())
+        return ids.index(target_id) if target_id in ids else 0
+
     remove_idx = None
     for idx, row in enumerate(line_items):
         with st.container(border=True):
+            prod_labels = list(product_options.keys())
+            product_label = st.selectbox(
+                "Product",
+                prod_labels,
+                index=_product_index(row.get("product_id")),
+                key=f"{SALES_RECORD_DIALOG}_line_product_{idx}",
+            )
+            product_id = product_options[product_label]
             head = st.columns([4, 1, 1, 1, 1])
             desc = head[0].text_input(
                 "Description",
@@ -146,6 +164,13 @@ def sales_record_dialog(services: dict) -> None:
             )
             if head[4].button("Remove", key=f"{SALES_RECORD_DIALOG}_line_rm_{idx}"):
                 remove_idx = idx
+            if product_id and inventory_service:
+                product = inventory_service.get_product(product_id)
+                if product:
+                    if not (desc or "").strip():
+                        desc = product.name
+                    if float(rate or 0) == 0.0:
+                        rate = float(product.selling_rate)
             line_gross = round(qty * rate, 2)
             line_disc = round(min(max(line_disc, 0.0), line_gross), 2)
             line_items[idx] = {
@@ -153,6 +178,7 @@ def sales_record_dialog(services: dict) -> None:
                 "qty": qty,
                 "rate": rate,
                 "discount": line_disc,
+                "product_id": product_id,
             }
 
     if remove_idx is not None and len(line_items) > 1:
@@ -222,7 +248,7 @@ def sales_record_dialog(services: dict) -> None:
             if not customer_account:
                 raise ValueError("No ledger account for this customer")
             note = serialize_line_items(line_items, invoice_discount)
-            accounting_service.create_cash_sales_invoice(
+            voucher = accounting_service.create_cash_sales_invoice(
                 customer_account.id,
                 store_opts[store_name],
                 gross,
@@ -232,6 +258,8 @@ def sales_record_dialog(services: dict) -> None:
                 line_items_note=note,
                 voucher_date=inv_date,
             )
+            if inventory_service:
+                inventory_service.apply_sales_movements(voucher.id, line_items)
             _clear_dialog_session()
             st.rerun()
         except Exception as exc:

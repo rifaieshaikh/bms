@@ -44,6 +44,9 @@ REPORT_LOADERS: dict[str, tuple[str, str]] = {
     "Employee Productivity": ("reports_labor", "worker_productivity_report"),
     "Labor vs MPH": ("reports_labor", "labor_vs_mph_report"),
     "Customer Order History": ("reports_customers", "customer_order_history"),
+    "Stock on Hand": ("reports_inventory", "stock_on_hand_report"),
+    "Low Stock Alert": ("reports_inventory", "low_stock_report"),
+    "Stock Movements": ("reports_inventory", "stock_movements_report"),
 }
 
 

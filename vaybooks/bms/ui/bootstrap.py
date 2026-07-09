@@ -15,12 +15,16 @@ from vaybooks.bms.application.reports import (
     LaborReportService,
     OperationsReportService,
     ProfitabilityReportService,
-    SalesReportService,
 )
+from vaybooks.bms.application.reports.inventory_report_service import (
+    InventoryReportService,
+)
+from vaybooks.bms.application.reports.sales_report_service import SalesReportService
 from vaybooks.bms.application.time_tracking_app_service import TimeTrackingAppService
 from vaybooks.bms.application.accounting_app_service import AccountingAppService
 from vaybooks.bms.application.activity_app_service import ActivityAppService
 from vaybooks.bms.application.vendor_service_app_service import VendorServiceAppService
+from vaybooks.bms.application.inventory_app_service import InventoryAppService
 from vaybooks.bms.application.worker_app_service import WorkerAppService
 from vaybooks.bms.infrastructure.db.connection import get_database
 from vaybooks.bms.infrastructure.db.indexes import ensure_indexes
@@ -51,6 +55,11 @@ from vaybooks.bms.infrastructure.repositories.mongo_order_repository import (
     MongoOrderRepository,
 )
 from vaybooks.bms.infrastructure.repositories.mongo_report_repository import MongoReportRepository
+from vaybooks.bms.infrastructure.repositories.mongo_inventory_repository import (
+    MongoInventoryProductRepository,
+    MongoProductCategoryRepository,
+    MongoStockMovementRepository,
+)
 from vaybooks.bms.infrastructure.repositories.mongo_time_tracking_repository import (
     MongoTimeTrackingRepository,
 )
@@ -110,6 +119,9 @@ def get_services():
     delivery_repo = MongoDeliveryRepository(db)
     counter_repo = MongoCounterRepository(db)
     report_repo = MongoReportRepository(db)
+    category_repo = MongoProductCategoryRepository(db)
+    inventory_product_repo = MongoInventoryProductRepository(db)
+    stock_movement_repo = MongoStockMovementRepository(db)
 
     accounting_service = AccountingAppService(account_repo, voucher_repo, counter_repo)
     customer_service = CustomerAppService(customer_repo, account_repo)
@@ -123,6 +135,10 @@ def get_services():
     reports_labor = LaborReportService(report_repo)
     reports_customers = CustomerReportService(report_repo)
     reports_sales = SalesReportService(report_repo)
+    inventory_service = InventoryAppService(
+        category_repo, inventory_product_repo, stock_movement_repo
+    )
+    reports_inventory = InventoryReportService(inventory_service)
     report_facade = ReportAppService(
         report_repo,
         reports_business,
@@ -131,6 +147,7 @@ def get_services():
         reports_labor,
         reports_customers,
         reports_sales,
+        inventory_reports=reports_inventory,
     )
 
     invoice_service = InvoiceAppService(
@@ -183,8 +200,10 @@ def get_services():
         "reports_operations": reports_operations,
         "reports_labor": reports_labor,
         "reports_customers": reports_customers,
+        "reports_inventory": reports_inventory,
         "reports": report_facade,
         "export": ExportAppService(report_repo),
+        "inventory": inventory_service,
         "activity_repo": activity_repo,
         "order_repo": order_repo,
         "invoice_repo": invoice_repo,

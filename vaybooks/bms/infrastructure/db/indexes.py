@@ -97,6 +97,13 @@ def ensure_indexes(db):
     _create_index(db.vouchers, "voucher_date")
     _create_index(db.vouchers, "reference_order_id")
 
+    _create_index(db.product_categories, "name", unique=True)
+    _create_index(db.inventory_products, "sku", unique=True)
+    _create_index(db.inventory_products, "category_id")
+    _create_index(db.stock_movements, "product_id")
+    _create_index(db.stock_movements, "movement_date")
+    _create_index(db.stock_movements, "movement_type")
+
 
 if __name__ == "__main__":
     import os

@@ -27,6 +27,9 @@ from vaybooks.bms.application.reports.operations_report_service import (
 from vaybooks.bms.application.reports.profitability_report_service import (
     ProfitabilityReportService,
 )
+from vaybooks.bms.application.reports.inventory_report_service import (
+    InventoryReportService,
+)
 from vaybooks.bms.application.reports.sales_report_service import SalesReportService
 from vaybooks.bms.domain.shared.enums import OrderStatus
 from vaybooks.bms.infrastructure.repositories.mongo_report_repository import (
@@ -46,6 +49,7 @@ class ReportAppService:
         labor: LaborReportService,
         customers: CustomerReportService,
         sales: SalesReportService | None = None,
+        inventory_reports: InventoryReportService | None = None,
     ):
         self._repo = report_repo
         self._business = business
@@ -54,6 +58,7 @@ class ReportAppService:
         self._labor = labor
         self._customers = customers
         self._sales = sales or SalesReportService(report_repo)
+        self._inventory_reports = inventory_reports
 
     def get_dashboard_summary(self) -> DashboardSummary:
         today = date.today()
@@ -71,6 +76,11 @@ class ReportAppService:
         pending_activity_orders = self._repo.count_orders_by_statuses(active_statuses)
         in_progress = self._repo.get_orders_by_statuses(active_statuses, limit=60)
         item_snapshot = self._repo.item_delivery_snapshot()
+        inv = (
+            self._inventory_reports.health_summary()
+            if self._inventory_reports is not None
+            else {}
+        )
         return DashboardSummary(
             active_orders=active,
             pending_activity_orders=pending_activity_orders,
@@ -94,6 +104,13 @@ class ReportAppService:
                 OrderStatus.COMPLETED.value, limit=20
             ),
             recently_delivered=self._repo.get_delivered_this_month(start, end),
+            inventory_active_products=inv.get("active_products", 0),
+            inventory_total_units=inv.get("total_units", 0.0),
+            inventory_stock_value=inv.get("stock_value", 0.0),
+            inventory_low_stock_count=inv.get("low_stock_count", 0),
+            inventory_out_of_stock_count=inv.get("out_of_stock_count", 0),
+            inventory_movements_this_month=inv.get("movements_this_month", 0),
+            inventory_low_stock_items=inv.get("low_stock_items", []),
         )
 
     def get_period_summary(self, start: date, end: date) -> dict:

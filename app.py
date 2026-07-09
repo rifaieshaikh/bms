@@ -20,6 +20,14 @@ from vaybooks.bms.ui.pages import customization_orders_list, customization_order
 from vaybooks.bms.ui.pages import customization_item_detail, customer_detail, vendor_detail
 from vaybooks.bms.ui.pages import account_detail
 from vaybooks.bms.ui.pages import mtd_dashboard, sales_dashboard, sales_detail, time_tracking
+from vaybooks.bms.ui.pages.inventory import (
+    categories as inventory_categories,
+    movements as inventory_movements,
+    product_detail as inventory_product_detail,
+    products as inventory_products,
+    stock_ledger as inventory_stock_ledger,
+    stock_on_hand as inventory_stock_on_hand,
+)
 from vaybooks.bms.ui.pages import workers
 from vaybooks.bms.ui.pages import system_settings, system_logs, system_updates
 from vaybooks.bms.ui.pages.finance import (
@@ -131,6 +139,26 @@ services_page = st.Page(
 workers_page = st.Page(
     _page(workers), title="Employees", icon=":material/badge:", url_path="employees",
 )
+inventory_categories_page = st.Page(
+    _page(inventory_categories), title="Categories", icon=":material/category:",
+    url_path="inventory-categories",
+)
+inventory_products_page = st.Page(
+    _page(inventory_products), title="Products", icon=":material/inventory:",
+    url_path="inventory-products",
+)
+inventory_stock_page = st.Page(
+    _page(inventory_stock_on_hand), title="Stock on Hand",
+    icon=":material/warehouse:", url_path="inventory-stock",
+)
+inventory_stock_ledger_page = st.Page(
+    _page(inventory_stock_ledger), title="Stock Ledger",
+    icon=":material/receipt_long:", url_path="inventory-stock-ledger",
+)
+inventory_movements_page = st.Page(
+    _page(inventory_movements), title="Movements", icon=":material/swap_horiz:",
+    url_path="inventory-movements",
+)
 
 system_settings_page = st.Page(
     _page(system_settings), title="Settings", icon=":material/settings:",
@@ -164,6 +192,10 @@ account_detail_page = st.Page(
 sales_detail_page = st.Page(
     _page(sales_detail), title="Sale Detail", url_path="sales-detail",
 )
+inventory_product_detail_page = st.Page(
+    _page(inventory_product_detail), title="Product Detail",
+    url_path="inventory-product-detail",
+)
 
 # --- Navigation registry (used by go_to_detail / go_back_to_list) ------------
 navigation.register("dashboard", dashboard_page)
@@ -191,6 +223,12 @@ navigation.register("reports", reports_page)
 navigation.register("activities_list", activities_page)
 navigation.register("services_list", services_page)
 navigation.register("workers_list", workers_page)
+navigation.register("inventory_categories_list", inventory_categories_page)
+navigation.register("inventory_products_list", inventory_products_page)
+navigation.register("inventory_stock_list", inventory_stock_page)
+navigation.register("inventory_stock_ledger_list", inventory_stock_ledger_page)
+navigation.register("inventory_movements_list", inventory_movements_page)
+navigation.register("inventory_product_detail", inventory_product_detail_page)
 
 page_groups = {
     "": [dashboard_page, mtd_page],
@@ -206,6 +244,13 @@ page_groups = {
     ],
     "Sales": [
         sales_dashboard_page,
+    ],
+    "Inventory": [
+        inventory_categories_page,
+        inventory_products_page,
+        inventory_stock_page,
+        inventory_stock_ledger_page,
+        inventory_movements_page,
     ],
     "Finance": [
         accounts_page,
@@ -238,6 +283,7 @@ hidden_pages = [
     vendor_detail_page,
     account_detail_page,
     sales_detail_page,
+    inventory_product_detail_page,
 ]
 
 # All pages must be registered with st.navigation for routing to work.

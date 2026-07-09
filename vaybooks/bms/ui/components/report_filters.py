@@ -18,11 +18,14 @@ from vaybooks.bms.application.report_filters import (
     ExpenseFilter,
     ItemProfitabilityFilter,
     LaborMphFilter,
+    LowStockFilter,
     OrderMphFilter,
     OrderPipelineFilter,
     OutstandingFilter,
     OverdueFilter,
     PeriodSummaryFilter,
+    StockMovementsFilter,
+    StockOnHandFilter,
     TimeTrackingFilter,
     TopCustomersFilter,
     WorkerProductivityFilter,
@@ -204,6 +207,33 @@ def build_labor_mph_filter(filters: dict) -> LaborMphFilter:
     )
 
 
+def build_stock_on_hand_filter(filters: dict) -> StockOnHandFilter:
+    return StockOnHandFilter(
+        category_id=filters.get("category_id") or "",
+        active_only=bool(filters.get("active_only")),
+        min_qty=_optional_min(filters.get("min_qty")),
+        search=_text(filters.get("search")),
+    )
+
+
+def build_low_stock_filter(filters: dict) -> LowStockFilter:
+    threshold = _optional_min(filters.get("threshold")) or 2.0
+    return LowStockFilter(
+        threshold=threshold,
+        category_id=filters.get("category_id") or "",
+        include_out_of_stock=bool(filters.get("include_out_of_stock", True)),
+    )
+
+
+def build_stock_movements_filter(filters: dict) -> StockMovementsFilter:
+    return StockMovementsFilter(
+        date_range=_date_range(filters),
+        product_id=filters.get("product_id") or "",
+        category_id=filters.get("category_id") or "",
+        movement_type=(filters.get("movement_type") or "").strip(),
+    )
+
+
 _BUILDERS = {
     "report_item_profitability": build_item_profitability_filter,
     "report_order_mph": build_order_mph_filter,
@@ -226,6 +256,9 @@ _BUILDERS = {
     "report_delivery_performance": build_delivery_performance_filter,
     "report_worker_productivity": build_worker_productivity_filter,
     "report_labor_vs_mph": build_labor_mph_filter,
+    "report_stock_on_hand": build_stock_on_hand_filter,
+    "report_low_stock": build_low_stock_filter,
+    "report_stock_movements": build_stock_movements_filter,
 }
 
 

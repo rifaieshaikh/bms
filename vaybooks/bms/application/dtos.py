@@ -42,6 +42,14 @@ class DashboardSummary:
     in_progress_orders: List[dict] = field(default_factory=list)
     recently_completed: List[dict] = field(default_factory=list)
     recently_delivered: List[dict] = field(default_factory=list)
+    # Inventory health (retail stock)
+    inventory_active_products: int = 0
+    inventory_total_units: float = 0.0
+    inventory_stock_value: float = 0.0
+    inventory_low_stock_count: int = 0
+    inventory_out_of_stock_count: int = 0
+    inventory_movements_this_month: int = 0
+    inventory_low_stock_items: List[dict] = field(default_factory=list)
 
 
 @dataclass

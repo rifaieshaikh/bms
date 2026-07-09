@@ -51,6 +51,15 @@ def _services_dict():
         labor_vs_mph_report=empty,
     )
     customers = MagicMock(customer_order_history=empty)
+    inventory = MagicMock(
+        list_categories=MagicMock(return_value=[]),
+        list_products=MagicMock(return_value=[]),
+    )
+    reports_inventory = MagicMock(
+        stock_on_hand_report=empty,
+        low_stock_report=empty,
+        stock_movements_report=empty,
+    )
     return {
         "reports": MagicMock(get_period_summary=summary),
         "reports_business": business,
@@ -58,6 +67,8 @@ def _services_dict():
         "reports_operations": operations,
         "reports_labor": labor,
         "reports_customers": customers,
+        "reports_inventory": reports_inventory,
+        "inventory": inventory,
         "customers": MagicMock(),
         "activities": MagicMock(list_activities=MagicMock(return_value=[])),
     }
@@ -77,6 +88,7 @@ def test_reports_page_renders_category_tabs():
     page_text = _page_text(at).lower()
     assert "profitability" in page_text
     assert "operations" in page_text
+    assert "inventory" in page_text
 
 
 def test_reports_page_shows_aggregated_mph_marker():

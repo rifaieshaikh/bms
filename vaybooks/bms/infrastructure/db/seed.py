@@ -102,6 +102,12 @@ DEFAULT_VENDOR_SERVICES = [
     ("Handwork", "Handwork Expense"),
 ]
 
+DEFAULT_PRODUCT_CATEGORIES = [
+    ("Fabric", "Fabrics and materials"),
+    ("Ready-made", "Finished ready-to-sell items"),
+    ("Accessories", "Accessories and add-ons"),
+]
+
 
 def run_seed(db):
     now = datetime.utcnow()
@@ -188,6 +194,21 @@ def run_seed(db):
                     "current_value": 0,
                 },
             )
+
+    for category_name, description in DEFAULT_PRODUCT_CATEGORIES:
+        if db.product_categories.find_one({"name": category_name}):
+            continue
+        _insert_ignoring_duplicates(
+            db.product_categories,
+            {
+                "_id": uuid4().hex,
+                "name": category_name,
+                "description": description,
+                "is_active": True,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
 
 
 def _insert_ignoring_duplicates(collection, document):

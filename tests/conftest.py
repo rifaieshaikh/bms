@@ -366,3 +366,84 @@ class FakeCounterRepository:
         self._counters[counter_name] += 1
         prefix = self._prefixes[counter_name]
         return f"{prefix}-{self._counters[counter_name]:04d}"
+
+
+class FakeProductCategoryRepository:
+    def __init__(self):
+        self._store: Dict[str, "ProductCategory"] = {}
+
+    def save(self, category):
+        self._store[category.id] = category
+        return category
+
+    def find_by_id(self, category_id: str):
+        return self._store.get(category_id)
+
+    def find_by_name(self, name: str):
+        name = (name or "").strip()
+        for category in self._store.values():
+            if category.name == name:
+                return category
+        return None
+
+    def list_all(self, active_only: bool = True):
+        if active_only:
+            return [c for c in self._store.values() if c.is_active]
+        return list(self._store.values())
+
+    def delete(self, category_id: str) -> None:
+        self._store.pop(category_id, None)
+
+
+class FakeInventoryProductRepository:
+    def __init__(self):
+        self._store: Dict[str, "InventoryProduct"] = {}
+
+    def save(self, product):
+        self._store[product.id] = product
+        return product
+
+    def find_by_id(self, product_id: str):
+        return self._store.get(product_id)
+
+    def find_by_sku(self, sku: str):
+        sku = (sku or "").strip()
+        for product in self._store.values():
+            if product.sku == sku:
+                return product
+        return None
+
+    def list_all(self, active_only: bool = True):
+        if active_only:
+            return [p for p in self._store.values() if p.is_active]
+        return list(self._store.values())
+
+    def list_by_category(self, category_id: str):
+        return [p for p in self._store.values() if p.category_id == category_id]
+
+    def count_by_category(self, category_id: str) -> int:
+        return len(self.list_by_category(category_id))
+
+    def search(self, query: str):
+        q = (query or "").strip().lower()
+        if not q:
+            return self.list_all()
+        return [
+            p for p in self._store.values()
+            if q in p.name.lower() or q in p.sku.lower()
+        ]
+
+
+class FakeStockMovementRepository:
+    def __init__(self):
+        self._store: Dict[str, "StockMovement"] = {}
+
+    def save(self, movement):
+        self._store[movement.id] = movement
+        return movement
+
+    def list_by_product(self, product_id: str):
+        return [m for m in self._store.values() if m.product_id == product_id]
+
+    def list_all(self):
+        return list(self._store.values())

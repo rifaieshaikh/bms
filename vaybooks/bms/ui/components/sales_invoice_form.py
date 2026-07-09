@@ -78,6 +78,7 @@ def default_line_item() -> dict[str, Any]:
         "qty": 1.0,
         "rate": 0.0,
         "discount": 0.0,
+        "product_id": None,
     }
 
 

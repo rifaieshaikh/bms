@@ -21,7 +21,7 @@ def _fmt_date(value) -> str:
     return str(value) if value else "—"
 
 
-def _line_items_table(line_items: list[dict]) -> pd.DataFrame:
+def _line_items_table(line_items: list[dict], inventory=None) -> pd.DataFrame:
     rows = []
     for item in line_items:
         desc = (item.get("description") or "").strip()
@@ -32,15 +32,22 @@ def _line_items_table(line_items: list[dict]) -> pd.DataFrame:
         discount = float(item.get("discount") or 0.0)
         gross = round(qty * rate, 2)
         discount = round(min(max(discount, 0.0), gross), 2)
-        rows.append(
-            {
-                "Description": desc,
-                "Qty": qty,
-                "Rate": rate,
-                "Discount": discount,
-                "Total": round(gross - discount, 2),
-            }
-        )
+        sku = ""
+        product_id = item.get("product_id")
+        if inventory and product_id:
+            product = inventory.get_product(str(product_id))
+            if product:
+                sku = product.sku
+        row = {
+            "Description": desc,
+            "Qty": qty,
+            "Rate": rate,
+            "Discount": discount,
+            "Total": round(gross - discount, 2),
+        }
+        if sku:
+            row["SKU"] = sku
+        rows.append(row)
     return pd.DataFrame(rows)
 
 
@@ -114,7 +121,8 @@ def render(services: dict) -> None:
     )
 
     st.subheader("Line items")
-    items_df = _line_items_table(parsed.get("line_items") or [])
+    inventory = services.get("inventory")
+    items_df = _line_items_table(parsed.get("line_items") or [], inventory)
     if items_df.empty:
         st.info("No line items recorded.")
     else:

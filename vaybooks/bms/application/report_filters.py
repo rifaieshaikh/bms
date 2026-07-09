@@ -144,3 +144,26 @@ class WorkerProductivityFilter:
 class LaborMphFilter:
     date_range: DateRange
     min_hours: Optional[float] = None
+
+
+@dataclass
+class StockOnHandFilter:
+    category_id: str = ""
+    active_only: bool = True
+    min_qty: Optional[float] = None
+    search: str = ""
+
+
+@dataclass
+class LowStockFilter:
+    threshold: float = 2.0
+    category_id: str = ""
+    include_out_of_stock: bool = True
+
+
+@dataclass
+class StockMovementsFilter:
+    date_range: DateRange
+    product_id: str = ""
+    category_id: str = ""
+    movement_type: str = ""

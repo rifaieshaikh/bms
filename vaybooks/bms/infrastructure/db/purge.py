@@ -21,6 +21,9 @@ BUSINESS_COLLECTIONS = (
     "expenses",
     "time_entries",
     "vouchers",
+    "product_categories",
+    "inventory_products",
+    "stock_movements",
 )
 
 DEFAULT_ACCOUNT_NAMES = {name for name, _, _ in DEFAULT_ACCOUNTS}

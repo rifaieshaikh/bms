@@ -9,7 +9,7 @@
     "stepsToExecute": [
       "Navigate to base URL",
       "Verify VayBooks branding in sidebar",
-      "Verify section labels Parties, Customization, Sales, Finance, and Settings",
+      "Verify section labels Parties, Customization, Sales, Inventory, Finance, and Settings",
       "Confirm no QA expected-result paragraphs under nav links"
     ],
     "expectedResult": "Sidebar shows VayBooks branding, section labels, and page links without QA boilerplate",
@@ -29,6 +29,7 @@
         { "action": "assertText", "value": "Parties" },
         { "action": "assertText", "value": "Customization" },
         { "action": "assertText", "value": "Sales" },
+        { "action": "assertText", "value": "Inventory" },
         { "action": "assertText", "value": "Finance" },
         { "action": "assertText", "value": "Settings" },
         { "action": "assertText", "value": "Dashboard" }
