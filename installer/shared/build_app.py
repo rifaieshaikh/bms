@@ -25,14 +25,35 @@ MONGODB_MSI_URL = (
     "https://fastdl.mongodb.org/windows/mongodb-windows-x86_64-7.0.14-signed.msi"
 )
 
-EXCLUDE_PATTERNS = {
+EXCLUDE_DIRS = {
     "tests",
     "__pycache__",
     ".pytest_cache",
     ".git",
     "venv",
-    ".streamlit/secrets.toml",
+    "installer",
+    "dev-orchestrator-output",
+    "qa-output",
+    "tasks",
+    ".github",
 }
+
+
+def _ignore_app_copy(_dir: str, names: list[str]) -> set[str]:
+    return {name for name in names if name in EXCLUDE_DIRS}
+
+
+def _configure_embeddable_pth(python_dir: Path) -> None:
+    pth_files = list(python_dir.glob("python*._pth"))
+    if not pth_files:
+        return
+    pth_file = pth_files[0]
+    lines = [line.strip() for line in pth_file.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if not any("site-packages" in line for line in lines):
+        lines.append("Lib\\site-packages")
+    if not any(line.startswith("import site") for line in lines):
+        lines.append("import site")
+    pth_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def _read_app_version() -> str:
@@ -59,36 +80,22 @@ def setup_embedded_python(output: Path) -> Path:
     with zipfile.ZipFile(embed_zip) as zf:
         zf.extractall(python_dir)
 
-    pth_file = python_dir / "python311._pth"
-    if pth_file.exists():
-        content = pth_file.read_text(encoding="utf-8")
-        if "import site" not in content:
-            pth_file.write_text(content.rstrip() + "\nimport site\n", encoding="utf-8")
-
     site_packages = python_dir / "Lib" / "site-packages"
     site_packages.mkdir(parents=True, exist_ok=True)
+    _configure_embeddable_pth(python_dir)
 
     pip_bootstrap = output / "downloads" / "get-pip.py"
     if not pip_bootstrap.exists():
         download_file("https://bootstrap.pypa.io/get-pip.py", pip_bootstrap)
 
-    subprocess.check_call(
-        [str(python_dir / "python.exe"), str(pip_bootstrap), "--no-warn-script-location"],
-        cwd=python_dir,
-    )
+    py_exe = str(python_dir / "python.exe")
+    subprocess.check_call([py_exe, str(pip_bootstrap), "--no-warn-script-location"], cwd=python_dir)
+    subprocess.check_call([py_exe, "-m", "pip", "--version"])
 
     requirements = [BMS_DIR / "requirements.txt", BMS_DIR / "requirements-desktop.txt"]
     for req in requirements:
         subprocess.check_call(
-            [
-                str(python_dir / "python.exe"),
-                "-m",
-                "pip",
-                "install",
-                "-r",
-                str(req),
-                "--no-warn-script-location",
-            ]
+            [py_exe, "-m", "pip", "install", "-r", str(req), "--no-warn-script-location"]
         )
     return python_dir
 
@@ -100,8 +107,11 @@ def copy_app(output: Path) -> Path:
     shutil.copytree(
         BMS_DIR,
         app_dir,
-        ignore=shutil.ignore_patterns(*EXCLUDE_PATTERNS),
+        ignore=_ignore_app_copy,
     )
+    secrets = app_dir / ".streamlit" / "secrets.toml"
+    if secrets.exists():
+        secrets.unlink()
     secrets_example = app_dir / ".streamlit" / "secrets.toml.example"
     secrets = app_dir / ".streamlit" / "secrets.toml"
     if secrets_example.exists() and not secrets.exists():
