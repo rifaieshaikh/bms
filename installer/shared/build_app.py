@@ -7,7 +7,8 @@ import argparse
 import re
 import shutil
 import subprocess
-import sys
+import time
+
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -63,10 +64,18 @@ def _read_app_version() -> str:
     return match.group(1) if match else "1.0.0"
 
 
-def download_file(url: str, dest: Path) -> None:
+def download_file(url: str, dest: Path, retries: int = 3) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
-    print(f"Downloading {url} -> {dest}")
-    urllib.request.urlretrieve(url, dest)
+    for attempt in range(1, retries + 1):
+        try:
+            print(f"Downloading {url} -> {dest} (attempt {attempt}/{retries})")
+            urllib.request.urlretrieve(url, dest)
+            return
+        except Exception as exc:
+            if attempt == retries:
+                raise
+            print(f"Download failed: {exc}; retrying in {attempt * 5}s")
+            time.sleep(attempt * 5)
 
 
 def setup_embedded_python(output: Path) -> Path:
