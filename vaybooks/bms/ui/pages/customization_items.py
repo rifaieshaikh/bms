@@ -1,9 +1,10 @@
 import streamlit as st
 
+from vaybooks.bms.domain.orders.order_refs import compact_order_ref
 from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.components.item_detail_panel import customization_item_detail_panel
 from vaybooks.bms.ui.components.list_view import render_list
-from vaybooks.bms.ui.styles import render_card_grid
+from vaybooks.bms.ui.styles import render_card_grid, status_badge
 from vaybooks.bms.ui.list_schemas import ITEMS
 
 
@@ -41,13 +42,12 @@ def _render_item_editor(services: dict, order_id: str, item_id: str):
 def _item_summary_card(services: dict, item: dict, index: int):
     with st.container(border=True):
         st.markdown(f"**{item['bill_number']}**")
-        st.write(item["description"] or "—")
+        st.caption(item["description"] or "—")
         st.caption(
-            f"{item['customer_name']} | {item['phone_number']} | "
-            f"Order {item['order_number']}"
+            f"{item['customer_name']} · {item['phone_number']} · "
+            f"{compact_order_ref(item['order_number'])}"
         )
-        st.write(f"Item status: {item['item_status']}")
-        st.write(f"Order status: {item['order_status']}")
+        st.markdown(status_badge(item["item_status"]), unsafe_allow_html=True)
 
         if item.get("mph_snapshot_at"):
             mph = item.get("margin_per_hour")
@@ -68,7 +68,7 @@ def _item_summary_card(services: dict, item: dict, index: int):
             )
 
         if st.button(
-            "View",
+            "Order",
             key=f"item_view_{index}_{item['item_id']}",
             use_container_width=True,
         ):
@@ -103,11 +103,7 @@ def render(services: dict):
 
 def render_item_detail(services: dict):
     item_id = navigation.current_detail_id("item_detail")
-    order_id = st.query_params.get("order_id") or st.session_state.get(
-        "_item_detail_order_id"
-    )
-    if order_id:
-        st.session_state["_item_detail_order_id"] = order_id
+    order_id = navigation.current_detail_param("item_detail", "order_id")
     if not item_id or not order_id:
         st.error("No item selected.")
         if st.button("← Back to items"):

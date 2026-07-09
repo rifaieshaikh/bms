@@ -4,10 +4,10 @@ import streamlit as st
 
 from vaybooks.bms.domain.shared.enums import VoucherType
 from vaybooks.bms.ui.components.list_view import render_list
+from vaybooks.bms.ui.components.voucher_card import VoucherEditAction, voucher_cards
 from vaybooks.bms.ui.dialog_utils import clear_all_dialog_flags
 from vaybooks.bms.ui.list_schemas import RECEIPTS
 from vaybooks.bms.ui.pages import accounts as acc
-from vaybooks.bms.ui.styles import render_card_grid
 
 
 def _load(services, filters, sort):
@@ -18,16 +18,20 @@ def _load(services, filters, sort):
 
 
 def _cards(page_vouchers, services):
-    def _render(v, _i):
-        with st.container(border=True):
-            st.markdown(f"**{v.voucher_number}** — ₹{v.total_debit:,.0f}")
-            st.caption(f"{acc._fmt_date(v.voucher_date)} | {v.description or '—'}")
-            if st.button("Edit", key=f"edit_rcpt_{v.id}",
-                         use_container_width=True):
-                st.session_state[acc.RCPT] = v.id
-                st.rerun()
+    def _edit(v):
+        return {
+            "edit": VoucherEditAction(
+                flag_key=acc.RCPT,
+                button_key=f"edit_rcpt_{v.id}",
+            )
+        }
 
-    render_card_grid(page_vouchers, _render, suffix="receipts")
+    voucher_cards(
+        page_vouchers,
+        suffix="receipts",
+        show_type_badge=False,
+        card_builder=_edit,
+    )
 
 
 def render(services: dict):

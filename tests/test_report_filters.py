@@ -1,10 +1,13 @@
 from datetime import date, datetime
+from unittest.mock import MagicMock
 
-from vaybooks.bms.application.report_app_service import ReportAppService
 from vaybooks.bms.application.report_filters import (
     DateRange,
     ItemProfitabilityFilter,
     OrderMphFilter,
+)
+from vaybooks.bms.application.reports.profitability_report_service import (
+    ProfitabilityReportService,
 )
 from vaybooks.bms.infrastructure.db.bson_utils import as_date
 
@@ -49,7 +52,7 @@ def test_mph_report_rolls_up_by_order():
         },
     ]
     repo = _FakeProfitabilityRepo(items)
-    service = ReportAppService(repo)
+    service = ProfitabilityReportService(repo)
     filters = OrderMphFilter(
         date_range=DateRange(date(2026, 1, 1), date(2026, 1, 31)),
     )
@@ -67,7 +70,7 @@ def test_mph_report_rolls_up_by_order():
 
 def test_item_profitability_passes_date_range_to_repo():
     repo = _FakeProfitabilityRepo([])
-    service = ReportAppService(repo)
+    service = ProfitabilityReportService(repo)
     start, end = date(2026, 3, 1), date(2026, 3, 15)
     service.item_profitability_report(
         ItemProfitabilityFilter(date_range=DateRange(start, end))
@@ -92,7 +95,7 @@ def test_mph_report_min_mph_filter():
             "delivered_on": date(2026, 1, 1),
         },
     ]
-    service = ReportAppService(_FakeProfitabilityRepo(items))
+    service = ProfitabilityReportService(_FakeProfitabilityRepo(items))
     rows = service.mph_report(
         OrderMphFilter(
             date_range=DateRange(date(2026, 1, 1), date(2026, 1, 31)),
@@ -120,7 +123,7 @@ def test_mph_report_min_mph_inclusive_at_boundary():
             "delivered_on": date(2026, 1, 1),
         },
     ]
-    service = ReportAppService(_FakeProfitabilityRepo(items))
+    service = ProfitabilityReportService(_FakeProfitabilityRepo(items))
     rows = service.mph_report(
         OrderMphFilter(
             date_range=DateRange(date(2026, 1, 1), date(2026, 1, 31)),

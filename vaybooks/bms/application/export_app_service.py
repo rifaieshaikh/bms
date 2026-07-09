@@ -1,5 +1,6 @@
 import json
 from datetime import date, datetime
+from enum import Enum
 from io import StringIO
 from typing import Any
 
@@ -8,35 +9,46 @@ from bson.decimal128 import Decimal128
 
 from vaybooks.bms.infrastructure.repositories.mongo_report_repository import MongoReportRepository
 
+try:
+    from bson.int64 import Int64
+except ImportError:  # pragma: no cover - older pymongo
+    Int64 = ()  # type: ignore[misc, assignment]
+
 
 def _serialize_bson(value: Any) -> Any:
     """Recursively convert BSON/Python types to JSON-serializable primitives."""
+    if value is None:
+        return None
     if isinstance(value, ObjectId):
         return str(value)
+    if Int64 and isinstance(value, Int64):
+        return int(value)
     if isinstance(value, datetime):
         return value.isoformat()
     if isinstance(value, date):
         return value.isoformat()
     if isinstance(value, Decimal128):
         return str(value)
+    if isinstance(value, Enum):
+        return _serialize_bson(value.value)
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
     if isinstance(value, dict):
         return {key: _serialize_bson(item) for key, item in value.items()}
-    if isinstance(value, list):
+    if isinstance(value, (list, tuple)):
         return [_serialize_bson(item) for item in value]
     return value
 
 
 def default_serializer(value: Any) -> Any:
     """Serialize BSON/Python types for CSV/JSON export without leaking raw reprs."""
-    if isinstance(value, (ObjectId, datetime, date, Decimal128, dict, list)):
-        return _serialize_bson(value)
-    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+    return _serialize_bson(value)
 
 
 def _serialize_cell(value: Any) -> str:
     if value is None:
         return ""
-    serialized = default_serializer(value)
+    serialized = _serialize_bson(value)
     if isinstance(serialized, (dict, list)):
         return json.dumps(serialized)
     return str(serialized)

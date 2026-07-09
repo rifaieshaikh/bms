@@ -6,6 +6,7 @@ import streamlit as st
 from vaybooks.bms.domain.shared.enums import AccountType, VoucherType
 from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.components.list_view import render_list
+from vaybooks.bms.ui.components.voucher_card import invoice_gross_amount
 from vaybooks.bms.ui.components.voucher_form import voucher_form
 from vaybooks.bms.ui.dialog_utils import (
     clear_all_dialog_flags,
@@ -16,7 +17,6 @@ from vaybooks.bms.ui.list_schemas import ACCOUNTS
 from vaybooks.bms.ui.pagination import (
     CARD_PAGE_SIZE,
     TRIAL_BALANCE_PAGE_SIZE,
-    VOUCHER_PAGE_SIZE,
     paginate_list,
     render_page_controls,
 )
@@ -61,15 +61,8 @@ def _fmt_date(value) -> str:
     return value.strftime("%Y-%m-%d") if hasattr(value, "strftime") else str(value)
 
 
-def _voucher_matches(voucher, query: str) -> bool:
-    """Match a voucher against a free-text query on account name, number or notes."""
-    if not query:
-        return True
-    if query in (voucher.voucher_number or "").lower():
-        return True
-    if query in (voucher.description or "").lower():
-        return True
-    return any(query in (ln.account_name or "").lower() for ln in voucher.lines)
+def _invoice_gross_amount(voucher) -> float:
+    return invoice_gross_amount(voucher)
 
 
 # --- dialogs -----------------------------------------------------------------
@@ -391,10 +384,6 @@ def _salary_dialog(accounting_service):
         st.rerun()
 
 
-def _invoice_gross_amount(voucher) -> float:
-    return max((line.credit_amount for line in voucher.lines), default=0.0)
-
-
 def _invoice_discount_amount(voucher, discount_account_id: str | None) -> float:
     if not discount_account_id:
         return 0.0
@@ -648,267 +637,6 @@ def _render_accounts_tab(accounting_service):
         page, total_pages, len(accounts),
         page_key="acc_page", prev_key="acc_prev", next_key="acc_next",
         label="accounts",
-    )
-
-
-def _render_voucher_list(vouchers, flag_key, edit_prefix, query="", page_key="acc_voucher_page"):
-    vouchers = [v for v in vouchers if _voucher_matches(v, query)]
-    if not vouchers:
-        st.caption("No matching entries." if query else "Nothing recorded yet.")
-        return
-    sorted_vouchers = sorted(vouchers, key=lambda x: x.voucher_date, reverse=True)
-    page_vouchers, page, total_pages = paginate_list(
-        sorted_vouchers,
-        page_key=page_key,
-        page_size=VOUCHER_PAGE_SIZE,
-        filter_key=f"{page_key}_filter",
-        filter_value=query,
-    )
-    for v in page_vouchers:
-        amount = v.total_debit
-        with st.container(border=True):
-            st.markdown(f"**{v.voucher_number}** — ₹{amount:,.0f}")
-            st.caption(f"{_fmt_date(v.voucher_date)} | {v.description or '—'}")
-            if st.button("Edit", key=f"{edit_prefix}_{v.id}"):
-                st.session_state[flag_key] = v.id
-                st.rerun()
-    render_page_controls(
-        page, total_pages, len(sorted_vouchers),
-        page_key=page_key,
-        prev_key=f"{page_key}_prev",
-        next_key=f"{page_key}_next",
-        label="entries",
-    )
-
-
-def _render_invoices_tab(accounting_service):
-    btns = st.columns(2)
-    if btns[0].button(
-        "+ Record Customization Invoice", type="primary", key="btn_rec_cust_inv"
-    ):
-        _clear_other_invoice_dialog_flags(INV_CUST)
-        _customization_invoice_dialog(accounting_service)
-    if btns[1].button("+ Record Sales Invoice", type="primary", key="btn_rec_sales_inv"):
-        _clear_other_invoice_dialog_flags(INV_SALES)
-        _sales_invoice_dialog(accounting_service)
-
-    query = st.text_input(
-        "Search invoices",
-        key="inv_search",
-        placeholder="Customer, voucher no. or notes",
-    ).strip().lower()
-
-    customization = accounting_service.list_vouchers_by_type(
-        VoucherType.CUSTOMIZATION_INVOICE
-    )
-    sales = accounting_service.list_vouchers_by_type(VoucherType.SALES_INVOICE)
-    combined = [v for v in customization + sales if _voucher_matches(v, query)]
-    if not combined:
-        st.caption("No matching invoices." if query else "No invoices recorded yet.")
-        return
-
-    sorted_combined = sorted(combined, key=lambda x: x.voucher_date, reverse=True)
-    page_vouchers, page, total_pages = paginate_list(
-        sorted_combined,
-        page_key="acc_inv_page",
-        page_size=VOUCHER_PAGE_SIZE,
-        filter_key="inv_search",
-        filter_value=query,
-    )
-    for v in page_vouchers:
-        gross = _invoice_gross_amount(v)
-        customer_name = v.lines[0].account_name if v.lines else "—"
-        is_customization = v.voucher_type == VoucherType.CUSTOMIZATION_INVOICE
-        tag = "Customization" if is_customization else "Sales"
-        flag_key = INV_CUST if is_customization else INV_SALES
-        edit_prefix = "edit_cust_inv" if is_customization else "edit_sales_inv"
-        order_ref = f" · Order linked" if v.reference_order_id else ""
-        with st.container(border=True):
-            st.markdown(f"**{v.voucher_number}** — ₹{gross:,.0f}  ·  _{tag}_")
-            st.caption(
-                f"{_fmt_date(v.voucher_date)} | Customer: {customer_name}{order_ref}"
-            )
-            if v.description:
-                st.caption(v.description)
-            if st.button("Edit", key=f"{edit_prefix}_{v.id}"):
-                _clear_other_invoice_dialog_flags(flag_key)
-                st.session_state[flag_key] = v.id
-                st.rerun()
-
-    render_page_controls(
-        page, total_pages, len(sorted_combined),
-        page_key="acc_inv_page", prev_key="acc_inv_prev", next_key="acc_inv_next",
-        label="invoices",
-    )
-
-
-def _render_receipts_tab(accounting_service):
-    if st.button("+ Record Receipt", type="primary", key="btn_rec_rcpt"):
-        clear_all_dialog_flags()
-        _receipt_dialog(accounting_service)
-    query = st.text_input(
-        "Search by account", key="rcpt_search",
-        placeholder="Account name, voucher no. or notes",
-    ).strip().lower()
-    _render_voucher_list(
-        accounting_service.list_vouchers_by_type(VoucherType.RECEIPT),
-        RCPT, "edit_rcpt", query=query, page_key="acc_rcpt_page",
-    )
-
-
-def _render_payments_tab(services):
-    accounting_service = services["accounting"]
-    service_config = services["vendor_services"]
-    btns = st.columns(2)
-    if btns[0].button("+ Record Vendor Payment", type="primary", key="btn_rec_pay"):
-        _clear_other_payment_dialog_flags(PAY)
-        _payment_dialog(services)
-    if btns[1].button("+ Record Salary", type="primary", key="btn_rec_sal"):
-        _clear_other_payment_dialog_flags(SAL)
-        _salary_dialog(accounting_service)
-    query = st.text_input(
-        "Search by vendor, service or account", key="pay_search",
-        placeholder="Vendor, service, voucher no. or notes",
-    ).strip().lower()
-
-    service_names = {
-        s.id: s.service_name for s in service_config.list_services(active_only=False)
-    }
-    payments = accounting_service.list_vouchers_by_type(VoucherType.VENDOR_PAYMENT)
-    salaries = accounting_service.list_vouchers_by_type(VoucherType.SALARY_PAYMENT)
-    combined = [
-        v
-        for v in payments + salaries
-        if _voucher_matches(v, query)
-        or query in (service_names.get(v.reference_service_id, "")).lower()
-    ]
-    if not combined:
-        st.caption("No matching payments." if query else "No payments recorded yet.")
-        return
-    sorted_combined = sorted(combined, key=lambda x: x.voucher_date, reverse=True)
-    page_vouchers, page, total_pages = paginate_list(
-        sorted_combined,
-        page_key="acc_pay_page",
-        page_size=VOUCHER_PAGE_SIZE,
-        filter_key="pay_search",
-        filter_value=query,
-    )
-    for v in page_vouchers:
-        # Both types share line order: [expense Dr, party Cr, party Dr, paying Cr].
-        amount = v.lines[0].debit_amount if v.lines else 0.0
-        party_name = v.lines[1].account_name if len(v.lines) > 1 else "—"
-        is_salary = v.voucher_type == VoucherType.SALARY_PAYMENT
-        flag_key = SAL if is_salary else PAY
-        edit_prefix = "edit_sal" if is_salary else "edit_pay"
-        tag = "Salary" if is_salary else "Vendor Payment"
-        service_label = None if is_salary else service_names.get(v.reference_service_id)
-        with st.container(border=True):
-            st.markdown(f"**{v.voucher_number}** — ₹{amount:,.0f}  ·  _{tag}_")
-            st.caption(f"{'Account' if is_salary else 'Vendor'}: {party_name}")
-            if service_label:
-                st.caption(f"Service: {service_label}")
-            st.caption(f"{_fmt_date(v.voucher_date)} | {v.description or '—'}")
-            if st.button("Edit", key=f"{edit_prefix}_{v.id}"):
-                st.session_state[flag_key] = v.id
-                st.rerun()
-
-    render_page_controls(
-        page, total_pages, len(sorted_combined),
-        page_key="acc_pay_page", prev_key="acc_pay_prev", next_key="acc_pay_next",
-        label="payments",
-    )
-
-
-def _render_voucher_tab(accounting_service):
-    st.subheader("Voucher List")
-    if st.button("+ Create Voucher", type="primary", key="btn_create_voucher"):
-        clear_all_dialog_flags()
-        _journal_dialog(accounting_service)
-
-    query = st.text_input(
-        "Search vouchers",
-        key="vch_search",
-        placeholder="Voucher number, type or description",
-    ).strip().lower()
-
-    vouchers = accounting_service.list_vouchers()
-    if query:
-        vouchers = [v for v in vouchers if _voucher_matches(v, query)]
-    if not vouchers:
-        st.caption("No matching vouchers." if query else "No vouchers recorded yet.")
-        return
-
-    sorted_vouchers = sorted(vouchers, key=lambda x: x.voucher_date, reverse=True)
-    page_vouchers, page, total_pages = paginate_list(
-        sorted_vouchers,
-        page_key="acc_vch_page",
-        page_size=VOUCHER_PAGE_SIZE,
-        filter_key="vch_search",
-        filter_value=query,
-    )
-    for v in page_vouchers:
-        amount = v.total_debit
-        vtype = v.voucher_type.value if hasattr(v.voucher_type, "value") else str(v.voucher_type)
-        order_ref = " · Order linked" if v.reference_order_id else ""
-        with st.container(border=True):
-            st.markdown(f"**{v.voucher_number}** — ₹{amount:,.0f}  ·  _{vtype}_")
-            st.caption(f"{_fmt_date(v.voucher_date)} | {v.description or '—'}{order_ref}")
-            if v.voucher_type == VoucherType.JOURNAL:
-                for line in v.lines:
-                    side = (
-                        f"Dr ₹{line.debit_amount:,.0f}"
-                        if line.debit_amount
-                        else f"Cr ₹{line.credit_amount:,.0f}"
-                    )
-                    st.caption(f"• {line.account_name}: {side}")
-
-    render_page_controls(
-        page, total_pages, len(sorted_vouchers),
-        page_key="acc_vch_page", prev_key="acc_vch_prev", next_key="acc_vch_next",
-        label="vouchers",
-    )
-
-
-def _render_journal_tab(accounting_service):
-    if st.button("+ New Journal Entry", type="primary", key="btn_new_jrnl"):
-        clear_all_dialog_flags()
-        _journal_dialog(accounting_service)
-    query = st.text_input(
-        "Search by account", key="jrnl_search",
-        placeholder="Account name, voucher no. or notes",
-    ).strip().lower()
-    journals = [
-        v
-        for v in accounting_service.list_vouchers_by_type(VoucherType.JOURNAL)
-        if _voucher_matches(v, query)
-    ]
-    if not journals:
-        st.caption("No matching entries." if query else "No journal entries yet.")
-        return
-    sorted_journals = sorted(journals, key=lambda x: x.voucher_date, reverse=True)
-    page_journals, page, total_pages = paginate_list(
-        sorted_journals,
-        page_key="acc_jrnl_page",
-        page_size=VOUCHER_PAGE_SIZE,
-        filter_key="jrnl_search",
-        filter_value=query,
-    )
-    for v in page_journals:
-        with st.container(border=True):
-            st.markdown(f"**{v.voucher_number}** — ₹{v.total_debit:,.0f}")
-            st.caption(f"{_fmt_date(v.voucher_date)} | {v.description or '—'}")
-            for line in v.lines:
-                side = (
-                    f"Dr ₹{line.debit_amount:,.0f}"
-                    if line.debit_amount
-                    else f"Cr ₹{line.credit_amount:,.0f}"
-                )
-                st.caption(f"• {line.account_name}: {side}")
-
-    render_page_controls(
-        page, total_pages, len(sorted_journals),
-        page_key="acc_jrnl_page", prev_key="acc_jrnl_prev", next_key="acc_jrnl_next",
-        label="entries",
     )
 
 

@@ -22,6 +22,7 @@ from vaybooks.bms.ui.dialog_utils import (
     register_armed_dialog,
 )
 from vaybooks.bms.ui.session_keys import ACTIVITY_SKIP_NOTICE
+from vaybooks.bms.ui.styles import metric_grid, panel, render_card_grid, status_badge
 
 
 def _money(value: float) -> str:
@@ -87,44 +88,65 @@ def _expense_source_for_activity(services: dict, activity_id: str) -> str:
 
 # --- order info card ---------------------------------------------------------
 def _render_order_card(order, item, invoices, deliveries):
-    with st.container(border=True):
-        head = st.columns([2, 1])
-        head[0].markdown(f"### {item.bill_number}")
-        head[1].markdown(f"**Item status:** {item.item_status.value}")
-        st.write(item.description or "_No description_")
-        st.divider()
-        info = st.columns(4)
-        info[0].caption("Order")
-        info[0].write(order.order_number)
-        info[1].caption("Customer")
-        info[1].write(order.customer_name)
-        info[2].caption("Mobile")
-        info[2].write(order.phone_number)
-        info[3].caption("Advance")
-        info[3].write(_money(order.advance_amount))
+    with panel(f"item_head_{item.item_id}"):
+        with st.container(border=True):
+            head = st.columns([3, 1])
+            with head[0]:
+                st.markdown(f"### {item.bill_number}")
+                st.caption(item.description or "No description")
+            with head[1]:
+                st.markdown(
+                    status_badge(item.item_status.value), unsafe_allow_html=True
+                )
 
-        flags = st.columns(3)
-        acts_done = order.item_activities_complete(item.item_id)
-        flags[0].write(("✅ " if acts_done else "⏳ ") + ("Activities done" if acts_done else "Activities pending"))
-        invoiced = bill_is_invoiced(item.item_id, invoices)
-        flags[1].write(("✅ " if invoiced else "❌ ") + ("Invoiced" if invoiced else "Not invoiced"))
-        delivered = bill_is_delivered(item.item_id, deliveries)
-        flags[2].write(("✅ " if delivered else "❌ ") + ("Delivered" if delivered else "Not delivered"))
+            acts_done = order.item_activities_complete(item.item_id)
+            invoiced = bill_is_invoiced(item.item_id, invoices)
+            delivered = bill_is_delivered(item.item_id, deliveries)
+            badges = " ".join(
+                [
+                    status_badge(
+                        "Activities done" if acts_done else "Activities pending",
+                        "green" if acts_done else "orange",
+                    ),
+                    status_badge(
+                        "Invoiced" if invoiced else "Not invoiced",
+                        "green" if invoiced else "gray",
+                    ),
+                    status_badge(
+                        "Delivered" if delivered else "Not delivered",
+                        "green" if delivered else "gray",
+                    ),
+                ]
+            )
+            st.markdown(badges, unsafe_allow_html=True)
 
-        _render_item_mph(item, invoiced, delivered)
+    metric_grid(
+        [
+            ("Order", order.order_number),
+            ("Customer", order.customer_name),
+            ("Mobile", order.phone_number),
+            ("Advance", _money(order.advance_amount)),
+        ],
+        suffix=f"item_info_{item.item_id}",
+    )
+
+    _render_item_mph(item, invoiced, delivered)
 
 
 def _render_item_mph(item, invoiced: bool, delivered: bool):
     """Show the frozen per-item profitability snapshot."""
-    st.divider()
     if item.mph_snapshot_at:
         mph = item.margin_per_hour
         mph_txt = f"{_money(mph)}/h" if mph is not None else "—"
-        m = st.columns(4)
-        m[0].metric("Revenue (net)", _money(item.sell_amount))
-        m[1].metric("Margin", _money(item.margin_amount or 0))
-        m[2].metric("In-house hours", f"{item.in_house_hours:.2f}")
-        m[3].metric("MPH", mph_txt)
+        metric_grid(
+            [
+                ("Revenue (net)", _money(item.sell_amount)),
+                ("Margin", _money(item.margin_amount or 0)),
+                ("In-house hours", f"{item.in_house_hours:.2f}"),
+                ("MPH", mph_txt),
+            ],
+            suffix=f"item_mph_{item.item_id}",
+        )
         st.caption(
             "Item MPH frozen on delivery "
             f"({item.mph_snapshot_at:%d %b %Y})."
@@ -314,6 +336,8 @@ def _complete_activity_body(services, order, item, activity, key_prefix, flag_ke
                     expense_source=source, purchase_price=rate, selling_price=rate,
                     quantity=qty, bill_id=item.item_id, activity_id=activity.activity_id,
                     notes=notes,
+                    linked_time_minutes=minutes if is_service else 0,
+                    linked_time_hours=hours if is_service else 0.0,
                 )
                 services["orders"].complete_activity(
                     activity.order_activity_id, "Staff", add_expense=False
@@ -554,15 +578,13 @@ def _render_activity_management(services, order, item, key_prefix, allow_dialogs
         st.caption("No activities on this item yet.")
         return
 
-    cards_per_row = 3
-    for start in range(0, len(activities), cards_per_row):
-        row = activities[start : start + cards_per_row]
-        cols = st.columns(cards_per_row)
-        for col, activity in zip(cols, row):
-            with col:
-                _render_activity_card(
-                    services, order, item, activity, key_prefix, allow_dialogs, locked
-                )
+    render_card_grid(
+        activities,
+        lambda activity, _i: _render_activity_card(
+            services, order, item, activity, key_prefix, allow_dialogs, locked
+        ),
+        suffix=f"acts_{key_prefix}",
+    )
 
 
 # --- time dialogs / management ----------------------------------------------
@@ -572,22 +594,18 @@ def _render_time_summary(entries, item_activities_list):
     for e in entries:
         totals[e.activity_name] = totals.get(e.activity_name, 0) + e.duration_minutes
     total_minutes = sum(totals.values())
-    summary_items = list(totals.items())
-    per_row = 3
-    if summary_items:
-        for start in range(0, len(summary_items), per_row):
-            row = summary_items[start : start + per_row]
-            cols = st.columns(per_row)
-            for col, (name, minutes) in zip(cols, row):
-                with col:
-                    with st.container(border=True):
-                        st.caption(name)
-                        st.markdown(f"**{minutes_to_hours(minutes):.2f} h**")
-                        st.caption(f"{minutes} min")
-    with st.container(border=True):
-        st.caption("Total time")
-        st.markdown(f"### {minutes_to_hours(total_minutes):.2f} h")
-        st.caption(f"{total_minutes} min across {len(entries)} entries")
+    metrics = [
+        (name, f"{minutes_to_hours(minutes):.2f} h", f"{minutes} min")
+        for name, minutes in totals.items()
+    ]
+    metrics.append(
+        (
+            "Total time",
+            f"{minutes_to_hours(total_minutes):.2f} h",
+            f"{total_minutes} min across {len(entries)} entries",
+        )
+    )
+    metric_grid(metrics, suffix="time_summary")
 
 
 def _render_time_management(services, order, item, key_prefix, allow_dialogs):
@@ -632,34 +650,32 @@ def _render_time_management(services, order, item, key_prefix, allow_dialogs):
     if not entries:
         st.caption("No time entries yet.")
         return
-    per_row = 2
-    for start in range(0, len(entries), per_row):
-        row = entries[start : start + per_row]
-        cols = st.columns(per_row)
-        for col, entry in zip(cols, row):
-            with col:
-                with st.container(border=True):
-                    st.markdown(f"**{entry.activity_name}**")
-                    st.write(f"{entry.work_date} | {entry.start_time}-{entry.end_time}")
-                    st.caption(f"{entry.duration_minutes} min · {entry.worker_name or '—'}")
-                    if entry.notes:
-                        st.caption(entry.notes)
-                    acts = st.columns(2)
-                    if acts[0].button("Edit", key=f"edit_time_{entry.id}", use_container_width=True):
-                        if allow_dialogs:
-                            clear_all_dialog_flags()
-                            flag = _time_flag_key(key_prefix)
-                            st.session_state[flag] = entry.id
-                            register_armed_dialog(flag)
-                        else:
-                            st.session_state[f"inline_time_{key_prefix}"] = entry.id
-                        st.rerun()
-                    if acts[1].button("Delete", key=f"del_time_{entry.id}", use_container_width=True):
-                        try:
-                            time_service.delete_time_entry(entry.id)
-                            st.rerun()
-                        except Exception as exc:
-                            st.error(str(exc))
+
+    def _entry_card(entry, _i):
+        with st.container(border=True):
+            st.markdown(f"**{entry.activity_name}**")
+            st.write(f"{entry.work_date} | {entry.start_time}-{entry.end_time}")
+            st.caption(f"{entry.duration_minutes} min · {entry.worker_name or '—'}")
+            if entry.notes:
+                st.caption(entry.notes)
+            acts = st.columns(2)
+            if acts[0].button("Edit", key=f"edit_time_{entry.id}", use_container_width=True):
+                if allow_dialogs:
+                    clear_all_dialog_flags()
+                    flag = _time_flag_key(key_prefix)
+                    st.session_state[flag] = entry.id
+                    register_armed_dialog(flag)
+                else:
+                    st.session_state[f"inline_time_{key_prefix}"] = entry.id
+                st.rerun()
+            if acts[1].button("Delete", key=f"del_time_{entry.id}", use_container_width=True):
+                try:
+                    time_service.delete_time_entry(entry.id)
+                    st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
+
+    render_card_grid(entries, _entry_card, suffix=f"time_{key_prefix}")
 
 
 # --- expense dialogs / management -------------------------------------------
@@ -757,21 +773,11 @@ def _render_expense_summary(expenses):
         label = e.activity_name or "Unassigned"
         totals[label] = totals.get(label, 0) + e.total_purchase_price
     grand_total = sum(totals.values())
-    summary_items = list(totals.items())
-    per_row = 3
-    if summary_items:
-        for start in range(0, len(summary_items), per_row):
-            row = summary_items[start : start + per_row]
-            cols = st.columns(per_row)
-            for col, (label, amount) in zip(cols, row):
-                with col:
-                    with st.container(border=True):
-                        st.caption(label)
-                        st.markdown(f"**{_money(amount)}**")
-    with st.container(border=True):
-        st.caption("Total expense")
-        st.markdown(f"### {_money(grand_total)}")
-        st.caption(f"{len(expenses)} entries")
+    metrics = [(label, _money(amount)) for label, amount in totals.items()]
+    metrics.append(
+        ("Total expense", _money(grand_total), f"{len(expenses)} entries")
+    )
+    metric_grid(metrics, suffix="exp_summary")
 
 
 def _render_expense_management(services, order, item, key_prefix, allow_dialogs):
@@ -810,37 +816,35 @@ def _render_expense_management(services, order, item, key_prefix, allow_dialogs)
     if not expenses:
         st.caption("No expenses yet.")
         return
-    per_row = 2
-    for start in range(0, len(expenses), per_row):
-        row = expenses[start : start + per_row]
-        cols = st.columns(per_row)
-        for col, expense in zip(cols, row):
-            with col:
-                with st.container(border=True):
-                    st.markdown(f"**{expense.expense_name}**")
-                    st.caption(expense.activity_name or "Unassigned")
-                    st.write(
-                        f"{_money(expense.purchase_price)} × {expense.quantity:g} = "
-                        f"**{_money(expense.total_purchase_price)}**"
-                    )
-                    if expense.notes:
-                        st.caption(expense.notes)
-                    acts = st.columns(2)
-                    if acts[0].button("Edit", key=f"edit_exp_{expense.id}", use_container_width=True):
-                        if allow_dialogs:
-                            clear_all_dialog_flags()
-                            flag = _expense_flag_key(key_prefix)
-                            st.session_state[flag] = expense.id
-                            register_armed_dialog(flag)
-                        else:
-                            st.session_state[f"inline_exp_{key_prefix}"] = expense.id
-                        st.rerun()
-                    if acts[1].button("Delete", key=f"del_exp_{expense.id}", use_container_width=True):
-                        try:
-                            expense_service.delete_expense(expense.id)
-                            st.rerun()
-                        except Exception as exc:
-                            st.error(str(exc))
+
+    def _expense_card(expense, _i):
+        with st.container(border=True):
+            st.markdown(f"**{expense.expense_name}**")
+            st.caption(expense.activity_name or "Unassigned")
+            st.write(
+                f"{_money(expense.purchase_price)} × {expense.quantity:g} = "
+                f"**{_money(expense.total_purchase_price)}**"
+            )
+            if expense.notes:
+                st.caption(expense.notes)
+            acts = st.columns(2)
+            if acts[0].button("Edit", key=f"edit_exp_{expense.id}", use_container_width=True):
+                if allow_dialogs:
+                    clear_all_dialog_flags()
+                    flag = _expense_flag_key(key_prefix)
+                    st.session_state[flag] = expense.id
+                    register_armed_dialog(flag)
+                else:
+                    st.session_state[f"inline_exp_{key_prefix}"] = expense.id
+                st.rerun()
+            if acts[1].button("Delete", key=f"del_exp_{expense.id}", use_container_width=True):
+                try:
+                    expense_service.delete_expense(expense.id)
+                    st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
+
+    render_card_grid(expenses, _expense_card, suffix=f"exp_{key_prefix}")
 
 
 # --- main panel --------------------------------------------------------------

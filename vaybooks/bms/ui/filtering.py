@@ -60,6 +60,7 @@ class FilterField:
     placeholder: str = ""
     help: str = ""
     default_active: bool = False
+    default: Any = None
     # Custom predicate(record, value) -> bool. When set, overrides the
     # type-based default matcher.
     match: Optional[Callable[[Any, Any], bool]] = None
@@ -230,7 +231,9 @@ def filter_token(schema: ListSchema, filters: dict, sort: dict) -> str:
 def default_filters(schema: ListSchema) -> dict:
     result: dict = {}
     for fld in schema.filter_fields:
-        if fld.type == CHECKBOX:
+        if fld.default is not None:
+            result[fld.key] = fld.default() if callable(fld.default) else fld.default
+        elif fld.type == CHECKBOX:
             result[fld.key] = bool(fld.default_active)
         elif fld.type == MULTISELECT:
             result[fld.key] = []

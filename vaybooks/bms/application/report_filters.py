@@ -80,3 +80,67 @@ class CompletedFilter:
         default_factory=lambda: ["Completed", "Delivered"]
     )
     customer_query: str = ""
+
+
+@dataclass
+class PeriodSummaryFilter:
+    date_range: DateRange
+
+
+@dataclass
+class TopCustomersFilter:
+    date_range: DateRange
+    min_revenue: Optional[float] = None
+    min_margin: Optional[float] = None
+
+
+@dataclass
+class OutstandingFilter:
+    min_balance: Optional[float] = None
+    search: str = ""
+
+
+@dataclass
+class CashMovementFilter:
+    date_range: DateRange
+
+
+@dataclass
+class ExpenseBySourceFilter:
+    date_range: DateRange
+
+
+@dataclass
+class CustomerSegmentsFilter:
+    date_range: DateRange
+
+
+@dataclass
+class OrderPipelineFilter:
+    statuses: list[str] = field(default_factory=list)
+
+
+@dataclass
+class BillsPendingFilter:
+    customer_query: str = ""
+
+
+@dataclass
+class DeliveryPerformanceFilter:
+    date_range: DateRange
+    customer_query: str = ""
+    on_time_only: bool = False
+    late_only: bool = False
+
+
+@dataclass
+class WorkerProductivityFilter:
+    date_range: DateRange
+    worker: str = ""
+    min_hours: Optional[float] = None
+
+
+@dataclass
+class LaborMphFilter:
+    date_range: DateRange
+    min_hours: Optional[float] = None

@@ -1,252 +1,246 @@
-"""Streamlit filter widgets for the Reports page."""
+"""Map committed filter-bar state to report service filter dataclasses."""
 
 from __future__ import annotations
 
-from datetime import date, timedelta
-
-import streamlit as st
+from datetime import date
+from typing import Any
 
 from vaybooks.bms.application.report_filters import (
     ActivityPendingFilter,
+    BillsPendingFilter,
+    CashMovementFilter,
     CompletedFilter,
     CustomerHistoryFilter,
+    CustomerSegmentsFilter,
     DateRange,
+    DeliveryPerformanceFilter,
+    ExpenseBySourceFilter,
     ExpenseFilter,
     ItemProfitabilityFilter,
+    LaborMphFilter,
     OrderMphFilter,
+    OrderPipelineFilter,
+    OutstandingFilter,
     OverdueFilter,
+    PeriodSummaryFilter,
     TimeTrackingFilter,
+    TopCustomersFilter,
+    WorkerProductivityFilter,
 )
-from vaybooks.bms.domain.shared.enums import ExpenseSource, OrderStatus
-from vaybooks.bms.infrastructure.db.bson_utils import as_date
+from vaybooks.bms.domain.shared.enums import OrderStatus
+from vaybooks.bms.ui import filtering as F
+from vaybooks.bms.ui.report_schemas import SCHEMA_BY_REPORT_TYPE
 
 
-def _mtd_range() -> DateRange:
+def _text(value: Any) -> str:
+    return (value or "").strip().lower()
+
+
+def _optional_min(value: Any) -> float | None:
+    try:
+        val = float(value or 0)
+    except (TypeError, ValueError):
+        return None
+    return val if val > 0 else None
+
+
+def _date_range(filters: dict, key: str = "date_range") -> DateRange:
+    raw = filters.get(key)
+    if isinstance(raw, (list, tuple)) and len(raw) == 2:
+        start, end = raw
+        if start and end and start > end:
+            start, end = end, start
+        return DateRange(start, end)
     today = date.today()
     return DateRange(today.replace(day=1), today)
 
 
-def render_date_range(key: str, default: DateRange | None = None) -> DateRange:
-    """Date range picker; defaults to month-to-date."""
-    today = date.today()
-    default = default or _mtd_range()
-    widget_key = f"report_period_{key}"
-    if widget_key not in st.session_state:
-        st.session_state[widget_key] = (default.start, default.end)
-    picked = st.date_input(
-        "Period",
-        value=st.session_state[widget_key],
-        max_value=today,
-        format="DD/MM/YYYY",
-        key=widget_key,
-    )
-    if isinstance(picked, (list, tuple)) and len(picked) == 2:
-        start, end = picked
-        if start > end:
-            start, end = end, start
-        return DateRange(start, end)
-    return default
-
-
-def render_quick_period(key: str) -> None:
-    """MTD / Last 30 days shortcuts; updates the paired date_input widget."""
-    widget_key = f"report_period_{key}"
-    cols = st.columns(2)
-    today = date.today()
-    if cols[0].button("MTD", key=f"report_mtd_{key}", use_container_width=True):
-        st.session_state[widget_key] = (today.replace(day=1), today)
-        st.rerun()
-    if cols[1].button("Last 30 days", key=f"report_30d_{key}", use_container_width=True):
-        st.session_state[widget_key] = (today - timedelta(days=29), today)
-        st.rerun()
-
-
-def _text_search(label: str, key: str) -> str:
-    return st.text_input(label, key=f"report_{key}").strip().lower()
-
-
-def _min_number(label: str, key: str) -> float | None:
-    val = st.number_input(label, min_value=0.0, value=0.0, key=f"report_{key}")
-    return val if val > 0 else None
-
-
-def render_item_profitability_filters() -> ItemProfitabilityFilter:
-    render_quick_period("item_profit")
-    date_range = render_date_range("item_profit")
-    st.caption(
-        f"Delivered / snapshotted {date_range.start:%d %b %Y} → {date_range.end:%d %b %Y}. "
-        "Bill-level MPH per item; order rollup uses aggregated totals."
-    )
-    c1, c2 = st.columns(2)
-    with c1:
-        customer = _text_search("Customer", "item_cust")
-    with c2:
-        bill = _text_search("Bill / order", "item_bill")
-    c3, c4 = st.columns(2)
-    with c3:
-        min_mph = _min_number("Min MPH (₹/h)", "item_min_mph")
-    with c4:
-        min_margin = _min_number("Min margin (₹)", "item_min_margin")
+def build_item_profitability_filter(filters: dict) -> ItemProfitabilityFilter:
     return ItemProfitabilityFilter(
-        date_range=date_range,
-        customer_query=customer,
-        bill_query=bill,
-        min_mph=min_mph,
-        min_margin=min_margin,
+        date_range=_date_range(filters),
+        customer_query=_text(filters.get("customer_query")),
+        bill_query=_text(filters.get("bill_query")),
+        min_mph=_optional_min(filters.get("min_mph")),
+        min_margin=_optional_min(filters.get("min_margin")),
     )
 
 
-def render_order_mph_filters() -> OrderMphFilter:
-    render_quick_period("order_mph")
-    date_range = render_date_range("order_mph")
-    st.caption(
-        f"Items delivered in period {date_range.start:%d %b %Y} → {date_range.end:%d %b %Y}. "
-        "Order MPH is aggregated across bills (not a simple average of bill-level MPH)."
+def build_order_mph_filter(filters: dict) -> OrderMphFilter:
+    return OrderMphFilter(
+        date_range=_date_range(filters),
+        customer_query=_text(filters.get("customer_query")),
+        min_mph=_optional_min(filters.get("min_mph")),
     )
-    customer = _text_search("Customer", "order_mph_cust")
-    min_mph = _min_number("Min order MPH (₹/h)", "order_min_mph")
-    return OrderMphFilter(date_range=date_range, customer_query=customer, min_mph=min_mph)
 
 
-def render_activity_pending_filters(activity_names: list[str]) -> ActivityPendingFilter:
-    today = date.today()
-    picked = st.date_input(
-        "ETD range",
-        value=(today, today + timedelta(days=30)),
-        format="DD/MM/YYYY",
-        key="report_etd_range",
-    )
-    if isinstance(picked, (list, tuple)) and len(picked) == 2:
-        etd_start = as_date(picked[0]) or today
-        etd_end = as_date(picked[1]) or today + timedelta(days=30)
-        if etd_start > etd_end:
-            etd_start, etd_end = etd_end, etd_start
-    else:
-        etd_start, etd_end = today, today + timedelta(days=30)
-
-    overdue_only = st.checkbox("Overdue only (ETD before today)", key="report_overdue_only")
-    statuses = st.multiselect(
-        "Activity status",
-        ["Pending", "In Progress"],
-        default=["Pending", "In Progress"],
-        key="report_act_status",
-    )
-    selected_activities = st.multiselect(
-        "Activity",
-        activity_names,
-        key="report_act_names",
-    )
-    customer = _text_search("Customer / order", "act_pending_search")
+def build_activity_pending_filter(filters: dict) -> ActivityPendingFilter:
+    etd = _date_range(filters, "etd_range")
+    statuses = filters.get("statuses") or ["Pending", "In Progress"]
     return ActivityPendingFilter(
-        etd_start=etd_start,
-        etd_end=etd_end,
-        statuses=statuses or ["Pending", "In Progress"],
-        activity_names=selected_activities,
-        customer_query=customer,
-        overdue_only=overdue_only,
+        etd_start=etd.start,
+        etd_end=etd.end,
+        statuses=list(statuses),
+        activity_names=list(filters.get("activity_names") or []),
+        customer_query=_text(filters.get("customer_query")),
+        overdue_only=bool(filters.get("overdue_only")),
     )
 
 
-def render_time_tracking_filters() -> TimeTrackingFilter:
-    render_quick_period("time")
-    date_range = render_date_range("time")
-    st.caption(f"Work date {date_range.start:%d %b %Y} → {date_range.end:%d %b %Y}")
-    c1, c2 = st.columns(2)
-    with c1:
-        worker = _text_search("Worker", "time_worker")
-    with c2:
-        activity = st.text_input("Activity", key="report_time_activity").strip()
-    search = _text_search("Order / bill", "time_search")
+def build_time_tracking_filter(filters: dict) -> TimeTrackingFilter:
     return TimeTrackingFilter(
-        date_range=date_range,
-        worker=worker,
-        activity_name=activity,
-        search=search,
+        date_range=_date_range(filters),
+        worker=_text(filters.get("worker")),
+        activity_name=(filters.get("activity_name") or "").strip(),
+        search=_text(filters.get("search")),
     )
 
 
-def render_expense_filters() -> ExpenseFilter:
-    render_quick_period("expense")
-    date_range = render_date_range("expense")
-    st.caption(f"Expense date {date_range.start:%d %b %Y} → {date_range.end:%d %b %Y}")
-    sources = [""] + [s.value for s in ExpenseSource]
-    source = st.selectbox(
-        "Expense source",
-        sources,
-        format_func=lambda s: "All" if not s else s,
-        key="report_exp_source",
-    )
-    search = _text_search("Order / bill", "exp_search")
-    min_amount = _min_number("Min amount (₹)", "exp_min")
+def build_expense_filter(filters: dict) -> ExpenseFilter:
+    source = filters.get("expense_source") or ""
     return ExpenseFilter(
-        date_range=date_range,
-        expense_source=source,
-        search=search,
-        min_amount=min_amount,
+        date_range=_date_range(filters),
+        expense_source=source if source else "",
+        search=_text(filters.get("search")),
+        min_amount=_optional_min(filters.get("min_amount")),
     )
 
 
-def render_customer_history_filters(
-    customer_id: str | None,
-) -> CustomerHistoryFilter | None:
-    if not customer_id:
-        return None
-    render_quick_period("cust_hist")
-    date_range = render_date_range("cust_hist")
-    statuses = st.multiselect(
-        "Order status",
-        [s.value for s in OrderStatus],
-        key="report_cust_status",
-    )
+def build_customer_history_filter(
+    customer_id: str, filters: dict
+) -> CustomerHistoryFilter:
     return CustomerHistoryFilter(
         customer_id=customer_id,
-        date_range=date_range,
-        statuses=statuses,
+        date_range=_date_range(filters),
+        statuses=list(filters.get("statuses") or []),
     )
 
 
-def render_overdue_filters() -> OverdueFilter:
-    today = date.today()
-    as_of = st.date_input("As-of date", value=today, key="report_as_of", format="DD/MM/YYYY")
-    min_days = int(
-        st.number_input("Min days overdue", min_value=0, value=0, key="report_min_overdue")
-    )
-    statuses = st.multiselect(
-        "Order status",
-        [
-            OrderStatus.IN_PROGRESS.value,
-            OrderStatus.READY_FOR_DELIVERY.value,
-            OrderStatus.INVOICE_GENERATED.value,
-        ],
-        key="report_overdue_status",
-    )
-    customer = _text_search("Customer / phone", "overdue_search")
+def build_overdue_filter(filters: dict) -> OverdueFilter:
+    as_of = filters.get("as_of_date") or date.today()
+    try:
+        min_days = int(filters.get("min_days_overdue") or 0)
+    except (TypeError, ValueError):
+        min_days = 0
     return OverdueFilter(
         as_of_date=as_of,
-        min_days_overdue=min_days,
-        statuses=statuses,
-        customer_query=customer,
+        min_days_overdue=max(0, min_days),
+        statuses=list(filters.get("statuses") or []),
+        customer_query=_text(filters.get("customer_query")),
     )
 
 
-def render_completed_filters() -> CompletedFilter:
-    render_quick_period("completed")
-    date_range = render_date_range("completed")
-    st.caption(f"Delivery date {date_range.start:%d %b %Y} → {date_range.end:%d %b %Y}")
-    statuses = st.multiselect(
-        "Status",
-        [OrderStatus.COMPLETED.value, OrderStatus.DELIVERED.value],
-        default=[OrderStatus.COMPLETED.value, OrderStatus.DELIVERED.value],
-        key="report_completed_status",
-    )
-    customer = _text_search("Customer", "completed_cust")
+def build_completed_filter(filters: dict) -> CompletedFilter:
+    statuses = filters.get("statuses") or [
+        OrderStatus.COMPLETED.value,
+        OrderStatus.DELIVERED.value,
+    ]
     return CompletedFilter(
-        date_range=date_range,
-        statuses=statuses or [OrderStatus.COMPLETED.value, OrderStatus.DELIVERED.value],
-        customer_query=customer,
+        date_range=_date_range(filters),
+        statuses=list(statuses),
+        customer_query=_text(filters.get("customer_query")),
     )
 
 
-def filter_token(report_key: str, *parts: str) -> str:
-    """Stable string for pagination reset when filters change."""
-    return "|".join([report_key, *parts])
+def build_period_summary_filter(filters: dict) -> PeriodSummaryFilter:
+    return PeriodSummaryFilter(date_range=_date_range(filters))
+
+
+def build_top_customers_filter(filters: dict) -> TopCustomersFilter:
+    return TopCustomersFilter(
+        date_range=_date_range(filters),
+        min_revenue=_optional_min(filters.get("min_revenue")),
+        min_margin=_optional_min(filters.get("min_margin")),
+    )
+
+
+def build_outstanding_filter(filters: dict) -> OutstandingFilter:
+    return OutstandingFilter(
+        min_balance=_optional_min(filters.get("min_balance")),
+        search=_text(filters.get("search")),
+    )
+
+
+def build_cash_movement_filter(filters: dict) -> CashMovementFilter:
+    return CashMovementFilter(date_range=_date_range(filters))
+
+
+def build_expense_by_source_filter(filters: dict) -> ExpenseBySourceFilter:
+    return ExpenseBySourceFilter(date_range=_date_range(filters))
+
+
+def build_customer_segments_filter(filters: dict) -> CustomerSegmentsFilter:
+    return CustomerSegmentsFilter(date_range=_date_range(filters))
+
+
+def build_order_pipeline_filter(filters: dict) -> OrderPipelineFilter:
+    return OrderPipelineFilter(statuses=list(filters.get("statuses") or []))
+
+
+def build_bills_pending_filter(filters: dict) -> BillsPendingFilter:
+    return BillsPendingFilter(customer_query=_text(filters.get("customer_query")))
+
+
+def build_delivery_performance_filter(filters: dict) -> DeliveryPerformanceFilter:
+    return DeliveryPerformanceFilter(
+        date_range=_date_range(filters),
+        customer_query=_text(filters.get("customer_query")),
+        on_time_only=bool(filters.get("on_time_only")),
+        late_only=bool(filters.get("late_only")),
+    )
+
+
+def build_worker_productivity_filter(filters: dict) -> WorkerProductivityFilter:
+    return WorkerProductivityFilter(
+        date_range=_date_range(filters),
+        worker=_text(filters.get("worker")),
+        min_hours=_optional_min(filters.get("min_hours")),
+    )
+
+
+def build_labor_mph_filter(filters: dict) -> LaborMphFilter:
+    return LaborMphFilter(
+        date_range=_date_range(filters),
+        min_hours=_optional_min(filters.get("min_hours")),
+    )
+
+
+_BUILDERS = {
+    "report_item_profitability": build_item_profitability_filter,
+    "report_order_mph": build_order_mph_filter,
+    "report_activity_pending": build_activity_pending_filter,
+    "report_activity_bottleneck": build_activity_pending_filter,
+    "report_time_tracking": build_time_tracking_filter,
+    "report_expense_detail": build_expense_filter,
+    "report_overdue": build_overdue_filter,
+    "report_completed": build_completed_filter,
+    "report_period_financial": build_period_summary_filter,
+    "report_top_customers_revenue": build_top_customers_filter,
+    "report_top_customers_margin": build_top_customers_filter,
+    "report_customer_outstanding": build_outstanding_filter,
+    "report_vendor_payables": build_outstanding_filter,
+    "report_cash_movement": build_cash_movement_filter,
+    "report_expense_by_source": build_expense_by_source_filter,
+    "report_customer_segments": build_customer_segments_filter,
+    "report_order_pipeline": build_order_pipeline_filter,
+    "report_bills_pending": build_bills_pending_filter,
+    "report_delivery_performance": build_delivery_performance_filter,
+    "report_worker_productivity": build_worker_productivity_filter,
+    "report_labor_vs_mph": build_labor_mph_filter,
+}
+
+
+def build_report_filter(report_type: str, filters: dict, **kwargs):
+    """Build a service-layer filter object from committed bar state."""
+    schema = SCHEMA_BY_REPORT_TYPE[report_type]
+    if schema.entity_key == "report_customer_history":
+        return build_customer_history_filter(kwargs["customer_id"], filters)
+    builder = _BUILDERS[schema.entity_key]
+    return builder(filters)
+
+
+def report_filter_token(report_type: str, filters: dict, sort: dict, **kwargs) -> str:
+    schema = SCHEMA_BY_REPORT_TYPE[report_type]
+    token = F.filter_token(schema, filters, sort)
+    if kwargs.get("customer_id"):
+        token = f"{token}|customer={kwargs['customer_id']}"
+    return token

@@ -61,12 +61,22 @@ def _edit_customer_dialog(customer_service, customer_id: str):
 
 def _load_customers(services, filters, sort):
     customers = services["customers"].list_all_customers()
+    accounting = services.get("accounting")
     try:
         counts = services["orders"].order_counts_by_customer()
     except Exception:
         counts = {}
     for customer in customers:
         setattr(customer, "order_count", counts.get(str(customer.id), 0))
+        try:
+            account = accounting.get_customer_account(customer.id) if accounting else None
+        except Exception:
+            account = None
+        setattr(
+            customer,
+            "current_balance",
+            account.current_balance if account else 0.0,
+        )
     return customers
 
 
@@ -75,7 +85,10 @@ def _render_cards(page_customers, services):
 
     def _render(customer, _i):
         edit_clicked = customer_card(
-            customer, getattr(customer, "order_count", 0), f"cust_{customer.id}"
+            customer,
+            getattr(customer, "order_count", 0),
+            getattr(customer, "current_balance", 0.0),
+            f"cust_{customer.id}",
         )
         if edit_clicked:
             _edit_customer_dialog(customer_service, customer.id)

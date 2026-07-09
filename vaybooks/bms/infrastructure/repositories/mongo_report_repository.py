@@ -583,5 +583,114 @@ class MongoReportRepository:
             )
         ]
 
+    def get_bills_pending_invoice_rows(self, limit: int = 500) -> List[dict]:
+        pipeline = [
+            {"$match": {"order_status": {"$ne": OrderStatus.CANCELLED.value}}},
+            {"$unwind": "$bill_numbers"},
+            {"$match": {"bill_numbers.bill_id": {"$ne": None}}},
+            {
+                "$lookup": {
+                    "from": "invoices",
+                    "localField": "_id",
+                    "foreignField": "order_id",
+                    "as": "invoices",
+                }
+            },
+            {
+                "$project": {
+                    "order_number": 1,
+                    "customer_name": 1,
+                    "order_status": 1,
+                    "expected_delivery_date": 1,
+                    "bill_id": "$bill_numbers.bill_id",
+                    "bill_number": "$bill_numbers.bill_number",
+                    "invoiced": {
+                        "$reduce": {
+                            "input": "$invoices",
+                            "initialValue": [],
+                            "in": {
+                                "$concatArrays": [
+                                    "$$value",
+                                    {"$ifNull": ["$$this.bill_ids", []]},
+                                ]
+                            },
+                        }
+                    },
+                }
+            },
+            {"$match": {"$expr": {"$not": [{"$in": ["$bill_id", "$invoiced"]}]}}},
+            {
+                "$project": {
+                    "_id": 0,
+                    "order_number": 1,
+                    "customer_name": 1,
+                    "bill_number": 1,
+                    "order_status": 1,
+                    "expected_delivery_date": 1,
+                }
+            },
+            {"$limit": limit},
+        ]
+        return list(self._db.customization_orders.aggregate(pipeline))
+
+    def get_voucher_totals_by_type(self, start: date, end: date) -> dict:
+        from vaybooks.bms.domain.shared.enums import VoucherType
+
+        keys = {
+            VoucherType.RECEIPT.value: "receipt",
+            VoucherType.REFUND.value: "refund",
+            VoucherType.VENDOR_PAYMENT.value: "vendor_payment",
+            VoucherType.SALARY_PAYMENT.value: "salary_payment",
+        }
+        totals: dict[str, float] = {}
+        for vtype, key in keys.items():
+            if vtype in (
+                VoucherType.VENDOR_PAYMENT.value,
+                VoucherType.SALARY_PAYMENT.value,
+            ):
+                totals[key] = self.sum_payment_voucher_amount(vtype, start, end)
+            else:
+                pipeline = [
+                    {
+                        "$match": {
+                            "voucher_type": vtype,
+                            "voucher_date": {
+                                "$gte": to_bson_value(start),
+                                "$lte": to_bson_value(end),
+                            },
+                        }
+                    },
+                    {"$unwind": "$lines"},
+                    {
+                        "$group": {
+                            "_id": None,
+                            "total": {"$sum": "$lines.debit_amount"},
+                        }
+                    },
+                ]
+                result = list(self._db.vouchers.aggregate(pipeline))
+                totals[key] = result[0]["total"] if result else 0.0
+        return totals
+
+    def get_orders_pipeline_snapshot(self) -> List[dict]:
+        pipeline = [
+            {"$match": {"order_status": {"$ne": OrderStatus.CANCELLED.value}}},
+            {
+                "$group": {
+                    "_id": "$order_status",
+                    "order_count": {"$sum": 1},
+                }
+            },
+            {
+                "$project": {
+                    "_id": 0,
+                    "order_status": "$_id",
+                    "order_count": "$order_count",
+                }
+            },
+            {"$sort": {"order_count": -1}},
+        ]
+        return list(self._db.customization_orders.aggregate(pipeline))
+
     def get_all_vouchers(self) -> List[dict]:
         return list(self._db.vouchers.find())

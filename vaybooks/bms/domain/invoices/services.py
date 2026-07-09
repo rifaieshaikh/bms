@@ -210,10 +210,17 @@ class InvoiceDomainService:
         invoices: List[Invoice],
         deliveries: List[Delivery],
         expenses: List[Expense],
+        force_bill_ids: Optional[Set[str]] = None,
     ) -> bool:
         """Freeze per-item MPH for every item that is both delivered and
-        invoiced. Returns True if any item snapshot changed."""
+        invoiced. Returns True if any item snapshot changed.
+
+        Items whose id is in ``force_bill_ids`` are recomputed even if already
+        frozen — used when an expense changes and the item's MPH must reflect
+        the new figures.
+        """
         delivered = delivered_bill_ids(deliveries)
+        force = force_bill_ids or set()
         expenses_by_bill: Dict[str, List[Expense]] = {}
         for e in expenses:
             if e.bill_id:
@@ -221,7 +228,7 @@ class InvoiceDomainService:
 
         changed = False
         for item in order.customization_items:
-            if item.mph_snapshot_at is not None:
+            if item.mph_snapshot_at is not None and item.item_id not in force:
                 continue  # frozen — never recalculate from live time/expense data
             if item.item_id not in delivered:
                 continue

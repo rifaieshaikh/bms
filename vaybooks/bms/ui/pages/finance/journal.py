@@ -4,6 +4,7 @@ import streamlit as st
 
 from vaybooks.bms.domain.shared.enums import VoucherType
 from vaybooks.bms.ui.components.list_view import render_list
+from vaybooks.bms.ui.components.voucher_card import voucher_cards
 from vaybooks.bms.ui.dialog_utils import clear_all_dialog_flags
 from vaybooks.bms.ui.list_schemas import JOURNAL
 from vaybooks.bms.ui.pages import accounts as acc
@@ -17,14 +18,13 @@ def _load(services, filters, sort):
 
 
 def _cards(page_vouchers, services):
-    for v in page_vouchers:
-        with st.container(border=True):
-            st.markdown(f"**{v.voucher_number}** — ₹{v.total_debit:,.0f}")
-            st.caption(f"{acc._fmt_date(v.voucher_date)} | {v.description or '—'}")
-            for line in v.lines:
-                side = (f"Dr ₹{line.debit_amount:,.0f}" if line.debit_amount
-                        else f"Cr ₹{line.credit_amount:,.0f}")
-                st.caption(f"• {line.account_name}: {side}")
+    voucher_cards(
+        page_vouchers,
+        suffix="journal",
+        show_journal_lines=True,
+        show_type_badge=False,
+        card_min_width=280,
+    )
 
 
 def render(services: dict):

@@ -79,6 +79,59 @@ def inject_global_css() -> None:
             div[data-testid="stVerticalBlock"] {
             gap: 0.28rem;
           }
+          /* Nested bordered blocks inside grid cards: no double chrome */
+          div[class*="st-key-card_grid"]
+            div[data-testid="stVerticalBlockBorderWrapper"]
+            > div[data-testid="stVerticalBlock"]
+            > div[data-testid="stVerticalBlockBorderWrapper"] {
+            border: none !important;
+            box-shadow: none !important;
+            border-left: none !important;
+            padding: 0;
+            background: transparent;
+          }
+          div[class*="st-key-card_grid"]
+            div[data-testid="stVerticalBlockBorderWrapper"]:hover
+            > div[data-testid="stVerticalBlock"]
+            > div[data-testid="stVerticalBlockBorderWrapper"] {
+            transform: none;
+            box-shadow: none;
+          }
+
+          .z-card-amount {
+            font-size: 1.3rem;
+            font-weight: 700;
+            line-height: 1.2;
+            margin: 0.1rem 0 0.3rem 0;
+            color: var(--z-ink);
+          }
+          .z-card-journal {
+            font-size: 0.72rem;
+            color: #5B5560;
+            background: #F8F5F7;
+            border: 1px solid #EDE6EA;
+            border-radius: 6px;
+            padding: 0.35rem 0.5rem;
+            margin: 0.2rem 0 0.35rem 0;
+            line-height: 1.45;
+          }
+          .z-badge.z-amount {
+            font-size: 0.82rem;
+            padding: 0.15rem 0.6rem;
+          }
+
+          .z-badge.z-compact {
+            white-space: nowrap;
+            font-size: 0.68rem;
+            padding: 0.06rem 0.45rem;
+          }
+          .z-card-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            line-height: 1.25;
+            margin: 0 0 0.2rem 0;
+            color: var(--z-ink);
+          }
 
           /* ---- Status badge chips ---------------------------------------- */
           .z-badge {
@@ -121,6 +174,18 @@ def inject_global_css() -> None:
             padding: 0.5rem 0.75rem;
           }
 
+          /* ---- Detail panels: single bordered cards on detail pages ------ */
+          /* Same plum accent + elevation as grid cards, but no hover lift    */
+          /* (they are full-width sections, not clickable tiles).             */
+          div[class*="st-key-zpanel"] > div[data-testid="stVerticalBlockBorderWrapper"],
+          div[class*="st-key-zpanel"] div[data-testid="stExpander"] {
+            border: 1px solid var(--z-line);
+            border-left: 3px solid var(--z-plum);
+            border-radius: 10px;
+            background: var(--z-card);
+            box-shadow: 0 1px 3px rgba(42, 30, 36, 0.06);
+          }
+
           /* ---- Phone padding trim ---------------------------------------- */
           @media (max-width: 640px) {
             .block-container {
@@ -137,6 +202,16 @@ def inject_global_css() -> None:
 def card_grid(suffix: str = "default"):
     """Return a uniquely-keyed container so scoped card CSS applies."""
     return st.container(key=f"{CARD_GRID_PREFIX}_{suffix}")
+
+
+def panel(suffix: str = "default"):
+    """Return a uniquely-keyed container for a single detail-page panel.
+
+    Bordered containers rendered inside get the plum accent + elevation (via
+    the ``st-key-zpanel`` CSS scope) without the hover-lift used for grid
+    cards. Use for the header/summary sections on detail pages.
+    """
+    return st.container(key=f"zpanel_{suffix}")
 
 
 def render_card_grid(
@@ -185,10 +260,11 @@ STATUS_BADGE_COLORS = {
 }
 
 
-def status_badge(label: str, color: str | None = None) -> str:
+def status_badge(label: str, color: str | None = None, *, compact: bool = False) -> str:
     """Return an HTML pill for a status/label. Render with st.markdown(..., True)."""
     tone = color or STATUS_BADGE_COLORS.get(label, "plum")
-    return f'<span class="z-badge {tone}">{label}</span>'
+    extra = " z-compact" if compact else ""
+    return f'<span class="z-badge {tone}{extra}">{label}</span>'
 
 
 def metric_grid(

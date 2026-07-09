@@ -147,6 +147,22 @@ class FakeOrderRepository:
     def list_by_customer(self, customer_id: str) -> List[CustomizationOrder]:
         return [deepcopy(o) for o in self._store.values() if o.customer_id == customer_id]
 
+    def list_recent_by_customer(self, customer_id: str, limit: int = 5) -> List[CustomizationOrder]:
+        orders = [o for o in self._store.values() if o.customer_id == customer_id]
+        orders.sort(key=lambda o: o.created_at, reverse=True)
+        return [deepcopy(o) for o in orders[:limit]]
+
+    def get_customer_summary(self, customer_id: str) -> dict:
+        inactive = {"Delivered", "Completed", "Cancelled"}
+        orders = [o for o in self._store.values() if o.customer_id == customer_id]
+        return {
+            "order_count": len(orders),
+            "active_count": sum(
+                1 for o in orders if o.order_status.value not in inactive
+            ),
+            "total_invoiced": 0.0,
+        }
+
     def update_order_activity(self, order_id, order_activity_id, updates):
         return self.find_by_id(order_id)
 

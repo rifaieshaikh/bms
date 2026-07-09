@@ -324,6 +324,16 @@ class OrderAppService:
     def list_by_customer(self, customer_id: str) -> List[CustomizationOrder]:
         return self._order_repo.list_by_customer(customer_id)
 
+    def list_recent_by_customer(
+        self, customer_id: str, limit: int = 5
+    ) -> List[CustomizationOrder]:
+        """Latest N orders for a customer (newest first)."""
+        return self._order_repo.list_recent_by_customer(customer_id, limit)
+
+    def get_customer_summary(self, customer_id: str) -> dict:
+        """Order counts and total invoiced for one customer (aggregated)."""
+        return self._order_repo.get_customer_summary(customer_id)
+
     def order_counts_by_customer(self) -> dict:
         """Map of customer_id -> order count for all customers (one query)."""
         return self._order_repo.counts_by_customer()

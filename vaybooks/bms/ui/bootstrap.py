@@ -8,6 +8,13 @@ from vaybooks.bms.application.export_app_service import ExportAppService
 from vaybooks.bms.application.invoice_app_service import InvoiceAppService
 from vaybooks.bms.application.order_app_service import OrderAppService
 from vaybooks.bms.application.report_app_service import ReportAppService
+from vaybooks.bms.application.reports import (
+    BusinessInsightsReportService,
+    CustomerReportService,
+    LaborReportService,
+    OperationsReportService,
+    ProfitabilityReportService,
+)
 from vaybooks.bms.application.time_tracking_app_service import TimeTrackingAppService
 from vaybooks.bms.application.accounting_app_service import AccountingAppService
 from vaybooks.bms.application.activity_app_service import ActivityAppService
@@ -76,10 +83,28 @@ def get_services():
     report_repo = MongoReportRepository(db)
 
     accounting_service = AccountingAppService(account_repo, voucher_repo, counter_repo)
+    customer_service = CustomerAppService(customer_repo, account_repo)
+    vendor_service = VendorAppService(vendor_repo, account_repo)
+
+    reports_business = BusinessInsightsReportService(
+        report_repo, accounting_service, vendor_service, customer_service
+    )
+    reports_profitability = ProfitabilityReportService(report_repo)
+    reports_operations = OperationsReportService(report_repo)
+    reports_labor = LaborReportService(report_repo)
+    reports_customers = CustomerReportService(report_repo)
+    report_facade = ReportAppService(
+        report_repo,
+        reports_business,
+        reports_profitability,
+        reports_operations,
+        reports_labor,
+        reports_customers,
+    )
 
     return {
-        "customers": CustomerAppService(customer_repo, account_repo),
-        "vendors": VendorAppService(vendor_repo, account_repo),
+        "customers": customer_service,
+        "vendors": vendor_service,
         "vendor_services": VendorServiceAppService(vendor_service_repo),
         "orders": OrderAppService(
             order_repo,
@@ -96,7 +121,13 @@ def get_services():
         ),
         "activities": ActivityAppService(activity_repo, order_repo),
         "time_tracking": TimeTrackingAppService(time_repo, order_repo),
-        "expenses": ExpenseAppService(expense_repo, order_repo),
+        "expenses": ExpenseAppService(
+            expense_repo,
+            order_repo,
+            invoice_repo=invoice_repo,
+            delivery_repo=delivery_repo,
+            time_repo=time_repo,
+        ),
         "invoices": InvoiceAppService(
             invoice_repo,
             order_repo,
@@ -109,7 +140,12 @@ def get_services():
             delivery_repo, order_repo, invoice_repo, expense_repo
         ),
         "accounting": accounting_service,
-        "reports": ReportAppService(report_repo),
+        "reports_business": reports_business,
+        "reports_profitability": reports_profitability,
+        "reports_operations": reports_operations,
+        "reports_labor": reports_labor,
+        "reports_customers": reports_customers,
+        "reports": report_facade,
         "export": ExportAppService(report_repo),
         "activity_repo": activity_repo,
         "order_repo": order_repo,

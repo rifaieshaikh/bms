@@ -28,6 +28,10 @@ def _detail_session_key(page_key: str) -> str:
     return f"_detail_id_{page_key}"
 
 
+def _detail_param_key(page_key: str, param: str) -> str:
+    return f"_detail_param_{page_key}_{param}"
+
+
 def go_to_detail(page_key: str, entity_id: str, **extra_params) -> None:
     """Navigate to a detail route, seeding ``?id=`` (with session fallback)."""
     target = _pages.get(page_key)
@@ -37,6 +41,7 @@ def go_to_detail(page_key: str, entity_id: str, **extra_params) -> None:
     for key, value in extra_params.items():
         if value is not None:
             st.query_params[key] = str(value)
+            st.session_state[_detail_param_key(page_key, key)] = str(value)
     if target is not None:
         st.switch_page(target)
 
@@ -49,15 +54,45 @@ def current_detail_id(page_key: str) -> Optional[str]:
     return st.session_state.get(_detail_session_key(page_key))
 
 
+def current_detail_param(page_key: str, param: str) -> Optional[str]:
+    """Resolve an extra detail param from query param, else session fallback."""
+    value = st.query_params.get(param)
+    if value:
+        return value
+    return st.session_state.get(_detail_param_key(page_key, param))
+
+
+def _list_param_key(page_key: str, param: str) -> str:
+    return f"_list_param_{page_key}_{param}"
+
+
 def go_to_list(page_key: str, **params) -> None:
-    """Navigate to a list route, optionally seeding query params (deep link)."""
+    """Navigate to a list route, optionally seeding query params (deep link).
+
+    Params are also stashed in session state because query params do not
+    reliably survive ``st.switch_page``; ``consume_list_param`` reads either.
+    """
     target = _pages.get(page_key)
     st.query_params.clear()
     for key, value in params.items():
         if value is not None:
             st.query_params[key] = str(value)
+            st.session_state[_list_param_key(page_key, key)] = str(value)
     if target is not None:
         st.switch_page(target)
+
+
+def consume_list_param(page_key: str, param: str) -> Optional[str]:
+    """One-shot read of a list deep-link param from query param or session
+    fallback. Clears both so the deep link only applies once."""
+    value = st.query_params.get(param)
+    if not value:
+        value = st.session_state.pop(_list_param_key(page_key, param), None)
+    else:
+        st.session_state.pop(_list_param_key(page_key, param), None)
+    if param in st.query_params:
+        del st.query_params[param]
+    return value
 
 
 def go_back_to_list(entity_key: str, list_page_key: str) -> None:

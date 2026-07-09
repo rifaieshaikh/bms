@@ -10,6 +10,7 @@ from vaybooks.bms.ui.dialog_utils import (
     make_dismiss_handler,
     register_armed_dialog,
 )
+from vaybooks.bms.ui.components.voucher_card import VoucherEditAction, voucher_cards
 from vaybooks.bms.ui.styles import render_card_grid
 from vaybooks.bms.ui.list_schemas import VENDORS
 
@@ -218,19 +219,26 @@ def _render_vendor_detail(services, vendor_id: str):
     if not payments:
         st.caption("No payments recorded yet.")
     else:
-        for v in sorted(payments, key=lambda x: x.voucher_date, reverse=True):
-            amount = v.lines[0].debit_amount if v.lines else 0.0
-            service_label = service_names.get(v.reference_service_id)
-            with st.container(border=True):
-                st.markdown(f"**{v.voucher_number}** — ₹{amount:,.0f}")
-                if service_label:
-                    st.caption(f"Service: {service_label}")
-                st.caption(f"{v.voucher_date:%Y-%m-%d} | {v.description or '—'}")
-                if st.button("Edit", key=f"edit_vpay_{v.id}"):
-                    clear_all_dialog_flags()
-                    st.session_state[V_PAY] = v.id
-                    register_armed_dialog(V_PAY)
-                    st.rerun()
+        ordered = sorted(payments, key=lambda x: x.voucher_date, reverse=True)
+
+        def _payment_builder(voucher):
+            return {
+                "service_label": service_names.get(voucher.reference_service_id),
+                "show_order_linked": False,
+                "show_type_badge": False,
+                "edit": VoucherEditAction(
+                    flag_key=V_PAY,
+                    button_key=f"edit_vpay_{voucher.id}",
+                    clear_dialogs=True,
+                    register_dialog=True,
+                ),
+            }
+
+        voucher_cards(
+            ordered,
+            suffix=f"vpay_{vendor.id}",
+            card_builder=_payment_builder,
+        )
 
     if st.session_state.get(V_PAY):
         _pay_vendor_dialog(services, vendor.id)

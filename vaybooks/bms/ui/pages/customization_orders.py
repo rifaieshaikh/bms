@@ -6,7 +6,10 @@ from vaybooks.bms.application.dtos import CreateOrderRequest
 from vaybooks.bms.domain.invoices.services import InvoiceDomainService
 from vaybooks.bms.domain.orders.order_refs import compact_order_ref
 from vaybooks.bms.domain.shared.enums import VoucherType
+from vaybooks.bms.ui.components.delivery_card import DeliveryEditAction, delivery_cards
+from vaybooks.bms.ui.components.invoice_card import InvoiceEditAction, invoice_cards
 from vaybooks.bms.ui.components.item_detail_panel import customization_item_detail_panel
+from vaybooks.bms.ui.components.voucher_card import VoucherEditAction, voucher_cards
 from vaybooks.bms.ui.dialog_utils import (
     clear_all_dialog_flags,
     dismiss_armed_dialogs,
@@ -14,6 +17,7 @@ from vaybooks.bms.ui.dialog_utils import (
 )
 from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.session_keys import ACTIVITY_SKIP_NOTICE
+from vaybooks.bms.ui.styles import metric_grid, panel, status_badge
 
 
 def _inv_flag(order_id: str) -> str:
@@ -516,40 +520,28 @@ def _render_invoices_tab(services: dict, order, invoices: list):
     if not invoices:
         st.caption("No invoices yet.")
         return
-    for invoice in invoices:
-        item_labels = [
-            f"{it.bill_number}"
-            for bill_id in invoice.bill_ids
-            if (it := order.get_item_by_id(bill_id))
-        ]
-        posted = services["accounting"].find_sales_voucher_by_invoice(invoice.id)
-        with st.container(border=True):
-            badge = " · Posted" if posted else ""
-            if invoice.discount_amount > 0:
-                st.markdown(
-                    f"**{invoice.invoice_number}** — Net ₹{invoice.net_amount:,.0f}{badge}"
-                )
-                st.caption(
-                    f"{invoice.invoice_date} | Items: {', '.join(item_labels) or '—'} | "
-                    f"Gross ₹{invoice.invoice_amount:,.0f} − Discount "
-                    f"₹{invoice.discount_amount:,.0f} | Margin: ₹{invoice.margin_amount:,.0f} | "
-                    f"MPH: {invoice.margin_per_hour}"
-                )
-            else:
-                st.markdown(
-                    f"**{invoice.invoice_number}** — ₹{invoice.invoice_amount:,.0f}{badge}"
-                )
-                st.caption(
-                    f"{invoice.invoice_date} | Items: {', '.join(item_labels) or '—'} | "
-                    f"Margin: ₹{invoice.margin_amount:,.0f} | "
-                    f"MPH: {invoice.margin_per_hour}"
-                )
-            if st.button("Edit", key=f"edit_inv_{invoice.id}"):
-                clear_all_dialog_flags()
-                flag = _inv_flag(order.id)
-                st.session_state[flag] = invoice.id
-                register_armed_dialog(flag)
-                st.rerun()
+    accounting = services["accounting"]
+    inv_flag = _inv_flag(order.id)
+
+    def _invoice_builder(invoice):
+        return {
+            "edit": InvoiceEditAction(
+                flag_key=inv_flag,
+                button_key=f"edit_inv_{invoice.id}",
+                clear_dialogs=True,
+                register_dialog=True,
+            )
+        }
+
+    invoice_cards(
+        invoices,
+        order,
+        suffix=f"inv_{order.id}",
+        posted_lookup=lambda inv_id: bool(
+            accounting.find_sales_voucher_by_invoice(inv_id)
+        ),
+        card_builder=_invoice_builder,
+    )
 
 
 # --- delivery dialog ---------------------------------------------------------
@@ -610,23 +602,24 @@ def _render_deliveries_tab(services: dict, order, deliveries: list):
     if not deliveries:
         st.caption("No deliveries yet.")
         return
-    for delivery in deliveries:
-        item_labels = [
-            f"{it.bill_number}"
-            for bill_id in delivery.bill_ids
-            if (it := order.get_item_by_id(bill_id))
-        ]
-        with st.container(border=True):
-            st.markdown(f"**{delivery.delivery_date}**")
-            st.caption(f"Items: {', '.join(item_labels) or '—'}")
-            if delivery.delivery_notes:
-                st.caption(delivery.delivery_notes)
-            if st.button("Edit", key=f"edit_del_{delivery.id}"):
-                clear_all_dialog_flags()
-                flag = _del_flag(order.id)
-                st.session_state[flag] = delivery.id
-                register_armed_dialog(flag)
-                st.rerun()
+    del_flag = _del_flag(order.id)
+
+    def _delivery_builder(delivery):
+        return {
+            "edit": DeliveryEditAction(
+                flag_key=del_flag,
+                button_key=f"edit_del_{delivery.id}",
+                clear_dialogs=True,
+                register_dialog=True,
+            )
+        }
+
+    delivery_cards(
+        deliveries,
+        order,
+        suffix=f"del_{order.id}",
+        card_builder=_delivery_builder,
+    )
 
 
 # --- receipt dialog ----------------------------------------------------------
@@ -704,17 +697,26 @@ def _render_receipts_tab(services: dict, order):
     if not receipts:
         st.caption("No receipts recorded yet.")
         return
-    for voucher in receipts:
-        amount = voucher.lines[0].debit_amount if voucher.lines else 0.0
-        with st.container(border=True):
-            st.markdown(f"**{voucher.voucher_number}** — ₹{amount:,.0f}")
-            st.caption(f"{voucher.voucher_date:%Y-%m-%d} | {voucher.description or '—'}")
-            if st.button("Edit", key=f"edit_rcpt_{voucher.id}"):
-                clear_all_dialog_flags()
-                flag = _rcpt_flag(order.id)
-                st.session_state[flag] = voucher.id
-                register_armed_dialog(flag)
-                st.rerun()
+
+    rcpt_flag = _rcpt_flag(order.id)
+
+    def _receipt_builder(voucher):
+        return {
+            "show_order_linked": False,
+            "show_type_badge": False,
+            "edit": VoucherEditAction(
+                flag_key=rcpt_flag,
+                button_key=f"edit_rcpt_{voucher.id}",
+                clear_dialogs=True,
+                register_dialog=True,
+            ),
+        }
+
+    voucher_cards(
+        receipts,
+        suffix=f"rcpt_{order.id}",
+        card_builder=_receipt_builder,
+    )
 
 
 # --- payment dialog ----------------------------------------------------------
@@ -816,23 +818,27 @@ def _render_payments_tab(services: dict, order):
     if not payments:
         st.caption("No payments recorded yet.")
         return
-    for voucher in sorted(payments, key=lambda x: x.voucher_date, reverse=True):
-        # Vendor payment lines: [expense Dr, vendor Cr, vendor Dr, paying Cr].
-        amount = voucher.lines[0].debit_amount if voucher.lines else 0.0
-        vendor_name = voucher.lines[1].account_name if len(voucher.lines) > 1 else "—"
-        service_label = service_names.get(voucher.reference_service_id)
-        with st.container(border=True):
-            st.markdown(f"**{voucher.voucher_number}** — ₹{amount:,.0f}")
-            st.caption(f"Vendor: {vendor_name}")
-            if service_label:
-                st.caption(f"Service: {service_label}")
-            st.caption(f"{voucher.voucher_date:%Y-%m-%d} | {voucher.description or '—'}")
-            if st.button("Edit", key=f"edit_pay_{voucher.id}"):
-                clear_all_dialog_flags()
-                flag = _pay_flag(order.id)
-                st.session_state[flag] = voucher.id
-                register_armed_dialog(flag)
-                st.rerun()
+    ordered = sorted(payments, key=lambda x: x.voucher_date, reverse=True)
+    pay_flag = _pay_flag(order.id)
+
+    def _payment_builder(voucher):
+        return {
+            "service_label": service_names.get(voucher.reference_service_id),
+            "show_order_linked": False,
+            "show_type_badge": False,
+            "edit": VoucherEditAction(
+                flag_key=pay_flag,
+                button_key=f"edit_pay_{voucher.id}",
+                clear_dialogs=True,
+                register_dialog=True,
+            ),
+        }
+
+    voucher_cards(
+        ordered,
+        suffix=f"pay_{order.id}",
+        card_builder=_payment_builder,
+    )
 
 
 # --- refund dialog -----------------------------------------------------------
@@ -933,17 +939,26 @@ def _render_refunds_tab(services: dict, order):
     if not refunds:
         st.caption("No refunds recorded yet.")
         return
-    for voucher in refunds:
-        amount = voucher.lines[0].debit_amount if voucher.lines else 0.0
-        with st.container(border=True):
-            st.markdown(f"**{voucher.voucher_number}** — ₹{amount:,.0f}")
-            st.caption(f"{voucher.voucher_date:%Y-%m-%d} | {voucher.description or '—'}")
-            if st.button("Edit", key=f"edit_refund_{voucher.id}"):
-                clear_all_dialog_flags()
-                flag = _refund_flag(order.id)
-                st.session_state[flag] = voucher.id
-                register_armed_dialog(flag)
-                st.rerun()
+
+    refund_flag = _refund_flag(order.id)
+
+    def _refund_builder(voucher):
+        return {
+            "show_order_linked": False,
+            "show_type_badge": False,
+            "edit": VoucherEditAction(
+                flag_key=refund_flag,
+                button_key=f"edit_refund_{voucher.id}",
+                clear_dialogs=True,
+                register_dialog=True,
+            ),
+        }
+
+    voucher_cards(
+        refunds,
+        suffix=f"refund_{order.id}",
+        card_builder=_refund_builder,
+    )
 
 
 def _render_order_financials(services: dict, order, invoices: list):
@@ -972,32 +987,29 @@ def _render_order_financials(services: dict, order, invoices: list):
     expense_totals = services["expenses"].get_order_totals(order.id)
     total_expenses = round(expense_totals.get("total_selling", 0), 2)
 
-    with st.container(border=True):
-        cols = st.columns(3)
-        cols[0].metric("Total Invoiced", f"₹{total_invoiced:,.0f}")
-        cols[1].metric("Received (net)", f"₹{total_received:,.0f}")
-        cols[2].metric(
-            "Balance Due",
-            f"₹{balance:,.0f}",
-            delta=("Settled" if abs(balance) < 0.01 else None),
-            delta_color="off",
+    metric_grid(
+        [
+            ("Total Invoiced", f"₹{total_invoiced:,.0f}"),
+            ("Received (net)", f"₹{total_received:,.0f}"),
+            ("Balance Due", f"₹{balance:,.0f}"),
+            ("Total Expenses", f"₹{total_expenses:,.0f}"),
+            (
+                "Refunded",
+                f"₹{total_refunds:,.0f}",
+                "Advance/credit paid back to the customer",
+            ),
+            (
+                "Order MPH",
+                f"₹{order_mph:,.0f}" if order_mph is not None else "—",
+                "Total margin ÷ total in-house hours",
+            ),
+        ],
+        suffix=f"order_fin_{order.id}",
+    )
+    if total_hours > 0:
+        st.caption(
+            f"Margin ₹{total_margin:,.0f} over {total_hours:,.2f} in-house hours"
         )
-        cols2 = st.columns(3)
-        cols2[0].metric("Total Expenses", f"₹{total_expenses:,.0f}")
-        cols2[1].metric(
-            "Refunded",
-            f"₹{total_refunds:,.0f}",
-            help="Advance/credit paid back to the customer",
-        )
-        cols2[2].metric(
-            "Order MPH",
-            f"₹{order_mph:,.0f}" if order_mph is not None else "—",
-            help="Total margin ÷ total in-house hours",
-        )
-        if total_hours > 0:
-            st.caption(
-                f"Margin ₹{total_margin:,.0f} over {total_hours:,.2f} in-house hours"
-            )
 
 
 def _render_order_view(services: dict, order_id: str):
@@ -1023,39 +1035,46 @@ def _render_order_view(services: dict, order_id: str):
 
     st.title(compact_order_ref(order.order_number))
 
-    with st.container(border=True):
-        info = st.columns(4)
-        info[0].metric("Status", order.order_status.value)
-        info[1].write(f"**Customer:** {order.customer_name}")
-        info[2].write(f"**Mobile:** {order.phone_number}")
-        info[3].write(f"**Advance:** ₹{order.advance_amount:,.0f}")
-        if order.notes:
-            st.caption(f"Notes: {order.notes}")
-
-        st.divider()
-        etd_cols = st.columns([2, 3, 1])
-        new_etd = etd_cols[0].date_input(
-            "Expected Delivery Date (ETD)",
-            value=order.expected_delivery_date,
-            key=f"order_etd_{order.id}",
-        )
-        propagate = etd_cols[1].checkbox(
-            "Also update items still using the order date",
-            value=True,
-            key=f"order_etd_prop_{order.id}",
-        )
-        etd_cols[2].markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-        if etd_cols[2].button(
-            "Update", key=f"order_etd_btn_{order.id}", use_container_width=True
-        ):
-            try:
-                order_service.update_order_delivery_date(
-                    order.id, new_etd, propagate_to_items=propagate
+    with panel(f"order_head_{order.id}"):
+        with st.container(border=True):
+            head = st.columns([2, 3])
+            with head[0]:
+                st.caption("Status")
+                st.markdown(
+                    status_badge(order.order_status.value), unsafe_allow_html=True
                 )
-                st.toast("Delivery date updated")
-                st.rerun()
-            except Exception as exc:
-                st.error(str(exc))
+            with head[1]:
+                st.markdown(
+                    f"**{order.customer_name}**  ·  📞 {order.phone_number}"
+                )
+                st.caption(f"Advance ₹{order.advance_amount:,.0f}")
+            if order.notes:
+                st.caption(f"Notes: {order.notes}")
+
+            st.divider()
+            etd_cols = st.columns([2, 3])
+            new_etd = etd_cols[0].date_input(
+                "Expected Delivery Date (ETD)",
+                value=order.expected_delivery_date,
+                key=f"order_etd_{order.id}",
+            )
+            propagate = etd_cols[1].checkbox(
+                "Also update items still using the order date",
+                value=True,
+                key=f"order_etd_prop_{order.id}",
+            )
+            if st.button(
+                "Update Delivery Date",
+                key=f"order_etd_btn_{order.id}",
+            ):
+                try:
+                    order_service.update_order_delivery_date(
+                        order.id, new_etd, propagate_to_items=propagate
+                    )
+                    st.toast("Delivery date updated")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
 
     _render_order_financials(services, order, invoices)
 

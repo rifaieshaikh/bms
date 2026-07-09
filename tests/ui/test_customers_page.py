@@ -50,7 +50,14 @@ def test_customer_detail_route_renders_from_query_id():
             ),
             "orders": MagicMock(
                 order_counts_by_customer=MagicMock(return_value={"cust-1": 2}),
-                list_by_customer=MagicMock(return_value=[]),
+                get_customer_summary=MagicMock(
+                    return_value={
+                        "order_count": 2,
+                        "active_count": 1,
+                        "total_invoiced": 0.0,
+                    }
+                ),
+                list_recent_by_customer=MagicMock(return_value=[]),
             ),
         }
         customer_detail.render(services)

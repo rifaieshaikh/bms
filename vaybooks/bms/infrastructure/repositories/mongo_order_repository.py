@@ -275,6 +275,84 @@ class MongoOrderRepository:
             if d["_id"] is not None
         }
 
+    def list_recent_by_customer(
+        self, customer_id: str, limit: int = 5
+    ) -> List[CustomizationOrder]:
+        """Most recently created orders for a customer (uses the
+        (customer_id, order_date) index for the match)."""
+        docs = (
+            self._collection.find({"customer_id": customer_id})
+            .sort("created_at", -1)
+            .limit(limit)
+        )
+        return [self._from_doc(d) for d in docs]
+
+    def get_customer_summary(self, customer_id: str) -> dict:
+        """Order counts and total invoiced for one customer via aggregation.
+
+        Invoices only store ``order_id``, so total invoiced is computed by
+        joining orders to invoices with ``$lookup`` instead of N per-order
+        queries. ``total_invoiced`` mirrors ``Invoice.net_amount`` (gross
+        invoice amount minus discount)."""
+        inactive = [
+            OrderStatus.DELIVERED.value,
+            OrderStatus.COMPLETED.value,
+            OrderStatus.CANCELLED.value,
+        ]
+
+        count_pipeline = [
+            {"$match": {"customer_id": customer_id}},
+            {
+                "$group": {
+                    "_id": None,
+                    "order_count": {"$sum": 1},
+                    "active_count": {
+                        "$sum": {
+                            "$cond": [
+                                {"$in": ["$order_status", inactive]},
+                                0,
+                                1,
+                            ]
+                        }
+                    },
+                }
+            },
+        ]
+        count_row = next(iter(self._collection.aggregate(count_pipeline)), None)
+
+        invoice_pipeline = [
+            {"$match": {"customer_id": customer_id}},
+            {
+                "$lookup": {
+                    "from": "invoices",
+                    "localField": "_id",
+                    "foreignField": "order_id",
+                    "as": "invoices",
+                }
+            },
+            {"$unwind": "$invoices"},
+            {
+                "$group": {
+                    "_id": None,
+                    "total_invoiced": {
+                        "$sum": {
+                            "$subtract": [
+                                "$invoices.invoice_amount",
+                                {"$ifNull": ["$invoices.discount_amount", 0]},
+                            ]
+                        }
+                    },
+                }
+            },
+        ]
+        invoice_row = next(iter(self._collection.aggregate(invoice_pipeline)), None)
+
+        return {
+            "order_count": (count_row or {}).get("order_count", 0),
+            "active_count": (count_row or {}).get("active_count", 0),
+            "total_invoiced": round((invoice_row or {}).get("total_invoiced", 0.0), 2),
+        }
+
     def update_order_activity(
         self, order_id: str, order_activity_id: str, updates: dict
     ) -> CustomizationOrder:
