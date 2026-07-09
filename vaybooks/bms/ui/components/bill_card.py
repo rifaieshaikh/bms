@@ -117,7 +117,7 @@ def bill_card(
                     "Quantity", min_value=0.01, value=1.0, key=f"exp_qty_{bill.bill_id}"
                 )
                 vendor = st.text_input(
-                    "Vendor / Worker", key=f"exp_vnd_{bill.bill_id}"
+                    "Vendor / Employee", key=f"exp_vnd_{bill.bill_id}"
                 )
                 notes = st.text_area("Notes", key=f"exp_notes_{bill.bill_id}")
                 if st.form_submit_button("Add Expense"):

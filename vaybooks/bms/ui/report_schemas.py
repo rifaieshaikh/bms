@@ -161,7 +161,7 @@ TIME_TRACKING = ListSchema(
         ),
         FilterField(
             "worker",
-            "Worker",
+            "Employee",
             F.EXACT,
             placeholder="Name contains…",
         ),
@@ -181,7 +181,7 @@ TIME_TRACKING = ListSchema(
     sort_options=[
         SortOption("work_date", "Work date"),
         SortOption("duration_minutes", "Duration"),
-        SortOption("worker_name", "Worker"),
+        SortOption("worker_name", "Employee"),
         SortOption("activity_name", "Activity"),
         SortOption("order_number", "Order number"),
     ],
@@ -531,17 +531,17 @@ DELIVERY_PERFORMANCE = ListSchema(
 
 WORKER_PRODUCTIVITY = ListSchema(
     entity_key="report_worker_productivity",
-    title="Worker Productivity",
+    title="Employee Productivity",
     filter_fields=[
         FilterField("date_range", "Work date", F.DATE_RANGE, default=_mtd),
-        FilterField("worker", "Worker", F.EXACT, placeholder="Name contains…"),
+        FilterField("worker", "Employee", F.EXACT, placeholder="Name contains…"),
         FilterField("min_hours", "Min hours", F.NUMBER_MIN),
     ],
     sort_options=[
         SortOption("total_hours", "Total hours"),
         SortOption("entry_count", "Entries"),
         SortOption("order_count", "Orders"),
-        SortOption("worker_name", "Worker"),
+        SortOption("worker_name", "Employee"),
     ],
     default_sort="total_hours",
     page_size=REPORT_PAGE_SIZE,
@@ -591,7 +591,7 @@ REPORT_CATEGORIES: dict[str, list[str]] = {
     ],
     "Labor": [
         "Time Tracking",
-        "Worker Productivity",
+        "Employee Productivity",
         "Labor vs MPH",
     ],
     "Customers": [
@@ -619,7 +619,7 @@ SCHEMA_BY_REPORT_TYPE = {
     "Overdue Orders": OVERDUE,
     "Completed Orders": COMPLETED,
     "Time Tracking": TIME_TRACKING,
-    "Worker Productivity": WORKER_PRODUCTIVITY,
+    "Employee Productivity": WORKER_PRODUCTIVITY,
     "Labor vs MPH": LABOR_VS_MPH,
     "Customer Order History": CUSTOMER_HISTORY,
 }

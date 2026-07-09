@@ -5,7 +5,7 @@ import streamlit as st
 from vaybooks.bms.application.dtos import CreateOrderRequest
 from vaybooks.bms.domain.invoices.services import InvoiceDomainService
 from vaybooks.bms.domain.orders.order_refs import compact_order_ref
-from vaybooks.bms.domain.shared.enums import VoucherType
+from vaybooks.bms.domain.shared.enums import OrderStatus, VoucherType
 from vaybooks.bms.ui.components.delivery_card import DeliveryEditAction, delivery_cards
 from vaybooks.bms.ui.components.invoice_card import InvoiceEditAction, invoice_cards
 from vaybooks.bms.ui.components.item_detail_panel import customization_item_detail_panel
@@ -329,7 +329,7 @@ def _invoice_dialog(services: dict, order_id: str):
         "Invoice Date", value=invoice.invoice_date if invoice else date.today()
     )
 
-    # Per-item pricing drives item-wise MPH (MPH always excludes discount).
+    # Per-item pricing drives item-wise MPH on net revenue after discount.
     # Order-level discount is distributed proportionally to item gross amounts.
     existing_prices = dict(invoice.item_amounts) if invoice and invoice.item_amounts else {}
     if invoice and not existing_prices and invoice.bill_ids:
@@ -434,10 +434,10 @@ def _invoice_dialog(services: dict, order_id: str):
             sum(r.get("expense_selling_total", 0.0) for r in previews), 2
         )
         total_hours = round(sum(r.get("in_house_hours", 0.0) for r in previews), 2)
-        total_cum_gross = round(
-            sum(r.get("cumulative_gross", 0.0) for r in previews), 2
+        total_cum_net = round(
+            sum(r.get("cumulative_net", 0.0) for r in previews), 2
         )
-        total_margin = round(total_cum_gross - total_expense, 2)
+        total_margin = round(total_cum_net - total_expense, 2)
         total_mph = round(total_margin / total_hours, 2) if total_hours > 0 else None
 
         st.markdown("**Totals**")
@@ -453,17 +453,29 @@ def _invoice_dialog(services: dict, order_id: str):
             f"\u20b9{total_mph:,.0f}/h" if total_mph is not None else "\u2014",
         )
 
-    # Accounting posting: Dr Customer / Cr Customization.
+    # Accounting posting: Dr Customer / Cr Customization, then apply advance via customer.
     accounting = services["accounting"]
     existing_voucher = (
         accounting.find_sales_voucher_by_invoice(invoice.id) if invoice else None
     )
+    unapplied_advance = accounting.get_order_unapplied_advance(
+        order.id,
+        exclude_invoice_id=invoice.id if invoice else None,
+    )
     st.divider()
     post_entry = st.checkbox(
-        "Post accounting entry (Dr Customer / Dr Discount / Cr Customization)",
+        "Post accounting entry (Dr Customer, Cr Customization; apply advance on customer)",
         value=bool(existing_voucher) if invoice else True,
     )
     if post_entry:
+        net_preview = round(amount - discount_amount, 2)
+        advance_preview = round(min(unapplied_advance, net_preview), 2)
+        balance_preview = round(net_preview - advance_preview, 2)
+        if advance_preview > 0:
+            st.caption(
+                f"Advance applied: **₹{advance_preview:,.0f}** · "
+                f"Customer balance due: **₹{balance_preview:,.0f}**"
+            )
         customization = accounting.get_customization_account()
         if customization:
             st.caption(f"Revenue credited to: **{customization.account_name}**")
@@ -666,12 +678,12 @@ def _receipt_dialog(services: dict, order_id: str):
     if cols[0].button("Save", type="primary", use_container_width=True):
         try:
             if voucher:
-                accounting.update_receipt(
+                accounting.update_customer_payment(
                     voucher.id, account_options[recv_name], customer_account.id,
                     amount, description, rcpt_date,
                 )
             else:
-                accounting.create_receipt(
+                accounting.create_customer_payment(
                     account_options[recv_name], customer_account.id, amount,
                     description, rcpt_date, reference_order_id=order.id,
                 )
@@ -842,27 +854,25 @@ def _render_payments_tab(services: dict, order):
 
 
 # --- refund dialog -----------------------------------------------------------
-def _customer_credit(services: dict, order, invoices: list, exclude_voucher_id=None) -> float:
-    """Outstanding advance/credit available to refund: receipts - invoiced - refunds."""
-    accounting = services["accounting"]
-    vouchers = accounting.list_vouchers_by_order(order.id)
-    receipts = sum(
-        v.total_debit for v in vouchers if v.voucher_type == VoucherType.RECEIPT
+def _refundable_advance(accounting, order_id: str, exclude_voucher_id=None) -> float:
+    available = accounting.get_order_unapplied_advance(order_id)
+    if exclude_voucher_id:
+        voucher = accounting.get_voucher(exclude_voucher_id)
+        if voucher and voucher.is_advance_refund:
+            available += voucher.cash_movement_amount
+    return round(max(available, 0.0), 2)
+
+
+def _refundable_payments(accounting, order_id: str, exclude_voucher_id=None) -> float:
+    return accounting.get_order_refundable_customer_payments(
+        order_id, exclude_voucher_id=exclude_voucher_id
     )
-    refunds = sum(
-        v.total_debit
-        for v in vouchers
-        if v.voucher_type == VoucherType.REFUND and v.id != exclude_voucher_id
-    )
-    invoiced = sum(inv.net_amount for inv in invoices)
-    return round(receipts - invoiced - refunds, 2)
 
 
 @st.dialog("Record Refund", width="large", on_dismiss=dismiss_armed_dialogs)
 def _refund_dialog(services: dict, order_id: str):
     accounting = services["accounting"]
     order = services["orders"].get_order_detail(order_id)
-    invoices = services["invoices"].list_invoices_by_order(order_id)
     flag_key = _refund_flag(order_id)
     target = st.session_state.get(flag_key)
     voucher = None if target in (None, "new") else accounting.get_voucher(target)
@@ -883,37 +893,85 @@ def _refund_dialog(services: dict, order_id: str):
         return
     store_options = {a.account_name: a.id for a in store_accounts}
 
-    # Refund lines: [customer (debit), store (credit)].
-    existing_store_id = voucher.lines[1].account_id if voucher else None
-    available = _customer_credit(
-        services, order, invoices, exclude_voucher_id=voucher.id if voucher else None
-    )
-    default_amount = (
-        voucher.lines[0].debit_amount if voucher else max(available, 0.0)
+    exclude_id = voucher.id if voucher else None
+    advance_available = _refundable_advance(accounting, order.id, exclude_id)
+    payment_available = _refundable_payments(accounting, order.id, exclude_id)
+
+    if voucher:
+        refund_type = "advance" if voucher.is_advance_refund else "payment"
+    else:
+        refund_type = "advance" if advance_available > 0 else "payment"
+
+    st.caption(
+        f"Unapplied advance: **₹{advance_available:,.0f}** · "
+        f"Customer payments: **₹{payment_available:,.0f}**"
     )
 
-    st.caption(f"Customer credit available to refund: **₹{available:,.0f}**")
+    if not voucher:
+        refund_type = st.radio(
+            "Refund type",
+            options=["advance", "payment"],
+            format_func=lambda x: (
+                "Advance refund (unused advance)"
+                if x == "advance"
+                else "Payment refund (receipt on this order)"
+            ),
+            index=0 if refund_type == "advance" else 1,
+            horizontal=True,
+        )
+
+    # Refund lines: advance 4-line uses store credit on line 3; payment 2-line on line 1.
+    if voucher and voucher.is_advance_refund:
+        existing_store_id = voucher.lines[3].account_id if len(voucher.lines) > 3 else None
+        default_amount = voucher.cash_movement_amount
+    elif voucher:
+        existing_store_id = voucher.lines[1].account_id if len(voucher.lines) > 1 else None
+        default_amount = voucher.cash_movement_amount
+    else:
+        existing_store_id = None
+        pool = advance_available if refund_type == "advance" else payment_available
+        default_amount = max(pool, 0.0)
+
     store_name = st.selectbox(
         "Refund from (Store account)", list(store_options.keys()),
         index=_index_of(store_options, existing_store_id),
     )
-    amount = st.number_input("Amount", min_value=0.0, value=float(default_amount))
+    max_amount = advance_available if refund_type == "advance" else payment_available
+    amount = st.number_input(
+        "Amount", min_value=0.0, max_value=float(max_amount), value=float(default_amount)
+    )
     refund_date = st.date_input("Date", value=date.today())
+    default_desc = (
+        f"Advance refund - {order.order_number}"
+        if refund_type == "advance"
+        else f"Payment refund - {order.order_number}"
+    )
     description = st.text_input(
         "Description",
-        value=voucher.description if voucher else f"Advance refund - {order.order_number}",
+        value=voucher.description if voucher else default_desc,
     )
 
     cols = st.columns(2)
     if cols[0].button("Save", type="primary", use_container_width=True):
         try:
             if voucher:
-                accounting.update_refund(
-                    voucher.id, customer_account.id, store_options[store_name],
-                    amount, description, refund_date,
+                if voucher.is_advance_refund:
+                    accounting.update_advance_refund(
+                        voucher.id, customer_account.id, store_options[store_name],
+                        amount, description, refund_date,
+                    )
+                else:
+                    accounting.update_customer_payment_refund(
+                        voucher.id, customer_account.id, store_options[store_name],
+                        amount, description, refund_date,
+                    )
+            elif refund_type == "advance":
+                accounting.create_advance_refund(
+                    customer_account.id, store_options[store_name], amount,
+                    description, refund_date, reference_order_id=order.id,
                 )
             else:
-                accounting.create_refund(
+                accounting.create_customer_payment_refund(
                     customer_account.id, store_options[store_name], amount,
                     description, refund_date, reference_order_id=order.id,
                 )
@@ -974,14 +1032,11 @@ def _render_order_financials(services: dict, order, invoices: list):
     order_mph = round(total_margin / total_hours, 2) if total_hours > 0 else None
 
     vouchers = accounting.list_vouchers_by_order(order.id)
-    total_receipts = round(
-        sum(v.total_debit for v in vouchers if v.voucher_type == VoucherType.RECEIPT), 2
-    )
+    total_received = accounting.get_order_total_received(order.id)
     total_refunds = round(
-        sum(v.total_debit for v in vouchers if v.voucher_type == VoucherType.REFUND), 2
+        sum(v.cash_movement_amount for v in vouchers if v.voucher_type == VoucherType.REFUND),
+        2,
     )
-    # Net received = money in (receipts) minus money returned (refunds).
-    total_received = round(total_receipts - total_refunds, 2)
     balance = round(total_invoiced - total_received, 2)
 
     expense_totals = services["expenses"].get_order_totals(order.id)
@@ -1095,10 +1150,24 @@ def _render_order_view(services: dict, order_id: str):
         _render_refunds_tab(services, order)
 
     st.divider()
-    if st.button("Cancel Order", type="secondary", key=f"cancel_ord_{order.id}"):
-        order_service.cancel_order(order.id)
-        st.warning("Order cancelled")
-        st.rerun()
+    action_cols = st.columns(2)
+    if order.order_status == OrderStatus.DELIVERED:
+        if action_cols[0].button(
+            "Mark Complete", type="primary", key=f"complete_ord_{order.id}"
+        ):
+            try:
+                order_service.complete_order(order.id)
+                st.success("Order marked complete")
+                st.rerun()
+            except Exception as exc:
+                st.error(str(exc))
+    if action_cols[1].button("Cancel Order", type="secondary", key=f"cancel_ord_{order.id}"):
+        try:
+            order_service.cancel_order(order.id)
+            st.warning("Order cancelled")
+            st.rerun()
+        except Exception as exc:
+            st.error(str(exc))
 
     # Popups opened at page top level (order view is a page, not a dialog).
     # Only one dialog may open per run, so this is a strict if/elif chain.

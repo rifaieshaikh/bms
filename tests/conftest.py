@@ -65,6 +65,18 @@ class FakeAccountRepository:
                 return a
         return None
 
+    def find_vendor_account(self, vendor_id: str) -> Optional[Account]:
+        for a in self._store.values():
+            if a.linked_vendor_id == vendor_id:
+                return a
+        return None
+
+    def find_worker_account(self, worker_id: str) -> Optional[Account]:
+        for a in self._store.values():
+            if a.linked_worker_id == worker_id:
+                return a
+        return None
+
     def customer_balances_by_customer(self) -> dict:
         return {
             str(a.linked_customer_id): a.current_balance

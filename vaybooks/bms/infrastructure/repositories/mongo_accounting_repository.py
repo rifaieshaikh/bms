@@ -18,6 +18,7 @@ class MongoAccountRepository:
             "account_type": account.account_type.value,
             "linked_customer_id": account.linked_customer_id,
             "linked_vendor_id": account.linked_vendor_id,
+            "linked_worker_id": account.linked_worker_id,
             "opening_balance": account.opening_balance,
             "current_balance": account.current_balance,
             "is_store_account": account.is_store_account,
@@ -34,6 +35,7 @@ class MongoAccountRepository:
             account_type=AccountType(doc["account_type"]),
             linked_customer_id=doc.get("linked_customer_id"),
             linked_vendor_id=doc.get("linked_vendor_id"),
+            linked_worker_id=doc.get("linked_worker_id"),
             opening_balance=doc.get("opening_balance", 0),
             current_balance=doc.get("current_balance", 0),
             is_store_account=doc.get("is_store_account", False),
@@ -74,6 +76,10 @@ class MongoAccountRepository:
 
     def find_vendor_account(self, vendor_id: str) -> Optional[Account]:
         doc = self._collection.find_one({"linked_vendor_id": vendor_id})
+        return self._from_doc(doc) if doc else None
+
+    def find_worker_account(self, worker_id: str) -> Optional[Account]:
+        doc = self._collection.find_one({"linked_worker_id": worker_id})
         return self._from_doc(doc) if doc else None
 
     def list_all(self, active_only: bool = True) -> List[Account]:

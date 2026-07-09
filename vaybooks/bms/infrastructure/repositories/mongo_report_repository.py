@@ -330,8 +330,53 @@ class MongoReportRepository:
     def sum_payment_voucher_amount(
         self, voucher_type: str, start: date, end: date
     ) -> float:
-        # Vendor/salary payments are 4-line double-entry vouchers where the paid
-        # amount appears on two debit lines, so sum(debits) / 2 == amount.
+        # Cash movement: first-line debit for ADVANCE/RECEIPT/vendor/salary;
+        # REFUND uses last-line credit when 2 lines, else debits/2 for 4-line routed.
+        from vaybooks.bms.domain.shared.enums import VoucherType
+
+        if voucher_type == VoucherType.REFUND.value:
+            pipeline = [
+                {
+                    "$match": {
+                        "voucher_type": voucher_type,
+                        "voucher_date": {
+                            "$gte": to_bson_value(start),
+                            "$lte": to_bson_value(end),
+                        },
+                    }
+                },
+                {
+                    "$project": {
+                        "amount": {
+                            "$cond": [
+                                {"$eq": [{"$size": "$lines"}, 2]},
+                                {"$arrayElemAt": ["$lines.credit_amount", -1]},
+                                {
+                                    "$divide": [
+                                        {
+                                            "$reduce": {
+                                                "input": "$lines",
+                                                "initialValue": 0,
+                                                "in": {
+                                                    "$add": [
+                                                        "$$value",
+                                                        "$$this.debit_amount",
+                                                    ]
+                                                },
+                                            }
+                                        },
+                                        2,
+                                    ]
+                                },
+                            ]
+                        }
+                    }
+                },
+                {"$group": {"_id": None, "total": {"$sum": "$amount"}}},
+            ]
+            result = list(self._db.vouchers.aggregate(pipeline))
+            return result[0]["total"] if result else 0.0
+
         pipeline = [
             {
                 "$match": {
@@ -342,11 +387,15 @@ class MongoReportRepository:
                     },
                 }
             },
-            {"$unwind": "$lines"},
-            {"$group": {"_id": None, "debits": {"$sum": "$lines.debit_amount"}}},
+            {
+                "$group": {
+                    "_id": None,
+                    "total": {"$sum": {"$arrayElemAt": ["$lines.debit_amount", 0]}},
+                }
+            },
         ]
         result = list(self._db.vouchers.aggregate(pipeline))
-        return (result[0]["debits"] / 2.0) if result else 0.0
+        return result[0]["total"] if result else 0.0
 
     def count_items_created(self, start: date, end: date) -> int:
         # Per-item created_at is a full datetime, so span the whole end day.
@@ -637,17 +686,22 @@ class MongoReportRepository:
         from vaybooks.bms.domain.shared.enums import VoucherType
 
         keys = {
+            VoucherType.ADVANCE.value: "advance",
             VoucherType.RECEIPT.value: "receipt",
             VoucherType.REFUND.value: "refund",
             VoucherType.VENDOR_PAYMENT.value: "vendor_payment",
             VoucherType.SALARY_PAYMENT.value: "salary_payment",
         }
         totals: dict[str, float] = {}
+        routed_types = (
+            VoucherType.ADVANCE.value,
+            VoucherType.RECEIPT.value,
+            VoucherType.REFUND.value,
+            VoucherType.VENDOR_PAYMENT.value,
+            VoucherType.SALARY_PAYMENT.value,
+        )
         for vtype, key in keys.items():
-            if vtype in (
-                VoucherType.VENDOR_PAYMENT.value,
-                VoucherType.SALARY_PAYMENT.value,
-            ):
+            if vtype in routed_types:
                 totals[key] = self.sum_payment_voucher_amount(vtype, start, end)
             else:
                 pipeline = [

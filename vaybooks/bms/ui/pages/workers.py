@@ -17,19 +17,19 @@ def _resolve_activity_ids(options: dict, selected_names: list[str]) -> list[str]
     return [options[n] for n in selected_names if n in options]
 
 
-@st.dialog("Add Worker")
+@st.dialog("Add Employee")
 def _add_worker_dialog(worker_service, services: dict):
-    name = st.text_input("Worker Name", key="add_worker_name")
+    name = st.text_input("Employee Name", key="add_worker_name")
     act_opts = _activity_options(services)
     selected = st.multiselect(
         "Activities",
         list(act_opts.keys()),
         key="add_worker_acts",
-        placeholder="Select activities this worker can do…",
+        placeholder="Select activities this employee can do…",
     )
-    if st.button("Create Worker", type="primary"):
+    if st.button("Create Employee", type="primary"):
         if not name.strip():
-            st.error("Worker name is required")
+            st.error("Employee name is required")
             return
         try:
             worker_service.create_worker(name, _resolve_activity_ids(act_opts, selected))
@@ -39,11 +39,11 @@ def _add_worker_dialog(worker_service, services: dict):
             st.error(str(exc))
 
 
-@st.dialog("Edit Worker")
+@st.dialog("Edit Employee")
 def _edit_worker_dialog(worker_service, services: dict, worker_id: str):
     worker = worker_service.get_worker(worker_id)
     if not worker:
-        st.error("Worker not found")
+        st.error("Employee not found")
         return
 
     act_opts = _activity_options(services)
@@ -51,19 +51,19 @@ def _edit_worker_dialog(worker_service, services: dict, worker_id: str):
     current_names = [act_name_by_id.get(aid) for aid in worker.activity_ids]
     current_names = [n for n in current_names if n]
 
-    name = st.text_input("Worker Name", value=worker.worker_name, key="edit_worker_name")
+    name = st.text_input("Employee Name", value=worker.worker_name, key="edit_worker_name")
     selected = st.multiselect(
         "Activities",
         list(act_opts.keys()),
         default=current_names,
         key="edit_worker_acts",
-        placeholder="Select activities this worker can do…",
+        placeholder="Select activities this employee can do…",
     )
     is_active = st.checkbox("Active", value=worker.is_active, key="edit_worker_active")
 
     if st.button("Save Changes", type="primary"):
         if not name.strip():
-            st.error("Worker name is required")
+            st.error("Employee name is required")
             return
         try:
             worker_service.update_worker(
@@ -72,7 +72,7 @@ def _edit_worker_dialog(worker_service, services: dict, worker_id: str):
                 _resolve_activity_ids(act_opts, selected),
                 is_active,
             )
-            st.success("Worker updated")
+            st.success("Employee updated")
             st.rerun()
         except Exception as exc:
             st.error(str(exc))
@@ -115,11 +115,11 @@ def render(services: dict):
     # Local schema (simple list page with only pagination/search handled by base component).
     WORKERS = ListSchema(
         entity_key="workers",
-        title="Workers",
+        title="Employees",
         filter_fields=[],
         sort_options=[
             SortOption("created_at", "Created (newest)"),
-            SortOption("worker_name", "Worker name"),
+            SortOption("worker_name", "Employee name"),
         ],
         default_sort="created_at",
     )
@@ -128,10 +128,10 @@ def render(services: dict):
         services=services,
         load_fn=_load_workers,
         card_renderer=_render_cards,
-        primary_label="Add Worker",
+        primary_label="Add Employee",
         primary_key="workers_add_btn",
-        count_label="workers",
-        empty_text="No workers configured yet.",
+        count_label="employees",
+        empty_text="No employees configured yet.",
     )
     if bar["primary_clicked"]:
         _add_worker_dialog(worker_service, services)

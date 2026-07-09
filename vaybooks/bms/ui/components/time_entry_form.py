@@ -28,7 +28,7 @@ def time_entry_form(
         else []
     )
     worker_options = [w.worker_name for w in workers] if workers else ["—"]
-    selected_worker = st.selectbox("Worker", worker_options, key=f"{key_prefix}_worker")
+    selected_worker = st.selectbox("Employee", worker_options, key=f"{key_prefix}_worker")
     worker_name = "" if selected_worker == "—" else selected_worker
     notes = st.text_area("Notes", key=f"{key_prefix}_notes")
 

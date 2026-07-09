@@ -265,6 +265,19 @@ class OrderDomainService:
         order.updated_at = utc_now()
         return order
 
+    def complete_order(self, order: CustomizationOrder) -> CustomizationOrder:
+        if order.order_status == OrderStatus.CANCELLED:
+            raise ValidationError("Cancelled orders cannot be completed")
+        if order.order_status == OrderStatus.COMPLETED:
+            raise ValidationError("Order is already completed")
+        if order.order_status != OrderStatus.DELIVERED:
+            raise ValidationError(
+                "Only delivered orders can be marked complete"
+            )
+        order.order_status = OrderStatus.COMPLETED
+        order.updated_at = utc_now()
+        return order
+
     def update_customization_item(
         self,
         order: CustomizationOrder,

@@ -14,6 +14,7 @@ class Account:
     id: str = field(default_factory=lambda: uuid4().hex)
     linked_customer_id: Optional[str] = None
     linked_vendor_id: Optional[str] = None
+    linked_worker_id: Optional[str] = None
     opening_balance: float = 0.0
     current_balance: float = 0.0
     is_store_account: bool = False
@@ -58,3 +59,36 @@ class Voucher:
     @property
     def is_balanced(self) -> bool:
         return abs(self.total_debit - self.total_credit) < 0.01
+
+    @property
+    def cash_movement_amount(self) -> float:
+        """Actual cash in/out for routed multi-line vouchers (receipt, refund, payments)."""
+        if self.voucher_type == VoucherType.REFUND and len(self.lines) == 2:
+            return self.lines[-1].credit_amount if self.lines else 0.0
+        if self.voucher_type == VoucherType.SALES_INVOICE:
+            for line in self.lines:
+                if line.debit_amount > 0 and line.description == "Cash/Bank received":
+                    return line.debit_amount
+        routed = (
+            VoucherType.ADVANCE,
+            VoucherType.RECEIPT,
+            VoucherType.REFUND,
+            VoucherType.VENDOR_PAYMENT,
+            VoucherType.SALARY_PAYMENT,
+        )
+        if self.voucher_type in routed and self.lines and self.lines[0].debit_amount > 0:
+            return self.lines[0].debit_amount
+        if self.voucher_type == VoucherType.RECEIPT and self.lines:
+            return self.lines[0].debit_amount
+        return self.total_debit
+
+    @property
+    def is_cash_sales_invoice(self) -> bool:
+        return self.voucher_type == VoucherType.SALES_INVOICE and any(
+            line.debit_amount > 0 and line.description == "Cash/Bank received"
+            for line in self.lines
+        )
+
+    @property
+    def is_advance_refund(self) -> bool:
+        return self.voucher_type == VoucherType.REFUND and len(self.lines) > 2

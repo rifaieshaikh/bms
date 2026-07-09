@@ -39,6 +39,12 @@ def ensure_indexes(db):
         unique=True,
         partialFilterExpression={"linked_vendor_id": {"$type": "string"}},
     )
+    _create_index(
+        db.accounts,
+        [("linked_worker_id", 1)],
+        unique=True,
+        partialFilterExpression={"linked_worker_id": {"$type": "string"}},
+    )
 
     _create_index(db.customization_orders, "order_number", unique=True)
     _create_index(db.customization_orders, "customer_id")

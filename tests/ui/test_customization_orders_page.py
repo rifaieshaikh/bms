@@ -70,6 +70,7 @@ def test_order_detail_route_renders_from_query_id():
             ),
             "accounting": MagicMock(
                 list_vouchers_by_order=MagicMock(return_value=[]),
+                get_order_total_received=MagicMock(return_value=0.0),
                 get_store_accounts=MagicMock(return_value=[]),
                 list_vendor_payments=MagicMock(return_value=[]),
             ),

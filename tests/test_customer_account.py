@@ -24,6 +24,15 @@ def test_ensure_customer_account_idempotent():
     assert acc1.id == acc2.id
 
 
+def test_sync_customer_account_renames():
+    repo = FakeAccountRepository()
+    service = AccountingDomainService(repo, FakeVoucherRepository())
+    acc = service.ensure_customer_account("cust1", "Customer - Aysha - 9876543210")
+    updated = service.sync_customer_account("cust1", "Customer - Aysha - 9999999999")
+    assert updated.id == acc.id
+    assert updated.account_name == "Customer - Aysha - 9999999999"
+
+
 def test_customer_balances_by_customer():
     repo = FakeAccountRepository()
     repo.save(

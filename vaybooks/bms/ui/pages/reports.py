@@ -41,7 +41,7 @@ REPORT_LOADERS: dict[str, tuple[str, str]] = {
     "Overdue Orders": ("reports_operations", "overdue_order_report"),
     "Completed Orders": ("reports_operations", "completed_order_report"),
     "Time Tracking": ("reports_labor", "time_tracking_report"),
-    "Worker Productivity": ("reports_labor", "worker_productivity_report"),
+    "Employee Productivity": ("reports_labor", "worker_productivity_report"),
     "Labor vs MPH": ("reports_labor", "labor_vs_mph_report"),
     "Customer Order History": ("reports_customers", "customer_order_history"),
 }

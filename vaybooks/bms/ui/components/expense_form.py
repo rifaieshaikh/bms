@@ -21,7 +21,7 @@ def expense_form(result: ActivityCompletionResult, key_prefix: str = "exp"):
         min_value=0.0,
         key=f"{key_prefix}_expense",
     )
-    vendor = st.text_input("Vendor / Worker Name", key=f"{key_prefix}_vendor")
+    vendor = st.text_input("Vendor / Employee Name", key=f"{key_prefix}_vendor")
     notes = st.text_area("Notes", key=f"{key_prefix}_notes")
     add_expense = st.checkbox("Save expense", value=True, key=f"{key_prefix}_save")
 

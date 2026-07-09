@@ -46,6 +46,7 @@ def purge_business_data(db: Database) -> dict[str, int]:
             "$or": [
                 {"linked_customer_id": {"$type": "string"}},
                 {"linked_vendor_id": {"$type": "string"}},
+                {"linked_worker_id": {"$type": "string"}},
             ]
         }
     )
@@ -58,7 +59,7 @@ def purge_business_data(db: Database) -> dict[str, int]:
 
     db.accounts.update_many(
         {"account_name": {"$in": list(DEFAULT_ACCOUNT_NAMES)}},
-        {"$set": {"linked_customer_id": None, "linked_vendor_id": None}},
+        {"$set": {"linked_customer_id": None, "linked_vendor_id": None, "linked_worker_id": None}},
     )
     for account in db.accounts.find({"account_name": {"$in": list(DEFAULT_ACCOUNT_NAMES)}}):
         db.accounts.update_one(

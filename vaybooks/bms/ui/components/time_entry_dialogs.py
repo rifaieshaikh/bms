@@ -77,7 +77,7 @@ def time_form_fields(
     if entry is not None and entry.worker_name and entry.worker_name in worker_options:
         default_worker_index = worker_options.index(entry.worker_name)
     selected_worker = st.selectbox(
-        "Worker",
+        "Employee",
         worker_options,
         index=default_worker_index,
         key=f"time_worker_{key_prefix}",

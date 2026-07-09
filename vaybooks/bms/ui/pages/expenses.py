@@ -35,7 +35,7 @@ def render(services: dict):
             purchase = st.number_input("Purchase Price", min_value=0.01)
             selling = st.number_input("Selling Price", min_value=0.01)
             quantity = st.number_input("Quantity", min_value=0.01, value=1.0)
-            vendor = st.text_input("Vendor / Worker")
+            vendor = st.text_input("Vendor / Employee")
             notes = st.text_area("Notes")
             if st.button("Add Expense"):
                 if purchase <= 0 or selling <= 0:

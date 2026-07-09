@@ -3,8 +3,14 @@ from typing import List, Optional
 
 from vaybooks.bms.domain.accounting.entities import Account, Voucher, VoucherLine
 from vaybooks.bms.domain.accounting.repository import AccountRepository, CounterRepository, VoucherRepository
-from vaybooks.bms.domain.accounting.services import AccountingDomainService
+from vaybooks.bms.domain.accounting.services import (
+    ADVANCE_FROM_CUSTOMERS_ACCOUNT_NAME,
+    AccountingDomainService,
+)
 from vaybooks.bms.domain.shared.enums import AccountType, VoucherType
+
+
+ADVANCE_RELEASE_DESCRIPTION_PREFIX = "Release advance on order"
 
 
 class AccountingAppService:
@@ -51,7 +57,12 @@ class AccountingAppService:
 
     # Accounts resolved by name/type elsewhere (invoice & discount posting). Their
     # name and type are locked so renaming/retyping can't silently break posting.
-    PROTECTED_ACCOUNT_NAMES = {"sales", "customization", "discount allowed"}
+    PROTECTED_ACCOUNT_NAMES = {
+        "sales",
+        "customization",
+        "discount allowed",
+        ADVANCE_FROM_CUSTOMERS_ACCOUNT_NAME.lower(),
+    }
 
     def is_protected_account(self, account: Account) -> bool:
         if account.is_store_account:
@@ -134,7 +145,7 @@ class AccountingAppService:
     def get_account(self, account_id: str) -> Optional[Account]:
         return self._account_repo.find_by_id(account_id)
 
-    def create_receipt(
+    def create_advance_receipt(
         self,
         receiving_account_id: str,
         customer_account_id: str,
@@ -145,10 +156,76 @@ class AccountingAppService:
     ) -> Voucher:
         receiving = self._account_repo.find_by_id(receiving_account_id)
         customer = self._account_repo.find_by_id(customer_account_id)
+        if not receiving or not customer:
+            raise ValueError("Receiving or customer account not found")
+        advance = self.get_advance_from_customers_account()
         voucher_number = self._counter_repo.next("voucher_number")
         v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
+        voucher = self._domain.build_advance_receipt_voucher(
+            voucher_number=voucher_number,
+            voucher_date=v_date,
+            description=description,
+            receiving_account_id=receiving.id,
+            receiving_account_name=receiving.account_name,
+            customer_account_id=customer.id,
+            customer_account_name=customer.account_name,
+            advance_account_id=advance.id,
+            advance_account_name=advance.account_name,
+            amount=amount,
+            reference_order_id=reference_order_id,
+        )
+        return self._domain.save_voucher(voucher)
 
-        voucher = self._domain.build_receipt_voucher(
+    def update_advance_receipt(
+        self,
+        voucher_id: str,
+        receiving_account_id: str,
+        customer_account_id: str,
+        amount: float,
+        description: str,
+        voucher_date: Optional[date] = None,
+    ) -> Voucher:
+        old = self._voucher_repo.find_by_id(voucher_id)
+        if not old or old.voucher_type != VoucherType.ADVANCE:
+            raise ValueError("Advance receipt not found")
+        receiving = self._account_repo.find_by_id(receiving_account_id)
+        customer = self._account_repo.find_by_id(customer_account_id)
+        if not receiving or not customer:
+            raise ValueError("Receiving or customer account not found")
+        advance = self.get_advance_from_customers_account()
+        v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
+        voucher = self._domain.build_advance_receipt_voucher(
+            voucher_number=old.voucher_number,
+            voucher_date=v_date,
+            description=description,
+            receiving_account_id=receiving.id,
+            receiving_account_name=receiving.account_name,
+            customer_account_id=customer.id,
+            customer_account_name=customer.account_name,
+            advance_account_id=advance.id,
+            advance_account_name=advance.account_name,
+            amount=amount,
+            reference_order_id=old.reference_order_id,
+        )
+        voucher.id = old.id
+        return self._domain.update_voucher(voucher)
+
+    def create_customer_payment(
+        self,
+        receiving_account_id: str,
+        customer_account_id: str,
+        amount: float,
+        description: str,
+        voucher_date: Optional[date] = None,
+        reference_order_id: Optional[str] = None,
+    ) -> Voucher:
+        receiving = self._account_repo.find_by_id(receiving_account_id)
+        customer = self._account_repo.find_by_id(customer_account_id)
+        if not receiving or not customer:
+            raise ValueError("Receiving or customer account not found")
+        voucher_number = self._counter_repo.next("voucher_number")
+        v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
+        voucher = self._domain.build_customer_payment_voucher(
             voucher_number=voucher_number,
             voucher_date=v_date,
             description=description,
@@ -161,7 +238,7 @@ class AccountingAppService:
         )
         return self._domain.save_voucher(voucher)
 
-    def update_receipt(
+    def update_customer_payment(
         self,
         voucher_id: str,
         receiving_account_id: str,
@@ -171,12 +248,14 @@ class AccountingAppService:
         voucher_date: Optional[date] = None,
     ) -> Voucher:
         old = self._voucher_repo.find_by_id(voucher_id)
-        if not old:
-            raise ValueError("Receipt not found")
+        if not old or old.voucher_type != VoucherType.RECEIPT:
+            raise ValueError("Customer payment not found")
         receiving = self._account_repo.find_by_id(receiving_account_id)
         customer = self._account_repo.find_by_id(customer_account_id)
+        if not receiving or not customer:
+            raise ValueError("Receiving or customer account not found")
         v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
-        voucher = self._domain.build_receipt_voucher(
+        voucher = self._domain.build_customer_payment_voucher(
             voucher_number=old.voucher_number,
             voucher_date=v_date,
             description=description,
@@ -189,6 +268,44 @@ class AccountingAppService:
         )
         voucher.id = old.id
         return self._domain.update_voucher(voucher)
+
+    def create_receipt(
+        self,
+        receiving_account_id: str,
+        customer_account_id: str,
+        amount: float,
+        description: str,
+        voucher_date: Optional[date] = None,
+        reference_order_id: Optional[str] = None,
+    ) -> Voucher:
+        """Alias for customer payment (Accounts page and receipt tab)."""
+        return self.create_customer_payment(
+            receiving_account_id,
+            customer_account_id,
+            amount,
+            description,
+            voucher_date,
+            reference_order_id,
+        )
+
+    def update_receipt(
+        self,
+        voucher_id: str,
+        receiving_account_id: str,
+        customer_account_id: str,
+        amount: float,
+        description: str,
+        voucher_date: Optional[date] = None,
+    ) -> Voucher:
+        """Alias for customer payment update."""
+        return self.update_customer_payment(
+            voucher_id,
+            receiving_account_id,
+            customer_account_id,
+            amount,
+            description,
+            voucher_date,
+        )
 
     def create_vendor_payment(
         self,
@@ -388,6 +505,158 @@ class AccountingAppService:
                 return account
         return None
 
+    def get_advance_from_customers_account(self) -> Account:
+        return self._domain.get_advance_from_customers_account()
+
+    @staticmethod
+    def _voucher_cash_amount(voucher: Voucher) -> float:
+        return voucher.cash_movement_amount
+
+    def _order_advance_released(self, order_id: str) -> float:
+        advance_account = self.get_advance_from_customers_account()
+        released = 0.0
+        for voucher in self.list_vouchers_by_order(order_id):
+            if voucher.voucher_type != VoucherType.JOURNAL:
+                continue
+            if not voucher.description.startswith(ADVANCE_RELEASE_DESCRIPTION_PREFIX):
+                continue
+            for line in voucher.lines:
+                if line.account_id == advance_account.id and line.debit_amount > 0:
+                    released += line.debit_amount
+        return round(released, 2)
+
+    def get_order_unapplied_advance(
+        self,
+        order_id: str,
+        exclude_invoice_id: Optional[str] = None,
+    ) -> float:
+        """Advance pool for an order: ADVANCE receipts minus advance refunds, applied, released."""
+        advance_account = self.get_advance_from_customers_account()
+        vouchers = self.list_vouchers_by_order(order_id)
+        advances = sum(
+            self._voucher_cash_amount(v)
+            for v in vouchers
+            if v.voucher_type == VoucherType.ADVANCE
+        )
+        advance_refunds = sum(
+            self._voucher_cash_amount(v)
+            for v in vouchers
+            if v.voucher_type == VoucherType.REFUND and v.is_advance_refund
+        )
+        applied = 0.0
+        invoice_types = (VoucherType.SALES_INVOICE, VoucherType.CUSTOMIZATION_INVOICE)
+        for voucher in vouchers:
+            if voucher.voucher_type not in invoice_types:
+                continue
+            if exclude_invoice_id and voucher.reference_invoice_id == exclude_invoice_id:
+                continue
+            for line in voucher.lines:
+                if line.account_id == advance_account.id and line.debit_amount > 0:
+                    applied += line.debit_amount
+        released = self._order_advance_released(order_id)
+        return round(advances - advance_refunds - applied - released, 2)
+
+    def get_order_customer_payments(
+        self,
+        order_id: str,
+        exclude_voucher_id: Optional[str] = None,
+    ) -> float:
+        total = sum(
+            self._voucher_cash_amount(v)
+            for v in self.list_vouchers_by_order(order_id)
+            if v.voucher_type == VoucherType.RECEIPT
+            and v.id != exclude_voucher_id
+        )
+        return round(total, 2)
+
+    def get_order_payment_refunds(
+        self,
+        order_id: str,
+        exclude_voucher_id: Optional[str] = None,
+    ) -> float:
+        total = sum(
+            self._voucher_cash_amount(v)
+            for v in self.list_vouchers_by_order(order_id)
+            if v.voucher_type == VoucherType.REFUND
+            and not v.is_advance_refund
+            and v.id != exclude_voucher_id
+        )
+        return round(total, 2)
+
+    def get_order_refundable_customer_payments(
+        self,
+        order_id: str,
+        exclude_voucher_id: Optional[str] = None,
+    ) -> float:
+        return round(
+            max(
+                self.get_order_customer_payments(order_id, exclude_voucher_id)
+                - self.get_order_payment_refunds(order_id, exclude_voucher_id),
+                0.0,
+            ),
+            2,
+        )
+
+    def get_order_total_received(self, order_id: str) -> float:
+        """Net cash in: advances + customer payments minus all refunds."""
+        vouchers = self.list_vouchers_by_order(order_id)
+        advances = sum(
+            self._voucher_cash_amount(v)
+            for v in vouchers
+            if v.voucher_type == VoucherType.ADVANCE
+        )
+        payments = sum(
+            self._voucher_cash_amount(v)
+            for v in vouchers
+            if v.voucher_type == VoucherType.RECEIPT
+        )
+        refunds = sum(
+            self._voucher_cash_amount(v)
+            for v in vouchers
+            if v.voucher_type == VoucherType.REFUND
+        )
+        return round(advances + payments - refunds, 2)
+
+    def has_advance_release_journal(self, order_id: str) -> bool:
+        return any(
+            v.voucher_type == VoucherType.JOURNAL
+            and v.description.startswith(ADVANCE_RELEASE_DESCRIPTION_PREFIX)
+            for v in self.list_vouchers_by_order(order_id)
+        )
+
+    def release_order_advance(
+        self,
+        order_id: str,
+        customer_account_id: str,
+        order_number: str,
+        voucher_date: Optional[date] = None,
+    ) -> Optional[Voucher]:
+        """Post Dr Advance / Cr Customer for unapplied advance when order closes."""
+        if self.has_advance_release_journal(order_id):
+            return None
+        amount = self.get_order_unapplied_advance(order_id)
+        if amount <= 0:
+            return None
+        customer = self._account_repo.find_by_id(customer_account_id)
+        if not customer:
+            raise ValueError("Customer account not found")
+        advance = self.get_advance_from_customers_account()
+        voucher_number = self._counter_repo.next("voucher_number")
+        v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
+        description = f"{ADVANCE_RELEASE_DESCRIPTION_PREFIX} {order_number}"
+        voucher = self._domain.build_release_advance_voucher(
+            voucher_number=voucher_number,
+            voucher_date=v_date,
+            description=description,
+            advance_account_id=advance.id,
+            advance_account_name=advance.account_name,
+            customer_account_id=customer.id,
+            customer_account_name=customer.account_name,
+            amount=amount,
+            reference_order_id=order_id,
+        )
+        return self._domain.save_voucher(voucher)
+
     def find_sales_voucher_by_invoice(self, invoice_id: str) -> Optional[Voucher]:
         return self._voucher_repo.find_by_invoice(invoice_id)
 
@@ -402,6 +671,7 @@ class AccountingAppService:
         reference_invoice_id: Optional[str] = None,
         discount_amount: float = 0.0,
         discount_account_id: Optional[str] = None,
+        advance_applied: float = 0.0,
         voucher_type: VoucherType = VoucherType.SALES_INVOICE,
     ) -> Voucher:
         customer = self._account_repo.find_by_id(customer_account_id)
@@ -411,6 +681,7 @@ class AccountingAppService:
             if discount_account_id
             else None
         )
+        advance = self.get_advance_from_customers_account() if advance_applied > 0 else None
         voucher_number = self._counter_repo.next("voucher_number")
         v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
         voucher = self._domain.build_sales_invoice_voucher(
@@ -427,6 +698,9 @@ class AccountingAppService:
             discount_amount=discount_amount,
             discount_account_id=discount.id if discount else None,
             discount_account_name=discount.account_name if discount else None,
+            advance_account_id=advance.id if advance else None,
+            advance_account_name=advance.account_name if advance else None,
+            advance_applied=advance_applied,
             voucher_type=voucher_type,
         )
         return self._domain.save_voucher(voucher)
@@ -441,6 +715,7 @@ class AccountingAppService:
         voucher_date: Optional[date] = None,
         discount_amount: float = 0.0,
         discount_account_id: Optional[str] = None,
+        advance_applied: float = 0.0,
         voucher_type: Optional[VoucherType] = None,
     ) -> Voucher:
         old = self._voucher_repo.find_by_id(voucher_id)
@@ -453,6 +728,7 @@ class AccountingAppService:
             if discount_account_id
             else None
         )
+        advance = self.get_advance_from_customers_account() if advance_applied > 0 else None
         v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
         voucher = self._domain.build_sales_invoice_voucher(
             voucher_number=old.voucher_number,
@@ -468,12 +744,119 @@ class AccountingAppService:
             discount_amount=discount_amount,
             discount_account_id=discount.id if discount else None,
             discount_account_name=discount.account_name if discount else None,
+            advance_account_id=advance.id if advance else None,
+            advance_account_name=advance.account_name if advance else None,
+            advance_applied=advance_applied,
             voucher_type=voucher_type or old.voucher_type,
         )
         voucher.id = old.id
         return self._domain.update_voucher(voucher)
 
-    def create_refund(
+    def create_cash_sales_invoice(
+        self,
+        customer_account_id: str,
+        store_account_id: str,
+        gross_amount: float,
+        discount_amount: float,
+        amount_received: float,
+        store_invoice_number: str,
+        line_items_note: str = "",
+        voucher_date: Optional[date] = None,
+    ) -> Voucher:
+        customer = self._account_repo.find_by_id(customer_account_id)
+        store = self._account_repo.find_by_id(store_account_id)
+        sales = self.get_sales_account()
+        if not customer:
+            raise ValueError("Customer account not found")
+        if not store:
+            raise ValueError("Store account not found")
+        if not sales:
+            raise ValueError('No "Sales" revenue account found')
+        discount_account = (
+            self.get_discount_account() if discount_amount > 0 else None
+        )
+        number = (store_invoice_number or "").strip()
+        if not number:
+            raise ValueError("Store invoice number is required")
+        description = f"Store invoice {number}"
+        if line_items_note.strip():
+            description = f"{description}\n{line_items_note.strip()}"
+        voucher_number = self._counter_repo.next("voucher_number")
+        v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
+        voucher = self._domain.build_cash_sales_invoice_voucher(
+            voucher_number=voucher_number,
+            voucher_date=v_date,
+            description=description,
+            customer_account_id=customer.id,
+            customer_account_name=customer.account_name,
+            sales_account_id=sales.id,
+            sales_account_name=sales.account_name,
+            store_account_id=store.id,
+            store_account_name=store.account_name,
+            gross_amount=gross_amount,
+            discount_amount=discount_amount,
+            amount_received=amount_received,
+            discount_account_id=discount_account.id if discount_account else None,
+            discount_account_name=discount_account.account_name if discount_account else None,
+        )
+        return self._domain.save_voucher(voucher)
+
+    def update_cash_sales_invoice(
+        self,
+        voucher_id: str,
+        customer_account_id: str,
+        store_account_id: str,
+        gross_amount: float,
+        discount_amount: float,
+        amount_received: float,
+        store_invoice_number: str,
+        line_items_note: str = "",
+        voucher_date: Optional[date] = None,
+    ) -> Voucher:
+        old = self._voucher_repo.find_by_id(voucher_id)
+        if not old or old.voucher_type != VoucherType.SALES_INVOICE:
+            raise ValueError("Sales invoice not found")
+        if old.reference_order_id or old.reference_invoice_id:
+            raise ValueError("Order-linked sales invoices cannot be edited here")
+        customer = self._account_repo.find_by_id(customer_account_id)
+        store = self._account_repo.find_by_id(store_account_id)
+        sales = self.get_sales_account()
+        if not customer:
+            raise ValueError("Customer account not found")
+        if not store:
+            raise ValueError("Store account not found")
+        if not sales:
+            raise ValueError('No "Sales" revenue account found')
+        discount_account = (
+            self.get_discount_account() if discount_amount > 0 else None
+        )
+        number = (store_invoice_number or "").strip()
+        if not number:
+            raise ValueError("Store invoice number is required")
+        description = f"Store invoice {number}"
+        if line_items_note.strip():
+            description = f"{description}\n{line_items_note.strip()}"
+        v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
+        voucher = self._domain.build_cash_sales_invoice_voucher(
+            voucher_number=old.voucher_number,
+            voucher_date=v_date,
+            description=description,
+            customer_account_id=customer.id,
+            customer_account_name=customer.account_name,
+            sales_account_id=sales.id,
+            sales_account_name=sales.account_name,
+            store_account_id=store.id,
+            store_account_name=store.account_name,
+            gross_amount=gross_amount,
+            discount_amount=discount_amount,
+            amount_received=amount_received,
+            discount_account_id=discount_account.id if discount_account else None,
+            discount_account_name=discount_account.account_name if discount_account else None,
+        )
+        voucher.id = old.id
+        return self._domain.update_voucher(voucher)
+
+    def create_advance_refund(
         self,
         customer_account_id: str,
         store_account_id: str,
@@ -484,9 +867,95 @@ class AccountingAppService:
     ) -> Voucher:
         customer = self._account_repo.find_by_id(customer_account_id)
         store = self._account_repo.find_by_id(store_account_id)
+        if not customer or not store:
+            raise ValueError("Customer or store account not found")
+        if reference_order_id:
+            available = self.get_order_unapplied_advance(reference_order_id)
+            if amount > available:
+                raise ValueError(
+                    f"Refund amount exceeds unapplied advance (₹{available:,.2f} available)"
+                )
+        advance = self.get_advance_from_customers_account()
         voucher_number = self._counter_repo.next("voucher_number")
         v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
-        voucher = self._domain.build_refund_voucher(
+        voucher = self._domain.build_advance_refund_voucher(
+            voucher_number=voucher_number,
+            voucher_date=v_date,
+            description=description,
+            advance_account_id=advance.id,
+            advance_account_name=advance.account_name,
+            customer_account_id=customer.id,
+            customer_account_name=customer.account_name,
+            store_account_id=store.id,
+            store_account_name=store.account_name,
+            amount=amount,
+            reference_order_id=reference_order_id,
+        )
+        return self._domain.save_voucher(voucher)
+
+    def update_advance_refund(
+        self,
+        voucher_id: str,
+        customer_account_id: str,
+        store_account_id: str,
+        amount: float,
+        description: str,
+        voucher_date: Optional[date] = None,
+    ) -> Voucher:
+        old = self._voucher_repo.find_by_id(voucher_id)
+        if not old or not old.is_advance_refund:
+            raise ValueError("Advance refund not found")
+        customer = self._account_repo.find_by_id(customer_account_id)
+        store = self._account_repo.find_by_id(store_account_id)
+        if not customer or not store:
+            raise ValueError("Customer or store account not found")
+        if old.reference_order_id:
+            available = self.get_order_unapplied_advance(old.reference_order_id)
+            available += old.cash_movement_amount
+            if amount > available:
+                raise ValueError(
+                    f"Refund amount exceeds unapplied advance (₹{available:,.2f} available)"
+                )
+        advance = self.get_advance_from_customers_account()
+        v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
+        voucher = self._domain.build_advance_refund_voucher(
+            voucher_number=old.voucher_number,
+            voucher_date=v_date,
+            description=description,
+            advance_account_id=advance.id,
+            advance_account_name=advance.account_name,
+            customer_account_id=customer.id,
+            customer_account_name=customer.account_name,
+            store_account_id=store.id,
+            store_account_name=store.account_name,
+            amount=amount,
+            reference_order_id=old.reference_order_id,
+        )
+        voucher.id = old.id
+        return self._domain.update_voucher(voucher)
+
+    def create_customer_payment_refund(
+        self,
+        customer_account_id: str,
+        store_account_id: str,
+        amount: float,
+        description: str,
+        voucher_date: Optional[date] = None,
+        reference_order_id: Optional[str] = None,
+    ) -> Voucher:
+        customer = self._account_repo.find_by_id(customer_account_id)
+        store = self._account_repo.find_by_id(store_account_id)
+        if not customer or not store:
+            raise ValueError("Customer or store account not found")
+        if reference_order_id:
+            available = self.get_order_refundable_customer_payments(reference_order_id)
+            if amount > available:
+                raise ValueError(
+                    f"Refund exceeds refundable customer payments (₹{available:,.2f} available)"
+                )
+        voucher_number = self._counter_repo.next("voucher_number")
+        v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
+        voucher = self._domain.build_customer_payment_refund_voucher(
             voucher_number=voucher_number,
             voucher_date=v_date,
             description=description,
@@ -499,7 +968,7 @@ class AccountingAppService:
         )
         return self._domain.save_voucher(voucher)
 
-    def update_refund(
+    def update_customer_payment_refund(
         self,
         voucher_id: str,
         customer_account_id: str,
@@ -509,12 +978,22 @@ class AccountingAppService:
         voucher_date: Optional[date] = None,
     ) -> Voucher:
         old = self._voucher_repo.find_by_id(voucher_id)
-        if not old:
-            raise ValueError("Refund not found")
+        if not old or old.is_advance_refund:
+            raise ValueError("Customer payment refund not found")
         customer = self._account_repo.find_by_id(customer_account_id)
         store = self._account_repo.find_by_id(store_account_id)
+        if not customer or not store:
+            raise ValueError("Customer or store account not found")
+        if old.reference_order_id:
+            available = self.get_order_refundable_customer_payments(
+                old.reference_order_id, exclude_voucher_id=old.id
+            )
+            if amount > available:
+                raise ValueError(
+                    f"Refund exceeds refundable customer payments (₹{available:,.2f} available)"
+                )
         v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
-        voucher = self._domain.build_refund_voucher(
+        voucher = self._domain.build_customer_payment_refund_voucher(
             voucher_number=old.voucher_number,
             voucher_date=v_date,
             description=description,
@@ -527,6 +1006,68 @@ class AccountingAppService:
         )
         voucher.id = old.id
         return self._domain.update_voucher(voucher)
+
+    def create_refund(
+        self,
+        customer_account_id: str,
+        store_account_id: str,
+        amount: float,
+        description: str,
+        voucher_date: Optional[date] = None,
+        reference_order_id: Optional[str] = None,
+        *,
+        refund_type: str = "advance",
+    ) -> Voucher:
+        if refund_type == "payment":
+            return self.create_customer_payment_refund(
+                customer_account_id,
+                store_account_id,
+                amount,
+                description,
+                voucher_date,
+                reference_order_id,
+            )
+        return self.create_advance_refund(
+            customer_account_id,
+            store_account_id,
+            amount,
+            description,
+            voucher_date,
+            reference_order_id,
+        )
+
+    def update_refund(
+        self,
+        voucher_id: str,
+        customer_account_id: str,
+        store_account_id: str,
+        amount: float,
+        description: str,
+        voucher_date: Optional[date] = None,
+        *,
+        refund_type: Optional[str] = None,
+    ) -> Voucher:
+        old = self._voucher_repo.find_by_id(voucher_id)
+        if not old:
+            raise ValueError("Refund not found")
+        is_advance = old.is_advance_refund if refund_type is None else refund_type == "advance"
+        if is_advance:
+            return self.update_advance_refund(
+                voucher_id,
+                customer_account_id,
+                store_account_id,
+                amount,
+                description,
+                voucher_date,
+            )
+        return self.update_customer_payment_refund(
+            voucher_id,
+            customer_account_id,
+            store_account_id,
+            amount,
+            description,
+            voucher_date,
+        )
 
     def get_discount_account(self) -> Optional[Account]:
         for account in self._account_repo.list_all():

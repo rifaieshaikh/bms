@@ -125,7 +125,7 @@ services_page = st.Page(
     url_path="services",
 )
 workers_page = st.Page(
-    _page(workers), title="Workers", icon=":material/badge:", url_path="workers",
+    _page(workers), title="Employees", icon=":material/badge:", url_path="employees",
 )
 
 system_settings_page = st.Page(
@@ -184,9 +184,12 @@ navigation.register("workers_list", workers_page)
 
 page_groups = {
     "": [dashboard_page, mtd_page],
-    "Operations": [
+    "Parties": [
         customers_page,
         vendors_page,
+        workers_page,
+    ],
+    "Customization": [
         orders_list_page,
         items_page,
         time_page,
@@ -205,7 +208,6 @@ page_groups = {
     "Settings": [
         activities_page,
         services_page,
-        workers_page,
     ],
 }
 

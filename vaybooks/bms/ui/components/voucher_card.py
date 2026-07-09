@@ -34,8 +34,14 @@ def invoice_gross_amount(voucher: Voucher) -> float:
 
 def voucher_display_amount(voucher: Voucher) -> float:
     vtype = voucher.voucher_type
-    if vtype in (VoucherType.VENDOR_PAYMENT, VoucherType.SALARY_PAYMENT):
-        return voucher.lines[0].debit_amount if voucher.lines else 0.0
+    if vtype in (
+        VoucherType.VENDOR_PAYMENT,
+        VoucherType.SALARY_PAYMENT,
+        VoucherType.ADVANCE,
+        VoucherType.RECEIPT,
+        VoucherType.REFUND,
+    ):
+        return voucher.cash_movement_amount
     if vtype in (VoucherType.SALES_INVOICE, VoucherType.CUSTOMIZATION_INVOICE):
         return invoice_gross_amount(voucher)
     return voucher.total_debit
@@ -55,6 +61,10 @@ def voucher_type_label(voucher: Voucher, *, short: bool = False) -> str:
             return short_map[vtype]
         value = vtype.value if hasattr(vtype, "value") else str(vtype)
         return value
+    if vtype == VoucherType.ADVANCE:
+        return "Advance"
+    if vtype == VoucherType.RECEIPT:
+        return "Receipt"
     if vtype == VoucherType.SALARY_PAYMENT:
         return "Salary"
     if vtype == VoucherType.VENDOR_PAYMENT:
@@ -122,22 +132,70 @@ def voucher_default_party(voucher: Voucher) -> tuple[Optional[str], Optional[str
         party_name = voucher.lines[1].account_name if len(voucher.lines) > 1 else None
         label = "Account" if voucher.voucher_type == VoucherType.SALARY_PAYMENT else "Vendor"
         return label, party_name
-    if voucher.voucher_type == VoucherType.RECEIPT:
-        customer = voucher.lines[1].account_name if len(voucher.lines) > 1 else None
-        return "Customer", customer
+    if voucher.voucher_type in (VoucherType.RECEIPT, VoucherType.ADVANCE):
+        customer_line = next(
+            (
+                line
+                for line in voucher.lines
+                if line.credit_amount > 0 and line.description == "Payment received"
+            ),
+            voucher.lines[1] if len(voucher.lines) > 1 else None,
+        )
+        if customer_line:
+            label = "Customer"
+            return label, customer_line.account_name
+        return None, None
+    if voucher.voucher_type == VoucherType.REFUND:
+        if voucher.is_advance_refund:
+            customer_line = next(
+                (
+                    line
+                    for line in voucher.lines
+                    if line.credit_amount > 0 and line.description == "Advance released"
+                ),
+                None,
+            )
+            if customer_line:
+                return "Customer", customer_line.account_name
+        else:
+            customer_line = voucher.lines[0] if voucher.lines else None
+            if customer_line and customer_line.debit_amount > 0:
+                return "Customer", customer_line.account_name
+        return None, None
     if voucher.voucher_type in (
         VoucherType.SALES_INVOICE,
         VoucherType.CUSTOMIZATION_INVOICE,
     ):
-        customer = voucher.lines[0].account_name if voucher.lines else None
-        return "Customer", customer
+        customer_line = next(
+            (
+                line
+                for line in voucher.lines
+                if line.debit_amount > 0
+                and line.description not in ("Advance applied", "Discount allowed")
+                and "discount" not in line.account_name.lower()
+            ),
+            None,
+        )
+        if customer_line:
+            return "Customer", customer_line.account_name
+        advance_line = next(
+            (line for line in voucher.lines if line.description == "Advance applied"),
+            None,
+        )
+        if advance_line:
+            return "Advance applied", f"₹{advance_line.debit_amount:,.0f}"
+        return None, None
     return None, None
 
 
 def voucher_receiving_account(voucher: Voucher) -> str | None:
-    """Store/cash account that received funds (receipt debit line)."""
-    if voucher.voucher_type == VoucherType.RECEIPT and voucher.lines:
+    """Store/cash account that received funds (receipt/advance/sales debit line)."""
+    if voucher.voucher_type in (VoucherType.RECEIPT, VoucherType.ADVANCE) and voucher.lines:
         return voucher.lines[0].account_name
+    if voucher.voucher_type == VoucherType.SALES_INVOICE:
+        for line in voucher.lines:
+            if line.debit_amount > 0 and line.description == "Cash/Bank received":
+                return line.account_name
     return None
 
 

@@ -424,7 +424,7 @@ def test_redistribute_discount_delta_only_moves_the_difference():
     assert result == {"a": 100.0, "b": 200.0}
 
 
-def test_discount_does_not_change_mph():
+def test_discount_reduces_mph():
     order_repo = FakeOrderRepository()
     invoice_repo = FakeInvoiceRepository()
     expense_repo = FakeExpenseRepository()
@@ -451,8 +451,8 @@ def test_discount_does_not_change_mph():
         item_discounts={bill_id: 500.0},
     )
 
-    # MPH still measured on gross 3500 (not net 3000): 2700 / 4 = 675.
-    assert invoice.margin_per_hour == 675.0
+    # MPH measured on net 3000 (not gross 3500): 2200 / 4 = 550.
+    assert invoice.margin_per_hour == 550.0
     assert invoice.discount_amount == 500.0
     assert invoice.item_discounts == {bill_id: 500.0}
     assert invoice.net_amount == 3000.0
@@ -484,5 +484,37 @@ def test_reinvoicing_is_additive_in_preview():
     row = rows[0]
     assert row["previously_invoiced"] == 1000.0
     assert row["cumulative_gross"] == 1500.0
+    assert row["cumulative_net"] == 1500.0
     # Cumulative margin: 1500 - 800 expense = 700 over 4 h = 175/h.
     assert row["margin_per_hour"] == 175.0
+
+
+def test_reinvoicing_with_discount_reduces_item_mph():
+    order_repo = FakeOrderRepository()
+    invoice_repo = FakeInvoiceRepository()
+    expense_repo = FakeExpenseRepository()
+    counter_repo = FakeCounterRepository()
+    delivery_repo = FakeDeliveryRepository()
+
+    order = _build_o1001_order()
+    bill_id = "bill-zb006"
+    order_repo.save(order)
+    for expense in _build_zb006_mixed_expenses(order.id, bill_id):
+        expense_repo.save(expense)
+
+    service = InvoiceAppService(
+        invoice_repo, order_repo, expense_repo, counter_repo,
+        delivery_repo=delivery_repo,
+    )
+
+    service.record_invoice(
+        order.id, "INV-1", [bill_id], 1000.0, item_amounts={bill_id: 1000.0}
+    )
+
+    rows = service.preview_item_mph(
+        order.id, {bill_id: 500.0}, item_discounts={bill_id: 100.0}
+    )
+    row = rows[0]
+    assert row["cumulative_net"] == 1400.0
+    # Cumulative margin: 1400 - 800 expense = 600 over 4 h = 150/h.
+    assert row["margin_per_hour"] == 150.0

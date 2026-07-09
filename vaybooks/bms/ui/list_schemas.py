@@ -274,7 +274,7 @@ TIME = ListSchema(
         FilterField("work_date", "Work date", F.DATE_RANGE),
         FilterField("bill_number", "Bill number", F.EXACT),
         FilterField("order_number", "Order number", F.EXACT),
-        FilterField("worker_name", "Worker", F.EXACT),
+        FilterField("worker_name", "Employee", F.EXACT),
         FilterField("activity_name", "Activity", F.SELECT,
                     options_loader="activity_names"),
     ],

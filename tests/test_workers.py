@@ -3,7 +3,9 @@ from datetime import datetime
 import pytest
 
 from vaybooks.bms.application.worker_app_service import WorkerAppService
+from vaybooks.bms.domain.shared.enums import AccountType
 from vaybooks.bms.domain.workers.entities import Worker
+from tests.conftest import FakeAccountRepository
 
 
 class _FakeWorkerRepo:
@@ -32,7 +34,7 @@ class _FakeWorkerRepo:
 
 def test_list_workers_by_activity_filters_active():
     repo = _FakeWorkerRepo()
-    svc = WorkerAppService(repo)
+    svc = WorkerAppService(repo, FakeAccountRepository())
 
     w1 = Worker(worker_name="Ravi", activity_ids=["a1"], is_active=True)
     w2 = Worker(worker_name="Ravi", activity_ids=["a1"], is_active=False)
@@ -53,7 +55,34 @@ def test_list_workers_by_activity_filters_active():
 
 def test_create_worker_requires_name():
     repo = _FakeWorkerRepo()
-    svc = WorkerAppService(repo)
+    svc = WorkerAppService(repo, FakeAccountRepository())
     with pytest.raises(Exception):
         svc.create_worker("  ", ["a1"])
+
+
+def test_create_worker_creates_salary_account():
+    worker_repo = _FakeWorkerRepo()
+    account_repo = FakeAccountRepository()
+    svc = WorkerAppService(worker_repo, account_repo)
+
+    worker = svc.create_worker("Ravi", ["a1"])
+
+    account = account_repo.find_worker_account(worker.id)
+    assert account is not None
+    assert account.account_name == "Salary - Ravi"
+    assert account.is_salary_account is True
+    assert account.account_type == AccountType.LIABILITY
+    assert account.linked_worker_id == worker.id
+
+
+def test_update_worker_renames_salary_account():
+    worker_repo = _FakeWorkerRepo()
+    account_repo = FakeAccountRepository()
+    svc = WorkerAppService(worker_repo, account_repo)
+
+    worker = svc.create_worker("Ravi", ["a1"])
+    svc.update_worker(worker.id, "Ravi Kumar", ["a1"], True)
+
+    account = account_repo.find_worker_account(worker.id)
+    assert account.account_name == "Salary - Ravi Kumar"
 

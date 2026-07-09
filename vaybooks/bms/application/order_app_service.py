@@ -1,6 +1,7 @@
 from datetime import date, datetime, timedelta
 from typing import List, Optional
 
+from vaybooks.bms.application.accounting_app_service import AccountingAppService
 from vaybooks.bms.application.dtos import ActivityCompletionResult, CreateOrderRequest
 from vaybooks.bms.domain.accounting.repository import AccountRepository, CounterRepository, VoucherRepository
 from vaybooks.bms.domain.accounting.services import AccountingDomainService
@@ -34,6 +35,7 @@ class OrderAppService:
         counter_repo: CounterRepository,
         invoice_repo: Optional[InvoiceRepository] = None,
         delivery_repo: Optional[DeliveryRepository] = None,
+        accounting_service: Optional[AccountingAppService] = None,
     ):
         self._order_repo = order_repo
         self._order_domain = OrderDomainService(order_repo, bill_registry_repo)
@@ -46,6 +48,19 @@ class OrderAppService:
         self._counter_repo = counter_repo
         self._invoice_repo = invoice_repo
         self._delivery_repo = delivery_repo
+        self._accounting_service = accounting_service
+
+    def _release_order_advance(self, order: CustomizationOrder) -> None:
+        if not self._accounting_service:
+            return
+        customer_account = self._accounting_service.get_customer_account(order.customer_id)
+        if not customer_account:
+            return
+        self._accounting_service.release_order_advance(
+            order.id,
+            customer_account.id,
+            order.order_number,
+        )
 
     def _recalculate_order(self, order: CustomizationOrder) -> None:
         invoices = (
@@ -113,8 +128,9 @@ class OrderAppService:
                 request.receiving_account_id
             )
             if receiving:
+                advance = self._accounting_domain.get_advance_from_customers_account()
                 voucher_number = self._counter_repo.next("voucher_number")
-                voucher = self._accounting_domain.build_receipt_voucher(
+                voucher = self._accounting_domain.build_advance_receipt_voucher(
                     voucher_number=voucher_number,
                     voucher_date=datetime.combine(today(), datetime.min.time()),
                     description=f"Advance for {order_number}",
@@ -122,6 +138,8 @@ class OrderAppService:
                     receiving_account_name=receiving.account_name,
                     customer_account_id=customer_account.id,
                     customer_account_name=customer_account.account_name,
+                    advance_account_id=advance.id,
+                    advance_account_name=advance.account_name,
                     amount=request.advance_amount,
                     reference_order_id=saved.id,
                 )
@@ -316,7 +334,16 @@ class OrderAppService:
     def cancel_order(self, order_id: str) -> CustomizationOrder:
         order = self._order_repo.find_by_id(order_id)
         self._order_domain.cancel_order(order)
-        return self._order_repo.save(order)
+        saved = self._order_repo.save(order)
+        self._release_order_advance(saved)
+        return saved
+
+    def complete_order(self, order_id: str) -> CustomizationOrder:
+        order = self._order_repo.find_by_id(order_id)
+        self._order_domain.complete_order(order)
+        saved = self._order_repo.save(order)
+        self._release_order_advance(saved)
+        return saved
 
     def list_by_status(self, status: str) -> List[CustomizationOrder]:
         return self._order_repo.list_by_status(status)

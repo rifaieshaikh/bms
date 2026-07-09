@@ -33,7 +33,9 @@ def _cards(page_vouchers, services):
                 before_edit=lambda fk=flag_key: acc._clear_other_invoice_dialog_flags(
                     fk
                 ),
-            )
+                clear_dialogs=True,
+                register_dialog=True,
+            ),
         }
 
     voucher_cards(page_vouchers, suffix="invoices", card_builder=_builder)
@@ -41,23 +43,14 @@ def _cards(page_vouchers, services):
 
 def render(services: dict):
     accounting_service = services["accounting"]
-    actions = st.columns(2)
-    if actions[0].button(
-        "+ Record Customization Invoice",
-        type="primary",
-        key="btn_rec_cust_inv",
-        use_container_width=True,
-    ):
-        acc._clear_other_invoice_dialog_flags(acc.INV_CUST)
-        acc._customization_invoice_dialog(accounting_service)
-    if actions[1].button(
+    if st.button(
         "+ Record Sales Invoice",
         type="primary",
         key="btn_rec_sales_inv",
         use_container_width=True,
     ):
         acc._clear_other_invoice_dialog_flags(acc.INV_SALES)
-        acc._sales_invoice_dialog(accounting_service)
+        acc._sales_invoice_dialog(services)
 
     render_list(
         ACCOUNTING_INVOICES,

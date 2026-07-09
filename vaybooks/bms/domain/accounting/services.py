@@ -6,9 +6,13 @@ from vaybooks.bms.domain.shared.enums import AccountType, VoucherType
 from vaybooks.bms.domain.shared.exceptions import (
     DuplicateCustomerAccountError,
     DuplicateVendorAccountError,
+    DuplicateWorkerAccountError,
     UnbalancedVoucherError,
     ValidationError,
 )
+
+
+ADVANCE_FROM_CUSTOMERS_ACCOUNT_NAME = "Advance From Customers"
 
 
 class AccountingDomainService:
@@ -47,6 +51,26 @@ class AccountingDomainService:
             return existing
         return self.create_customer_account(customer_id, account_name)
 
+    def sync_customer_account(
+        self,
+        customer_id: str,
+        account_name: str,
+    ) -> Account:
+        account = self.ensure_customer_account(customer_id, account_name)
+        if account.account_name != account_name:
+            account.account_name = account_name
+            return self._account_repo.save(account)
+        return account
+
+    def get_advance_from_customers_account(self) -> Account:
+        account = self._account_repo.find_by_name(ADVANCE_FROM_CUSTOMERS_ACCOUNT_NAME)
+        if not account:
+            raise ValidationError(
+                f'No "{ADVANCE_FROM_CUSTOMERS_ACCOUNT_NAME}" account found. '
+                "Restart the app to seed defaults or create the account in Accounts."
+            )
+        return account
+
     def create_vendor_account(
         self,
         vendor_id: str,
@@ -73,6 +97,45 @@ class AccountingDomainService:
         if existing:
             return existing
         return self.create_vendor_account(vendor_id, account_name)
+
+    def create_worker_salary_account(
+        self,
+        worker_id: str,
+        account_name: str,
+    ) -> Account:
+        existing = self._account_repo.find_worker_account(worker_id)
+        if existing:
+            raise DuplicateWorkerAccountError(
+                f"Salary account already exists for worker {worker_id}"
+            )
+        account = Account(
+            account_name=account_name,
+            account_type=AccountType.LIABILITY,
+            linked_worker_id=worker_id,
+            is_salary_account=True,
+        )
+        return self._account_repo.save(account)
+
+    def ensure_worker_salary_account(
+        self,
+        worker_id: str,
+        account_name: str,
+    ) -> Account:
+        existing = self._account_repo.find_worker_account(worker_id)
+        if existing:
+            return existing
+        return self.create_worker_salary_account(worker_id, account_name)
+
+    def sync_worker_salary_account(
+        self,
+        worker_id: str,
+        account_name: str,
+    ) -> Account:
+        account = self.ensure_worker_salary_account(worker_id, account_name)
+        if account.account_name != account_name:
+            account.account_name = account_name
+            return self._account_repo.save(account)
+        return account
 
     def validate_voucher(self, voucher: Voucher) -> None:
         if not voucher.lines:
@@ -114,7 +177,7 @@ class AccountingDomainService:
             )
         return saved
 
-    def build_receipt_voucher(
+    def build_advance_receipt_voucher(
         self,
         voucher_number: str,
         voucher_date,
@@ -123,11 +186,14 @@ class AccountingDomainService:
         receiving_account_name: str,
         customer_account_id: str,
         customer_account_name: str,
+        advance_account_id: str,
+        advance_account_name: str,
         amount: float,
         reference_order_id: Optional[str] = None,
     ) -> Voucher:
+        """Order advance: route Cash -> Customer -> Advance From Customers."""
         if amount <= 0:
-            raise ValidationError("Receipt amount must be positive")
+            raise ValidationError("Advance amount must be positive")
         lines = [
             VoucherLine(
                 account_id=receiving_account_id,
@@ -141,7 +207,61 @@ class AccountingDomainService:
                 account_name=customer_account_name,
                 debit_amount=0,
                 credit_amount=amount,
+                description="Payment received",
+            ),
+            VoucherLine(
+                account_id=customer_account_id,
+                account_name=customer_account_name,
+                debit_amount=amount,
+                credit_amount=0,
+                description="Reclassify as advance",
+            ),
+            VoucherLine(
+                account_id=advance_account_id,
+                account_name=advance_account_name,
+                debit_amount=0,
+                credit_amount=amount,
                 description=description,
+            ),
+        ]
+        return Voucher(
+            voucher_number=voucher_number,
+            voucher_type=VoucherType.ADVANCE,
+            voucher_date=voucher_date,
+            description=description,
+            lines=lines,
+            reference_order_id=reference_order_id,
+        )
+
+    def build_customer_payment_voucher(
+        self,
+        voucher_number: str,
+        voucher_date,
+        description: str,
+        receiving_account_id: str,
+        receiving_account_name: str,
+        customer_account_id: str,
+        customer_account_name: str,
+        amount: float,
+        reference_order_id: Optional[str] = None,
+    ) -> Voucher:
+        """Customer payment against balance: Dr Cash/Bank, Cr Customer."""
+        if amount <= 0:
+            raise ValidationError("Payment amount must be positive")
+        lines = [
+            VoucherLine(
+                account_id=receiving_account_id,
+                account_name=receiving_account_name,
+                debit_amount=amount,
+                credit_amount=0,
+                description="Cash/Bank received",
+            ),
+            VoucherLine(
+                account_id=customer_account_id,
+                account_name=customer_account_name,
+                debit_amount=0,
+                credit_amount=amount,
+                description="Payment received",
             ),
         ]
         return Voucher(
@@ -292,6 +412,9 @@ class AccountingDomainService:
         discount_amount: float = 0.0,
         discount_account_id: Optional[str] = None,
         discount_account_name: Optional[str] = None,
+        advance_account_id: Optional[str] = None,
+        advance_account_name: Optional[str] = None,
+        advance_applied: float = 0.0,
         voucher_type=None,
     ) -> Voucher:
         from vaybooks.bms.domain.shared.enums import VoucherType
@@ -310,35 +433,68 @@ class AccountingDomainService:
             raise ValidationError("A discount account is required to post a discount")
 
         net_amount = round(amount - discount_amount, 2)
-        # Dr Customer (net), Dr Discount Allowed (discount), Cr Sales (gross).
+        advance_applied = round(max(advance_applied or 0.0, 0.0), 2)
+        if advance_applied > net_amount:
+            raise ValidationError("Advance applied cannot exceed the net invoice amount")
+        if advance_applied > 0 and not advance_account_id:
+            raise ValidationError(
+                f'An "{ADVANCE_FROM_CUSTOMERS_ACCOUNT_NAME}" account is required to apply advance'
+            )
+
         lines = [
             VoucherLine(
                 account_id=customer_account_id,
                 account_name=customer_account_name,
-                debit_amount=net_amount,
+                debit_amount=amount,
                 credit_amount=0,
                 description=description,
             ),
-        ]
-        if discount_amount > 0:
-            lines.append(
-                VoucherLine(
-                    account_id=discount_account_id,
-                    account_name=discount_account_name or "Discount Allowed",
-                    debit_amount=discount_amount,
-                    credit_amount=0,
-                    description="Discount allowed",
-                )
-            )
-        lines.append(
             VoucherLine(
                 account_id=income_account_id,
                 account_name=income_account_name,
                 debit_amount=0,
                 credit_amount=amount,
                 description="Sales invoice",
+            ),
+        ]
+        if advance_applied > 0:
+            lines.extend(
+                [
+                    VoucherLine(
+                        account_id=advance_account_id,
+                        account_name=advance_account_name or ADVANCE_FROM_CUSTOMERS_ACCOUNT_NAME,
+                        debit_amount=advance_applied,
+                        credit_amount=0,
+                        description="Advance applied",
+                    ),
+                    VoucherLine(
+                        account_id=customer_account_id,
+                        account_name=customer_account_name,
+                        debit_amount=0,
+                        credit_amount=advance_applied,
+                        description="Advance applied",
+                    ),
+                ]
             )
-        )
+        if discount_amount > 0:
+            lines.extend(
+                [
+                    VoucherLine(
+                        account_id=discount_account_id,
+                        account_name=discount_account_name or "Discount Allowed",
+                        debit_amount=discount_amount,
+                        credit_amount=0,
+                        description="Discount allowed",
+                    ),
+                    VoucherLine(
+                        account_id=customer_account_id,
+                        account_name=customer_account_name,
+                        debit_amount=0,
+                        credit_amount=discount_amount,
+                        description="Discount allowed",
+                    ),
+                ]
+            )
         return Voucher(
             voucher_number=voucher_number,
             voucher_type=voucher_type,
@@ -349,7 +505,161 @@ class AccountingDomainService:
             reference_invoice_id=reference_invoice_id,
         )
 
-    def build_refund_voucher(
+    def build_cash_sales_invoice_voucher(
+        self,
+        voucher_number: str,
+        voucher_date,
+        description: str,
+        customer_account_id: str,
+        customer_account_name: str,
+        sales_account_id: str,
+        sales_account_name: str,
+        store_account_id: str,
+        store_account_name: str,
+        gross_amount: float,
+        discount_amount: float = 0.0,
+        amount_received: float = 0.0,
+        discount_account_id: Optional[str] = None,
+        discount_account_name: Optional[str] = None,
+    ) -> Voucher:
+        """Cash sale: book gross revenue, discount, and partial/full payment via customer."""
+        from vaybooks.bms.domain.shared.enums import VoucherType
+
+        gross_amount = round(gross_amount, 2)
+        discount_amount = round(discount_amount or 0.0, 2)
+        amount_received = round(amount_received, 2)
+        if gross_amount <= 0:
+            raise ValidationError("Invoice amount must be positive")
+        if discount_amount < 0:
+            raise ValidationError("Discount cannot be negative")
+        if discount_amount >= gross_amount:
+            raise ValidationError("Discount cannot equal or exceed the invoice amount")
+        if amount_received <= 0:
+            raise ValidationError("Amount received must be positive")
+        net_amount = round(gross_amount - discount_amount, 2)
+        if amount_received > net_amount:
+            raise ValidationError("Amount received cannot exceed net due")
+        if discount_amount > 0 and not discount_account_id:
+            raise ValidationError("A discount account is required to post a discount")
+
+        lines = [
+            VoucherLine(
+                account_id=customer_account_id,
+                account_name=customer_account_name,
+                debit_amount=gross_amount,
+                credit_amount=0,
+                description=description,
+            ),
+            VoucherLine(
+                account_id=sales_account_id,
+                account_name=sales_account_name,
+                debit_amount=0,
+                credit_amount=gross_amount,
+                description="Sales invoice",
+            ),
+        ]
+        if discount_amount > 0:
+            lines.extend(
+                [
+                    VoucherLine(
+                        account_id=discount_account_id,
+                        account_name=discount_account_name or "Discount Allowed",
+                        debit_amount=discount_amount,
+                        credit_amount=0,
+                        description="Discount allowed",
+                    ),
+                    VoucherLine(
+                        account_id=customer_account_id,
+                        account_name=customer_account_name,
+                        debit_amount=0,
+                        credit_amount=discount_amount,
+                        description="Discount allowed",
+                    ),
+                ]
+            )
+        lines.extend(
+            [
+                VoucherLine(
+                    account_id=store_account_id,
+                    account_name=store_account_name,
+                    debit_amount=amount_received,
+                    credit_amount=0,
+                    description="Cash/Bank received",
+                ),
+                VoucherLine(
+                    account_id=customer_account_id,
+                    account_name=customer_account_name,
+                    debit_amount=0,
+                    credit_amount=amount_received,
+                    description="Payment received",
+                ),
+            ]
+        )
+        return Voucher(
+            voucher_number=voucher_number,
+            voucher_type=VoucherType.SALES_INVOICE,
+            voucher_date=voucher_date,
+            description=description,
+            lines=lines,
+        )
+
+    def build_advance_refund_voucher(
+        self,
+        voucher_number: str,
+        voucher_date,
+        description: str,
+        advance_account_id: str,
+        advance_account_name: str,
+        customer_account_id: str,
+        customer_account_name: str,
+        store_account_id: str,
+        store_account_name: str,
+        amount: float,
+        reference_order_id: Optional[str] = None,
+    ) -> Voucher:
+        """Refund unused advance: Advance -> Customer -> Cash."""
+        if amount <= 0:
+            raise ValidationError("Refund amount must be positive")
+        lines = [
+            VoucherLine(
+                account_id=advance_account_id,
+                account_name=advance_account_name,
+                debit_amount=amount,
+                credit_amount=0,
+                description=description,
+            ),
+            VoucherLine(
+                account_id=customer_account_id,
+                account_name=customer_account_name,
+                debit_amount=0,
+                credit_amount=amount,
+                description="Advance released",
+            ),
+            VoucherLine(
+                account_id=customer_account_id,
+                account_name=customer_account_name,
+                debit_amount=amount,
+                credit_amount=0,
+                description="Refund payable",
+            ),
+            VoucherLine(
+                account_id=store_account_id,
+                account_name=store_account_name,
+                debit_amount=0,
+                credit_amount=amount,
+                description="Refund paid",
+            ),
+        ]
+        return Voucher(
+            voucher_number=voucher_number,
+            voucher_type=VoucherType.REFUND,
+            voucher_date=voucher_date,
+            description=description,
+            lines=lines,
+            reference_order_id=reference_order_id,
+        )
+
+    def build_customer_payment_refund_voucher(
         self,
         voucher_number: str,
         voucher_date,
@@ -361,7 +671,7 @@ class AccountingDomainService:
         amount: float,
         reference_order_id: Optional[str] = None,
     ) -> Voucher:
-        # Refund = reverse of a receipt: Dr Customer, Cr Store (cash/bank out).
+        """Refund a customer payment: Dr Customer, Cr Cash/Bank."""
         if amount <= 0:
             raise ValidationError("Refund amount must be positive")
         lines = [
@@ -383,6 +693,46 @@ class AccountingDomainService:
         return Voucher(
             voucher_number=voucher_number,
             voucher_type=VoucherType.REFUND,
+            voucher_date=voucher_date,
+            description=description,
+            lines=lines,
+            reference_order_id=reference_order_id,
+        )
+
+    def build_release_advance_voucher(
+        self,
+        voucher_number: str,
+        voucher_date,
+        description: str,
+        advance_account_id: str,
+        advance_account_name: str,
+        customer_account_id: str,
+        customer_account_name: str,
+        amount: float,
+        reference_order_id: Optional[str] = None,
+    ) -> Voucher:
+        """Move unapplied order advance to customer credit on order close."""
+        if amount <= 0:
+            raise ValidationError("Release amount must be positive")
+        lines = [
+            VoucherLine(
+                account_id=advance_account_id,
+                account_name=advance_account_name,
+                debit_amount=amount,
+                credit_amount=0,
+                description="Advance released to customer",
+            ),
+            VoucherLine(
+                account_id=customer_account_id,
+                account_name=customer_account_name,
+                debit_amount=0,
+                credit_amount=amount,
+                description="Advance released to customer",
+            ),
+        ]
+        return Voucher(
+            voucher_number=voucher_number,
+            voucher_type=VoucherType.JOURNAL,
             voucher_date=voucher_date,
             description=description,
             lines=lines,

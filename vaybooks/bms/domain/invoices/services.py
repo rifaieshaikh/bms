@@ -25,9 +25,10 @@ class InvoiceDomainService:
 
     @staticmethod
     def calculate_mph(
-        invoice_amount: float,
+        revenue_amount: float,
         expenses: List[Expense],
     ) -> dict:
+        """Compute invoice-level margin and MPH from net revenue after discount."""
         total_expense_selling = sum(e.total_selling_price for e in expenses)
         total_expense_purchase = sum(e.total_purchase_price for e in expenses)
         total_in_house_hours = sum(
@@ -35,7 +36,7 @@ class InvoiceDomainService:
             for e in expenses
             if e.expense_source == ExpenseSource.IN_HOUSE and e.linked_time_hours > 0
         )
-        margin_amount = round(invoice_amount - total_expense_selling, 2)
+        margin_amount = round(revenue_amount - total_expense_selling, 2)
         margin_per_hour = None
         if total_in_house_hours > 0:
             margin_per_hour = round(margin_amount / total_in_house_hours, 2)
@@ -55,8 +56,8 @@ class InvoiceDomainService:
     ) -> dict:
         """MPH for a single customization item (bill).
 
-        ``item_revenue`` must be the *gross* revenue (before discount): MPH
-        measures production profitability and deliberately excludes discounts.
+        ``item_revenue`` is cumulative net revenue (gross minus discounts) across
+        every invoice for the item.
         """
         selling = sum(e.total_selling_price for e in item_expenses)
         purchase = sum(e.total_purchase_price for e in item_expenses)
@@ -235,9 +236,7 @@ class InvoiceDomainService:
             net = cls.item_net_revenue(item.item_id, invoices)
             if net is None:
                 continue  # delivered but not invoiced yet — backfilled later
-            # MPH excludes discount: margin is measured on cumulative gross.
-            gross = cls.item_gross_revenue(item.item_id, invoices)
-            data = cls.calculate_item_mph(gross, expenses_by_bill.get(item.item_id, []))
+            data = cls.calculate_item_mph(net, expenses_by_bill.get(item.item_id, []))
             item.sell_amount = net
             item.expense_selling_total = data["expense_selling_total"]
             item.expense_purchase_total = data["expense_purchase_total"]
@@ -349,8 +348,8 @@ class InvoiceDomainService:
         scoped_expenses = [
             e for e in expenses if e.bill_id and e.bill_id in bill_id_set
         ]
-        # MPH excludes discount: margin is measured on the gross amount.
-        mph_data = self.calculate_mph(invoice_amount, scoped_expenses)
+        net_revenue = round(invoice_amount - discount_amount, 2)
+        mph_data = self.calculate_mph(net_revenue, scoped_expenses)
         total_amount = self.compute_total_amount(
             order,
             bill_ids,

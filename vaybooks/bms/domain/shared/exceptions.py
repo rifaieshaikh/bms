@@ -30,6 +30,10 @@ class DuplicateVendorAccountError(DomainError):
     """Vendor account already exists."""
 
 
+class DuplicateWorkerAccountError(DomainError):
+    """Worker salary account already exists."""
+
+
 class OrderNotReadyError(DomainError):
     """Order is not ready for the requested operation."""
 

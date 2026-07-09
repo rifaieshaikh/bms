@@ -73,7 +73,7 @@ class InvoiceAppService:
         for invoice in invoices:
             bill_id_set = set(invoice.bill_ids or [])
             scoped = [e for e in expenses if e.bill_id and e.bill_id in bill_id_set]
-            mph = self._domain.calculate_mph(invoice.invoice_amount, scoped)
+            mph = self._domain.calculate_mph(invoice.net_amount, scoped)
 
             if (
                 invoice.total_expense_purchase_price != mph["total_expense_purchase_price"]
@@ -122,7 +122,7 @@ class InvoiceAppService:
         invoice: Invoice,
         post_entry: bool,
     ) -> None:
-        """Create, update, or void the Dr Customer / Dr Discount / Cr Customization voucher."""
+        """Create, update, or void the sales voucher with advance application."""
         if self._accounting is None:
             return
         existing = self._accounting.find_sales_voucher_by_invoice(invoice.id)
@@ -139,6 +139,16 @@ class InvoiceAppService:
         discount_account_id = (
             self._resolve_discount_account_id() if discount > 0 else None
         )
+        unapplied = self._accounting.get_order_unapplied_advance(
+            order.id,
+            exclude_invoice_id=invoice.id if existing else None,
+        )
+        advance_applied = round(min(unapplied, invoice.net_amount), 2)
+        if advance_applied > unapplied:
+            raise ValueError(
+                f"Cannot apply ₹{advance_applied:,.2f} advance; "
+                f"only ₹{unapplied:,.2f} unapplied advance available on this order"
+            )
         description = f"Invoice {invoice.invoice_number} - {order.order_number}"
         if existing:
             self._accounting.update_sales_invoice(
@@ -150,6 +160,7 @@ class InvoiceAppService:
                 invoice.invoice_date,
                 discount_amount=discount,
                 discount_account_id=discount_account_id,
+                advance_applied=advance_applied,
                 voucher_type=VoucherType.CUSTOMIZATION_INVOICE,
             )
         else:
@@ -163,6 +174,7 @@ class InvoiceAppService:
                 reference_invoice_id=invoice.id,
                 discount_amount=discount,
                 discount_account_id=discount_account_id,
+                advance_applied=advance_applied,
                 voucher_type=VoucherType.CUSTOMIZATION_INVOICE,
             )
 
@@ -330,8 +342,8 @@ class InvoiceAppService:
             raise ValueError("Discount cannot exceed the invoice amount")
 
         scoped = [e for e in expenses if e.bill_id and e.bill_id in bill_id_set]
-        # MPH excludes discount: margin is measured on the gross amount.
-        mph = self._domain.calculate_mph(invoice_amount, scoped)
+        net_revenue = round(invoice_amount - discount_amount, 2)
+        mph = self._domain.calculate_mph(net_revenue, scoped)
 
         invoice.invoice_number = invoice_number.strip()
         invoice.bill_ids = list(bill_ids)
@@ -383,8 +395,8 @@ class InvoiceAppService:
         expenses = self._expense_repo.find_by_order(order_id)
         bill_id_set = set(bill_ids)
         scoped = [e for e in expenses if e.bill_id and e.bill_id in bill_id_set]
-        # MPH excludes discount: margin is measured on the gross amount.
-        return self._domain.calculate_mph(max(invoice_amount, 0.0), scoped)
+        net_revenue = round(max(invoice_amount - (discount_amount or 0.0), 0.0), 2)
+        return self._domain.calculate_mph(net_revenue, scoped)
 
     def preview_item_mph(
         self,
@@ -395,10 +407,9 @@ class InvoiceAppService:
     ) -> List[dict]:
         """Per-item margin preview for the invoice dialog.
 
-        MPH is computed on cumulative *gross* revenue (this invoice plus any
-        prior invoices for the same item), so discounts never affect MPH and
-        re-invoicing is additive. Each row also carries the previously invoiced
-        net amount and this invoice's discount/net for display.
+        MPH is computed on cumulative *net* revenue (this invoice plus any
+        prior invoices for the same item), so discounts reduce MPH and
+        re-invoicing is additive on net amounts.
         """
         if not item_amounts:
             return []
@@ -423,8 +434,9 @@ class InvoiceAppService:
             cumulative_gross = round(prev_gross + gross, 2)
             discount = round(float(item_discounts.get(bill_id, 0.0)), 2)
             net = round(gross - discount, 2)
+            cumulative_net = round(prev_net + net, 2)
             data = self._domain.calculate_item_mph(
-                cumulative_gross, exp_by_bill.get(bill_id, [])
+                cumulative_net, exp_by_bill.get(bill_id, [])
             )
             rows.append(
                 {
@@ -434,6 +446,7 @@ class InvoiceAppService:
                     "net": net,
                     "previously_invoiced": round(prev_net, 2),
                     "cumulative_gross": cumulative_gross,
+                    "cumulative_net": cumulative_net,
                     **data,
                 }
             )

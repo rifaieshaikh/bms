@@ -63,7 +63,10 @@ class CustomerAppService:
             address=address,
             notes=notes,
         )
-        return self._customer_repo.save(customer)
+        saved = self._customer_repo.save(customer)
+        account_name = CustomerDomainService.build_account_name(saved)
+        self._accounting_domain.sync_customer_account(saved.id, account_name)
+        return saved
 
     def find_or_create_customer(
         self,

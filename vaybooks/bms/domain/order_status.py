@@ -16,7 +16,7 @@ def resolve_order_status(
     deliveries: Optional[List[Delivery]] = None,
 ) -> OrderStatus:
     """Derive the order lifecycle status from invoices, deliveries, and activity progress."""
-    if order.order_status == OrderStatus.CANCELLED:
+    if order.order_status in (OrderStatus.CANCELLED, OrderStatus.COMPLETED):
         return order.order_status
 
     if invoices is not None and deliveries is not None:
