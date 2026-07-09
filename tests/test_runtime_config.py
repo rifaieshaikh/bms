@@ -18,6 +18,6 @@ def test_desktop_mode_when_data_dir_set(monkeypatch):
 
 
 def test_secrets_module_imports_on_all_platforms():
-    from vaybooks.bms.infrastructure.config import secrets  # noqa: F401
+    from vaybooks.bms.infrastructure.config.secrets import resolve_mongo_uri
 
-    assert secrets.resolve_mongo_uri("mongodb://localhost:27017", None) == "mongodb://localhost:27017"
+    assert resolve_mongo_uri("mongodb://localhost:27017", None) == "mongodb://localhost:27017"

@@ -1,3 +1,5 @@
 """VayBooks Boutique Management System."""
 
-__version__ = "1.0.0"
+from vaybooks.bms.version import __version__
+
+__all__ = ["__version__"]

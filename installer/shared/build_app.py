@@ -59,7 +59,7 @@ def _configure_embeddable_pth(python_dir: Path) -> None:
 
 
 def _read_app_version() -> str:
-    init_py = BMS_DIR / "vaybooks" / "bms" / "__init__.py"
+    init_py = BMS_DIR / "vaybooks" / "bms" / "version.py"
     text = init_py.read_text(encoding="utf-8")
     match = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', text)
     return match.group(1) if match else "1.0.0"

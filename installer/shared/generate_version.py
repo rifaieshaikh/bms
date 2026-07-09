@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-INIT_PY = REPO_ROOT / "vaybooks" / "bms" / "__init__.py"
+VERSION_PY = REPO_ROOT / "vaybooks" / "bms" / "version.py"
 INNO_ISS = REPO_ROOT / "installer" / "windows" / "inno" / "VayBooks-BMS.iss"
 
 
@@ -25,14 +25,14 @@ def _git_tag_version() -> str | None:
         return None
 
 
-def update_init_py(version: str) -> None:
-    text = INIT_PY.read_text(encoding="utf-8")
+def update_version_py(version: str) -> None:
+    text = VERSION_PY.read_text(encoding="utf-8")
     new_text = re.sub(
         r'__version__\s*=\s*["\'][^"\']+["\']',
         f'__version__ = "{version}"',
         text,
     )
-    INIT_PY.write_text(new_text, encoding="utf-8")
+    VERSION_PY.write_text(new_text, encoding="utf-8")
 
 
 def update_inno(version: str) -> None:
@@ -55,7 +55,7 @@ def main() -> int:
     parser.add_argument("--version", default=None)
     args = parser.parse_args()
     version = args.version or _git_tag_version() or "1.0.0"
-    update_init_py(version)
+    update_version_py(version)
     update_inno(version)
     print(version)
     return 0

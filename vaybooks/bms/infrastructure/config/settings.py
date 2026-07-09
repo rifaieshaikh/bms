@@ -6,7 +6,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Any
 
-from vaybooks.bms import __version__
+from vaybooks.bms.version import __version__
 from vaybooks.bms.infrastructure.config.paths import (
     ensure_desktop_dirs,
     get_config_path,
