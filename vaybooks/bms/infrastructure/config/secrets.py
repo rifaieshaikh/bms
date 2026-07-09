@@ -5,10 +5,11 @@ from __future__ import annotations
 import base64
 import json
 import sys
-from ctypes import POINTER, Structure, byref, cast, create_string_buffer, string_at, windll, c_char
-from ctypes.wintypes import DWORD
+from ctypes import POINTER, Structure, byref, cast, c_char, c_ulong, create_string_buffer, string_at
 from pathlib import Path
 from typing import Any
+
+DWORD = c_ulong
 
 
 class _DATA_BLOB(Structure):
@@ -16,6 +17,8 @@ class _DATA_BLOB(Structure):
 
 
 def _dpapi_encrypt(data: bytes) -> bytes:
+    from ctypes import windll
+
     buffer = create_string_buffer(data)
     blob_in = _DATA_BLOB(len(data), cast(buffer, POINTER(c_char)))
     blob_out = _DATA_BLOB()
@@ -27,6 +30,8 @@ def _dpapi_encrypt(data: bytes) -> bytes:
 
 
 def _dpapi_decrypt(data: bytes) -> bytes:
+    from ctypes import windll
+
     buffer = create_string_buffer(data)
     blob_in = _DATA_BLOB(len(data), cast(buffer, POINTER(c_char)))
     blob_out = _DATA_BLOB()
