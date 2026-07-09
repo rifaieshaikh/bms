@@ -63,6 +63,7 @@ jobs:
           echo "installer=$INSTALLER" >> "$GITHUB_OUTPUT"
 
       - name: Generate version.json
+        shell: bash
         run: |
           python installer/shared/publish_release.py \
             --download-url "https://github.com/${{ github.repository }}/releases/download/v${{ steps.checksum.outputs.version }}/VayBooks-BMS-Setup-${{ steps.checksum.outputs.version }}.exe" \
