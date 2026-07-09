@@ -24,7 +24,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 stage_app() {
-  python3 "$REPO_ROOT/installer/shared/build_app.py" --output "$REPO_ROOT/installer/dist/staging" --skip-python
+  python3 "$REPO_ROOT/installer/shared/build_app.py" --output "$REPO_ROOT/installer/dist/staging" --skip-python --skip-downloads
 }
 
 install_app() {

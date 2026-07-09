@@ -7,6 +7,7 @@ import argparse
 import re
 import shutil
 import subprocess
+import sys
 import time
 
 import urllib.request
@@ -129,6 +130,9 @@ def copy_app(output: Path) -> Path:
 
 
 def download_tools(output: Path) -> None:
+    if sys.platform != "win32":
+        return
+
     tools_dir = output / "tools"
     tools_dir.mkdir(parents=True, exist_ok=True)
 
@@ -218,7 +222,10 @@ def main() -> int:
     version = _read_app_version()
 
     if not args.skip_python:
-        setup_embedded_python(output)
+        if sys.platform != "win32":
+            print("Embedded Python bundling is Windows-only; use --skip-python on other platforms.")
+        else:
+            setup_embedded_python(output)
     copy_app(output)
     copy_service_scripts(output)
     if not args.skip_downloads:

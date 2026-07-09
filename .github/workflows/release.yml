@@ -33,7 +33,16 @@ jobs:
           python installer/shared/generate_version.py --version "$VERSION"
 
       - name: Stage application
-        run: python installer/shared/build_app.py --output installer/dist/staging
+        run: python installer/shared/build_app.py --output installer/dist/staging --skip-downloads
+
+      - name: Install NSSM and MongoDB MSI
+        shell: pwsh
+        run: |
+          choco install nssm -y --no-progress
+          New-Item -ItemType Directory -Force -Path installer/dist/staging/tools | Out-Null
+          Copy-Item "$env:ProgramData\chocolatey\lib\NSSM\tools\nssm.exe" installer/dist/staging/tools/
+          New-Item -ItemType Directory -Force -Path installer/dist/staging/downloads | Out-Null
+          Invoke-WebRequest -Uri "https://fastdl.mongodb.org/windows/mongodb-windows-x86_64-7.0.14-signed.msi" -OutFile installer/dist/staging/downloads/mongodb.msi
 
       - name: Install Inno Setup
         run: choco install innosetup -y
