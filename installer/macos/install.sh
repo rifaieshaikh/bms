@@ -39,7 +39,7 @@ install_app() {
 }
 
 package_tarball() {
-  VERSION=$(python3 -c "import sys; sys.path.insert(0,'$REPO_ROOT'); from vaybooks.bms import __version__; print(__version__)")
+  VERSION=$(python3 -c "import sys; sys.path.insert(0,'$REPO_ROOT'); from vaybooks.bms.version import __version__; print(__version__)")
   OUT="$REPO_ROOT/installer/dist/VayBooks-BMS-${VERSION}-macos.tar.gz"
   tar -czf "$OUT" -C "$REPO_ROOT/installer/dist/staging" .
   echo "Package: $OUT"

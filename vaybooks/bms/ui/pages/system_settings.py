@@ -2,7 +2,7 @@
 
 import streamlit as st
 
-from vaybooks.bms import __version__
+from vaybooks.bms.version import __version__
 from vaybooks.bms.infrastructure.config.settings import (
     AppSettings,
     get_settings,

@@ -10,7 +10,7 @@ from urllib.request import urlopen
 
 from packaging.version import Version
 
-from vaybooks.bms import __version__
+from vaybooks.bms.version import __version__
 from vaybooks.bms.infrastructure.config.settings import get_settings
 
 logger = logging.getLogger("vaybooks.bms.updater")

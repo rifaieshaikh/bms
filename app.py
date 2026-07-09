@@ -1,6 +1,6 @@
 import streamlit as st
 
-from vaybooks.bms import __version__
+from vaybooks.bms.version import __version__
 from vaybooks.bms.infrastructure.config.runtime import is_desktop
 from vaybooks.bms.infrastructure.logging.setup import setup_logging
 from vaybooks.bms.ui import navigation

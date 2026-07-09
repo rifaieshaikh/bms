@@ -2,7 +2,7 @@
 
 import streamlit as st
 
-from vaybooks.bms import __version__
+from vaybooks.bms.version import __version__
 from vaybooks.bms.infrastructure.updater.checker import fetch_update_info
 from vaybooks.bms.infrastructure.updater.installer import download_and_install
 
