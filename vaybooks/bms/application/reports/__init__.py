@@ -11,6 +11,7 @@ from vaybooks.bms.application.reports.operations_report_service import (
 from vaybooks.bms.application.reports.profitability_report_service import (
     ProfitabilityReportService,
 )
+from vaybooks.bms.application.reports.sales_report_service import SalesReportService
 
 __all__ = [
     "BusinessInsightsReportService",
@@ -18,4 +19,5 @@ __all__ = [
     "OperationsReportService",
     "LaborReportService",
     "CustomerReportService",
+    "SalesReportService",
 ]

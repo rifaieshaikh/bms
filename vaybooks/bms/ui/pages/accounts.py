@@ -7,14 +7,6 @@ from vaybooks.bms.domain.shared.enums import AccountType, VoucherType
 from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.components.list_view import render_list
 from vaybooks.bms.ui.components.voucher_card import invoice_gross_amount
-from vaybooks.bms.ui.components.customer_picker import customer_picker
-from vaybooks.bms.ui.components.sales_invoice_form import (
-    default_line_item,
-    line_items_discount,
-    line_items_gross,
-    parse_cash_sales_voucher,
-    serialize_line_items,
-)
 from vaybooks.bms.ui.components.voucher_form import voucher_form
 from vaybooks.bms.ui.dialog_utils import (
     clear_all_dialog_flags,
@@ -39,13 +31,12 @@ RCPT = "acc_receipt_dialog"
 PAY = "acc_payment_dialog"
 SAL = "acc_salary_dialog"
 INV_CUST = "acc_cust_inv_dialog"
-INV_SALES = "acc_sales_inv_dialog"
 JOURNAL = "acc_journal_dialog"
 
 
 def _clear_other_invoice_dialog_flags(keep: str) -> None:
     """Only one invoice dialog may be armed; drop the sibling flag."""
-    clear_dialog_flags(*(k for k in (INV_CUST, INV_SALES) if k != keep))
+    clear_dialog_flags(*(k for k in (INV_CUST,) if k != keep))
 
 
 def _clear_other_payment_dialog_flags(keep: str) -> None:
@@ -416,240 +407,6 @@ def _customization_invoice_dialog(accounting_service):
     )
 
 
-@st.dialog(
-    "Record Sales Invoice",
-    width="large",
-    on_dismiss=make_dismiss_handler(INV_SALES),
-)
-def _sales_invoice_dialog(services: dict):
-    accounting_service = services["accounting"]
-    target = st.session_state.get(INV_SALES)
-    voucher = None if target in (None, "new") else accounting_service.get_voucher(target)
-    if voucher and voucher.voucher_type != VoucherType.SALES_INVOICE:
-        st.error("This entry is not a sales invoice.")
-        if st.button("Close"):
-            st.session_state.pop(INV_SALES, None)
-            st.rerun()
-        return
-    if voucher and (voucher.reference_order_id or voucher.reference_invoice_id):
-        st.error("Order-linked invoices are edited from the order Invoices tab.")
-        if st.button("Close"):
-            st.session_state.pop(INV_SALES, None)
-            st.rerun()
-        return
-
-    sales_account = accounting_service.get_sales_account()
-    store_accounts = accounting_service.get_store_accounts()
-    discount_account = accounting_service.get_discount_account()
-    if not sales_account:
-        st.error('No "Sales" revenue account found.')
-        if st.button("Close"):
-            st.session_state.pop(INV_SALES, None)
-            st.rerun()
-        return
-    if not store_accounts:
-        st.error("Need at least one cash/bank store account.")
-        if st.button("Close"):
-            st.session_state.pop(INV_SALES, None)
-            st.rerun()
-        return
-
-    lines_key = f"{INV_SALES}_line_items"
-    loaded_key = f"{INV_SALES}_loaded_for"
-    customer_default_key = f"{INV_SALES}_customer_default"
-    discount_account_id = discount_account.id if discount_account else None
-    default_customer_id = None
-    if voucher:
-        parsed = parse_cash_sales_voucher(voucher, discount_account_id)
-        if st.session_state.get(loaded_key) != voucher.id:
-            st.session_state[lines_key] = parsed["line_items"]
-            st.session_state[loaded_key] = voucher.id
-            st.session_state[f"{INV_SALES}_inv_disc"] = parsed["invoice_discount"]
-            cust_account = accounting_service.get_account(parsed["customer_id"])
-            if cust_account and cust_account.linked_customer_id:
-                st.session_state[customer_default_key] = cust_account.linked_customer_id
-        default_store = parsed["store_id"]
-        default_received = parsed["received"]
-        default_store_number = parsed["store_invoice_number"]
-        default_date = (
-            voucher.voucher_date.date()
-            if hasattr(voucher.voucher_date, "date")
-            else date.today()
-        )
-        default_customer_id = st.session_state.get(customer_default_key)
-    else:
-        st.session_state.pop(loaded_key, None)
-        st.session_state.pop(customer_default_key, None)
-        if lines_key not in st.session_state:
-            st.session_state[lines_key] = [default_line_item()]
-        default_store = store_accounts[0].id
-        default_received = 0.0
-        default_store_number = ""
-        default_date = date.today()
-
-    store_opts = {a.account_name: a.id for a in store_accounts}
-    store_names = list(store_opts.keys())
-
-    inv_cols = st.columns(2)
-    store_number = inv_cols[0].text_input(
-        "Store invoice number",
-        value=default_store_number,
-        key=f"{INV_SALES}_store_no",
-    )
-    inv_date = inv_cols[1].date_input("Date", value=default_date, key=f"{INV_SALES}_date")
-
-    customer_id = customer_picker(
-        services,
-        INV_SALES,
-        default_customer_id=default_customer_id,
-    )
-    customer_account = (
-        accounting_service.get_customer_account(customer_id) if customer_id else None
-    )
-    if customer_id and not customer_account:
-        st.error("No ledger account for this customer. Try editing and saving the customer.")
-
-    store_name = st.selectbox(
-        "Cash / Bank account",
-        store_names,
-        index=_index_of(store_opts, default_store),
-        key=f"{INV_SALES}_store",
-    )
-
-    st.markdown("**Line items**")
-    line_items: list[dict] = list(st.session_state.get(lines_key, [default_line_item()]))
-    remove_idx = None
-    for idx, row in enumerate(line_items):
-        with st.container(border=True):
-            head = st.columns([4, 1, 1, 1, 1])
-            desc = head[0].text_input(
-                "Description",
-                value=row.get("description", ""),
-                key=f"{INV_SALES}_line_desc_{idx}",
-            )
-            qty = head[1].number_input(
-                "Qty",
-                min_value=0.0,
-                value=float(row.get("qty") or 1.0),
-                key=f"{INV_SALES}_line_qty_{idx}",
-            )
-            rate = head[2].number_input(
-                "Rate",
-                min_value=0.0,
-                value=float(row.get("rate") or 0.0),
-                key=f"{INV_SALES}_line_rate_{idx}",
-            )
-            line_disc = head[3].number_input(
-                "Disc (₹)",
-                min_value=0.0,
-                value=float(row.get("discount") or 0.0),
-                key=f"{INV_SALES}_line_disc_{idx}",
-            )
-            if head[4].button("Remove", key=f"{INV_SALES}_line_rm_{idx}"):
-                remove_idx = idx
-            line_gross = round(qty * rate, 2)
-            line_disc = round(min(max(line_disc, 0.0), line_gross), 2)
-            line_items[idx] = {
-                "description": desc,
-                "qty": qty,
-                "rate": rate,
-                "discount": line_disc,
-            }
-
-    if remove_idx is not None and len(line_items) > 1:
-        line_items.pop(remove_idx)
-        st.session_state[lines_key] = line_items
-        st.rerun()
-    st.session_state[lines_key] = line_items
-
-    if st.button("+ Add line", key=f"{INV_SALES}_add_line"):
-        line_items.append(default_line_item())
-        st.session_state[lines_key] = line_items
-        st.rerun()
-
-    gross = line_items_gross(line_items)
-    line_discount_total = line_items_discount(line_items)
-    inv_disc_cols = st.columns(2)
-    invoice_discount = inv_disc_cols[0].number_input(
-        "Invoice-level discount (₹)",
-        min_value=0.0,
-        value=0.0,
-        key=f"{INV_SALES}_inv_disc",
-    )
-    invoice_discount = round(min(max(invoice_discount, 0.0), max(gross - line_discount_total, 0.0)), 2)
-    total_discount = round(line_discount_total + invoice_discount, 2)
-    net_due = round(max(gross - total_discount, 0.0), 2)
-
-    received = st.number_input(
-        "Amount received now",
-        min_value=0.0,
-        max_value=float(net_due) if net_due > 0 else 0.0,
-        value=float(default_received if default_received > 0 else net_due),
-        key=f"{INV_SALES}_received",
-    )
-    balance = round(net_due - received, 2)
-
-    with st.container(border=True):
-        st.markdown("**Summary**")
-        m = st.columns(4)
-        m[0].metric("Subtotal", f"₹{gross:,.0f}")
-        m[1].metric("Total discount", f"₹{total_discount:,.0f}")
-        m[2].metric("Net due", f"₹{net_due:,.0f}")
-        m[3].metric("Customer balance", f"₹{balance:,.0f}")
-
-    if total_discount > 0 and not discount_account:
-        st.warning('No "Discount Allowed" account found. Create one to post discounts.')
-
-    st.caption(f"Revenue credited to: **{sales_account.account_name}**")
-
-    cols = st.columns(2)
-    if cols[0].button("Save", type="primary", use_container_width=True):
-        try:
-            if not customer_account:
-                raise ValueError("Select or add a customer before saving")
-            if net_due <= 0:
-                raise ValueError("Invoice net amount must be positive")
-            if received <= 0:
-                raise ValueError("Amount received must be positive")
-            if total_discount > 0 and not discount_account:
-                raise ValueError('A "Discount Allowed" account is required for discounts')
-            note = serialize_line_items(line_items, invoice_discount)
-            if voucher:
-                accounting_service.update_cash_sales_invoice(
-                    voucher.id,
-                    customer_account.id,
-                    store_opts[store_name],
-                    gross,
-                    total_discount,
-                    received,
-                    store_number,
-                    line_items_note=note,
-                    voucher_date=inv_date,
-                )
-            else:
-                accounting_service.create_cash_sales_invoice(
-                    customer_account.id,
-                    store_opts[store_name],
-                    gross,
-                    total_discount,
-                    received,
-                    store_number,
-                    line_items_note=note,
-                    voucher_date=inv_date,
-                )
-            st.session_state.pop(lines_key, None)
-            st.session_state.pop(loaded_key, None)
-            st.session_state.pop(INV_SALES, None)
-            st.rerun()
-        except Exception as exc:
-            st.error(str(exc))
-    if cols[1].button("Cancel", use_container_width=True):
-        st.session_state.pop(lines_key, None)
-        st.session_state.pop(loaded_key, None)
-        st.session_state.pop(INV_SALES, None)
-        st.rerun()
-
-
 def _standalone_invoice_dialog(
     accounting_service,
     flag_key: str,
@@ -999,8 +756,6 @@ def open_pending_dialogs(services: dict) -> None:
         _salary_dialog(accounting_service)
     elif st.session_state.get(INV_CUST):
         _customization_invoice_dialog(accounting_service)
-    elif st.session_state.get(INV_SALES):
-        _sales_invoice_dialog(services)
     elif st.session_state.get(JOURNAL):
         _journal_dialog(accounting_service)
 

@@ -11,22 +11,24 @@ class MongoCustomerRepository:
         self._collection = db.customers
 
     def _to_doc(self, customer: Customer) -> dict:
-        return {
+        doc = {
             "_id": customer.id,
             "customer_name": customer.customer_name,
-            "phone_number": customer.phone_number,
             "alternate_phone_number": customer.alternate_phone_number,
             "address": customer.address,
             "notes": customer.notes,
             "created_at": customer.created_at,
             "updated_at": customer.updated_at,
         }
+        if (customer.phone_number or "").strip():
+            doc["phone_number"] = customer.phone_number.strip()
+        return doc
 
     def _from_doc(self, doc: dict) -> Customer:
         return Customer(
             id=doc["_id"],
             customer_name=doc["customer_name"],
-            phone_number=doc["phone_number"],
+            phone_number=doc.get("phone_number") or "",
             alternate_phone_number=doc.get("alternate_phone_number"),
             address=doc.get("address", ""),
             notes=doc.get("notes", ""),
@@ -44,6 +46,9 @@ class MongoCustomerRepository:
         return self._from_doc(doc) if doc else None
 
     def find_by_phone(self, phone: str) -> Optional[Customer]:
+        phone = (phone or "").strip()
+        if not phone:
+            return None
         doc = self._collection.find_one({"phone_number": phone})
         return self._from_doc(doc) if doc else None
 

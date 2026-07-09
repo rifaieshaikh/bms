@@ -15,6 +15,7 @@ from vaybooks.bms.application.reports import (
     LaborReportService,
     OperationsReportService,
     ProfitabilityReportService,
+    SalesReportService,
 )
 from vaybooks.bms.application.time_tracking_app_service import TimeTrackingAppService
 from vaybooks.bms.application.accounting_app_service import AccountingAppService
@@ -121,6 +122,7 @@ def get_services():
     reports_operations = OperationsReportService(report_repo)
     reports_labor = LaborReportService(report_repo)
     reports_customers = CustomerReportService(report_repo)
+    reports_sales = SalesReportService(report_repo)
     report_facade = ReportAppService(
         report_repo,
         reports_business,
@@ -128,6 +130,7 @@ def get_services():
         reports_operations,
         reports_labor,
         reports_customers,
+        reports_sales,
     )
 
     invoice_service = InvoiceAppService(

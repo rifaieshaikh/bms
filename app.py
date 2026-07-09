@@ -19,7 +19,7 @@ from vaybooks.bms.ui.pages import activities, customization_items, customization
 from vaybooks.bms.ui.pages import customization_orders_list, customization_order_detail
 from vaybooks.bms.ui.pages import customization_item_detail, customer_detail, vendor_detail
 from vaybooks.bms.ui.pages import account_detail
-from vaybooks.bms.ui.pages import mtd_dashboard, time_tracking
+from vaybooks.bms.ui.pages import mtd_dashboard, sales_dashboard, sales_detail, time_tracking
 from vaybooks.bms.ui.pages import workers
 from vaybooks.bms.ui.pages import system_settings, system_logs, system_updates
 from vaybooks.bms.ui.pages.finance import (
@@ -109,6 +109,10 @@ mtd_page = st.Page(
     _page(mtd_dashboard), title="Period Dashboard", icon=":material/calendar_month:",
     url_path="mtd-dashboard",
 )
+sales_dashboard_page = st.Page(
+    _page(sales_dashboard), title="Sales", icon=":material/point_of_sale:",
+    url_path="sales",
+)
 reports_page = st.Page(
     _page(reports), title="Reports", icon=":material/analytics:", url_path="reports",
 )
@@ -157,6 +161,9 @@ vendor_detail_page = st.Page(
 account_detail_page = st.Page(
     _page(account_detail), title="Account Detail", url_path="account-detail",
 )
+sales_detail_page = st.Page(
+    _page(sales_detail), title="Sale Detail", url_path="sales-detail",
+)
 
 # --- Navigation registry (used by go_to_detail / go_back_to_list) ------------
 navigation.register("dashboard", dashboard_page)
@@ -177,6 +184,9 @@ navigation.register("payments_list", payments_page)
 navigation.register("accounting_invoices_list", accounting_invoices_page)
 navigation.register("journal_list", journal_page)
 navigation.register("trial_balance_list", trial_balance_page)
+navigation.register("mtd_dashboard", mtd_page)
+navigation.register("sales_dashboard", sales_dashboard_page)
+navigation.register("sales_detail", sales_detail_page)
 navigation.register("reports", reports_page)
 navigation.register("activities_list", activities_page)
 navigation.register("services_list", services_page)
@@ -193,6 +203,9 @@ page_groups = {
         orders_list_page,
         items_page,
         time_page,
+    ],
+    "Sales": [
+        sales_dashboard_page,
     ],
     "Finance": [
         accounts_page,
@@ -224,6 +237,7 @@ hidden_pages = [
     customer_detail_page,
     vendor_detail_page,
     account_detail_page,
+    sales_detail_page,
 ]
 
 # All pages must be registered with st.navigation for routing to work.

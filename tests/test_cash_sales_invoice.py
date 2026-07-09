@@ -109,6 +109,25 @@ def test_cash_sales_invoice_with_discount():
     assert accounts["discount"].current_balance == 100.0
 
 
+def test_cash_sales_invoice_zero_payment_leaves_full_customer_balance():
+    service = _service()
+    accounts = _seed_accounts(service._account_repo)
+
+    voucher = service.create_cash_sales_invoice(
+        accounts["customer"].id,
+        accounts["cash"].id,
+        gross_amount=1000.0,
+        discount_amount=0.0,
+        amount_received=0.0,
+        store_invoice_number="SI-104",
+    )
+
+    assert len(voucher.lines) == 2
+    assert not voucher.is_cash_sales_invoice
+    assert accounts["customer"].current_balance == 1000.0
+    assert accounts["cash"].current_balance == 0.0
+
+
 def test_cash_sales_invoice_rejects_overpayment():
     service = _service()
     accounts = _seed_accounts(service._account_repo)

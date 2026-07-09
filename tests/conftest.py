@@ -30,6 +30,9 @@ class FakeCustomerRepository:
         return self._store.get(customer_id)
 
     def find_by_phone(self, phone: str) -> Optional[Customer]:
+        phone = (phone or "").strip()
+        if not phone:
+            return None
         for c in self._store.values():
             if c.phone_number == phone:
                 return c

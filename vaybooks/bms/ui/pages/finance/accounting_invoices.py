@@ -23,16 +23,13 @@ def _load(services, filters, sort):
 
 def _cards(page_vouchers, services):
     def _builder(v):
-        is_customization = v.voucher_type == VoucherType.CUSTOMIZATION_INVOICE
-        flag_key = acc.INV_CUST if is_customization else acc.INV_SALES
-        edit_prefix = "edit_cust_inv" if is_customization else "edit_sales_inv"
+        if v.voucher_type != VoucherType.CUSTOMIZATION_INVOICE:
+            return {}
         return {
             "edit": VoucherEditAction(
-                flag_key=flag_key,
-                button_key=f"{edit_prefix}_{v.id}",
-                before_edit=lambda fk=flag_key: acc._clear_other_invoice_dialog_flags(
-                    fk
-                ),
+                flag_key=acc.INV_CUST,
+                button_key=f"edit_cust_inv_{v.id}",
+                before_edit=lambda: acc._clear_other_invoice_dialog_flags(acc.INV_CUST),
                 clear_dialogs=True,
                 register_dialog=True,
             ),
@@ -42,16 +39,6 @@ def _cards(page_vouchers, services):
 
 
 def render(services: dict):
-    accounting_service = services["accounting"]
-    if st.button(
-        "+ Record Sales Invoice",
-        type="primary",
-        key="btn_rec_sales_inv",
-        use_container_width=True,
-    ):
-        acc._clear_other_invoice_dialog_flags(acc.INV_SALES)
-        acc._sales_invoice_dialog(services)
-
     render_list(
         ACCOUNTING_INVOICES,
         services=services,

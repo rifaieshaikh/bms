@@ -38,6 +38,24 @@ class CustomerDomainService:
         )
         return self._customer_repo.save(customer)
 
+    def create_without_phone(
+        self,
+        customer_name: str,
+        alternate_phone_number: Optional[str] = None,
+        address: str = "",
+        notes: str = "",
+    ) -> Customer:
+        if not customer_name.strip():
+            raise ValidationError("Customer name is required")
+        customer = Customer(
+            customer_name=customer_name.strip(),
+            phone_number="",
+            alternate_phone_number=alternate_phone_number,
+            address=address,
+            notes=notes,
+        )
+        return self._customer_repo.save(customer)
+
     def find_or_create(
         self,
         customer_name: str,

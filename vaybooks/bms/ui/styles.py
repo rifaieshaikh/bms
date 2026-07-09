@@ -257,6 +257,8 @@ STATUS_BADGE_COLORS = {
     "Completed": "green",
     "Delivered": "green",
     "Cancelled": "red",
+    "Paid": "green",
+    "Unpaid": "red",
 }
 
 

@@ -5,18 +5,26 @@ from __future__ import annotations
 import json
 from typing import Any, Optional
 
-STORE_INVOICE_PREFIX = "Store invoice "
+from vaybooks.bms.domain.accounting.sales_parsing import (
+    STORE_INVOICE_PREFIX,
+    parse_store_invoice_number,
+    sales_amounts_from_lines,
+    sales_row_from_voucher,
+)
 
-
-def parse_store_invoice_number(description: str) -> str:
-    if not description:
-        return ""
-    first_line = description.split("\n", 1)[0].strip()
-    if first_line.startswith(STORE_INVOICE_PREFIX):
-        return first_line[len(STORE_INVOICE_PREFIX) :].strip()
-    return ""
-
-
+__all__ = [
+    "STORE_INVOICE_PREFIX",
+    "parse_store_invoice_number",
+    "sales_amounts_from_lines",
+    "sales_row_from_voucher",
+    "serialize_line_items",
+    "parse_line_items_note",
+    "line_items_gross",
+    "line_items_discount",
+    "default_line_item",
+    "parse_cash_sales_voucher",
+    "format_line_items_summary",
+]
 def serialize_line_items(line_items: list[dict], invoice_discount: float) -> str:
     payload = {
         "items": line_items,
@@ -75,28 +83,16 @@ def default_line_item() -> dict[str, Any]:
 
 def parse_cash_sales_voucher(voucher, discount_account_id: Optional[str] = None) -> dict:
     """Extract fields from a cash sales invoice voucher for editing."""
-    gross = 0.0
-    discount = 0.0
-    received = 0.0
-    customer_id = None
+    amounts = sales_amounts_from_lines(voucher.lines, discount_account_id)
+    gross = amounts["gross"]
+    discount = amounts["discount"]
+    received = amounts["collected"]
+    customer_id = amounts["customer_account_id"]
     store_id = None
     for line in voucher.lines:
-        if line.description == "Sales invoice" and line.credit_amount > 0:
-            gross = line.credit_amount
-        if discount_account_id and line.account_id == discount_account_id and line.debit_amount > 0:
-            discount = line.debit_amount
         if line.description == "Cash/Bank received" and line.debit_amount > 0:
-            received = line.debit_amount
             store_id = line.account_id
-        if line.debit_amount > 0 and line.description not in (
-            "Sales invoice",
-            "Discount allowed",
-            "Cash/Bank received",
-        ):
-            customer_id = line.account_id
-
-    if not customer_id and voucher.lines:
-        customer_id = voucher.lines[0].account_id
+            break
 
     items, invoice_discount = parse_line_items_note(voucher.description or "")
     if not items and gross > 0:

@@ -83,5 +83,8 @@ class CustomerAppService:
         self._accounting_domain.ensure_customer_account(customer.id, account_name)
         return customer
 
+    def lookup_customer_by_phone(self, phone_number: str) -> Optional[Customer]:
+        return self._customer_repo.find_by_phone(phone_number)
+
     def list_all_customers(self) -> List[Customer]:
         return self._customer_repo.list_all()

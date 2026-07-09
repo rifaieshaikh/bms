@@ -3,7 +3,7 @@ from typing import List
 
 from pymongo.database import Database
 
-from vaybooks.bms.domain.shared.enums import CustomizationItemStatus, OrderStatus
+from vaybooks.bms.domain.shared.enums import CustomizationItemStatus, OrderStatus, VoucherType
 from vaybooks.bms.infrastructure.db.bson_utils import to_bson_value
 
 
@@ -748,3 +748,44 @@ class MongoReportRepository:
 
     def get_all_vouchers(self) -> List[dict]:
         return list(self._db.vouchers.find())
+
+    def list_sales_vouchers(
+        self, start: date, end: date, limit: int = 100
+    ) -> List[dict]:
+        end_dt = datetime.combine(end, time.max)
+        cursor = (
+            self._db.vouchers.find(
+                {
+                    "voucher_type": VoucherType.SALES_INVOICE.value,
+                    "voucher_date": {
+                        "$gte": to_bson_value(start),
+                        "$lte": to_bson_value(end_dt),
+                    },
+                }
+            )
+            .sort("voucher_date", -1)
+            .limit(limit)
+        )
+        return list(cursor)
+
+    def aggregate_sales_invoice_totals(self, start: date, end: date) -> dict:
+        vouchers = self.list_sales_vouchers(start, end, limit=10000)
+        gross = discount = collected = 0.0
+        for doc in vouchers:
+            for line in doc.get("lines") or []:
+                desc = (line.get("description") or "").strip()
+                if desc == "Sales invoice":
+                    gross += float(line.get("credit_amount") or 0)
+                elif desc == "Cash/Bank received":
+                    collected += float(line.get("debit_amount") or 0)
+                elif desc == "Discount allowed":
+                    discount += float(line.get("debit_amount") or 0)
+        net = round(gross - discount, 2)
+        return {
+            "count": len(vouchers),
+            "gross": round(gross, 2),
+            "discount": round(discount, 2),
+            "net": net,
+            "collected": round(collected, 2),
+            "outstanding": round(net - collected, 2),
+        }

@@ -534,8 +534,8 @@ class AccountingDomainService:
             raise ValidationError("Discount cannot be negative")
         if discount_amount >= gross_amount:
             raise ValidationError("Discount cannot equal or exceed the invoice amount")
-        if amount_received <= 0:
-            raise ValidationError("Amount received must be positive")
+        if amount_received < 0:
+            raise ValidationError("Amount received cannot be negative")
         net_amount = round(gross_amount - discount_amount, 2)
         if amount_received > net_amount:
             raise ValidationError("Amount received cannot exceed net due")
@@ -577,24 +577,25 @@ class AccountingDomainService:
                     ),
                 ]
             )
-        lines.extend(
-            [
-                VoucherLine(
-                    account_id=store_account_id,
-                    account_name=store_account_name,
-                    debit_amount=amount_received,
-                    credit_amount=0,
-                    description="Cash/Bank received",
-                ),
-                VoucherLine(
-                    account_id=customer_account_id,
-                    account_name=customer_account_name,
-                    debit_amount=0,
-                    credit_amount=amount_received,
-                    description="Payment received",
-                ),
-            ]
-        )
+        if amount_received > 0:
+            lines.extend(
+                [
+                    VoucherLine(
+                        account_id=store_account_id,
+                        account_name=store_account_name,
+                        debit_amount=amount_received,
+                        credit_amount=0,
+                        description="Cash/Bank received",
+                    ),
+                    VoucherLine(
+                        account_id=customer_account_id,
+                        account_name=customer_account_name,
+                        debit_amount=0,
+                        credit_amount=amount_received,
+                        description="Payment received",
+                    ),
+                ]
+            )
         return Voucher(
             voucher_number=voucher_number,
             voucher_type=VoucherType.SALES_INVOICE,

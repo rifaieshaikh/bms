@@ -405,6 +405,35 @@ ACCOUNTING_INVOICES = ListSchema(
     page_size=VOUCHER_PAGE_SIZE,
 )
 
+def _match_sales_customer(row, value) -> bool:
+    if isinstance(row, dict):
+        return row.get("customer_account_id") == value
+    return _match_voucher_debit_account(row, value)
+
+
+STORE_SALES = ListSchema(
+    entity_key="store_sales",
+    title="Sales",
+    filter_fields=[
+        FilterField("store_invoice_number", "Store invoice number", F.EXACT),
+        FilterField("party_name", "Customer", F.EXACT),
+        FilterField("sale_date", "Sale date", F.DATE_RANGE),
+        FilterField("customer_account_id", "Customer account", F.ENTITY_SELECT,
+                    options_loader="customer_accounts",
+                    match=_match_sales_customer),
+        FilterField("min_gross", "Min gross (₹)", F.NUMBER_MIN,
+                    record_attr="gross"),
+    ],
+    sort_options=[
+        SortOption("sale_date", "Date (newest)"),
+        SortOption("gross", "Gross amount"),
+        SortOption("collected", "Collected"),
+        SortOption("store_invoice_number", "Store invoice #"),
+    ],
+    default_sort="sale_date",
+    page_size=VOUCHER_PAGE_SIZE,
+)
+
 JOURNAL = ListSchema(
     entity_key="journal",
     title="Journal Entries",
@@ -490,6 +519,6 @@ SCHEMAS = {
     s.entity_key: s
     for s in [
         ORDERS, ITEMS, CUSTOMERS, VENDORS, TIME, ACCOUNTS, VOUCHERS, RECEIPTS,
-        PAYMENTS, ACCOUNTING_INVOICES, JOURNAL, TRIAL_BALANCE, ACTIVITIES, SERVICES,
+        PAYMENTS, ACCOUNTING_INVOICES, STORE_SALES, JOURNAL, TRIAL_BALANCE, ACTIVITIES, SERVICES,
     ]
 }

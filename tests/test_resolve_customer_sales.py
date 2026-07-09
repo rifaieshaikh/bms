@@ -1,0 +1,52 @@
+"""Tests for sales customer lookup and find-or-create flow."""
+
+from vaybooks.bms.application.customer_app_service import CustomerAppService
+from vaybooks.bms.domain.customers.entities import Customer
+from tests.conftest import FakeAccountRepository, FakeCustomerRepository
+
+
+def _service():
+    customer_repo = FakeCustomerRepository()
+    account_repo = FakeAccountRepository()
+    return CustomerAppService(customer_repo, account_repo), customer_repo, account_repo
+
+
+def test_lookup_returns_customer_by_phone():
+    service, customer_repo, _ = _service()
+    customer_repo.save(Customer(id="c1", customer_name="Aysha", phone_number="9876543210"))
+
+    found = service.lookup_customer_by_phone("9876543210")
+
+    assert found is not None
+    assert found.id == "c1"
+    assert found.customer_name == "Aysha"
+
+
+def test_lookup_returns_none_when_phone_unknown():
+    service, _, _ = _service()
+
+    assert service.lookup_customer_by_phone("9000000001") is None
+
+
+def test_find_or_create_trusts_existing_phone_over_name():
+    service, customer_repo, account_repo = _service()
+    existing = customer_repo.save(
+        Customer(id="c1", customer_name="Aysha", phone_number="9876543210")
+    )
+
+    resolved = service.find_or_create_customer("Different Name", "9876543210")
+
+    assert resolved.id == existing.id
+    assert resolved.customer_name == "Aysha"
+    assert account_repo.find_customer_account("c1") is not None
+
+
+def test_find_or_create_creates_customer_when_phone_new():
+    service, customer_repo, account_repo = _service()
+
+    resolved = service.find_or_create_customer("New Buyer", "9000000001")
+
+    assert resolved.customer_name == "New Buyer"
+    assert resolved.phone_number == "9000000001"
+    assert len(customer_repo.list_all()) == 1
+    assert account_repo.find_customer_account(resolved.id) is not None
