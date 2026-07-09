@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import Any
 
 from vaybooks.bms.version import __version__
@@ -18,6 +20,9 @@ from vaybooks.bms.infrastructure.config.secrets import resolve_mongo_uri
 DEFAULT_UPDATE_URL = (
     "https://github.com/rifaieshaikh/bms/releases/latest/download/version.json"
 )
+
+_SEED_FLAG_KEYS = ("SEED_CONFIG", "SEED_QA_FIXTURES", "PURGE_BUSINESS_DATA")
+logger = logging.getLogger("vaybooks.bms.config")
 
 
 def _coerce_bool(value: Any, default: bool) -> bool:
@@ -54,6 +59,47 @@ def _seed_flags_from_env() -> dict[str, bool]:
         "seed_qa_fixtures": flags["seed_qa_fixtures"],
         "purge_business_data": flags["purge_business_data"],
     }
+
+
+def _find_streamlit_secrets_path() -> Path | None:
+    path = Path.cwd() / ".streamlit" / "secrets.toml"
+    return path if path.exists() else None
+
+
+def _load_streamlit_secrets_file() -> dict[str, Any]:
+    path = _find_streamlit_secrets_path()
+    if not path:
+        return {}
+    return _parse_toml(path.read_text(encoding="utf-8"))
+
+
+def _resolve_seed_flags() -> dict[str, bool]:
+    """Resolve seed flags for cloud/local Streamlit deployments."""
+    file_raw = _load_streamlit_secrets_file()
+    if any(key in file_raw for key in _SEED_FLAG_KEYS):
+        return _seed_flags_from_mapping(file_raw)
+
+    try:
+        import streamlit as st
+
+        if any(key in st.secrets for key in _SEED_FLAG_KEYS):
+            return _seed_flags_from_mapping({key: st.secrets[key] for key in st.secrets})
+    except Exception:
+        pass
+
+    return _seed_flags_from_env()
+
+
+def _apply_seed_flags(settings: AppSettings) -> AppSettings:
+    if is_desktop():
+        return settings
+    seed_flags = _resolve_seed_flags()
+    return replace(
+        settings,
+        seed_config=seed_flags["seed_config"],
+        seed_qa_fixtures=seed_flags["seed_qa_fixtures"],
+        purge_business_data=seed_flags["purge_business_data"],
+    )
 
 
 @dataclass
@@ -206,15 +252,15 @@ def get_settings() -> AppSettings:
 
     env_settings = _load_env_settings()
     if env_settings:
-        _settings = env_settings
+        _settings = _apply_seed_flags(env_settings)
         return _settings
 
     secrets_settings = _load_streamlit_secrets()
     if secrets_settings:
-        _settings = secrets_settings
+        _settings = _apply_seed_flags(secrets_settings)
         return _settings
 
-    _settings = AppSettings()
+    _settings = _apply_seed_flags(AppSettings())
     return _settings
 
 

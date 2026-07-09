@@ -1,3 +1,4 @@
+import logging
 import streamlit as st
 
 from vaybooks.bms.application.customer_app_service import CustomerAppService
@@ -23,7 +24,7 @@ from vaybooks.bms.application.worker_app_service import WorkerAppService
 from vaybooks.bms.infrastructure.db.connection import get_database
 from vaybooks.bms.infrastructure.db.indexes import ensure_indexes
 from vaybooks.bms.infrastructure.db.migrations.runner import run_pending_migrations
-from vaybooks.bms.infrastructure.config.settings import get_settings
+from vaybooks.bms.infrastructure.config.settings import get_settings, reload_settings
 from vaybooks.bms.infrastructure.db.purge import purge_business_data
 from vaybooks.bms.infrastructure.db.seed import run_seed
 from vaybooks.bms.infrastructure.logging.setup import setup_logging
@@ -54,6 +55,9 @@ from vaybooks.bms.infrastructure.repositories.mongo_time_tracking_repository imp
 )
 
 
+logger = logging.getLogger("vaybooks.bms.bootstrap")
+
+
 @st.cache_resource
 def _bootstrap_db():
     """Create indexes and seed defaults exactly once per process.
@@ -63,7 +67,15 @@ def _bootstrap_db():
     cause of slow page loads. Caching the resource makes it run only once.
     """
     setup_logging()
+    reload_settings()
     settings = get_settings()
+    logger.info(
+        "Bootstrap seed settings: seed_config=%s seed_qa_fixtures=%s purge_business_data=%s db=%s",
+        settings.seed_config,
+        settings.seed_qa_fixtures,
+        settings.purge_business_data,
+        settings.db_name,
+    )
     db = get_database()
     run_pending_migrations(db)
     ensure_indexes(db)

@@ -1,9 +1,11 @@
 """Tests for secret/env controlled seeding settings."""
 
 import os
+from pathlib import Path
 
 from vaybooks.bms.infrastructure.config.settings import (
     _coerce_bool,
+    _resolve_seed_flags,
     _seed_flags_from_env,
     _seed_flags_from_mapping,
     get_settings,
@@ -52,8 +54,9 @@ def test_seed_flags_from_env(monkeypatch):
     }
 
 
-def test_env_settings_include_seed_flags(monkeypatch):
+def test_env_settings_include_seed_flags(monkeypatch, tmp_path):
     monkeypatch.delenv("VAYBOOKS_DATA_DIR", raising=False)
+    monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("MONGODB_URI", "mongodb://localhost:27017")
     monkeypatch.setenv("SEED_QA_FIXTURES", "true")
     reload_settings()
@@ -61,4 +64,35 @@ def test_env_settings_include_seed_flags(monkeypatch):
     assert settings.seed_config is True
     assert settings.seed_qa_fixtures is True
     assert settings.purge_business_data is False
+    reload_settings()
+
+
+def test_seed_flags_read_from_streamlit_secrets_file(monkeypatch, tmp_path):
+    monkeypatch.delenv("VAYBOOKS_DATA_DIR", raising=False)
+    monkeypatch.setenv("MONGODB_URI", "mongodb://localhost:27017")
+    monkeypatch.delenv("SEED_QA_FIXTURES", raising=False)
+    monkeypatch.delenv("PURGE_BUSINESS_DATA", raising=False)
+
+    secrets_dir = tmp_path / ".streamlit"
+    secrets_dir.mkdir()
+    secrets_path = secrets_dir / "secrets.toml"
+    secrets_path.write_text(
+        "\n".join(
+            [
+                'MONGODB_URI = "mongodb://localhost:27017"',
+                "SEED_CONFIG = true",
+                "SEED_QA_FIXTURES = false",
+                "PURGE_BUSINESS_DATA = true",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    reload_settings()
+    settings = get_settings()
+    assert settings.seed_config is True
+    assert settings.seed_qa_fixtures is False
+    assert settings.purge_business_data is True
+    assert _resolve_seed_flags()["purge_business_data"] is True
     reload_settings()
