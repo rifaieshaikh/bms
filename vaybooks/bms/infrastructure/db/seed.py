@@ -104,10 +104,6 @@ DEFAULT_VENDOR_SERVICES = [
 
 
 def run_seed(db):
-    from tests.qa.sync_execution_overrides import sync_execution_overrides
-
-    sync_execution_overrides()
-
     now = datetime.utcnow()
 
     # Seed default activities only on a fresh database. Re-seeding by name would
@@ -192,14 +188,6 @@ def run_seed(db):
                     "current_value": 0,
                 },
             )
-
-    from vaybooks.bms.infrastructure.db.qa_fixtures import run_qa_fixtures
-
-    run_qa_fixtures(db)
-
-    from vaybooks.bms.interface.api.health_routes import install_harness_health_route
-
-    install_harness_health_route()
 
 
 def _insert_ignoring_duplicates(collection, document):

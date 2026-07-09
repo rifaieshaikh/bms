@@ -20,6 +20,42 @@ DEFAULT_UPDATE_URL = (
 )
 
 
+def _coerce_bool(value: Any, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return default
+
+
+def _seed_flags_from_mapping(raw: dict[str, Any]) -> dict[str, bool]:
+    return {
+        "seed_config": _coerce_bool(raw.get("SEED_CONFIG"), True),
+        "seed_qa_fixtures": _coerce_bool(raw.get("SEED_QA_FIXTURES"), False),
+        "purge_business_data": _coerce_bool(raw.get("PURGE_BUSINESS_DATA"), False),
+    }
+
+
+def _seed_flags_from_env() -> dict[str, bool]:
+    flags: dict[str, bool] = {}
+    for key, default in (
+        ("SEED_CONFIG", True),
+        ("SEED_QA_FIXTURES", False),
+        ("PURGE_BUSINESS_DATA", False),
+    ):
+        env_value = os.environ.get(key)
+        flags[key.lower()] = _coerce_bool(env_value, default) if env_value is not None else default
+    return {
+        "seed_config": flags["seed_config"],
+        "seed_qa_fixtures": flags["seed_qa_fixtures"],
+        "purge_business_data": flags["purge_business_data"],
+    }
+
+
 @dataclass
 class AppSettings:
     app_version: str = __version__
@@ -31,6 +67,9 @@ class AppSettings:
     backup_schedule: str = "off"
     backup_retention_days: int = 30
     auto_update_enabled: bool = False
+    seed_config: bool = True
+    seed_qa_fixtures: bool = False
+    purge_business_data: bool = False
     extra: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -84,6 +123,7 @@ def _load_toml_settings() -> AppSettings:
         str(raw.get("MONGO_URI", "")),
         secrets_path,
     )
+    seed_flags = _seed_flags_from_mapping(raw)
     return AppSettings(
         app_version=str(raw.get("APP_VERSION", __version__)),
         app_port=int(raw.get("APP_PORT", 8501)),
@@ -94,6 +134,9 @@ def _load_toml_settings() -> AppSettings:
         backup_schedule=str(raw.get("BACKUP_SCHEDULE", "off")),
         backup_retention_days=int(raw.get("BACKUP_RETENTION_DAYS", 30)),
         auto_update_enabled=bool(raw.get("AUTO_UPDATE_ENABLED", False)),
+        seed_config=seed_flags["seed_config"],
+        seed_qa_fixtures=seed_flags["seed_qa_fixtures"],
+        purge_business_data=seed_flags["purge_business_data"],
         extra={k: v for k, v in raw.items() if k not in _KNOWN_KEYS},
     )
 
@@ -108,6 +151,9 @@ _KNOWN_KEYS = {
     "BACKUP_SCHEDULE",
     "BACKUP_RETENTION_DAYS",
     "AUTO_UPDATE_ENABLED",
+    "SEED_CONFIG",
+    "SEED_QA_FIXTURES",
+    "PURGE_BUSINESS_DATA",
 }
 
 
@@ -115,6 +161,7 @@ def _load_env_settings() -> AppSettings | None:
     uri = os.environ.get("MONGODB_URI") or os.environ.get("MONGO_URI")
     if not uri:
         return None
+    seed_flags = _seed_flags_from_env()
     return AppSettings(
         mongo_uri=uri,
         db_name=os.environ.get(
@@ -122,6 +169,9 @@ def _load_env_settings() -> AppSettings | None:
             os.environ.get("DB_NAME", "zahcci_customization"),
         ),
         app_port=int(os.environ.get("APP_PORT", "8501")),
+        seed_config=seed_flags["seed_config"],
+        seed_qa_fixtures=seed_flags["seed_qa_fixtures"],
+        purge_business_data=seed_flags["purge_business_data"],
     )
 
 
@@ -131,9 +181,14 @@ def _load_streamlit_secrets() -> AppSettings | None:
 
         if "MONGODB_URI" not in st.secrets:
             return None
+        secrets = {key: st.secrets[key] for key in st.secrets}
+        seed_flags = _seed_flags_from_mapping(secrets)
         return AppSettings(
             mongo_uri=str(st.secrets["MONGODB_URI"]),
             db_name=str(st.secrets.get("MONGODB_DATABASE", "zahcci_customization")),
+            seed_config=seed_flags["seed_config"],
+            seed_qa_fixtures=seed_flags["seed_qa_fixtures"],
+            purge_business_data=seed_flags["purge_business_data"],
         )
     except Exception:
         return None
@@ -193,6 +248,9 @@ def save_settings(settings: AppSettings, encrypt_uri: bool = True) -> None:
         "BACKUP_SCHEDULE": settings.backup_schedule,
         "BACKUP_RETENTION_DAYS": settings.backup_retention_days,
         "AUTO_UPDATE_ENABLED": settings.auto_update_enabled,
+        "SEED_CONFIG": settings.seed_config,
+        "SEED_QA_FIXTURES": settings.seed_qa_fixtures,
+        "PURGE_BUSINESS_DATA": settings.purge_business_data,
     }
     data.update(settings.extra)
     config_path.write_text(_serialize_toml(data), encoding="utf-8")

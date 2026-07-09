@@ -23,6 +23,8 @@ from vaybooks.bms.application.worker_app_service import WorkerAppService
 from vaybooks.bms.infrastructure.db.connection import get_database
 from vaybooks.bms.infrastructure.db.indexes import ensure_indexes
 from vaybooks.bms.infrastructure.db.migrations.runner import run_pending_migrations
+from vaybooks.bms.infrastructure.config.settings import get_settings
+from vaybooks.bms.infrastructure.db.purge import purge_business_data
 from vaybooks.bms.infrastructure.db.seed import run_seed
 from vaybooks.bms.infrastructure.logging.setup import setup_logging
 from vaybooks.bms.infrastructure.repositories.mongo_accounting_repository import (
@@ -61,13 +63,18 @@ def _bootstrap_db():
     cause of slow page loads. Caching the resource makes it run only once.
     """
     setup_logging()
+    settings = get_settings()
     db = get_database()
     run_pending_migrations(db)
     ensure_indexes(db)
-    run_seed(db)
-    from vaybooks.bms.infrastructure.db.qa_fixtures import ensure_cash_drawer_account
+    if settings.purge_business_data:
+        purge_business_data(db)
+    if settings.seed_config:
+        run_seed(db)
+    if settings.seed_qa_fixtures:
+        from vaybooks.bms.infrastructure.db.qa_fixtures import run_qa_fixtures
 
-    ensure_cash_drawer_account(db)
+        run_qa_fixtures(db)
     return db
 
 
