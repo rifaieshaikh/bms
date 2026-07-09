@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.vaybooks.bms</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__INSTALL_DIR__/python/bin/python3</string>
+        <string>-m</string>
+        <string>streamlit</string>
+        <string>run</string>
+        <string>app.py</string>
+        <string>--server.headless=true</string>
+        <string>--server.port=8501</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>__INSTALL_DIR__/app</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>VAYBOOKS_DATA_DIR</key>
+        <string>__DATA_DIR__</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>__DATA_DIR__/logs/service.log</string>
+    <key>StandardErrorPath</key>
+    <string>__DATA_DIR__/logs/service.log</string>
+</dict>
+</plist>

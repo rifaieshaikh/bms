@@ -1,0 +1,5 @@
+tomli
+tomli-w
+requests
+cryptography
+pyinstaller

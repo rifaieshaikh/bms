@@ -1,5 +1,8 @@
 import streamlit as st
 
+from vaybooks.bms import __version__
+from vaybooks.bms.infrastructure.config.runtime import is_desktop
+from vaybooks.bms.infrastructure.logging.setup import setup_logging
 from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.bootstrap import get_services
 from vaybooks.bms.ui.styles import inject_global_css
@@ -18,6 +21,7 @@ from vaybooks.bms.ui.pages import customization_item_detail, customer_detail, ve
 from vaybooks.bms.ui.pages import account_detail
 from vaybooks.bms.ui.pages import mtd_dashboard, time_tracking
 from vaybooks.bms.ui.pages import workers
+from vaybooks.bms.ui.pages import system_settings, system_logs, system_updates
 from vaybooks.bms.ui.pages.finance import (
     accounting_invoices,
     journal as finance_journal,
@@ -26,6 +30,8 @@ from vaybooks.bms.ui.pages.finance import (
     trial_balance,
     vouchers as finance_vouchers,
 )
+
+setup_logging()
 
 st.set_page_config(
     page_title="Zahcci Customization Orders",
@@ -122,6 +128,19 @@ workers_page = st.Page(
     _page(workers), title="Workers", icon=":material/badge:", url_path="workers",
 )
 
+system_settings_page = st.Page(
+    _page(system_settings), title="Settings", icon=":material/settings:",
+    url_path="system-settings",
+)
+system_updates_page = st.Page(
+    _page(system_updates), title="Updates", icon=":material/system_update:",
+    url_path="system-updates",
+)
+system_logs_page = st.Page(
+    _page(system_logs), title="Logs", icon=":material/article:",
+    url_path="system-logs",
+)
+
 # --- Hidden detail routes (deep-linkable, not in sidebar) --------------------
 order_detail_page = st.Page(
     _page(customization_order_detail), title="Order Detail", url_path="order-detail",
@@ -190,6 +209,13 @@ page_groups = {
     ],
 }
 
+if is_desktop():
+    page_groups["System"] = [
+        system_settings_page,
+        system_updates_page,
+        system_logs_page,
+    ]
+
 hidden_pages = [
     order_detail_page,
     item_detail_page,
@@ -215,5 +241,7 @@ with st.sidebar:
             st.caption(header)
         for page in pages:
             st.page_link(page)
+    st.divider()
+    st.caption(f"v{__version__}")
 
 nav.run()

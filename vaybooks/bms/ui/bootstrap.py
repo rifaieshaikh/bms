@@ -22,7 +22,9 @@ from vaybooks.bms.application.vendor_service_app_service import VendorServiceApp
 from vaybooks.bms.application.worker_app_service import WorkerAppService
 from vaybooks.bms.infrastructure.db.connection import get_database
 from vaybooks.bms.infrastructure.db.indexes import ensure_indexes
+from vaybooks.bms.infrastructure.db.migrations.runner import run_pending_migrations
 from vaybooks.bms.infrastructure.db.seed import run_seed
+from vaybooks.bms.infrastructure.logging.setup import setup_logging
 from vaybooks.bms.infrastructure.repositories.mongo_accounting_repository import (
     MongoAccountRepository,
     MongoVoucherRepository,
@@ -58,7 +60,9 @@ def _bootstrap_db():
     round-trips plus several seed queries to Atlas each time — the dominant
     cause of slow page loads. Caching the resource makes it run only once.
     """
+    setup_logging()
     db = get_database()
+    run_pending_migrations(db)
     ensure_indexes(db)
     run_seed(db)
     from vaybooks.bms.infrastructure.db.qa_fixtures import ensure_cash_drawer_account

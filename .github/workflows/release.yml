@@ -1,0 +1,126 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build dependencies
+        run: |
+          pip install -r installer/requirements-installer.txt
+          pip install -r requirements.txt
+          pip install -r requirements-desktop.txt
+
+      - name: Sync version from tag
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          python installer/shared/generate_version.py --version "$VERSION"
+
+      - name: Stage application
+        run: python installer/shared/build_app.py --output installer/dist/staging
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y
+
+      - name: Build installer
+        run: |
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" installer/windows/inno/VayBooks-BMS.iss
+
+      - name: Generate checksum
+        id: checksum
+        shell: bash
+        run: |
+          VERSION=$(python -c "from vaybooks.bms import __version__; print(__version__)")
+          INSTALLER="installer/dist/VayBooks-BMS-Setup-${VERSION}.exe"
+          SHA=$(python installer/shared/generate_checksum.py "$INSTALLER")
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "installer=$INSTALLER" >> "$GITHUB_OUTPUT"
+
+      - name: Generate version.json
+        run: |
+          python installer/shared/publish_release.py \
+            --download-url "https://github.com/${{ github.repository }}/releases/download/v${{ steps.checksum.outputs.version }}/VayBooks-BMS-Setup-${{ steps.checksum.outputs.version }}.exe" \
+            --sha256 "${{ steps.checksum.outputs.sha256 }}" \
+            --release-notes "Release v${{ steps.checksum.outputs.version }}" \
+            --output installer/dist/version.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: |
+            installer/dist/VayBooks-BMS-Setup-*.exe
+            installer/dist/version.json
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build macOS package
+        run: |
+          pip install -r requirements.txt
+          BUILD_ONLY=1 bash installer/macos/install.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-package
+          path: installer/dist/VayBooks-BMS-*-macos.tar.gz
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build Linux package
+        run: |
+          pip install -r requirements.txt
+          BUILD_ONLY=1 bash installer/linux/install.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-package
+          path: installer/dist/VayBooks-BMS-*-linux.tar.gz
+
+  release:
+    needs: [build-windows, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/windows-installer/*
+            artifacts/macos-package/*
+            artifacts/linux-package/*
+          generate_release_notes: true

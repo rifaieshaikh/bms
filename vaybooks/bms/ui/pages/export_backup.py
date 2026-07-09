@@ -2,6 +2,10 @@ import json
 
 import streamlit as st
 
+from vaybooks.bms.infrastructure.backup.service import BackupService
+from vaybooks.bms.infrastructure.config.runtime import is_desktop
+from vaybooks.bms.infrastructure.config.settings import get_settings
+from vaybooks.bms.infrastructure.db.connection import get_database
 from vaybooks.bms.ui.styles import panel, render_card_grid
 
 
@@ -46,10 +50,11 @@ def _render_export_card(
 def render(services: dict):
     st.title("Export / Backup")
     export_service = services["export"]
+    settings = get_settings()
 
     st.write(
         "Export data for backup and reporting. "
-        "MongoDB Atlas remains the source of truth."
+        "MongoDB remains the source of truth."
     )
 
     exports = [
@@ -71,7 +76,7 @@ def render(services: dict):
     st.divider()
     with panel("backup"):
         st.subheader("Full backup")
-        st.caption("JSON snapshot of all exportable collections.")
+        st.caption("JSON snapshot of exportable collections.")
         backup_json = _cached_backup_json_v2(export_service)
         try:
             json.loads(backup_json)
@@ -86,3 +91,48 @@ def render(services: dict):
             key="export_full_backup_json",
             use_container_width=True,
         )
+
+        if is_desktop():
+            backup_service = BackupService(get_database())
+            zip_bytes = backup_service.create_backup_zip()
+            st.download_button(
+                "Download Full Backup (ZIP — all collections)",
+                zip_bytes,
+                file_name="vaybooks_backup.zip",
+                mime="application/zip",
+                key="export_full_backup_zip",
+                use_container_width=True,
+            )
+
+            if st.button("Save Backup to Disk", use_container_width=True):
+                path = backup_service.save_backup_to_disk()
+                if path:
+                    st.success(f"Backup saved to {path}")
+                else:
+                    st.error("Could not save backup")
+
+            st.caption(f"Scheduled backup: **{settings.backup_schedule}**")
+            local_backups = backup_service.list_local_backups()
+            if local_backups:
+                st.write("Recent local backups:")
+                for path in local_backups[:5]:
+                    st.text(str(path.name))
+
+    if is_desktop():
+        st.divider()
+        with panel("restore"):
+            st.subheader("Restore from backup")
+            st.warning("Restore replaces existing data in all backed-up collections.")
+            uploaded = st.file_uploader("Upload backup ZIP", type=["zip"])
+            dry_run = st.checkbox("Dry run (validate only)", value=True)
+            if uploaded and st.button("Restore", type="primary"):
+                backup_service = BackupService(get_database())
+                try:
+                    stats = backup_service.restore_from_zip(uploaded.read(), dry_run=dry_run)
+                    if dry_run:
+                        st.info(f"Dry run OK — would restore: {stats}")
+                    else:
+                        st.success(f"Restore complete: {stats}")
+                        st.cache_data.clear()
+                except Exception as exc:
+                    st.error(str(exc))

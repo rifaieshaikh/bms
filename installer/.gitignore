@@ -1,0 +1,5 @@
+dist/
+build/
+downloads/
+*.exe
+*.msi
