@@ -167,3 +167,8 @@ class StockMovementsFilter:
     product_id: str = ""
     category_id: str = ""
     movement_type: str = ""
+
+
+@dataclass
+class PurchasesByVendorFilter:
+    date_range: DateRange | None = None

@@ -6,19 +6,11 @@ from vaybooks.bms.application.inventory_app_service import InventoryAppService
 from vaybooks.bms.domain.shared.enums import StockMovementType
 from vaybooks.bms.ui import filtering as F
 from vaybooks.bms.ui.inventory_list_schemas import INVENTORY_STOCK_LEDGER
-from tests.conftest import (
-    FakeInventoryProductRepository,
-    FakeProductCategoryRepository,
-    FakeStockMovementRepository,
-)
+from tests.conftest import make_inventory_app_service
 
 
 def _service() -> InventoryAppService:
-    return InventoryAppService(
-        FakeProductCategoryRepository(),
-        FakeInventoryProductRepository(),
-        FakeStockMovementRepository(),
-    )
+    return make_inventory_app_service()
 
 
 def test_stock_ledger_returns_enriched_rows():

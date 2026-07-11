@@ -12,6 +12,7 @@ from vaybooks.bms.domain.shared.enums import (
     ActivityType,
     CustomizationItemStatus,
     OrderStatus,
+    PartyRegistrationType,
     VoucherType,
 )
 from vaybooks.bms.ui import filtering as F
@@ -262,6 +263,9 @@ CUSTOMERS = ListSchema(
         FilterField("customer_name", "Customer name", F.EXACT),
         FilterField("phone_number", "Phone", F.EXACT),
         FilterField("alternate_phone_number", "Alternate phone", F.EXACT),
+        FilterField("gstin", "GSTIN", F.EXACT),
+        FilterField("registration_type", "Registration type", F.SELECT,
+                    options=_enum_opts(PartyRegistrationType)),
         FilterField("has_orders", "Has orders", F.SELECT,
                     options=[("with", "With orders"), ("without", "Without orders")],
                     match=_match_customer_has_orders),

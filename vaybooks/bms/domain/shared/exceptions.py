@@ -40,3 +40,19 @@ class OrderNotReadyError(DomainError):
 
 class InvoiceExistsError(DomainError):
     """Invoice already exists for this order."""
+
+
+class DuplicateVendorError(DomainError):
+    """Vendor already exists (phone or GSTIN)."""
+
+    def __init__(self, message: str, existing_vendor_id: str):
+        super().__init__(message)
+        self.existing_vendor_id = existing_vendor_id
+
+
+class DuplicateCustomerError(DomainError):
+    """Customer already exists (phone or GSTIN)."""
+
+    def __init__(self, message: str, existing_customer_id: str):
+        super().__init__(message)
+        self.existing_customer_id = existing_customer_id

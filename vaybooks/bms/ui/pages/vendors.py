@@ -2,9 +2,14 @@ from datetime import date
 
 import streamlit as st
 
-from vaybooks.bms.domain.shared.exceptions import ValidationError
+from vaybooks.bms.domain.shared.exceptions import (
+    DuplicateVendorError,
+    ValidationError,
+)
+from vaybooks.bms.domain.shared.india import mask_bank_account
 from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.components.list_view import render_list
+from vaybooks.bms.ui.components.vendor_form import render_vendor_form
 from vaybooks.bms.ui.dialog_utils import (
     clear_all_dialog_flags,
     make_dismiss_handler,
@@ -17,61 +22,72 @@ from vaybooks.bms.ui.list_schemas import VENDORS
 V_ADD = "vendor_add_dialog"
 V_EDIT = "vendor_edit_dialog"
 V_PAY = "vendor_pay_dialog"
+V_DUP_VENDOR_ID = "vendor_duplicate_existing_id"
 
 
-# --- dialogs -----------------------------------------------------------------
-@st.dialog("Add Vendor", width="medium", on_dismiss=make_dismiss_handler(V_ADD))
-def _add_vendor_dialog(vendor_service):
-    name = st.text_input("Vendor Name", key="v_add_name")
-    phone = st.text_input("Phone Number", key="v_add_phone")
-    alt_phone = st.text_input("Alternate Phone", key="v_add_alt")
-    address = st.text_area("Address", key="v_add_addr")
-    notes = st.text_area("Notes", key="v_add_notes")
-
-    cols = st.columns(2)
-    if cols[0].button("Create Vendor", type="primary", use_container_width=True):
-        if not name or not phone:
-            st.error("Name and phone are required")
-        else:
-            try:
-                vendor = vendor_service.create_vendor(
-                    name, phone, alt_phone or None, address, notes
-                )
-                st.session_state.pop(V_ADD, None)
-                st.success(f"Created vendor: {vendor.vendor_name}")
-                st.rerun()
-            except ValidationError as exc:
-                st.error(str(exc))
-            except Exception as exc:
-                st.error(str(exc))
-    if cols[1].button("Cancel", use_container_width=True):
+def _render_duplicate_vendor_warning(existing_vendor_id: str, vendor_service) -> None:
+    existing = vendor_service.get_vendor_detail(existing_vendor_id)
+    label = existing.vendor_name if existing else "existing vendor"
+    st.warning(f"A vendor with this phone or GSTIN already exists: **{label}**")
+    if st.button("Open existing vendor", key="vendor_open_existing", type="primary"):
         st.session_state.pop(V_ADD, None)
+        st.session_state.pop(V_DUP_VENDOR_ID, None)
+        navigation.go_to_detail("vendor_detail", existing_vendor_id)
         st.rerun()
 
 
-@st.dialog("Edit Vendor", width="medium", on_dismiss=make_dismiss_handler(V_EDIT))
+# --- dialogs -----------------------------------------------------------------
+@st.dialog("Add Vendor", width="large", on_dismiss=make_dismiss_handler(V_ADD))
+def _add_vendor_dialog(vendor_service):
+    dup_id = st.session_state.get(V_DUP_VENDOR_ID)
+    if dup_id:
+        _render_duplicate_vendor_warning(dup_id, vendor_service)
+
+    vendor_input = render_vendor_form("v_add")
+
+    cols = st.columns(2)
+    if cols[0].button("Create Vendor", type="primary", use_container_width=True):
+        try:
+            vendor = vendor_service.create_vendor(vendor_input)
+            st.session_state.pop(V_ADD, None)
+            st.session_state.pop(V_DUP_VENDOR_ID, None)
+            st.success(f"Created vendor: {vendor.vendor_name}")
+            st.rerun()
+        except DuplicateVendorError as exc:
+            st.session_state[V_DUP_VENDOR_ID] = exc.existing_vendor_id
+            st.rerun()
+        except ValidationError as exc:
+            st.error(str(exc))
+        except Exception as exc:
+            st.error(str(exc))
+    if cols[1].button("Cancel", use_container_width=True):
+        st.session_state.pop(V_ADD, None)
+        st.session_state.pop(V_DUP_VENDOR_ID, None)
+        st.rerun()
+
+
+@st.dialog("Edit Vendor", width="large", on_dismiss=make_dismiss_handler(V_EDIT))
 def _edit_vendor_dialog(vendor_service):
     vendor = vendor_service.get_vendor_detail(st.session_state.get(V_EDIT))
     if not vendor:
         st.error("Vendor not found")
         return
-    name = st.text_input("Vendor Name", value=vendor.vendor_name, key="v_edit_name")
-    phone = st.text_input("Phone Number", value=vendor.phone_number, key="v_edit_phone")
-    alt_phone = st.text_input(
-        "Alternate Phone", value=vendor.alternate_phone_number or "", key="v_edit_alt"
-    )
-    address = st.text_area("Address", value=vendor.address or "", key="v_edit_addr")
-    notes = st.text_area("Notes", value=vendor.notes or "", key="v_edit_notes")
+
+    vendor_input = render_vendor_form("v_edit", vendor=vendor)
 
     cols = st.columns(2)
     if cols[0].button("Save Changes", type="primary", use_container_width=True):
         try:
-            vendor_service.update_vendor(
-                vendor.id, name, phone, alt_phone or None, address, notes
-            )
+            vendor_service.update_vendor(vendor.id, vendor_input)
             st.session_state.pop(V_EDIT, None)
             st.success("Vendor updated")
             st.rerun()
+        except DuplicateVendorError as exc:
+            st.warning(str(exc))
+            if st.button("Open existing vendor", key="vendor_edit_open_existing"):
+                st.session_state.pop(V_EDIT, None)
+                navigation.go_to_detail("vendor_detail", exc.existing_vendor_id)
+                st.rerun()
         except ValidationError as exc:
             st.error(str(exc))
         except Exception as exc:
@@ -148,7 +164,7 @@ def _pay_vendor_dialog(services, vendor_id: str):
                     service_id=selected_service.id,
                 )
             else:
-                accounting.create_vendor_payment(
+                services["purchases"].merge_vendor_payment_into_purchase(
                     vendor_account.id, selected_service.expense_account_id,
                     pay_opts[paying_name], amount, desc, v_date,
                     service_id=selected_service.id,
@@ -184,10 +200,36 @@ def _render_vendor_detail(services, vendor_id: str):
         vendor_account = accounting.get_vendor_account(vendor.id)
         balance = vendor_account.current_balance if vendor_account else 0.0
         info[2].write(f"**Payable:** ₹{abs(balance):,.0f}")
+        if vendor.contact_person:
+            st.caption(f"Contact: {vendor.contact_person}")
+        if vendor.email:
+            st.caption(f"Email: {vendor.email}")
         if vendor_account:
             st.caption(f"System Account: {vendor_account.account_name}")
-        if vendor.address:
-            st.caption(f"Address: {vendor.address}")
+        if vendor.formatted_address:
+            st.caption(f"Address: {vendor.formatted_address}")
+        tax_bits = []
+        if vendor.registration_type:
+            tax_bits.append(f"Registration: {vendor.registration_type.value}")
+        if vendor.gstin:
+            tax_bits.append(f"GSTIN: {vendor.gstin}")
+        if vendor.pan:
+            tax_bits.append(f"PAN: {vendor.pan}")
+        if vendor.msme_number:
+            tax_bits.append(f"MSME: {vendor.msme_number}")
+        if tax_bits:
+            st.caption(" · ".join(tax_bits))
+        if vendor.bank_account_number or vendor.bank_ifsc:
+            bank_bits = []
+            if vendor.bank_account_holder:
+                bank_bits.append(vendor.bank_account_holder)
+            if vendor.bank_account_number:
+                bank_bits.append(mask_bank_account(vendor.bank_account_number))
+            if vendor.bank_ifsc:
+                bank_bits.append(vendor.bank_ifsc)
+            if vendor.bank_name:
+                bank_bits.append(vendor.bank_name)
+            st.caption(f"Bank: {' · '.join(bank_bits)}")
         if vendor.notes:
             st.caption(f"Notes: {vendor.notes}")
 
@@ -261,6 +303,8 @@ def _render_cards(page_vendors, services):
         with st.container(border=True):
             st.markdown(f"**{vendor.vendor_name}**")
             st.write(vendor.phone_number)
+            if vendor.gstin:
+                st.caption(f"GSTIN: {vendor.gstin}")
             balance = getattr(vendor, "current_balance", 0.0)
             st.caption(f"Payable: ₹{abs(balance):,.0f}")
             btns = st.columns(2)
@@ -290,6 +334,10 @@ def render(services: dict):
     )
     if bar["primary_clicked"]:
         clear_all_dialog_flags()
+        st.session_state.pop(V_DUP_VENDOR_ID, None)
+        st.session_state[V_ADD] = True
+        register_armed_dialog(V_ADD)
+    if st.session_state.get(V_ADD):
         _add_vendor_dialog(services["vendors"])
     if st.session_state.get(V_EDIT):
         _edit_vendor_dialog(services["vendors"])
@@ -303,3 +351,4 @@ def render_vendor_detail(services: dict):
             navigation.go_back_to_list("vendors", "vendors_list")
         return
     _render_vendor_detail(services, vendor_id)
+

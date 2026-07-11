@@ -14,6 +14,17 @@ _OUT_COLOR = "#B03636"
 _RATE_COLOR = "#5B5560"
 
 
+def _format_categories(product) -> str:
+    names = list(getattr(product, "category_names", None) or [])
+    if not names and getattr(product, "category_name", ""):
+        names = [product.category_name]
+    if not names:
+        return "—"
+    if len(names) <= 2:
+        return " · ".join(names)
+    return f"{names[0]} · {names[1]} +{len(names) - 2} more"
+
+
 def _stock_badge(qty: float, threshold: float = LOW_STOCK_THRESHOLD) -> str:
     if qty <= 0:
         return status_badge("Out of stock", "red", compact=True)
@@ -45,7 +56,7 @@ def inventory_product_card(
             f'<p class="z-card-title">{product.name}</p>',
             unsafe_allow_html=True,
         )
-        st.caption(f"{product.sku} · {product.category_name or '—'}")
+        st.caption(f"{product.sku} · {_format_categories(product)}")
         if show_qty:
             st.markdown(
                 f'<p class="z-card-amount" style="color:{qty_color}">'
@@ -68,11 +79,11 @@ def inventory_product_card(
     return view, edit
 
 
-def inventory_category_card(category, *, product_count: int = 0) -> bool:
+def inventory_category_card(category, *, product_count: int = 0, path: str = "") -> bool:
     """Render a category card. Returns True if edit was clicked."""
     with st.container(border=True):
         st.markdown(
-            f'<p class="z-card-title">{category.name}</p>',
+            f'<p class="z-card-title">{path or category.name}</p>',
             unsafe_allow_html=True,
         )
         st.markdown(_status_badge(category.is_active), unsafe_allow_html=True)

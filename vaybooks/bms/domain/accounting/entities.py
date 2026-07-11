@@ -45,6 +45,10 @@ class Voucher:
     reference_order_id: Optional[str] = None
     reference_invoice_id: Optional[str] = None
     reference_service_id: Optional[str] = None
+    reference_po_id: Optional[str] = None
+    reference_grn_id: Optional[str] = None
+    reference_so_id: Optional[str] = None
+    reference_dn_id: Optional[str] = None
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
 
@@ -75,7 +79,12 @@ class Voucher:
             VoucherType.REFUND,
             VoucherType.VENDOR_PAYMENT,
             VoucherType.SALARY_PAYMENT,
+            VoucherType.PURCHASE_BILL,
         )
+        if self.voucher_type == VoucherType.PURCHASE_BILL:
+            for line in self.lines:
+                if line.credit_amount > 0 and line.description == "Payment made":
+                    return line.credit_amount
         if self.voucher_type in routed and self.lines and self.lines[0].debit_amount > 0:
             return self.lines[0].debit_amount
         if self.voucher_type == VoucherType.RECEIPT and self.lines:

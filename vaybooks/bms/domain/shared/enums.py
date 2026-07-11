@@ -60,10 +60,44 @@ class VoucherType(str, Enum):
     SALES_INVOICE = "Sales Invoice"
     CUSTOMIZATION_INVOICE = "Customization Invoice"
     PURCHASE_EXPENSE = "Purchase Expense"
+    PURCHASE_BILL = "Purchase Bill"
+    PURCHASE_RETURN = "Purchase Return"
+    PURCHASE_DEBIT_NOTE = "Purchase Debit Note"
     ADVANCE = "Advance"
     REFUND = "Refund"
     VENDOR_PAYMENT = "Vendor Payment"
     SALARY_PAYMENT = "Salary Payment"
+    SALES_RETURN = "Sales Return"
+
+
+class SalesOrderStatus(str, Enum):
+    DRAFT = "Draft"
+    CONFIRMED = "Confirmed"
+    PARTIALLY_DELIVERED = "Partially Delivered"
+    DELIVERED = "Delivered"
+    CLOSED = "Closed"
+    CANCELLED = "Cancelled"
+
+
+class DeliveryNoteStatus(str, Enum):
+    DRAFT = "Draft"
+    DELIVERED = "Delivered"
+    CANCELLED = "Cancelled"
+
+
+class PurchaseOrderStatus(str, Enum):
+    DRAFT = "Draft"
+    SENT = "Sent"
+    PARTIALLY_RECEIVED = "Partially Received"
+    RECEIVED = "Received"
+    CLOSED = "Closed"
+    CANCELLED = "Cancelled"
+
+
+class GoodsReceiptStatus(str, Enum):
+    DRAFT = "Draft"
+    RECEIVED = "Received"
+    CANCELLED = "Cancelled"
 
 
 class StockMovementType(str, Enum):
@@ -73,9 +107,29 @@ class StockMovementType(str, Enum):
     ADJUST_OUT = "Adjust Out"
     SALE = "Sale"
     PURCHASE_RECEIVE = "Purchase Receive"
+    PURCHASE_RETURN = "Purchase Return"
+    SALES_RETURN = "Sales Return"
 
 
 class StockReferenceType(str, Enum):
     MANUAL = "Manual"
     SALES_INVOICE = "Sales Invoice"
     PURCHASE = "Purchase"
+    PURCHASE_RETURN = "Purchase Return"
+    GRN = "GRN"
+    DELIVERY_NOTE = "Delivery Note"
+    SALES_RETURN = "Sales Return"
+
+
+class PartyRegistrationType(str, Enum):
+    REGISTERED = "Registered"
+    UNREGISTERED = "Unregistered"
+    COMPOSITION = "Composition"
+
+
+VendorRegistrationType = PartyRegistrationType
+
+
+class CatalogItemType(str, Enum):
+    PRODUCT = "Product"
+    SERVICE = "Service"

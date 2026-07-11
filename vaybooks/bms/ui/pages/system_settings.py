@@ -11,11 +11,146 @@ from vaybooks.bms.infrastructure.config.settings import (
 )
 
 
+def _render_product_custom_fields(services: dict) -> None:
+    from vaybooks.bms.domain.inventory.field_definitions import ProductFieldType
+
+    inventory = services["inventory"]
+    st.subheader("Product custom fields")
+    definitions = inventory.list_field_definitions(active_only=False)
+    categories = inventory.list_categories(active_only=False)
+    cat_opts = {inventory.get_category_path(c.id) or c.name: c.id for c in categories}
+
+    with st.expander("Add custom field", expanded=False):
+        key = st.text_input("Key", key="cf_new_key")
+        label = st.text_input("Label", key="cf_new_label")
+        field_type = st.selectbox(
+            "Type",
+            [t.value for t in ProductFieldType],
+            key="cf_new_type",
+        )
+        options_raw = st.text_input(
+            "Options (comma-separated, for select)",
+            key="cf_new_options",
+        )
+        required = st.checkbox("Required", key="cf_new_required")
+        scope = st.multiselect(
+            "Applies to categories (empty = all)",
+            list(cat_opts.keys()),
+            key="cf_new_scope",
+        )
+        if st.button("Add field", key="cf_add_btn"):
+            try:
+                inventory.create_field_definition(
+                    key,
+                    label,
+                    ProductFieldType(field_type),
+                    options=[o.strip() for o in options_raw.split(",") if o.strip()],
+                    required=required,
+                    applies_to_category_ids=[cat_opts[s] for s in scope],
+                )
+                st.success("Custom field added.")
+                st.rerun()
+            except Exception as exc:
+                st.error(str(exc))
+
+    if not definitions:
+        st.caption("No custom fields defined yet.")
+        return
+
+    for definition in definitions:
+        with st.container(border=True):
+            st.markdown(f"**{definition.label}** (`{definition.key}`)")
+            new_label = st.text_input(
+                "Label",
+                value=definition.label,
+                key=f"cf_lbl_{definition.id}",
+            )
+            new_type = st.selectbox(
+                "Type",
+                [t.value for t in ProductFieldType],
+                index=[t.value for t in ProductFieldType].index(definition.field_type.value),
+                key=f"cf_type_{definition.id}",
+            )
+            new_options = st.text_input(
+                "Options",
+                value=", ".join(definition.options),
+                key=f"cf_opts_{definition.id}",
+            )
+            new_required = st.checkbox(
+                "Required",
+                value=definition.required,
+                key=f"cf_req_{definition.id}",
+            )
+            new_active = st.checkbox(
+                "Active",
+                value=definition.is_active,
+                key=f"cf_act_{definition.id}",
+            )
+            cols = st.columns(2)
+            if cols[0].button("Save", key=f"cf_save_{definition.id}"):
+                try:
+                    inventory.update_field_definition(
+                        definition.id,
+                        label=new_label,
+                        field_type=ProductFieldType(new_type),
+                        options=[o.strip() for o in new_options.split(",") if o.strip()],
+                        required=new_required,
+                        is_active=new_active,
+                        applies_to_category_ids=definition.applies_to_category_ids,
+                    )
+                    st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
+            if cols[1].button("Delete", key=f"cf_del_{definition.id}"):
+                try:
+                    inventory.delete_field_definition(definition.id)
+                    st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
+
+
 def render(services: dict):
     st.title("System Settings")
     st.caption(f"VayBooks-BMS v{__version__}")
 
     settings = get_settings()
+    business = services["business"].get_profile()
+
+    st.subheader("Business GST profile")
+    with st.form("business_profile_form"):
+        from vaybooks.bms.domain.shared.enums import VendorRegistrationType
+        from vaybooks.bms.domain.shared.india import INDIAN_STATES
+
+        legal_name = st.text_input("Legal name", value=business.legal_name)
+        gstin = st.text_input("GSTIN", value=business.gstin)
+        state_labels = [f"{s['code']} — {s['name']}" for s in INDIAN_STATES]
+        code_by_label = {f"{s['code']} — {s['name']}": s["code"] for s in INDIAN_STATES}
+        default_state = 0
+        if business.state_code:
+            label = next(
+                (f"{s['code']} — {s['name']}" for s in INDIAN_STATES if s["code"] == business.state_code),
+                state_labels[0],
+            )
+            if label in state_labels:
+                default_state = state_labels.index(label)
+        state_label = st.selectbox("State", state_labels, index=default_state)
+        reg_types = [t.value for t in VendorRegistrationType]
+        reg_idx = reg_types.index(business.registration_type.value) if business.registration_type.value in reg_types else 0
+        registration = st.selectbox("Registration type", reg_types, index=reg_idx)
+        if st.form_submit_button("Save business profile", type="primary"):
+            services["business"].update_profile(
+                legal_name=legal_name,
+                gstin=gstin,
+                state_code=code_by_label.get(state_label, ""),
+                registration_type=VendorRegistrationType(registration),
+            )
+            st.success("Business profile saved.")
+
+    st.divider()
+
+    _render_product_custom_fields(services)
+
+    st.divider()
 
     with st.form("system_settings_form"):
         mongo_uri = st.text_input("MongoDB URI", value=settings.mongo_uri, type="password")

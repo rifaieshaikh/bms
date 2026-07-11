@@ -38,6 +38,15 @@ class FakeCustomerRepository:
                 return c
         return None
 
+    def find_by_gstin(self, gstin: str) -> Optional[Customer]:
+        gstin = (gstin or "").strip().upper()
+        if not gstin:
+            return None
+        for c in self._store.values():
+            if (c.gstin or "").strip().upper() == gstin:
+                return c
+        return None
+
     def search(self, query: str) -> List[Customer]:
         return list(self._store.values())
 
@@ -359,8 +368,28 @@ class FakeInvoiceRepository:
 
 class FakeCounterRepository:
     def __init__(self):
-        self._counters = {"order_number": 0, "voucher_number": 0, "invoice_number": 0}
-        self._prefixes = {"order_number": "CO", "voucher_number": "VCH", "invoice_number": "INV"}
+        self._counters = {
+            "order_number": 0,
+            "voucher_number": 0,
+            "invoice_number": 0,
+            "po_number": 0,
+            "grn_number": 0,
+            "purchase_return_number": 0,
+            "so_number": 0,
+            "dn_number": 0,
+            "sales_return_number": 0,
+        }
+        self._prefixes = {
+            "order_number": "CO",
+            "voucher_number": "VCH",
+            "invoice_number": "INV",
+            "po_number": "PO",
+            "grn_number": "GRN",
+            "purchase_return_number": "PR",
+            "so_number": "SO",
+            "dn_number": "DN",
+            "sales_return_number": "SR",
+        }
 
     def next(self, counter_name: str) -> str:
         self._counters[counter_name] += 1
@@ -386,6 +415,18 @@ class FakeProductCategoryRepository:
                 return category
         return None
 
+    def find_by_parent_and_name(self, parent_id: str | None, name: str):
+        name = (name or "").strip()
+        parent_id = parent_id or None
+        for category in self._store.values():
+            if category.name == name and (category.parent_id or None) == parent_id:
+                return category
+        return None
+
+    def list_children(self, parent_id: str | None):
+        parent_id = parent_id or None
+        return [c for c in self._store.values() if (c.parent_id or None) == parent_id]
+
     def list_all(self, active_only: bool = True):
         if active_only:
             return [c for c in self._store.values() if c.is_active]
@@ -393,6 +434,33 @@ class FakeProductCategoryRepository:
 
     def delete(self, category_id: str) -> None:
         self._store.pop(category_id, None)
+
+
+class FakeProductUnitRepository:
+    def __init__(self):
+        self._store: Dict[str, "ProductUnit"] = {}
+
+    def save(self, unit):
+        self._store[unit.id] = unit
+        return unit
+
+    def find_by_id(self, unit_id: str):
+        return self._store.get(unit_id)
+
+    def find_by_code(self, code: str):
+        code = (code or "").strip().lower()
+        for unit in self._store.values():
+            if unit.code == code:
+                return unit
+        return None
+
+    def list_all(self, active_only: bool = True):
+        if active_only:
+            return [u for u in self._store.values() if u.is_active]
+        return list(self._store.values())
+
+    def count_products_using(self, unit_id: str) -> int:
+        return 0
 
 
 class FakeInventoryProductRepository:
@@ -419,10 +487,17 @@ class FakeInventoryProductRepository:
         return list(self._store.values())
 
     def list_by_category(self, category_id: str):
-        return [p for p in self._store.values() if p.category_id == category_id]
+        return [
+            p for p in self._store.values()
+            if category_id in (p.category_ids or [])
+            or p.category_id == category_id
+        ]
 
     def count_by_category(self, category_id: str) -> int:
         return len(self.list_by_category(category_id))
+
+    def count_by_unit(self, unit_id: str) -> int:
+        return sum(1 for p in self._store.values() if p.unit_id == unit_id)
 
     def search(self, query: str):
         q = (query or "").strip().lower()
@@ -447,3 +522,22 @@ class FakeStockMovementRepository:
 
     def list_all(self):
         return list(self._store.values())
+
+    def list_by_reference(self, reference_id: str):
+        return [
+            m for m in self._store.values() if m.reference_id == reference_id
+        ]
+
+    def delete(self, movement_id: str) -> None:
+        self._store.pop(movement_id, None)
+
+
+def make_inventory_app_service():
+    from vaybooks.bms.application.inventory_app_service import InventoryAppService
+
+    return InventoryAppService(
+        FakeProductCategoryRepository(),
+        FakeInventoryProductRepository(),
+        FakeStockMovementRepository(),
+        FakeProductUnitRepository(),
+    )

@@ -19,6 +19,8 @@ def customer_card(
     with st.container(border=True):
         st.markdown(f"### {customer.customer_name}")
         st.write(f"\U0001f4de {customer.phone_number}")
+        if customer.gstin:
+            st.caption(f"GSTIN: {customer.gstin}")
 
         color = "red" if balance > 0.01 else ("green" if balance < -0.01 else "gray")
         badges = (

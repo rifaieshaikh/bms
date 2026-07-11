@@ -24,6 +24,7 @@ from vaybooks.bms.application.report_filters import (
     OutstandingFilter,
     OverdueFilter,
     PeriodSummaryFilter,
+    PurchasesByVendorFilter,
     StockMovementsFilter,
     StockOnHandFilter,
     TimeTrackingFilter,
@@ -234,6 +235,17 @@ def build_stock_movements_filter(filters: dict) -> StockMovementsFilter:
     )
 
 
+def build_empty_report_filter(filters: dict):
+    return None
+
+
+def build_purchases_by_vendor_filter(filters: dict) -> PurchasesByVendorFilter:
+    dr = filters.get("date_range")
+    return PurchasesByVendorFilter(
+        date_range=_date_range(filters) if dr else None
+    )
+
+
 _BUILDERS = {
     "report_item_profitability": build_item_profitability_filter,
     "report_order_mph": build_order_mph_filter,
@@ -259,6 +271,11 @@ _BUILDERS = {
     "report_stock_on_hand": build_stock_on_hand_filter,
     "report_low_stock": build_low_stock_filter,
     "report_stock_movements": build_stock_movements_filter,
+    "report_inventory_valuation": build_stock_on_hand_filter,
+    "report_po_pipeline": build_empty_report_filter,
+    "report_grn_pending": build_empty_report_filter,
+    "report_purchases_by_vendor": build_purchases_by_vendor_filter,
+    "report_purchase_returns": build_purchases_by_vendor_filter,
 }
 
 

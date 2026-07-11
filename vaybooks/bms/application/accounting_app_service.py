@@ -8,6 +8,16 @@ from vaybooks.bms.domain.accounting.services import (
     AccountingDomainService,
 )
 from vaybooks.bms.domain.shared.enums import AccountType, VoucherType
+from vaybooks.bms.domain.shared.india import (
+    CGST_INPUT_ACCOUNT_NAME,
+    CGST_OUTPUT_ACCOUNT_NAME,
+    IGST_INPUT_ACCOUNT_NAME,
+    IGST_OUTPUT_ACCOUNT_NAME,
+    SGST_INPUT_ACCOUNT_NAME,
+    SGST_OUTPUT_ACCOUNT_NAME,
+    UTGST_INPUT_ACCOUNT_NAME,
+    UTGST_OUTPUT_ACCOUNT_NAME,
+)
 
 
 ADVANCE_RELEASE_DESCRIPTION_PREFIX = "Release advance on order"
@@ -53,6 +63,25 @@ class AccountingAppService:
         if not account:
             raise ValueError("Account not found")
         account.is_store_account = is_store_account
+        return self._account_repo.save(account)
+
+    def set_opening_balance(self, account_id: str, amount: float) -> Account:
+        """Set opening and current balance for go-live migration.
+
+        Rejects accounts that already have posted vouchers so migration cannot
+        overwrite a live ledger.
+        """
+        account = self._account_repo.find_by_id(account_id)
+        if not account:
+            raise ValueError("Account not found")
+        if self.get_account_ledger(account_id):
+            raise ValueError(
+                "Cannot set opening balance on an account that has transactions"
+            )
+        balance = round(float(amount or 0), 2)
+        account.opening_balance = balance
+        account.current_balance = balance
+        account.updated_at = datetime.utcnow()
         return self._account_repo.save(account)
 
     # Accounts resolved by name/type elsewhere (invoice & discount posting). Their
@@ -144,6 +173,37 @@ class AccountingAppService:
 
     def get_account(self, account_id: str) -> Optional[Account]:
         return self._account_repo.find_by_id(account_id)
+
+    def get_account_by_name(self, name: str) -> Optional[Account]:
+        return self._account_repo.find_by_name(name)
+
+    def get_gst_input_accounts(self) -> dict:
+        mapping = {
+            "cgst": CGST_INPUT_ACCOUNT_NAME,
+            "sgst": SGST_INPUT_ACCOUNT_NAME,
+            "igst": IGST_INPUT_ACCOUNT_NAME,
+            "utgst": UTGST_INPUT_ACCOUNT_NAME,
+        }
+        result = {}
+        for key, account_name in mapping.items():
+            account = self._account_repo.find_by_name(account_name)
+            if account:
+                result[key] = {"id": account.id, "name": account.account_name}
+        return result
+
+    def get_gst_output_accounts(self) -> dict:
+        mapping = {
+            "cgst": CGST_OUTPUT_ACCOUNT_NAME,
+            "sgst": SGST_OUTPUT_ACCOUNT_NAME,
+            "igst": IGST_OUTPUT_ACCOUNT_NAME,
+            "utgst": UTGST_OUTPUT_ACCOUNT_NAME,
+        }
+        result = {}
+        for key, account_name in mapping.items():
+            account = self._account_repo.find_by_name(account_name)
+            if account:
+                result[key] = {"id": account.id, "name": account.account_name}
+        return result
 
     def create_advance_receipt(
         self,
@@ -762,6 +822,10 @@ class AccountingAppService:
         store_invoice_number: str,
         line_items_note: str = "",
         voucher_date: Optional[date] = None,
+        reference_so_id: Optional[str] = None,
+        reference_dn_id: Optional[str] = None,
+        sales_lines: Optional[list[dict]] = None,
+        gst_output_accounts: Optional[dict] = None,
     ) -> Voucher:
         customer = self._account_repo.find_by_id(customer_account_id)
         store = self._account_repo.find_by_id(store_account_id)
@@ -773,7 +837,7 @@ class AccountingAppService:
         if not sales:
             raise ValueError('No "Sales" revenue account found')
         discount_account = (
-            self.get_discount_account() if discount_amount > 0 else None
+            self.get_discount_account() if discount_amount > 0 and not sales_lines else None
         )
         number = (store_invoice_number or "").strip()
         if not number:
@@ -783,6 +847,8 @@ class AccountingAppService:
             description = f"{description}\n{line_items_note.strip()}"
         voucher_number = self._counter_repo.next("voucher_number")
         v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
+        if sales_lines and not gst_output_accounts:
+            gst_output_accounts = self.get_gst_output_accounts()
         voucher = self._domain.build_cash_sales_invoice_voucher(
             voucher_number=voucher_number,
             voucher_date=v_date,
@@ -798,6 +864,10 @@ class AccountingAppService:
             amount_received=amount_received,
             discount_account_id=discount_account.id if discount_account else None,
             discount_account_name=discount_account.account_name if discount_account else None,
+            reference_so_id=reference_so_id,
+            reference_dn_id=reference_dn_id,
+            sales_lines=sales_lines,
+            gst_output_accounts=gst_output_accounts,
         )
         return self._domain.save_voucher(voucher)
 
@@ -818,6 +888,8 @@ class AccountingAppService:
             raise ValueError("Sales invoice not found")
         if old.reference_order_id or old.reference_invoice_id:
             raise ValueError("Order-linked sales invoices cannot be edited here")
+        if old.reference_so_id or old.reference_dn_id:
+            raise ValueError("ERP-linked sales invoices cannot be edited here")
         customer = self._account_repo.find_by_id(customer_account_id)
         store = self._account_repo.find_by_id(store_account_id)
         sales = self.get_sales_account()
@@ -1131,6 +1203,269 @@ class AccountingAppService:
         return [
             v for v in self._voucher_repo.list_all() if v.voucher_type == voucher_type
         ]
+
+    def list_vouchers_by_types(self, voucher_types: list[VoucherType]) -> List[Voucher]:
+        allowed = set(voucher_types)
+        return [v for v in self._voucher_repo.list_all() if v.voucher_type in allowed]
+
+    def create_purchase_bill(
+        self,
+        vendor_account_id: str,
+        expense_lines: list[dict],
+        vendor_bill_number: str,
+        amount_paid: float = 0.0,
+        paying_account_id: Optional[str] = None,
+        voucher_date: Optional[date] = None,
+        reference_order_id: Optional[str] = None,
+        reference_service_id: Optional[str] = None,
+        reference_po_id: Optional[str] = None,
+        reference_grn_id: Optional[str] = None,
+        stock_lines: Optional[list[dict]] = None,
+        landed_cost_lines: Optional[list[dict]] = None,
+        stock_reference_id: Optional[str] = None,
+    ) -> Voucher:
+        from vaybooks.bms.domain.accounting.purchase_parsing import (
+            build_purchase_description,
+        )
+
+        vendor = self._account_repo.find_by_id(vendor_account_id)
+        if not vendor:
+            raise ValueError("Vendor account not found")
+        resolved_lines = []
+        for raw in expense_lines:
+            acct = self._account_repo.find_by_id(str(raw.get("expense_account_id") or ""))
+            if not acct:
+                raise ValueError("Expense account not found")
+            line_total = round(
+                float(raw.get("line_total") or raw.get("amount") or 0), 2
+            )
+            if line_total <= 0:
+                continue
+            resolved_lines.append(
+                {
+                    "expense_account_id": acct.id,
+                    "expense_account_name": acct.account_name,
+                    "amount": line_total,
+                    "line_total": line_total,
+                    "taxable_amount": round(
+                        float(raw.get("taxable_amount") or line_total), 2
+                    ),
+                    "cgst_amount": round(float(raw.get("cgst_amount") or 0), 2),
+                    "sgst_amount": round(float(raw.get("sgst_amount") or 0), 2),
+                    "igst_amount": round(float(raw.get("igst_amount") or 0), 2),
+                    "utgst_amount": round(float(raw.get("utgst_amount") or 0), 2),
+                    "product_id": raw.get("product_id"),
+                    "item_type": raw.get("item_type"),
+                    "item_id": raw.get("item_id"),
+                    "item_name": raw.get("item_name"),
+                    "hsn_sac": raw.get("hsn_sac"),
+                    "qty": raw.get("qty"),
+                    "rate": raw.get("rate"),
+                    "landed_cost_alloc": raw.get("landed_cost_alloc"),
+                }
+            )
+        if not resolved_lines:
+            raise ValueError("At least one purchase line with amount is required")
+        paying = None
+        if amount_paid > 0:
+            if not paying_account_id:
+                raise ValueError("Paying account is required when amount is paid")
+            paying = self._account_repo.find_by_id(paying_account_id)
+            if not paying:
+                raise ValueError("Paying account not found")
+        description = build_purchase_description(vendor_bill_number, resolved_lines)
+        voucher_number = self._counter_repo.next("voucher_number")
+        v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
+        gst_input_accounts = self.get_gst_input_accounts()
+        voucher = self._domain.build_purchase_bill_voucher(
+            voucher_number=voucher_number,
+            voucher_date=v_date,
+            description=description,
+            vendor_account_id=vendor.id,
+            vendor_account_name=vendor.account_name,
+            expense_lines=resolved_lines,
+            amount_paid=amount_paid,
+            paying_account_id=paying.id if paying else None,
+            paying_account_name=paying.account_name if paying else None,
+            reference_order_id=reference_order_id,
+            reference_service_id=reference_service_id,
+            reference_po_id=reference_po_id,
+            reference_grn_id=reference_grn_id,
+            gst_input_accounts=gst_input_accounts,
+        )
+        saved = self._domain.save_voucher(voucher)
+        return saved
+
+    def update_purchase_bill(
+        self,
+        voucher_id: str,
+        vendor_account_id: str,
+        expense_lines: list[dict],
+        vendor_bill_number: str,
+        amount_paid: float = 0.0,
+        paying_account_id: Optional[str] = None,
+        voucher_date: Optional[date] = None,
+        reference_service_id: Optional[str] = None,
+    ) -> Voucher:
+        from vaybooks.bms.domain.accounting.purchase_parsing import (
+            build_purchase_description,
+        )
+
+        old = self._voucher_repo.find_by_id(voucher_id)
+        if not old or old.voucher_type != VoucherType.PURCHASE_BILL:
+            raise ValueError("Purchase bill not found")
+        vendor = self._account_repo.find_by_id(vendor_account_id)
+        if not vendor:
+            raise ValueError("Vendor account not found")
+        resolved_lines = []
+        for raw in expense_lines:
+            acct = self._account_repo.find_by_id(str(raw.get("expense_account_id") or ""))
+            if not acct:
+                raise ValueError("Expense account not found")
+            amount = round(float(raw.get("amount") or 0), 2)
+            if amount <= 0:
+                continue
+            resolved_lines.append(
+                {
+                    "expense_account_id": acct.id,
+                    "expense_account_name": acct.account_name,
+                    "amount": amount,
+                    "product_id": raw.get("product_id"),
+                    "qty": raw.get("qty"),
+                    "rate": raw.get("rate"),
+                    "landed_cost_alloc": raw.get("landed_cost_alloc"),
+                }
+            )
+        if not resolved_lines:
+            raise ValueError("At least one purchase line with amount is required")
+        paying = None
+        if amount_paid > 0:
+            if not paying_account_id:
+                raise ValueError("Paying account is required when amount is paid")
+            paying = self._account_repo.find_by_id(paying_account_id)
+            if not paying:
+                raise ValueError("Paying account not found")
+        description = build_purchase_description(vendor_bill_number, resolved_lines)
+        v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
+        voucher = self._domain.build_purchase_bill_voucher(
+            voucher_number=old.voucher_number,
+            voucher_date=v_date,
+            description=description,
+            vendor_account_id=vendor.id,
+            vendor_account_name=vendor.account_name,
+            expense_lines=resolved_lines,
+            amount_paid=amount_paid,
+            paying_account_id=paying.id if paying else None,
+            paying_account_name=paying.account_name if paying else None,
+            reference_order_id=old.reference_order_id,
+            reference_service_id=reference_service_id
+            if reference_service_id is not None
+            else old.reference_service_id,
+            reference_po_id=old.reference_po_id,
+            reference_grn_id=old.reference_grn_id,
+        )
+        voucher.id = old.id
+        return self._domain.update_voucher(voucher)
+
+    def delete_purchase_bill(self, voucher_id: str) -> None:
+        old = self._voucher_repo.find_by_id(voucher_id)
+        if not old or old.voucher_type != VoucherType.PURCHASE_BILL:
+            raise ValueError("Purchase bill not found")
+        self._domain.reverse_and_delete_voucher(voucher_id)
+
+    def create_purchase_return_voucher(
+        self,
+        vendor_account_id: str,
+        expense_lines: list[dict],
+        description: str,
+        amount_refunded: float = 0.0,
+        refund_account_id: Optional[str] = None,
+        voucher_date: Optional[date] = None,
+        reference_grn_id: Optional[str] = None,
+    ) -> Voucher:
+        vendor = self._account_repo.find_by_id(vendor_account_id)
+        if not vendor:
+            raise ValueError("Vendor account not found")
+        resolved_lines = []
+        for raw in expense_lines:
+            acct = self._account_repo.find_by_id(str(raw.get("expense_account_id") or ""))
+            if not acct:
+                raise ValueError("Expense account not found")
+            amount = round(float(raw.get("amount") or 0), 2)
+            if amount <= 0:
+                continue
+            resolved_lines.append(
+                {
+                    "expense_account_id": acct.id,
+                    "expense_account_name": acct.account_name,
+                    "amount": amount,
+                }
+            )
+        refund = None
+        if amount_refunded > 0:
+            if not refund_account_id:
+                raise ValueError("Refund account is required when refunding cash")
+            refund = self._account_repo.find_by_id(refund_account_id)
+            if not refund:
+                raise ValueError("Refund account not found")
+        voucher_number = self._counter_repo.next("voucher_number")
+        v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
+        voucher = self._domain.build_purchase_return_voucher(
+            voucher_number=voucher_number,
+            voucher_date=v_date,
+            description=description,
+            vendor_account_id=vendor.id,
+            vendor_account_name=vendor.account_name,
+            expense_lines=resolved_lines,
+            amount_refunded=amount_refunded,
+            refund_account_id=refund.id if refund else None,
+            refund_account_name=refund.account_name if refund else None,
+            reference_grn_id=reference_grn_id,
+        )
+        return self._domain.save_voucher(voucher)
+
+    def create_sales_return_voucher(
+        self,
+        customer_account_id: str,
+        return_amount: float,
+        description: str,
+        amount_refunded: float = 0.0,
+        refund_account_id: Optional[str] = None,
+        voucher_date: Optional[date] = None,
+        reference_dn_id: Optional[str] = None,
+        source_invoice_id: Optional[str] = None,
+    ) -> Voucher:
+        customer = self._account_repo.find_by_id(customer_account_id)
+        if not customer:
+            raise ValueError("Customer account not found")
+        sales = self.get_sales_account()
+        if not sales:
+            raise ValueError('No "Sales" revenue account found')
+        refund = None
+        if amount_refunded > 0:
+            if not refund_account_id:
+                raise ValueError("Refund account is required when refunding cash")
+            refund = self._account_repo.find_by_id(refund_account_id)
+            if not refund:
+                raise ValueError("Refund account not found")
+        voucher_number = self._counter_repo.next("voucher_number")
+        v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
+        voucher = self._domain.build_sales_return_voucher(
+            voucher_number=voucher_number,
+            voucher_date=v_date,
+            description=description,
+            customer_account_id=customer.id,
+            customer_account_name=customer.account_name,
+            sales_account_id=sales.id,
+            sales_account_name=sales.account_name,
+            return_amount=return_amount,
+            amount_refunded=amount_refunded,
+            refund_account_id=refund.id if refund else None,
+            refund_account_name=refund.account_name if refund else None,
+            reference_dn_id=reference_dn_id,
+            source_invoice_id=source_invoice_id,
+        )
+        return self._domain.save_voucher(voucher)
 
     def get_account(self, account_id: str) -> Optional[Account]:
         return self._account_repo.find_by_id(account_id)

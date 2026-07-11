@@ -803,7 +803,7 @@ def _payment_dialog(services: dict, order_id: str):
                     amount, description, pay_date, service_id=selected_service.id,
                 )
             else:
-                accounting.create_vendor_payment(
+                services["purchases"].merge_vendor_payment_into_purchase(
                     vendor_options[vendor_name], selected_service.expense_account_id,
                     pay_options[pay_name], amount, description, pay_date,
                     service_id=selected_service.id, reference_order_id=order.id,

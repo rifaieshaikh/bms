@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any, Optional
 
 from vaybooks.bms.domain.accounting.sales_parsing import (
@@ -10,6 +9,10 @@ from vaybooks.bms.domain.accounting.sales_parsing import (
     parse_store_invoice_number,
     sales_amounts_from_lines,
     sales_row_from_voucher,
+)
+from vaybooks.bms.domain.sales.line_items import (
+    parse_sales_line_items_note,
+    serialize_sales_line_items,
 )
 
 __all__ = [
@@ -21,32 +24,30 @@ __all__ = [
     "parse_line_items_note",
     "line_items_gross",
     "line_items_discount",
+    "line_items_taxable",
+    "line_items_tax_total",
+    "line_items_grand_total",
     "default_line_item",
     "parse_cash_sales_voucher",
     "format_line_items_summary",
 ]
-def serialize_line_items(line_items: list[dict], invoice_discount: float) -> str:
-    payload = {
-        "items": line_items,
-        "invoice_discount": round(invoice_discount, 2),
-    }
-    return json.dumps(payload, ensure_ascii=False)
+
+
+def serialize_line_items(
+    line_items: list[dict],
+    invoice_discount: float,
+    tax_summary: dict | None = None,
+) -> str:
+    return serialize_sales_line_items(line_items, invoice_discount, tax_summary)
 
 
 def parse_line_items_note(description: str) -> tuple[list[dict], float]:
-    if not description or "\n" not in description:
-        return [], 0.0
-    _, rest = description.split("\n", 1)
-    rest = rest.strip()
-    if not rest:
-        return [], 0.0
-    try:
-        data = json.loads(rest)
-        items = data.get("items") or []
-        invoice_discount = float(data.get("invoice_discount") or 0.0)
-        return items, round(invoice_discount, 2)
-    except (json.JSONDecodeError, TypeError, ValueError):
-        return [], 0.0
+    items, invoice_discount, _ = parse_sales_line_items_note(description)
+    return items, invoice_discount
+
+
+def parse_line_items_with_tax(description: str) -> tuple[list[dict], float, dict | None]:
+    return parse_sales_line_items_note(description)
 
 
 def line_items_gross(line_items: list[dict]) -> float:
@@ -72,6 +73,49 @@ def line_items_discount(line_items: list[dict]) -> float:
     return round(total, 2)
 
 
+def line_items_taxable(line_items: list[dict], tax_summary: dict | None = None) -> float:
+    if tax_summary:
+        return float(tax_summary.get("taxable") or 0.0)
+    total = 0.0
+    for row in line_items:
+        if "taxable_amount" in row:
+            total += float(row.get("taxable_amount") or 0.0)
+        else:
+            qty = float(row.get("qty") or 1.0)
+            rate = float(row.get("rate") or 0.0)
+            line_discount = float(row.get("discount") or 0.0)
+            line_gross = round(qty * rate, 2)
+            line_discount = round(min(max(line_discount, 0.0), line_gross), 2)
+            total += round(line_gross - line_discount, 2)
+    return round(total, 2)
+
+
+def line_items_tax_total(line_items: list[dict], tax_summary: dict | None = None) -> float:
+    if tax_summary:
+        return float(tax_summary.get("total_tax") or 0.0)
+    total = 0.0
+    for row in line_items:
+        if "total_tax" in row:
+            total += float(row.get("total_tax") or 0.0)
+        else:
+            total += round(
+                float(row.get("cgst_amount") or 0)
+                + float(row.get("sgst_amount") or 0)
+                + float(row.get("igst_amount") or 0)
+                + float(row.get("utgst_amount") or 0),
+                2,
+            )
+    return round(total, 2)
+
+
+def line_items_grand_total(line_items: list[dict], tax_summary: dict | None = None) -> float:
+    if tax_summary:
+        return float(tax_summary.get("grand_total") or 0.0)
+    if any("line_total" in row for row in line_items):
+        return round(sum(float(row.get("line_total") or 0) for row in line_items), 2)
+    return round(line_items_taxable(line_items) + line_items_tax_total(line_items), 2)
+
+
 def default_line_item() -> dict[str, Any]:
     return {
         "description": "",
@@ -95,7 +139,9 @@ def parse_cash_sales_voucher(voucher, discount_account_id: Optional[str] = None)
             store_id = line.account_id
             break
 
-    items, invoice_discount = parse_line_items_note(voucher.description or "")
+    items, invoice_discount, tax_summary = parse_sales_line_items_note(
+        voucher.description or ""
+    )
     if not items and gross > 0:
         line_disc = round(max(discount - invoice_discount, 0.0), 2)
         items = [
@@ -115,6 +161,7 @@ def parse_cash_sales_voucher(voucher, discount_account_id: Optional[str] = None)
         "gross": gross,
         "discount": discount,
         "invoice_discount": invoice_discount,
+        "tax_summary": tax_summary,
         "received": received,
         "line_items": items or [default_line_item()],
     }

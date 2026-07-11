@@ -12,6 +12,13 @@ def _enum_opts(enum_cls) -> list[tuple]:
     return [(e.value, e.value) for e in enum_cls]
 
 
+def _match_inv_product_category(product, value) -> bool:
+    ids = list(getattr(product, "category_ids", None) or [])
+    if not ids and getattr(product, "category_id", ""):
+        ids = [product.category_id]
+    return value in ids
+
+
 def _match_inv_category_active(category, _value) -> bool:
     return bool(getattr(category, "is_active", False))
 
@@ -55,7 +62,8 @@ INVENTORY_PRODUCTS = ListSchema(
         FilterField("sku", "SKU", F.EXACT),
         FilterField("name", "Product name", F.EXACT),
         FilterField("category_id", "Category", F.ENTITY_SELECT,
-                    options_loader="inventory_categories"),
+                    options_loader="inventory_categories",
+                    match=_match_inv_product_category),
         FilterField("active_only", "Active only", F.CHECKBOX,
                     match=_match_inv_product_active),
     ],
@@ -76,7 +84,8 @@ INVENTORY_STOCK = ListSchema(
         FilterField("sku", "SKU", F.EXACT),
         FilterField("name", "Product name", F.EXACT),
         FilterField("category_id", "Category", F.ENTITY_SELECT,
-                    options_loader="inventory_categories"),
+                    options_loader="inventory_categories",
+                    match=_match_inv_product_category),
         FilterField("active_only", "Active only", F.CHECKBOX,
                     match=_match_inv_product_active),
     ],

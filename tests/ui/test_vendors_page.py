@@ -27,3 +27,9 @@ def test_vendors_list_route_renders():
     at.run(timeout=15)
     assert not at.exception
     assert "Vendors" in _text(at)
+
+
+def test_vendor_form_module_exports_render():
+    from vaybooks.bms.ui.components.vendor_form import render_vendor_form
+
+    assert callable(render_vendor_form)

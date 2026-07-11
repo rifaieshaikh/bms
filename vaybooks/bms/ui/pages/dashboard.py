@@ -139,6 +139,25 @@ def render(services: dict):
     _inventory_health_row(summary)
     _inventory_alerts(summary)
 
+    purchase_summary = services["reports_purchases"].dashboard_summary()
+    st.markdown("#### Purchases")
+    metric_grid(
+        [
+            ("📝 Open POs", purchase_summary.get("open_po_count", 0)),
+            ("📥 Pending GRN Qty", f"{purchase_summary.get('pending_grn_qty', 0):g}"),
+            (
+                "🧾 Purchases (Month)",
+                f"₹{purchase_summary.get('purchases_this_month', 0):,.0f}",
+            ),
+            (
+                "↩️ Returns (Month)",
+                f"₹{purchase_summary.get('returns_this_month', 0):,.0f}",
+            ),
+        ],
+        suffix="dashboard_purchase_kpi",
+    )
+    st.divider()
+
     order_action_cards(
         "Today's ETD Orders", _summary_list(summary, "etd_today"), "etd", accent="orange"
     )

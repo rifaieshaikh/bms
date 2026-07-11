@@ -6,6 +6,11 @@ from vaybooks.bms.application.accounting_app_service import AccountingAppService
 from vaybooks.bms.domain.accounting.entities import Account
 from vaybooks.bms.domain.accounting.services import ADVANCE_FROM_CUSTOMERS_ACCOUNT_NAME
 from vaybooks.bms.domain.shared.enums import AccountType, VoucherType
+from vaybooks.bms.domain.shared.india import (
+    CGST_OUTPUT_ACCOUNT_NAME,
+    IGST_OUTPUT_ACCOUNT_NAME,
+    SGST_OUTPUT_ACCOUNT_NAME,
+)
 from tests.conftest import FakeAccountRepository, FakeCounterRepository, FakeVoucherRepository
 
 
@@ -141,3 +146,49 @@ def test_cash_sales_invoice_rejects_overpayment():
             amount_received=950.0,
             store_invoice_number="SI-103",
         )
+
+
+def test_cash_sales_invoice_with_gst_lines():
+    service = _service()
+    accounts = _seed_accounts(service._account_repo)
+    for name in (
+        CGST_OUTPUT_ACCOUNT_NAME,
+        SGST_OUTPUT_ACCOUNT_NAME,
+        IGST_OUTPUT_ACCOUNT_NAME,
+    ):
+        service._account_repo.save(
+            Account(account_name=name, account_type=AccountType.LIABILITY)
+        )
+
+    sales_lines = [
+        {
+            "product_id": "p1",
+            "description": "Item",
+            "qty": 1,
+            "rate": 1000,
+            "taxable_amount": 1000.0,
+            "cgst_amount": 90.0,
+            "sgst_amount": 90.0,
+            "igst_amount": 0.0,
+            "utgst_amount": 0.0,
+            "line_total": 1180.0,
+        }
+    ]
+
+    voucher = service.create_cash_sales_invoice(
+        accounts["customer"].id,
+        accounts["cash"].id,
+        gross_amount=1180.0,
+        discount_amount=0.0,
+        amount_received=1180.0,
+        store_invoice_number="SI-GST",
+        sales_lines=sales_lines,
+    )
+
+    sales_credit = next(
+        line for line in voucher.lines if line.description == "Sales invoice"
+    )
+    assert sales_credit.credit_amount == 1000.0
+    customer_debit = voucher.lines[0]
+    assert customer_debit.debit_amount == 1180.0
+    assert accounts["sales"].current_balance == -1000.0

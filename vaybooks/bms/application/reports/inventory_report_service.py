@@ -173,3 +173,28 @@ class InventoryReportService:
                 }
             )
         return rows
+
+    def inventory_valuation_report(self, filters: StockOnHandFilter) -> list[dict]:
+        products = self._inventory.list_products(active_only=filters.active_only)
+        rows = []
+        for product in products:
+            if filters.category_id and product.category_id != filters.category_id:
+                continue
+            if filters.search:
+                needle = filters.search.lower()
+                hay = f"{product.sku} {product.name} {product.category_name}".lower()
+                if needle not in hay:
+                    continue
+            rows.append(
+                {
+                    "sku": product.sku,
+                    "product_name": product.name,
+                    "category": product.category_name,
+                    "qty": product.current_qty,
+                    "weighted_avg_cost": product.weighted_avg_cost,
+                    "valuation": round(
+                        product.current_qty * product.weighted_avg_cost, 2
+                    ),
+                }
+            )
+        return rows

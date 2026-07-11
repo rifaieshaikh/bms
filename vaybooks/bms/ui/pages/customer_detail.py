@@ -49,10 +49,25 @@ def render(services: dict):
             info[0].write(f"**Phone:** {customer.phone_number}")
             info[1].write(f"**Alt:** {customer.alternate_phone_number or '—'}")
             info[2].write(f"**Since:** {_fmt_date(customer.created_at)}")
-            if customer.address:
-                st.caption(f"📍 {customer.address}")
+            if customer.contact_person:
+                st.caption(f"Contact: {customer.contact_person}")
+            if customer.email:
+                st.caption(f"Email: {customer.email}")
+            if customer.formatted_address:
+                st.caption(f"Address: {customer.formatted_address}")
+            tax_bits = []
+            if customer.registration_type:
+                tax_bits.append(f"Registration: {customer.registration_type.value}")
+            if customer.gstin:
+                tax_bits.append(f"GSTIN: {customer.gstin}")
+            if customer.pan:
+                tax_bits.append(f"PAN: {customer.pan}")
+            if customer.msme_number:
+                tax_bits.append(f"MSME: {customer.msme_number}")
+            if tax_bits:
+                st.caption(" · ".join(tax_bits))
             if customer.notes:
-                st.caption(f"📝 {customer.notes}")
+                st.caption(f"Notes: {customer.notes}")
 
     try:
         summary = order_service.get_customer_summary(customer.id)

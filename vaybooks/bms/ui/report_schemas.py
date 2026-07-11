@@ -662,6 +662,78 @@ STOCK_MOVEMENTS = ListSchema(
     page_size=REPORT_PAGE_SIZE,
 )
 
+PO_PIPELINE = ListSchema(
+    entity_key="report_po_pipeline",
+    title="Purchase Orders Pipeline",
+    filter_fields=[],
+    sort_options=[
+        SortOption("order_date", "Order date"),
+        SortOption("po_number", "PO number"),
+        SortOption("status", "Status"),
+    ],
+    default_sort="order_date",
+    page_size=REPORT_PAGE_SIZE,
+)
+
+GRN_PENDING = ListSchema(
+    entity_key="report_grn_pending",
+    title="GRN Pending",
+    filter_fields=[],
+    sort_options=[
+        SortOption("po_number", "PO number"),
+        SortOption("qty_pending", "Qty pending"),
+    ],
+    default_sort="qty_pending",
+    page_size=REPORT_PAGE_SIZE,
+)
+
+PURCHASES_BY_VENDOR = ListSchema(
+    entity_key="report_purchases_by_vendor",
+    title="Purchases by Vendor",
+    filter_fields=[
+        FilterField("date_range", "Period", F.DATE_RANGE, default=_mtd),
+    ],
+    sort_options=[
+        SortOption("total", "Total amount"),
+        SortOption("vendor_name", "Vendor"),
+    ],
+    default_sort="total",
+    page_size=REPORT_PAGE_SIZE,
+)
+
+PURCHASE_RETURNS_SUMMARY = ListSchema(
+    entity_key="report_purchase_returns",
+    title="Purchase Returns Summary",
+    filter_fields=[
+        FilterField("date_range", "Period", F.DATE_RANGE, default=_mtd),
+    ],
+    sort_options=[
+        SortOption("return_date", "Return date"),
+        SortOption("total_amount", "Amount"),
+    ],
+    default_sort="return_date",
+    page_size=REPORT_PAGE_SIZE,
+)
+
+INVENTORY_VALUATION = ListSchema(
+    entity_key="report_inventory_valuation",
+    title="Inventory Valuation",
+    filter_fields=[
+        FilterField(
+            "category_id",
+            "Category",
+            F.ENTITY_SELECT,
+            options_loader="inventory_categories",
+        ),
+    ],
+    sort_options=[
+        SortOption("valuation", "Valuation"),
+        SortOption("product_name", "Product"),
+    ],
+    default_sort="valuation",
+    page_size=REPORT_PAGE_SIZE,
+)
+
 REPORT_CATEGORIES: dict[str, list[str]] = {
     "Business Insights": [
         "Period Financial Summary",
@@ -699,6 +771,13 @@ REPORT_CATEGORIES: dict[str, list[str]] = {
         "Stock on Hand",
         "Low Stock Alert",
         "Stock Movements",
+        "Inventory Valuation",
+    ],
+    "Purchases": [
+        "Purchase Orders Pipeline",
+        "GRN Pending",
+        "Purchases by Vendor",
+        "Purchase Returns Summary",
     ],
 }
 
@@ -728,6 +807,11 @@ SCHEMA_BY_REPORT_TYPE = {
     "Stock on Hand": STOCK_ON_HAND,
     "Low Stock Alert": LOW_STOCK,
     "Stock Movements": STOCK_MOVEMENTS,
+    "Inventory Valuation": INVENTORY_VALUATION,
+    "Purchase Orders Pipeline": PO_PIPELINE,
+    "GRN Pending": GRN_PENDING,
+    "Purchases by Vendor": PURCHASES_BY_VENDOR,
+    "Purchase Returns Summary": PURCHASE_RETURNS_SUMMARY,
 }
 
 CATEGORY_BY_REPORT_TYPE = {
@@ -743,6 +827,7 @@ CATEGORY_SERVICE_KEYS = {
     "Labor": "reports_labor",
     "Customers": "reports_customers",
     "Inventory": "reports_inventory",
+    "Purchases": "reports_purchases",
 }
 
 REPORT_TYPES = [

@@ -2,7 +2,7 @@ from typing import List, Optional
 
 from vaybooks.bms.domain.accounting.repository import AccountRepository
 from vaybooks.bms.domain.accounting.services import AccountingDomainService
-from vaybooks.bms.domain.customers.entities import Customer
+from vaybooks.bms.domain.customers.entities import Customer, CustomerInput
 from vaybooks.bms.domain.customers.repository import CustomerRepository
 from vaybooks.bms.domain.customers.services import CustomerDomainService
 
@@ -17,21 +17,8 @@ class CustomerAppService:
         self._customer_domain = CustomerDomainService(customer_repo)
         self._accounting_domain = AccountingDomainService(account_repo, None)
 
-    def create_customer(
-        self,
-        customer_name: str,
-        phone_number: str,
-        alternate_phone_number: Optional[str] = None,
-        address: str = "",
-        notes: str = "",
-    ) -> Customer:
-        customer = self._customer_domain.create(
-            customer_name=customer_name,
-            phone_number=phone_number,
-            alternate_phone_number=alternate_phone_number,
-            address=address,
-            notes=notes,
-        )
+    def create_customer(self, customer_input: CustomerInput) -> Customer:
+        customer = self._customer_domain.create(customer_input)
         account_name = CustomerDomainService.build_account_name(customer)
         self._accounting_domain.ensure_customer_account(customer.id, account_name)
         return customer
@@ -45,28 +32,12 @@ class CustomerAppService:
         return self._customer_repo.find_by_id(customer_id)
 
     def update_customer(
-        self,
-        customer_id: str,
-        customer_name: str,
-        phone_number: str,
-        alternate_phone_number: Optional[str] = None,
-        address: str = "",
-        notes: str = "",
+        self, customer_id: str, customer_input: CustomerInput
     ) -> Customer:
-        customer = self._customer_repo.find_by_id(customer_id)
-        if not customer:
-            raise ValueError("Customer not found")
-        customer.update(
-            customer_name=customer_name.strip(),
-            phone_number=phone_number.strip(),
-            alternate_phone_number=alternate_phone_number,
-            address=address,
-            notes=notes,
-        )
-        saved = self._customer_repo.save(customer)
-        account_name = CustomerDomainService.build_account_name(saved)
-        self._accounting_domain.sync_customer_account(saved.id, account_name)
-        return saved
+        customer = self._customer_domain.update(customer_id, customer_input)
+        account_name = CustomerDomainService.build_account_name(customer)
+        self._accounting_domain.sync_customer_account(customer.id, account_name)
+        return customer
 
     def find_or_create_customer(
         self,

@@ -82,12 +82,26 @@ DEFAULT_ACCOUNTS = [
     ("Embroidery Expense", AccountType.EXPENSE, False),
     ("Salary Expense", AccountType.EXPENSE, False),
     ("Advance From Customers", AccountType.LIABILITY, False),
+    ("CGST Input", AccountType.ASSET, False),
+    ("SGST Input", AccountType.ASSET, False),
+    ("IGST Input", AccountType.ASSET, False),
+    ("UTGST Input", AccountType.ASSET, False),
+    ("CGST Output", AccountType.LIABILITY, False),
+    ("SGST Output", AccountType.LIABILITY, False),
+    ("IGST Output", AccountType.LIABILITY, False),
+    ("UTGST Output", AccountType.LIABILITY, False),
 ]
 
 COUNTERS = [
     ("order_number", "CO"),
     ("voucher_number", "VCH"),
     ("invoice_number", "INV"),
+    ("po_number", "PO"),
+    ("grn_number", "GRN"),
+    ("purchase_return_number", "PR"),
+    ("so_number", "SO"),
+    ("dn_number", "DN"),
+    ("sales_return_number", "SR"),
 ]
 
 # (service_name, expense_account_name) — the expense account each vendor
@@ -106,6 +120,14 @@ DEFAULT_PRODUCT_CATEGORIES = [
     ("Fabric", "Fabrics and materials"),
     ("Ready-made", "Finished ready-to-sell items"),
     ("Accessories", "Accessories and add-ons"),
+]
+
+DEFAULT_PRODUCT_UNITS = [
+    ("pcs", "Pieces"),
+    ("m", "Metres"),
+    ("kg", "Kilograms"),
+    ("roll", "Roll"),
+    ("set", "Set"),
 ]
 
 
@@ -204,6 +226,21 @@ def run_seed(db):
                 "_id": uuid4().hex,
                 "name": category_name,
                 "description": description,
+                "is_active": True,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+
+    for code, label in DEFAULT_PRODUCT_UNITS:
+        if db.product_units.find_one({"code": code}):
+            continue
+        _insert_ignoring_duplicates(
+            db.product_units,
+            {
+                "_id": uuid4().hex,
+                "code": code,
+                "label": label,
                 "is_active": True,
                 "created_at": now,
                 "updated_at": now,

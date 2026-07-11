@@ -24,6 +24,12 @@ BUSINESS_COLLECTIONS = (
     "product_categories",
     "inventory_products",
     "stock_movements",
+    "purchase_orders",
+    "goods_receipts",
+    "purchase_returns",
+    "sales_orders",
+    "delivery_notes",
+    "sales_returns",
 )
 
 DEFAULT_ACCOUNT_NAMES = {name for name, _, _ in DEFAULT_ACCOUNTS}

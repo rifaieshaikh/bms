@@ -1,4 +1,4 @@
-"""Vendor Payments route (vendor payments + salaries)."""
+"""Salary payments route (vendor purchases moved to Purchases → Bills)."""
 
 import streamlit as st
 
@@ -9,34 +9,20 @@ from vaybooks.bms.ui.list_schemas import PAYMENTS
 from vaybooks.bms.ui.pages import accounts as acc
 
 
-def _load(services, filters, sort):
+def _load_salaries(services, filters, sort):
     try:
-        accounting = services["accounting"]
-        payments = accounting.list_vouchers_by_type(VoucherType.VENDOR_PAYMENT)
-        salaries = accounting.list_vouchers_by_type(VoucherType.SALARY_PAYMENT)
-        return payments + salaries
+        return services["accounting"].list_vouchers_by_type(VoucherType.SALARY_PAYMENT)
     except Exception:
         return []
 
 
 def _cards(page_vouchers, services):
-    service_names = {
-        s.id: s.service_name
-        for s in services["vendor_services"].list_services(active_only=False)
-    }
-
     def _builder(v):
-        is_salary = v.voucher_type == VoucherType.SALARY_PAYMENT
-        flag_key = acc.SAL if is_salary else acc.PAY
-        edit_prefix = "edit_sal" if is_salary else "edit_pay"
-        service_label = (
-            None if is_salary else service_names.get(v.reference_service_id)
-        )
         return {
-            "service_label": service_label,
+            "service_label": None,
             "edit": VoucherEditAction(
-                flag_key=flag_key,
-                button_key=f"{edit_prefix}_{v.id}",
+                flag_key=acc.SAL,
+                button_key=f"edit_sal_{v.id}",
             ),
         }
 
@@ -45,16 +31,11 @@ def _cards(page_vouchers, services):
 
 def render(services: dict):
     accounting_service = services["accounting"]
-    actions = st.columns(2)
-    if actions[0].button(
-        "+ Record Vendor Payment",
-        type="primary",
-        key="btn_rec_pay",
-        use_container_width=True,
-    ):
-        acc._clear_other_payment_dialog_flags(acc.PAY)
-        acc._payment_dialog(services)
-    if actions[1].button(
+    st.info(
+        "Vendor purchases are recorded under **Purchases → Purchase Bills**. "
+        "This page shows salary payments only."
+    )
+    if st.button(
         "+ Record Salary",
         type="primary",
         key="btn_rec_sal",
@@ -66,9 +47,9 @@ def render(services: dict):
     render_list(
         PAYMENTS,
         services=services,
-        load_fn=_load,
+        load_fn=_load_salaries,
         card_renderer=_cards,
-        count_label="payments",
-        empty_text="No payments recorded yet.",
+        count_label="salary payments",
+        empty_text="No salary payments recorded yet.",
     )
     acc.open_pending_dialogs(services)

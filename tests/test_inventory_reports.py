@@ -12,20 +12,11 @@ from vaybooks.bms.application.reports.inventory_report_service import (
     InventoryReportService,
 )
 from vaybooks.bms.domain.shared.enums import StockMovementType
-from tests.conftest import (
-    FakeInventoryProductRepository,
-    FakeProductCategoryRepository,
-    FakeStockMovementRepository,
-)
+from tests.conftest import make_inventory_app_service
 
 
 def _service() -> InventoryReportService:
-    inventory = InventoryAppService(
-        FakeProductCategoryRepository(),
-        FakeInventoryProductRepository(),
-        FakeStockMovementRepository(),
-    )
-    return InventoryReportService(inventory)
+    return InventoryReportService(make_inventory_app_service())
 
 
 def test_health_summary_counts_low_and_out_of_stock():

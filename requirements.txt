@@ -2,6 +2,7 @@ streamlit>=1.48
 streamlit-js-eval
 pymongo
 pandas
+openpyxl
 python-dotenv
 pytest
 dnspython

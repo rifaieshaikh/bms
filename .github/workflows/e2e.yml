@@ -1,0 +1,52 @@
+name: E2E Playwright
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "bms/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "bms/**"
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bms
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-e2e.txt
+          playwright install chromium
+
+      - name: Initialize E2E database
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          MONGODB_DATABASE: zahcci_e2e
+        run: |
+          python -m vaybooks.bms.infrastructure.db.indexes
+
+      - name: Run Playwright E2E tests
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          MONGODB_DATABASE: zahcci_e2e
+          E2E_PORT: "8502"
+        run: |
+          mkdir -p .streamlit
+          cat > .streamlit/secrets.toml << EOF
+          MONGODB_URI = "${{ secrets.MONGODB_URI }}"
+          MONGODB_DATABASE = "zahcci_e2e"
+          EOF
+          pytest e2e/ -v -p pytest_playwright --e2e-base-url=http://localhost:8502

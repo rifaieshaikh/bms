@@ -47,6 +47,11 @@ REPORT_LOADERS: dict[str, tuple[str, str]] = {
     "Stock on Hand": ("reports_inventory", "stock_on_hand_report"),
     "Low Stock Alert": ("reports_inventory", "low_stock_report"),
     "Stock Movements": ("reports_inventory", "stock_movements_report"),
+    "Inventory Valuation": ("reports_inventory", "inventory_valuation_report"),
+    "Purchase Orders Pipeline": ("reports_purchases", "purchase_orders_pipeline_report"),
+    "GRN Pending": ("reports_purchases", "grn_pending_report"),
+    "Purchases by Vendor": ("reports_purchases", "purchases_by_vendor_report"),
+    "Purchase Returns Summary": ("reports_purchases", "purchase_returns_summary_report"),
 }
 
 

@@ -1,62 +1,89 @@
 import streamlit as st
 
-from vaybooks.bms.domain.shared.exceptions import ValidationError
+from vaybooks.bms.domain.customers.entities import CustomerInput
+from vaybooks.bms.domain.shared.exceptions import (
+    DuplicateCustomerError,
+    ValidationError,
+)
+from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.components.customer_card import customer_card
+from vaybooks.bms.ui.components.customer_form import render_customer_form
 from vaybooks.bms.ui.components.list_view import render_list
+from vaybooks.bms.ui.dialog_utils import (
+    clear_all_dialog_flags,
+    make_dismiss_handler,
+    register_armed_dialog,
+)
 from vaybooks.bms.ui.styles import render_card_grid
 from vaybooks.bms.ui.list_schemas import CUSTOMERS
 
+C_ADD = "customer_add_dialog"
+C_EDIT = "customer_edit_dialog"
+C_DUP_CUSTOMER_ID = "customer_duplicate_existing_id"
 
-@st.dialog("Add Customer", width="medium")
+
+def _render_duplicate_customer_warning(existing_customer_id: str, customer_service) -> None:
+    existing = customer_service.get_customer_detail(existing_customer_id)
+    label = existing.customer_name if existing else "existing customer"
+    st.warning(f"A customer with this phone or GSTIN already exists: **{label}**")
+    if st.button("Open existing customer", key="customer_open_existing", type="primary"):
+        st.session_state.pop(C_ADD, None)
+        st.session_state.pop(C_DUP_CUSTOMER_ID, None)
+        navigation.go_to_detail("customer_detail", existing_customer_id)
+        st.rerun()
+
+
+@st.dialog("Add Customer", width="large", on_dismiss=make_dismiss_handler(C_ADD))
 def _add_customer_dialog(customer_service):
-    name = st.text_input("Customer Name", key="add_name")
-    phone = st.text_input("Phone Number", key="add_phone")
-    alt_phone = st.text_input("Alternate Phone", key="add_alt")
-    address = st.text_area("Address", key="add_addr")
-    notes = st.text_area("Notes", key="add_notes")
+    dup_id = st.session_state.get(C_DUP_CUSTOMER_ID)
+    if dup_id:
+        _render_duplicate_customer_warning(dup_id, customer_service)
 
-    if st.button("Create Customer", type="primary"):
-        if name and phone:
-            try:
-                customer = customer_service.create_customer(
-                    name, phone, alt_phone or None, address, notes
-                )
-                st.success(
-                    f"Customer submission for {customer.customer_name} saved successfully."
-                )
-                st.rerun()
-            except ValidationError as exc:
-                st.error(str(exc))
-        else:
-            st.error("Name and phone are required")
+    customer_input = render_customer_form("c_add")
+
+    cols = st.columns(2)
+    if cols[0].button("Create Customer", type="primary", use_container_width=True):
+        try:
+            customer = customer_service.create_customer(customer_input)
+            st.session_state.pop(C_ADD, None)
+            st.session_state.pop(C_DUP_CUSTOMER_ID, None)
+            st.success(f"Created customer: {customer.customer_name}")
+            st.rerun()
+        except DuplicateCustomerError as exc:
+            st.session_state[C_DUP_CUSTOMER_ID] = exc.existing_customer_id
+            st.rerun()
+        except ValidationError as exc:
+            st.error(str(exc))
+    if cols[1].button("Cancel", use_container_width=True):
+        st.session_state.pop(C_ADD, None)
+        st.session_state.pop(C_DUP_CUSTOMER_ID, None)
+        st.rerun()
 
 
-@st.dialog("Edit Customer", width="medium")
+@st.dialog("Edit Customer", width="large", on_dismiss=make_dismiss_handler(C_EDIT))
 def _edit_customer_dialog(customer_service, customer_id: str):
     customer = customer_service.get_customer_detail(customer_id)
     if not customer:
         st.error("Customer not found")
         return
 
-    name = st.text_input("Customer Name", value=customer.customer_name, key="edit_name")
-    phone = st.text_input("Phone Number", value=customer.phone_number, key="edit_phone")
-    alt_phone = st.text_input(
-        "Alternate Phone",
-        value=customer.alternate_phone_number or "",
-        key="edit_alt",
-    )
-    address = st.text_area("Address", value=customer.address or "", key="edit_addr")
-    notes = st.text_area("Notes", value=customer.notes or "", key="edit_notes")
+    customer_input = render_customer_form("c_edit", customer=customer)
 
-    if st.button("Save Changes", type="primary"):
+    cols = st.columns(2)
+    if cols[0].button("Save Changes", type="primary", use_container_width=True):
         try:
-            customer_service.update_customer(
-                customer_id, name, phone, alt_phone or None, address, notes
-            )
+            customer_service.update_customer(customer_id, customer_input)
+            st.session_state.pop(C_EDIT, None)
             st.success("Customer updated")
             st.rerun()
-        except Exception as e:
-            st.error(str(e))
+        except DuplicateCustomerError as exc:
+            st.session_state[C_DUP_CUSTOMER_ID] = exc.existing_customer_id
+            st.error(str(exc))
+        except ValidationError as exc:
+            st.error(str(exc))
+    if cols[1].button("Cancel", use_container_width=True):
+        st.session_state.pop(C_EDIT, None)
+        st.rerun()
 
 
 def _load_customers(services, filters, sort):
@@ -90,7 +117,10 @@ def _render_cards(page_customers, services):
             f"cust_{customer.id}",
         )
         if edit_clicked:
-            _edit_customer_dialog(customer_service, customer.id)
+            clear_all_dialog_flags()
+            st.session_state[C_EDIT] = customer.id
+            register_armed_dialog(C_EDIT)
+            st.rerun()
 
     render_card_grid(page_customers, _render, suffix="customers")
 
@@ -107,4 +137,11 @@ def render(services: dict):
         empty_text="No customers found.",
     )
     if bar["primary_clicked"]:
+        clear_all_dialog_flags()
+        st.session_state.pop(C_DUP_CUSTOMER_ID, None)
+        st.session_state[C_ADD] = True
+        register_armed_dialog(C_ADD)
+    if st.session_state.get(C_ADD):
         _add_customer_dialog(services["customers"])
+    if st.session_state.get(C_EDIT):
+        _edit_customer_dialog(services["customers"], st.session_state[C_EDIT])

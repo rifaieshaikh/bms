@@ -7,6 +7,7 @@ from datetime import date, datetime
 import pandas as pd
 import streamlit as st
 
+from vaybooks.bms.domain.shared.enums import CatalogItemType
 from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.styles import metric_grid, panel
 
@@ -35,7 +36,13 @@ def render(services: dict):
         return
 
     st.title(product.name)
-    st.caption(f"{product.sku} · {product.category_name or '—'}")
+    st.caption(
+        f"{product.sku} · "
+        + (" · ".join(product.category_names) if product.category_names else product.category_name or "—")
+    )
+
+    active_gst = product.active_gst_slab()
+    active_mrp = product.active_mrp_slab()
 
     with panel(f"inv_prod_head_{product.id}"):
         with st.container(border=True):
@@ -44,9 +51,65 @@ def render(services: dict):
                     ("Current stock", f"{product.current_qty:g} {product.unit}"),
                     ("Opening qty", f"{product.opening_qty:g}"),
                     ("Selling rate", f"₹{product.selling_rate:,.0f}"),
+                    ("HSN", product.hsn_sac or "—"),
+                    ("Active GST", f"{active_gst.gst_rate:g}%" if active_gst else "—"),
+                    ("Active MRP", f"₹{active_mrp.mrp:,.2f}" if active_mrp else "—"),
                     ("Status", "Active" if product.is_active else "Inactive"),
                 ],
                 suffix=f"inv_prod_{product.id}",
+            )
+
+    with st.expander("GST rate history", expanded=False):
+        gst_rows = []
+        for slab in sorted(product.gst_rates, key=lambda s: s.effective_from, reverse=True):
+            gst_rows.append(
+                {
+                    "Rate (%)": slab.gst_rate,
+                    "Effective from": _fmt_date(slab.effective_from),
+                    "Active": "Yes" if slab.is_active else "No",
+                }
+            )
+        if gst_rows:
+            st.dataframe(pd.DataFrame(gst_rows), use_container_width=True, hide_index=True)
+        else:
+            st.caption("No GST rates recorded.")
+
+    with st.expander("MRP history", expanded=False):
+        mrp_rows = []
+        for entry in sorted(product.mrp_entries, key=lambda e: e.effective_from, reverse=True):
+            mrp_rows.append(
+                {
+                    "MRP (₹)": entry.mrp,
+                    "Effective from": _fmt_date(entry.effective_from),
+                    "Active": "Yes" if entry.is_active else "No",
+                }
+            )
+        if mrp_rows:
+            st.dataframe(pd.DataFrame(mrp_rows), use_container_width=True, hide_index=True)
+        else:
+            st.caption("No MRP history recorded.")
+
+    if product.specifications:
+        st.subheader("Specifications")
+        spec_rows = [{"Name": k, "Value": v} for k, v in product.specifications.items()]
+        st.dataframe(pd.DataFrame(spec_rows), use_container_width=True, hide_index=True)
+
+    if product.custom_fields:
+        st.subheader("Custom fields")
+        cf_rows = [{"Field": k, "Value": v} for k, v in product.custom_fields.items()]
+        st.dataframe(pd.DataFrame(cf_rows), use_container_width=True, hide_index=True)
+
+    st.subheader("Purchase price history")
+    history = services["purchases"].list_purchase_price_history(
+        CatalogItemType.PRODUCT, product_id
+    )
+    if not history:
+        st.caption("No purchase history yet.")
+    else:
+        for row in history[:20]:
+            st.caption(
+                f"{row.purchase_date} · Qty {row.qty:g} @ ₹{row.rate:,.2f} "
+                f"(₹{row.line_total:,.2f}) · Bill {row.vendor_bill_number or '—'}"
             )
 
     st.subheader("Stock ledger")

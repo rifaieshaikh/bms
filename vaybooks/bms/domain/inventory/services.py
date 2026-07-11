@@ -1,24 +1,41 @@
 from datetime import date, datetime
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional
 
+from vaybooks.bms.domain.inventory.category_tree import (
+    build_category_paths,
+    normalize_parent_id,
+    validate_category_parent,
+)
 from vaybooks.bms.domain.inventory.entities import (
     InventoryProduct,
     ProductCategory,
+    ProductUnit,
     StockMovement,
+)
+from vaybooks.bms.domain.inventory.field_definitions import (
+    ProductFieldDefinition,
+    ProductFieldType,
+    normalize_field_key,
+    validate_custom_field_values,
 )
 from vaybooks.bms.domain.inventory.repository import (
     InventoryProductRepository,
     ProductCategoryRepository,
+    ProductFieldDefinitionRepository,
+    ProductUnitRepository,
     StockMovementRepository,
 )
+from vaybooks.bms.domain.inventory.units import default_unit_label, normalize_unit_code
 from vaybooks.bms.domain.shared.enums import StockMovementType, StockReferenceType
 from vaybooks.bms.domain.shared.exceptions import ValidationError
+from vaybooks.bms.domain.shared.item_tax import ProductGstSlab, ProductMrpSlab
 
 INFLOW_TYPES = frozenset(
     {
         StockMovementType.RECEIVE,
         StockMovementType.ADJUST_IN,
         StockMovementType.PURCHASE_RECEIVE,
+        StockMovementType.SALES_RETURN,
     }
 )
 
@@ -46,22 +63,107 @@ class InventoryDomainService:
         category_repo: ProductCategoryRepository,
         product_repo: InventoryProductRepository,
         movement_repo: StockMovementRepository,
+        unit_repo: Optional[ProductUnitRepository] = None,
+        field_def_repo: Optional[ProductFieldDefinitionRepository] = None,
     ):
         self._category_repo = category_repo
         self._product_repo = product_repo
         self._movement_repo = movement_repo
+        self._unit_repo = unit_repo
+        self._field_def_repo = field_def_repo
 
-    def create_category(self, name: str, description: str = "") -> ProductCategory:
+    def _categories_by_id(self) -> Dict[str, ProductCategory]:
+        return {c.id: c for c in self._category_repo.list_all(active_only=False)}
+
+    def list_units(self, active_only: bool = True) -> List[ProductUnit]:
+        if not self._unit_repo:
+            return []
+        return self._unit_repo.list_all(active_only=active_only)
+
+    def find_or_create_unit(self, code: str, label: str = "") -> ProductUnit:
+        if not self._unit_repo:
+            raise ValidationError("Unit repository not configured")
+        normalized = normalize_unit_code(code)
+        if not normalized:
+            raise ValidationError("Unit code is required")
+        existing = self._unit_repo.find_by_code(normalized)
+        if existing:
+            return existing
+        unit = ProductUnit(
+            code=normalized,
+            label=(label or default_unit_label(normalized)).strip(),
+        )
+        return self._unit_repo.save(unit)
+
+    def update_unit(self, unit_id: str, label: str, is_active: bool = True) -> ProductUnit:
+        if not self._unit_repo:
+            raise ValidationError("Unit repository not configured")
+        unit = self._unit_repo.find_by_id(unit_id)
+        if not unit:
+            raise ValidationError("Unit not found")
+        label = (label or "").strip()
+        if not label:
+            raise ValidationError("Unit label is required")
+        unit.update(label=label, is_active=is_active)
+        return self._unit_repo.save(unit)
+
+    def resolve_unit_for_product(self, product: InventoryProduct) -> InventoryProduct:
+        if not self._unit_repo:
+            return product
+        if product.unit_id:
+            unit = self._unit_repo.find_by_id(product.unit_id)
+            if unit:
+                product.unit = unit.code
+                return product
+        unit = self.find_or_create_unit(product.unit or "pcs")
+        product.unit_id = unit.id
+        product.unit = unit.code
+        self._product_repo.save(product)
+        return product
+
+    def _resolve_categories(
+        self, category_ids: List[str]
+    ) -> tuple[List[str], List[str]]:
+        if not category_ids:
+            raise ValidationError("At least one category is required")
+        categories_by_id = self._categories_by_id()
+        resolved_ids: List[str] = []
+        for category_id in category_ids:
+            if category_id not in categories_by_id:
+                raise ValidationError("Category not found")
+            if category_id not in resolved_ids:
+                resolved_ids.append(category_id)
+        paths = build_category_paths(resolved_ids, categories_by_id)
+        return resolved_ids, paths
+
+    def create_category(
+        self,
+        name: str,
+        description: str = "",
+        parent_id: Optional[str] = None,
+    ) -> ProductCategory:
         name = name.strip()
         if not name:
             raise ValidationError("Category name is required")
-        if self._category_repo.find_by_name(name):
-            raise ValidationError("A category with this name already exists")
-        category = ProductCategory(name=name, description=description.strip())
+        parent_id = normalize_parent_id(parent_id)
+        categories_by_id = self._categories_by_id()
+        validate_category_parent(None, parent_id, categories_by_id)
+        if self._category_repo.find_by_parent_and_name(parent_id, name):
+            raise ValidationError("A category with this name already exists under the parent")
+        category = ProductCategory(
+            name=name,
+            description=description.strip(),
+            parent_id=parent_id,
+        )
         return self._category_repo.save(category)
 
     def update_category(
-        self, category_id: str, name: str, description: str = "", is_active: bool = True
+        self,
+        category_id: str,
+        name: str,
+        description: str = "",
+        is_active: bool = True,
+        parent_id: Optional[str] = None,
     ) -> ProductCategory:
         category = self._category_repo.find_by_id(category_id)
         if not category:
@@ -69,25 +171,114 @@ class InventoryDomainService:
         name = name.strip()
         if not name:
             raise ValidationError("Category name is required")
-        existing = self._category_repo.find_by_name(name)
+        parent_id = normalize_parent_id(parent_id)
+        categories_by_id = self._categories_by_id()
+        validate_category_parent(category_id, parent_id, categories_by_id)
+        existing = self._category_repo.find_by_parent_and_name(parent_id, name)
         if existing and existing.id != category_id:
-            raise ValidationError("A category with this name already exists")
-        category.update(name=name, description=description.strip(), is_active=is_active)
+            raise ValidationError("A category with this name already exists under the parent")
+        category.update(
+            name=name,
+            description=description.strip(),
+            is_active=is_active,
+            parent_id=parent_id,
+        )
         return self._category_repo.save(category)
 
     def delete_category(self, category_id: str) -> None:
+        categories_by_id = self._categories_by_id()
+        if self._category_repo.list_children(category_id):
+            raise ValidationError("Cannot delete a category that has child categories")
         if self._product_repo.count_by_category(category_id) > 0:
             raise ValidationError("Cannot delete a category that has products")
         self._category_repo.delete(category_id)
+
+    def list_field_definitions(self, active_only: bool = False) -> List[ProductFieldDefinition]:
+        if not self._field_def_repo:
+            return []
+        return self._field_def_repo.list_all(active_only=active_only)
+
+    def create_field_definition(
+        self,
+        key: str,
+        label: str,
+        field_type: ProductFieldType,
+        *,
+        options: Optional[List[str]] = None,
+        required: bool = False,
+        applies_to_category_ids: Optional[List[str]] = None,
+        sort_order: int = 0,
+    ) -> ProductFieldDefinition:
+        if not self._field_def_repo:
+            raise ValidationError("Custom field repository not configured")
+        key = normalize_field_key(key)
+        label = label.strip()
+        if not key or not label:
+            raise ValidationError("Field key and label are required")
+        if self._field_def_repo.find_by_key(key):
+            raise ValidationError("A custom field with this key already exists")
+        definition = ProductFieldDefinition(
+            key=key,
+            label=label,
+            field_type=field_type,
+            options=list(options or []),
+            required=required,
+            applies_to_category_ids=list(applies_to_category_ids or []),
+            sort_order=sort_order,
+        )
+        return self._field_def_repo.save(definition)
+
+    def update_field_definition(
+        self,
+        definition_id: str,
+        *,
+        label: str,
+        field_type: ProductFieldType,
+        options: Optional[List[str]] = None,
+        required: bool = False,
+        applies_to_category_ids: Optional[List[str]] = None,
+        sort_order: int = 0,
+        is_active: bool = True,
+    ) -> ProductFieldDefinition:
+        if not self._field_def_repo:
+            raise ValidationError("Custom field repository not configured")
+        definition = self._field_def_repo.find_by_id(definition_id)
+        if not definition:
+            raise ValidationError("Custom field not found")
+        label = label.strip()
+        if not label:
+            raise ValidationError("Field label is required")
+        definition.update(
+            label=label,
+            field_type=field_type,
+            options=list(options or []),
+            required=required,
+            applies_to_category_ids=list(applies_to_category_ids or []),
+            sort_order=sort_order,
+            is_active=is_active,
+        )
+        return self._field_def_repo.save(definition)
+
+    def delete_field_definition(self, definition_id: str) -> None:
+        if not self._field_def_repo:
+            raise ValidationError("Custom field repository not configured")
+        self._field_def_repo.delete(definition_id)
 
     def create_product(
         self,
         sku: str,
         name: str,
-        category_id: str,
-        unit: str = "pcs",
+        category_ids: List[str],
+        unit_id: str = "",
+        unit_code: str = "pcs",
         selling_rate: float = 0.0,
         opening_qty: float = 0.0,
+        *,
+        hsn_sac: str = "",
+        gst_rates: Optional[List[ProductGstSlab]] = None,
+        mrp_entries: Optional[List[ProductMrpSlab]] = None,
+        specifications: Optional[Dict[str, str]] = None,
+        custom_fields: Optional[Dict[str, Any]] = None,
     ) -> InventoryProduct:
         sku = sku.strip()
         name = name.strip()
@@ -95,22 +286,43 @@ class InventoryDomainService:
             raise ValidationError("SKU is required")
         if not name:
             raise ValidationError("Product name is required")
-        category = self._category_repo.find_by_id(category_id)
-        if not category:
-            raise ValidationError("Category not found")
         if self._product_repo.find_by_sku(sku):
             raise ValidationError("A product with this SKU already exists")
+        resolved_ids, paths = self._resolve_categories(category_ids)
+        unit = self.find_or_create_unit(unit_code) if not unit_id else None
+        if unit_id and self._unit_repo:
+            unit = self._unit_repo.find_by_id(unit_id)
+        if not unit:
+            unit = self.find_or_create_unit(unit_code or "pcs")
         opening_qty = round(max(opening_qty, 0.0), 2)
+        gst_slabs = gst_rates or [InventoryProduct.default_gst_slab()]
+        mrp_slabs = mrp_entries or [InventoryProduct.default_mrp_entry()]
+        specs = {
+            k.strip(): str(v).strip()
+            for k, v in (specifications or {}).items()
+            if k and str(k).strip() and str(v).strip()
+        }
+        field_values = custom_fields or {}
+        if self._field_def_repo:
+            definitions = self._field_def_repo.list_all(active_only=True)
+            field_values = validate_custom_field_values(
+                definitions, field_values, resolved_ids
+            )
         product = InventoryProduct(
             sku=sku,
             name=name,
-            category_id=category.id,
-            category_name=category.name,
-            unit=(unit or "pcs").strip(),
+            category_ids=resolved_ids,
+            category_names=paths,
+            unit_id=unit.id,
+            unit=unit.code,
             selling_rate=round(max(selling_rate, 0.0), 2),
             opening_qty=opening_qty,
             current_qty=0.0,
+            specifications=specs,
+            custom_fields=field_values,
         )
+        product.sync_legacy_category_fields()
+        product.apply_tax_data(hsn_sac, gst_slabs, mrp_slabs)
         saved = self._product_repo.save(product)
         if opening_qty > 0:
             self._record_movement(
@@ -129,17 +341,21 @@ class InventoryDomainService:
         product_id: str,
         sku: str,
         name: str,
-        category_id: str,
-        unit: str,
+        category_ids: List[str],
+        unit_id: str,
         selling_rate: float,
         is_active: bool = True,
+        *,
+        hsn_sac: Optional[str] = None,
+        gst_rates: Optional[List[ProductGstSlab]] = None,
+        mrp_entries: Optional[List[ProductMrpSlab]] = None,
+        specifications: Optional[Dict[str, str]] = None,
+        custom_fields: Optional[Dict[str, Any]] = None,
     ) -> InventoryProduct:
         product = self._product_repo.find_by_id(product_id)
         if not product:
             raise ValidationError("Product not found")
-        category = self._category_repo.find_by_id(category_id)
-        if not category:
-            raise ValidationError("Category not found")
+        resolved_ids, paths = self._resolve_categories(category_ids)
         sku = sku.strip()
         name = name.strip()
         if not sku or not name:
@@ -147,15 +363,45 @@ class InventoryDomainService:
         existing = self._product_repo.find_by_sku(sku)
         if existing and existing.id != product_id:
             raise ValidationError("A product with this SKU already exists")
+        unit = None
+        if self._unit_repo and unit_id:
+            unit = self._unit_repo.find_by_id(unit_id) or self._unit_repo.find_by_code(unit_id)
+        if not unit:
+            unit = self.find_or_create_unit(product.unit or unit_id or "pcs")
+        specs = product.specifications
+        if specifications is not None:
+            specs = {
+                k.strip(): str(v).strip()
+                for k, v in specifications.items()
+                if k and str(k).strip() and str(v).strip()
+            }
+        field_values = product.custom_fields
+        if custom_fields is not None:
+            field_values = custom_fields
+            if self._field_def_repo:
+                definitions = self._field_def_repo.list_all(active_only=True)
+                field_values = validate_custom_field_values(
+                    definitions, field_values, resolved_ids
+                )
         product.update(
             sku=sku,
             name=name,
-            category_id=category.id,
-            category_name=category.name,
-            unit=(unit or "pcs").strip(),
+            category_ids=resolved_ids,
+            category_names=paths,
+            unit_id=unit.id,
+            unit=unit.code,
             selling_rate=round(max(selling_rate, 0.0), 2),
             is_active=is_active,
+            specifications=specs,
+            custom_fields=field_values,
         )
+        product.sync_legacy_category_fields()
+        if hsn_sac is not None or gst_rates is not None or mrp_entries is not None:
+            product.apply_tax_data(
+                hsn_sac if hsn_sac is not None else product.hsn_sac,
+                gst_rates if gst_rates is not None else product.gst_rates,
+                mrp_entries if mrp_entries is not None else product.mrp_entries,
+            )
         return self._product_repo.save(product)
 
     def record_manual_movement(
@@ -180,9 +426,14 @@ class InventoryDomainService:
         )
 
     def record_sale_movements(
-        self, voucher_id: str, lines: list[dict]
+        self,
+        reference_id: str,
+        lines: list[dict],
+        reference_type: StockReferenceType = StockReferenceType.SALES_INVOICE,
+        movement_date: Optional[date] = None,
     ) -> list[StockMovement]:
         recorded: list[StockMovement] = []
+        md = movement_date or date.today()
         for line in lines:
             product_id = line.get("product_id")
             if not product_id:
@@ -190,30 +441,170 @@ class InventoryDomainService:
             product = self._product_repo.find_by_id(str(product_id))
             if not product:
                 raise ValidationError(f"Product not found for sale line")
-            qty = float(line.get("qty") or 0)
+            qty = float(line.get("qty") or line.get("qty_delivered") or 0)
             if qty <= 0:
                 continue
             movement = self._record_movement(
                 product,
                 StockMovementType.SALE,
                 qty,
-                date.today(),
-                StockReferenceType.SALES_INVOICE,
-                voucher_id,
+                md,
+                reference_type,
+                reference_id,
                 (line.get("description") or "").strip() or "Sale",
+            )
+            recorded.append(movement)
+        return recorded
+
+    def apply_delivery_note_issue(
+        self,
+        dn_id: str,
+        lines: list[dict],
+        movement_date: Optional[date] = None,
+    ) -> list[StockMovement]:
+        return self.record_sale_movements(
+            dn_id,
+            lines,
+            StockReferenceType.DELIVERY_NOTE,
+            movement_date,
+        )
+
+    def apply_sales_return(
+        self,
+        return_id: str,
+        lines: list[dict],
+        movement_date: Optional[date] = None,
+    ) -> list[StockMovement]:
+        recorded: list[StockMovement] = []
+        md = movement_date or date.today()
+        for line in lines:
+            product_id = line.get("product_id")
+            if not product_id:
+                continue
+            product = self._product_repo.find_by_id(str(product_id))
+            if not product:
+                raise ValidationError("Product not found for sales return")
+            qty = float(line.get("qty") or 0)
+            if qty <= 0:
+                continue
+            movement = self._record_movement(
+                product,
+                StockMovementType.SALES_RETURN,
+                qty,
+                md,
+                StockReferenceType.SALES_RETURN,
+                return_id,
+                (line.get("description") or "").strip() or "Sales return",
             )
             recorded.append(movement)
         return recorded
 
     def apply_purchase_receive(
         self,
-        vendor_id: str,
         lines: list[dict],
         reference_id: str,
+        reference_type: StockReferenceType = StockReferenceType.GRN,
+        movement_date: Optional[date] = None,
     ) -> list[StockMovement]:
-        raise NotImplementedError(
-            "Vendor purchase receive is not implemented yet; hook reserved for future use."
-        )
+        recorded: list[StockMovement] = []
+        md = movement_date or date.today()
+        for line in lines:
+            product_id = line.get("product_id")
+            if not product_id:
+                continue
+            product = self._product_repo.find_by_id(str(product_id))
+            if not product:
+                raise ValidationError("Product not found for purchase receive")
+            qty = float(line.get("qty") or 0)
+            if qty <= 0:
+                continue
+            movement = self._record_movement(
+                product,
+                StockMovementType.PURCHASE_RECEIVE,
+                qty,
+                md,
+                reference_type,
+                reference_id,
+                (line.get("description") or "").strip() or "Purchase receive",
+            )
+            recorded.append(movement)
+        return recorded
+
+    def apply_purchase_return(
+        self,
+        return_id: str,
+        lines: list[dict],
+        movement_date: Optional[date] = None,
+    ) -> list[StockMovement]:
+        recorded: list[StockMovement] = []
+        md = movement_date or date.today()
+        for line in lines:
+            product_id = line.get("product_id")
+            if not product_id:
+                continue
+            product = self._product_repo.find_by_id(str(product_id))
+            if not product:
+                raise ValidationError("Product not found for purchase return")
+            qty = float(line.get("qty") or 0)
+            if qty <= 0:
+                continue
+            movement = self._record_movement(
+                product,
+                StockMovementType.PURCHASE_RETURN,
+                qty,
+                md,
+                StockReferenceType.PURCHASE_RETURN,
+                return_id,
+                (line.get("description") or "").strip() or "Purchase return",
+            )
+            recorded.append(movement)
+        return recorded
+
+    def apply_landed_cost(self, lines: list[dict]) -> None:
+        for line in lines:
+            product_id = line.get("product_id")
+            if not product_id:
+                continue
+            product = self._product_repo.find_by_id(str(product_id))
+            if not product:
+                continue
+            qty = float(line.get("qty") or 0)
+            unit_cost = float(line.get("unit_cost") or 0)
+            if qty <= 0 or unit_cost < 0:
+                continue
+            old_qty = product.current_qty - qty
+            if old_qty < 0:
+                old_qty = 0.0
+            old_wac = product.weighted_avg_cost
+            if old_qty + qty <= 0:
+                new_wac = unit_cost
+            else:
+                new_wac = round(
+                    (old_qty * old_wac + qty * unit_cost) / (old_qty + qty), 4
+                )
+            product.weighted_avg_cost = new_wac
+            product.last_purchase_rate = round(unit_cost, 4)
+            self._product_repo.save(product)
+
+    def reverse_movements_by_reference(self, reference_id: str) -> None:
+        if not reference_id:
+            return
+        movements = self._movement_repo.list_by_reference(reference_id)
+        for movement in movements:
+            product = self._product_repo.find_by_id(movement.product_id)
+            if not product:
+                continue
+            qty = round(float(movement.qty), 2)
+            if movement.movement_type in INFLOW_TYPES:
+                if product.current_qty < qty - 0.001:
+                    raise ValidationError(
+                        f"Cannot reverse receive for {product.name}: insufficient stock"
+                    )
+                product.current_qty = round(product.current_qty - qty, 2)
+            else:
+                product.current_qty = round(product.current_qty + qty, 2)
+            self._product_repo.save(product)
+            self._movement_repo.delete(movement.id)
 
     def get_product_ledger(self, product_id: str) -> list[dict[str, Any]]:
         product = self._product_repo.find_by_id(product_id)
@@ -261,6 +652,7 @@ class InventoryDomainService:
             StockMovementType.ISSUE,
             StockMovementType.ADJUST_OUT,
             StockMovementType.SALE,
+            StockMovementType.PURCHASE_RETURN,
         }:
             raise ValidationError("Unsupported movement type")
         if movement_type in INFLOW_TYPES:

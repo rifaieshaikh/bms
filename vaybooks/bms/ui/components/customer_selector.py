@@ -1,6 +1,7 @@
 import streamlit as st
 
 from vaybooks.bms.application.customer_app_service import CustomerAppService
+from vaybooks.bms.domain.customers.entities import CustomerInput
 
 
 def customer_selector(services: dict, key_prefix: str = "cust"):
@@ -21,7 +22,9 @@ def customer_selector(services: dict, key_prefix: str = "cust"):
         phone = st.text_input("Phone number", key=f"{key_prefix}_new_phone")
         if st.button("Create Customer", key=f"{key_prefix}_create"):
             if name and phone:
-                customer = customer_service.create_customer(name, phone)
+                customer = customer_service.create_customer(
+                    CustomerInput(customer_name=name, phone_number=phone)
+                )
                 st.success(f"Created {customer.customer_name}")
                 selected_id = customer.id
             else:

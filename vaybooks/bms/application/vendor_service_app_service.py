@@ -1,6 +1,7 @@
-from typing import List, Optional
+from typing import List, Optional, Optional
 
 from vaybooks.bms.domain.shared.exceptions import ValidationError
+from vaybooks.bms.domain.shared.item_tax import ItemTaxProfile
 from vaybooks.bms.domain.vendor_services.entities import VendorService
 from vaybooks.bms.domain.vendor_services.repository import VendorServiceRepository
 
@@ -16,7 +17,8 @@ class VendorServiceAppService:
         return self._repo.find_by_id(service_id)
 
     def create_service(
-        self, service_name: str, expense_account_id: str
+        self, service_name: str, expense_account_id: str,
+        tax_profile: Optional[ItemTaxProfile] = None,
     ) -> VendorService:
         if not service_name.strip():
             raise ValidationError("Service name is required")
@@ -25,7 +27,17 @@ class VendorServiceAppService:
         service = VendorService(
             service_name=service_name.strip(),
             expense_account_id=expense_account_id,
+            tax_profile=tax_profile or ItemTaxProfile(),
         )
+        return self._repo.save(service)
+
+    def set_service_tax_profile(
+        self, service_id: str, tax_profile: ItemTaxProfile
+    ) -> VendorService:
+        service = self._repo.find_by_id(service_id)
+        if not service:
+            raise ValueError("Service not found")
+        service.tax_profile = tax_profile
         return self._repo.save(service)
 
     def update_service(

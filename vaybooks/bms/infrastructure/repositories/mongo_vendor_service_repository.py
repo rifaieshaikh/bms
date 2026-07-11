@@ -4,6 +4,7 @@ from typing import List, Optional
 from pymongo.database import Database
 
 from vaybooks.bms.domain.vendor_services.entities import VendorService
+from vaybooks.bms.domain.shared.item_tax import ItemTaxProfile
 
 
 class MongoVendorServiceRepository:
@@ -15,6 +16,7 @@ class MongoVendorServiceRepository:
             "_id": service.id,
             "service_name": service.service_name,
             "expense_account_id": service.expense_account_id,
+            "tax_profile": service.tax_profile.to_dict(),
             "is_active": service.is_active,
             "created_at": service.created_at,
             "updated_at": service.updated_at,
@@ -25,6 +27,7 @@ class MongoVendorServiceRepository:
             id=doc["_id"],
             service_name=doc["service_name"],
             expense_account_id=doc["expense_account_id"],
+            tax_profile=ItemTaxProfile.from_dict(doc.get("tax_profile")),
             is_active=doc.get("is_active", True),
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),

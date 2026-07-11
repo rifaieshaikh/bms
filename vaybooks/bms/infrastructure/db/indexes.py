@@ -24,7 +24,9 @@ def _create_index(collection, keys, **kwargs):
 
 def ensure_indexes(db):
     _create_index(db.customers, "phone_number", unique=True, sparse=True)
+    _create_index(db.customers, "gstin", unique=True, sparse=True)
     _create_index(db.vendors, "phone_number", unique=True, sparse=True)
+    _create_index(db.vendors, "gstin", unique=True, sparse=True)
     # One account per customer / vendor. Partial filter on string values excludes
     # the null link shared by all other accounts.
     _create_index(
@@ -97,12 +99,50 @@ def ensure_indexes(db):
     _create_index(db.vouchers, "voucher_date")
     _create_index(db.vouchers, "reference_order_id")
 
-    _create_index(db.product_categories, "name", unique=True)
+    _create_index(db.product_categories, [("parent_id", 1), ("name", 1)], unique=True)
+    _create_index(db.product_units, "code", unique=True)
+    _create_index(db.product_field_definitions, "key", unique=True)
     _create_index(db.inventory_products, "sku", unique=True)
     _create_index(db.inventory_products, "category_id")
+    _create_index(db.inventory_products, "category_ids")
+    _create_index(db.inventory_products, "unit_id")
     _create_index(db.stock_movements, "product_id")
     _create_index(db.stock_movements, "movement_date")
     _create_index(db.stock_movements, "movement_type")
+    _create_index(db.stock_movements, "reference_id")
+
+    _create_index(db.purchase_orders, "po_number", unique=True)
+    _create_index(db.purchase_orders, "vendor_id")
+    _create_index(db.purchase_orders, "order_date")
+    _create_index(db.purchase_orders, "status")
+
+    _create_index(db.goods_receipts, "grn_number", unique=True)
+    _create_index(db.goods_receipts, "purchase_order_id")
+    _create_index(db.goods_receipts, "vendor_id")
+    _create_index(db.goods_receipts, "receipt_date")
+
+    _create_index(db.purchase_returns, "return_number", unique=True)
+    _create_index(db.purchase_returns, "vendor_id")
+    _create_index(db.purchase_returns, "return_date")
+
+    _create_index(db.sales_orders, "so_number", unique=True)
+    _create_index(db.sales_orders, "customer_id")
+    _create_index(db.sales_orders, "order_date")
+    _create_index(db.sales_orders, "status")
+
+    _create_index(db.delivery_notes, "dn_number", unique=True)
+    _create_index(db.delivery_notes, "sales_order_id")
+    _create_index(db.delivery_notes, "customer_id")
+    _create_index(db.delivery_notes, "delivery_date")
+
+    _create_index(db.sales_returns, "return_number", unique=True)
+    _create_index(db.sales_returns, "customer_id")
+    _create_index(db.sales_returns, "return_date")
+
+    _create_index(
+        db.purchase_price_history,
+        [("item_id", 1), ("item_type", 1), ("vendor_id", 1), ("purchase_date", -1)],
+    )
 
 
 if __name__ == "__main__":

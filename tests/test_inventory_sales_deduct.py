@@ -5,19 +5,11 @@ import pytest
 from vaybooks.bms.application.inventory_app_service import InventoryAppService
 from vaybooks.bms.domain.shared.enums import StockMovementType
 from vaybooks.bms.domain.shared.exceptions import ValidationError
-from tests.conftest import (
-    FakeInventoryProductRepository,
-    FakeProductCategoryRepository,
-    FakeStockMovementRepository,
-)
+from tests.conftest import make_inventory_app_service
 
 
 def _service() -> InventoryAppService:
-    return InventoryAppService(
-        FakeProductCategoryRepository(),
-        FakeInventoryProductRepository(),
-        FakeStockMovementRepository(),
-    )
+    return make_inventory_app_service()
 
 
 def test_sale_movement_deducts_stock():

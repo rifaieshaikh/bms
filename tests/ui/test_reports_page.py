@@ -59,6 +59,13 @@ def _services_dict():
         stock_on_hand_report=empty,
         low_stock_report=empty,
         stock_movements_report=empty,
+        inventory_valuation_report=empty,
+    )
+    reports_purchases = MagicMock(
+        purchase_orders_pipeline_report=empty,
+        grn_pending_report=empty,
+        purchases_by_vendor_report=empty,
+        purchase_returns_summary_report=empty,
     )
     return {
         "reports": MagicMock(get_period_summary=summary),
@@ -68,6 +75,7 @@ def _services_dict():
         "reports_labor": labor,
         "reports_customers": customers,
         "reports_inventory": reports_inventory,
+        "reports_purchases": reports_purchases,
         "inventory": inventory,
         "customers": MagicMock(),
         "activities": MagicMock(list_activities=MagicMock(return_value=[])),

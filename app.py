@@ -19,7 +19,15 @@ from vaybooks.bms.ui.pages import activities, customization_items, customization
 from vaybooks.bms.ui.pages import customization_orders_list, customization_order_detail
 from vaybooks.bms.ui.pages import customization_item_detail, customer_detail, vendor_detail
 from vaybooks.bms.ui.pages import account_detail
-from vaybooks.bms.ui.pages import mtd_dashboard, sales_dashboard, sales_detail, time_tracking
+from vaybooks.bms.ui.pages import mtd_dashboard, sales_detail, time_tracking
+from vaybooks.bms.ui.pages.sales import (
+    delivery_note_detail as sales_delivery_note_detail_mod,
+    delivery_notes as sales_delivery_notes_mod,
+    invoices as sales_invoices_mod,
+    returns as sales_returns_mod,
+    sales_order_detail as sales_order_detail_mod,
+    sales_orders as sales_orders_mod,
+)
 from vaybooks.bms.ui.pages.inventory import (
     categories as inventory_categories,
     movements as inventory_movements,
@@ -28,8 +36,23 @@ from vaybooks.bms.ui.pages.inventory import (
     stock_ledger as inventory_stock_ledger,
     stock_on_hand as inventory_stock_on_hand,
 )
+from vaybooks.bms.ui.pages.purchases import (
+    bills as purchase_bills_mod,
+    goods_receipt as purchase_goods_receipt_mod,
+    grn_detail as purchase_grn_detail_mod,
+    purchase_detail as purchase_bill_detail_mod,
+    purchase_order_detail as purchase_order_detail_mod,
+    purchase_orders as purchase_orders_mod,
+    returns as purchase_returns_mod,
+)
 from vaybooks.bms.ui.pages import workers
 from vaybooks.bms.ui.pages import system_settings, system_logs, system_updates
+from vaybooks.bms.ui.pages.migration import (
+    categories as migration_categories,
+    customers as migration_customers,
+    products as migration_products,
+    vendors as migration_vendors,
+)
 from vaybooks.bms.ui.pages.finance import (
     accounting_invoices,
     journal as finance_journal,
@@ -117,9 +140,37 @@ mtd_page = st.Page(
     _page(mtd_dashboard), title="Period Dashboard", icon=":material/calendar_month:",
     url_path="mtd-dashboard",
 )
-sales_dashboard_page = st.Page(
-    _page(sales_dashboard), title="Sales", icon=":material/point_of_sale:",
+sales_orders_page = st.Page(
+    _page(sales_orders_mod), title="Sales Orders", icon=":material/assignment:",
+    url_path="sales-orders",
+)
+sales_delivery_notes_page = st.Page(
+    _page(sales_delivery_notes_mod), title="Delivery Notes", icon=":material/local_shipping:",
+    url_path="delivery-notes",
+)
+sales_invoices_page = st.Page(
+    _page(sales_invoices_mod), title="Sales Invoices", icon=":material/point_of_sale:",
     url_path="sales",
+)
+sales_returns_page = st.Page(
+    _page(sales_returns_mod), title="Sales Returns", icon=":material/undo:",
+    url_path="sales-returns",
+)
+purchase_orders_page = st.Page(
+    _page(purchase_orders_mod), title="Purchase Orders", icon=":material/shopping_cart:",
+    url_path="purchase-orders",
+)
+purchase_grn_page = st.Page(
+    _page(purchase_goods_receipt_mod), title="Goods Receipt", icon=":material/inventory:",
+    url_path="goods-receipt",
+)
+purchase_bills_page = st.Page(
+    _page(purchase_bills_mod), title="Purchase Bills", icon=":material/receipt:",
+    url_path="purchases",
+)
+purchase_returns_page = st.Page(
+    _page(purchase_returns_mod), title="Returns", icon=":material/undo:",
+    url_path="purchase-returns",
 )
 reports_page = st.Page(
     _page(reports), title="Reports", icon=":material/analytics:", url_path="reports",
@@ -127,6 +178,22 @@ reports_page = st.Page(
 export_page = st.Page(
     _page(export_backup), title="Export / Backup", icon=":material/download:",
     url_path="export-backup",
+)
+migration_categories_page = st.Page(
+    _page(migration_categories), title="Categories", icon=":material/upload_file:",
+    url_path="migration-categories",
+)
+migration_products_page = st.Page(
+    _page(migration_products), title="Products", icon=":material/upload_file:",
+    url_path="migration-products",
+)
+migration_customers_page = st.Page(
+    _page(migration_customers), title="Customers", icon=":material/upload_file:",
+    url_path="migration-customers",
+)
+migration_vendors_page = st.Page(
+    _page(migration_vendors), title="Vendors", icon=":material/upload_file:",
+    url_path="migration-vendors",
 )
 activities_page = st.Page(
     _page(activities), title="Activity Configuration", icon=":material/checklist:",
@@ -158,6 +225,15 @@ inventory_stock_ledger_page = st.Page(
 inventory_movements_page = st.Page(
     _page(inventory_movements), title="Movements", icon=":material/swap_horiz:",
     url_path="inventory-movements",
+)
+purchase_order_detail_page = st.Page(
+    _page(purchase_order_detail_mod), title="PO Detail", url_path="purchase-order-detail",
+)
+purchase_grn_detail_page = st.Page(
+    _page(purchase_grn_detail_mod), title="GRN Detail", url_path="grn-detail",
+)
+purchase_detail_page = st.Page(
+    _page(purchase_bill_detail_mod), title="Purchase Detail", url_path="purchase-detail",
 )
 
 system_settings_page = st.Page(
@@ -192,6 +268,12 @@ account_detail_page = st.Page(
 sales_detail_page = st.Page(
     _page(sales_detail), title="Sale Detail", url_path="sales-detail",
 )
+sales_order_detail_page = st.Page(
+    _page(sales_order_detail_mod), title="SO Detail", url_path="sales-order-detail",
+)
+sales_delivery_note_detail_page = st.Page(
+    _page(sales_delivery_note_detail_mod), title="DN Detail", url_path="delivery-note-detail",
+)
 inventory_product_detail_page = st.Page(
     _page(inventory_product_detail), title="Product Detail",
     url_path="inventory-product-detail",
@@ -217,8 +299,20 @@ navigation.register("accounting_invoices_list", accounting_invoices_page)
 navigation.register("journal_list", journal_page)
 navigation.register("trial_balance_list", trial_balance_page)
 navigation.register("mtd_dashboard", mtd_page)
-navigation.register("sales_dashboard", sales_dashboard_page)
+navigation.register("sales_orders_list", sales_orders_page)
+navigation.register("sales_order_detail", sales_order_detail_page)
+navigation.register("delivery_notes_list", sales_delivery_notes_page)
+navigation.register("delivery_note_detail", sales_delivery_note_detail_page)
+navigation.register("sales_invoices_list", sales_invoices_page)
 navigation.register("sales_detail", sales_detail_page)
+navigation.register("sales_returns_list", sales_returns_page)
+navigation.register("purchase_orders_list", purchase_orders_page)
+navigation.register("purchase_order_detail", purchase_order_detail_page)
+navigation.register("goods_receipt_list", purchase_grn_page)
+navigation.register("grn_detail", purchase_grn_detail_page)
+navigation.register("purchases_list", purchase_bills_page)
+navigation.register("purchase_detail", purchase_detail_page)
+navigation.register("purchase_returns_list", purchase_returns_page)
 navigation.register("reports", reports_page)
 navigation.register("activities_list", activities_page)
 navigation.register("services_list", services_page)
@@ -243,7 +337,16 @@ page_groups = {
         time_page,
     ],
     "Sales": [
-        sales_dashboard_page,
+        sales_orders_page,
+        sales_delivery_notes_page,
+        sales_invoices_page,
+        sales_returns_page,
+    ],
+    "Purchases": [
+        purchase_orders_page,
+        purchase_grn_page,
+        purchase_bills_page,
+        purchase_returns_page,
     ],
     "Inventory": [
         inventory_categories_page,
@@ -262,6 +365,12 @@ page_groups = {
         trial_balance_page,
         reports_page,
         export_page,
+    ],
+    "Migration": [
+        migration_categories_page,
+        migration_products_page,
+        migration_customers_page,
+        migration_vendors_page,
     ],
     "Settings": [
         activities_page,
@@ -283,7 +392,12 @@ hidden_pages = [
     vendor_detail_page,
     account_detail_page,
     sales_detail_page,
+    sales_order_detail_page,
+    sales_delivery_note_detail_page,
     inventory_product_detail_page,
+    purchase_order_detail_page,
+    purchase_grn_detail_page,
+    purchase_detail_page,
 ]
 
 # All pages must be registered with st.navigation for routing to work.
