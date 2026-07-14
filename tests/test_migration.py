@@ -33,6 +33,7 @@ from tests.conftest import (
     FakeProductUnitRepository,
     FakeStockMovementRepository,
     FakeVoucherRepository,
+    make_inventory_app_service,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures" / "migration"
@@ -104,17 +105,11 @@ def make_migration_service():
     counter_repo = FakeCounterRepository()
     customer_repo = FakeCustomerRepository()
     vendor_repo = FakeVendorRepository()
-    category_repo = FakeProductCategoryRepository()
-    product_repo = FakeInventoryProductRepository()
-    movement_repo = FakeStockMovementRepository()
-    unit_repo = FakeProductUnitRepository()
 
     accounting = AccountingAppService(account_repo, voucher_repo, counter_repo)
     customers = CustomerAppService(customer_repo, account_repo)
     vendors = VendorAppService(vendor_repo, account_repo)
-    inventory = InventoryAppService(
-        category_repo, product_repo, movement_repo, unit_repo
-    )
+    inventory = make_inventory_app_service()
     migration = MigrationAppService(
         FakeImportMappingProfileRepository(),
         customers,
@@ -122,7 +117,7 @@ def make_migration_service():
         inventory,
         accounting,
     )
-    return migration, inventory, customers, accounting, account_repo, movement_repo
+    return migration, inventory, customers, accounting, account_repo, inventory._domain._movement_repo
 
 
 def test_suggest_mapping_alien_customer_headers():

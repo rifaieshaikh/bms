@@ -10,8 +10,17 @@ BUSINESS_PROFILE_ID = "default"
 @dataclass
 class BusinessProfile:
     legal_name: str = ""
-    gstin: str = ""
+    trade_name: str = ""
+    address_line1: str = ""
+    address_line2: str = ""
+    city: str = ""
     state_code: str = ""
+    pincode: str = ""
+    country: str = "India"
+    phone: str = ""
+    email: str = ""
+    gstin: str = ""
+    pan: str = ""
     registration_type: VendorRegistrationType = VendorRegistrationType.UNREGISTERED
     id: str = BUSINESS_PROFILE_ID
     created_at: datetime = field(default_factory=utc_now)

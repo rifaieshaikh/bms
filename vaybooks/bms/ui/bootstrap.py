@@ -33,6 +33,7 @@ from vaybooks.bms.application.inventory_app_service import InventoryAppService
 from vaybooks.bms.application.purchase_app_service import PurchaseAppService
 from vaybooks.bms.application.sales_app_service import SalesAppService
 from vaybooks.bms.application.worker_app_service import WorkerAppService
+from vaybooks.bms.domain.inventory.rate_history_service import ProductRateHistoryService
 from vaybooks.bms.infrastructure.db.connection import get_database
 from vaybooks.bms.infrastructure.db.indexes import ensure_indexes
 from vaybooks.bms.infrastructure.db.migrations.runner import run_pending_migrations
@@ -42,6 +43,9 @@ from vaybooks.bms.infrastructure.db.seed import run_seed
 from vaybooks.bms.infrastructure.logging.setup import setup_logging
 from vaybooks.bms.infrastructure.repositories.mongo_business_profile_repository import (
     MongoBusinessProfileRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_product_rate_history_repository import (
+    MongoProductRateHistoryRepository,
 )
 from vaybooks.bms.infrastructure.repositories.mongo_purchase_price_history_repository import (
     MongoPurchasePriceHistoryRepository,
@@ -160,6 +164,16 @@ def get_services():
     sales_return_repo = MongoSalesReturnRepository(db)
     business_profile_repo = MongoBusinessProfileRepository(db)
     price_history_repo = MongoPurchasePriceHistoryRepository(db)
+    selling_rate_history_repo = MongoProductRateHistoryRepository(
+        db, "product_selling_rate_history"
+    )
+    mrp_history_repo = MongoProductRateHistoryRepository(db, "product_mrp_history")
+    gst_rate_history_repo = MongoProductRateHistoryRepository(db, "product_gst_rate_history")
+    rate_history = ProductRateHistoryService(
+        selling_rate_history_repo,
+        mrp_history_repo,
+        gst_rate_history_repo,
+    )
     mapping_profile_repo = MongoImportMappingProfileRepository(db)
 
     accounting_service = AccountingAppService(account_repo, voucher_repo, counter_repo)
@@ -182,6 +196,7 @@ def get_services():
         stock_movement_repo,
         unit_repo,
         field_def_repo,
+        rate_history,
     )
     migration_service = MigrationAppService(
         mapping_profile_repo,

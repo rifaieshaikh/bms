@@ -367,22 +367,15 @@ class MigrationAppService:
             result.issues.append(RowIssue(row=row_num, message=cat_err))
             return
         category_ids = [category_id] if category_id else []
-        unit = (row.get("unit") or "pcs").strip() or "pcs"
+        unit_code = (row.get("unit") or "pcs").strip() or "pcs"
+        unit_obj = self._inventory.find_or_create_unit(unit_code)
         selling_rate = float(row.get("selling_rate") or 0)
         opening_qty = float(row.get("opening_qty") or 0)
         hsn_sac = (row.get("hsn_sac") or "") or ""
-        gst_rate = row.get("gst_rate")
-        mrp = row.get("mrp")
-        gst_rates = None
-        mrp_entries = None
-        if gst_rate is not None:
-            gst_rates = [
-                InventoryProduct.default_gst_slab(gst_rate=float(gst_rate))
-            ]
-        if mrp is not None:
-            mrp_entries = [
-                InventoryProduct.default_mrp_entry(mrp=float(mrp))
-            ]
+        gst_rate = float(row.get("gst_rate") or 0)
+        mrp = float(row.get("mrp") or 0)
+        if mrp <= 0 and selling_rate > 0:
+            mrp = selling_rate
         existing = self._inventory.find_product_by_sku(sku)
         try:
             if existing:
@@ -400,12 +393,12 @@ class MigrationAppService:
                     sku=sku,
                     name=name,
                     category_ids=category_ids or existing.category_ids,
-                    unit_id=existing.unit_id or unit,
-                    selling_rate=selling_rate,
+                    unit_id=existing.unit_id or unit_obj.id,
                     is_active=True,
                     hsn_sac=hsn_sac or existing.hsn_sac,
-                    gst_rates=gst_rates,
-                    mrp_entries=mrp_entries,
+                    selling_rate=selling_rate,
+                    mrp=mrp or existing.active_mrp,
+                    gst_rate=gst_rate or existing.active_gst_rate,
                 )
                 self._apply_product_costs(existing.id, row)
                 result.updated += 1
@@ -414,12 +407,12 @@ class MigrationAppService:
                 sku=sku,
                 name=name,
                 category_ids=category_ids,
-                unit=unit,
+                unit_id=unit_obj.id,
                 selling_rate=selling_rate,
+                mrp=mrp,
+                gst_rate=gst_rate,
                 opening_qty=opening_qty,
                 hsn_sac=hsn_sac,
-                gst_rates=gst_rates,
-                mrp_entries=mrp_entries,
             )
             self._apply_product_costs(product.id, row)
             result.created += 1

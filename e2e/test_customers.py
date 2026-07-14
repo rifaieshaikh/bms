@@ -136,6 +136,8 @@ class TestCustomerValidation:
         fill_customer_minimal(
             page, PartyMinimal(name=unique_name("BadPin"), phone=unique_phone())
         )
+        dialog(page).get_by_role("button", name="Address", exact=True).click()
+        page.wait_for_timeout(300)
         dialog(page).get_by_label("PIN Code").fill("40001")
         dialog(page).get_by_label("PIN Code").press("Tab")
         page.wait_for_timeout(250)

@@ -31,6 +31,7 @@ def render(services: dict) -> None:
         title="Sales Returns",
         count_label="returns",
         empty_text="No sales returns yet.",
+        page_key_nav="sales_returns_list",
     )
     if bar["primary_clicked"]:
         arm_sales_return_dialog()

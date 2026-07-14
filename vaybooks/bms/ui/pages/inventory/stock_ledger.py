@@ -56,4 +56,5 @@ def render(services: dict):
         card_renderer=_render_table,
         count_label="movements",
         empty_text="No stock movements yet.",
+        page_key_nav="inventory_stock_ledger_list",
     )

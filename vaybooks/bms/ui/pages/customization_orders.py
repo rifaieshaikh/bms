@@ -526,7 +526,13 @@ def _invoice_dialog(services: dict, order_id: str):
 
 
 def _render_invoices_tab(services: dict, order, invoices: list):
-    if st.button("+ Record Invoice", key=f"rec_inv_{order.id}", type="primary"):
+    from vaybooks.bms.ui.keyboard.actions import consume_action
+    from vaybooks.bms.ui.keyboard.wired import mark_wired
+
+    mark_wired("orders.record_invoice")
+    if st.button("+ Record Invoice", key=f"rec_inv_{order.id}", type="primary") or consume_action(
+        "orders.record_invoice"
+    ):
         clear_all_dialog_flags()
         _invoice_dialog(services, order.id)
     if not invoices:
@@ -608,7 +614,13 @@ def _delivery_dialog(services: dict, order_id: str):
 
 
 def _render_deliveries_tab(services: dict, order, deliveries: list):
-    if st.button("+ Record Delivery", key=f"rec_del_{order.id}", type="primary"):
+    from vaybooks.bms.ui.keyboard.actions import consume_action
+    from vaybooks.bms.ui.keyboard.wired import mark_wired
+
+    mark_wired("orders.record_delivery")
+    if st.button("+ Record Delivery", key=f"rec_del_{order.id}", type="primary") or consume_action(
+        "orders.record_delivery"
+    ):
         clear_all_dialog_flags()
         _delivery_dialog(services, order.id)
     if not deliveries:
@@ -697,8 +709,14 @@ def _receipt_dialog(services: dict, order_id: str):
 
 
 def _render_receipts_tab(services: dict, order):
+    from vaybooks.bms.ui.keyboard.actions import consume_action
+    from vaybooks.bms.ui.keyboard.wired import mark_wired
+
     accounting = services["accounting"]
-    if st.button("+ Record Receipt", key=f"rec_rcpt_{order.id}", type="primary"):
+    mark_wired("orders.record_receipt")
+    if st.button("+ Record Receipt", key=f"rec_rcpt_{order.id}", type="primary") or consume_action(
+        "orders.record_receipt"
+    ):
         clear_all_dialog_flags()
         _receipt_dialog(services, order.id)
     receipts = [
@@ -818,12 +836,18 @@ def _payment_dialog(services: dict, order_id: str):
 
 
 def _render_payments_tab(services: dict, order):
+    from vaybooks.bms.ui.keyboard.actions import consume_action
+    from vaybooks.bms.ui.keyboard.wired import mark_wired
+
     accounting = services["accounting"]
     service_names = {
         s.id: s.service_name
         for s in services["vendor_services"].list_services(active_only=False)
     }
-    if st.button("+ Record Vendor Payment", key=f"rec_pay_{order.id}", type="primary"):
+    mark_wired("orders.record_payment")
+    if st.button(
+        "+ Record Vendor Payment", key=f"rec_pay_{order.id}", type="primary"
+    ) or consume_action("orders.record_payment"):
         clear_all_dialog_flags()
         _payment_dialog(services, order.id)
     payments = accounting.list_order_vendor_payments(order.id)
@@ -985,8 +1009,14 @@ def _refund_dialog(services: dict, order_id: str):
 
 
 def _render_refunds_tab(services: dict, order):
+    from vaybooks.bms.ui.keyboard.actions import consume_action
+    from vaybooks.bms.ui.keyboard.wired import mark_wired
+
     accounting = services["accounting"]
-    if st.button("+ Record Refund", key=f"rec_refund_{order.id}", type="primary"):
+    mark_wired("orders.record_refund")
+    if st.button("+ Record Refund", key=f"rec_refund_{order.id}", type="primary") or consume_action(
+        "orders.record_refund"
+    ):
         clear_all_dialog_flags()
         _refund_dialog(services, order.id)
     refunds = [
@@ -1068,11 +1098,18 @@ def _render_order_financials(services: dict, order, invoices: list):
 
 
 def _render_order_view(services: dict, order_id: str):
+    from vaybooks.bms.ui.keyboard.actions import consume_action
+    from vaybooks.bms.ui.keyboard.context import set_current_page
+    from vaybooks.bms.ui.keyboard.wired import mark_wired
+
+    set_current_page("order_detail")
+    mark_wired("nav.back")
+
     order_service = services["orders"]
     invoice_service = services["invoices"]
     delivery_service = services["deliveries"]
 
-    if st.button("← Back to orders", key="order_view_back"):
+    if st.button("← Back to orders", key="order_view_back") or consume_action("nav.back"):
         navigation.go_back_to_list("orders", "orders_list")
         return
 
@@ -1150,18 +1187,24 @@ def _render_order_view(services: dict, order_id: str):
         _render_refunds_tab(services, order)
 
     st.divider()
+    from vaybooks.bms.ui.keyboard.actions import consume_action
+    from vaybooks.bms.ui.keyboard.wired import mark_wired
+
+    mark_wired("orders.mark_complete", "orders.cancel")
     action_cols = st.columns(2)
     if order.order_status == OrderStatus.DELIVERED:
         if action_cols[0].button(
             "Mark Complete", type="primary", key=f"complete_ord_{order.id}"
-        ):
+        ) or consume_action("orders.mark_complete"):
             try:
                 order_service.complete_order(order.id)
                 st.success("Order marked complete")
                 st.rerun()
             except Exception as exc:
                 st.error(str(exc))
-    if action_cols[1].button("Cancel Order", type="secondary", key=f"cancel_ord_{order.id}"):
+    if action_cols[1].button(
+        "Cancel Order", type="secondary", key=f"cancel_ord_{order.id}"
+    ) or consume_action("orders.cancel"):
         try:
             order_service.cancel_order(order.id)
             st.warning("Order cancelled")
@@ -1185,10 +1228,16 @@ def _render_order_view(services: dict, order_id: str):
 
 def render_order_detail(services: dict):
     """Detail route entry point: reads ``?id=`` and renders the order view."""
+    from vaybooks.bms.ui.keyboard.actions import consume_action
+    from vaybooks.bms.ui.keyboard.context import set_current_page
+    from vaybooks.bms.ui.keyboard.wired import mark_wired
+
+    set_current_page("order_detail")
+    mark_wired("nav.back")
     order_id = navigation.current_detail_id("order_detail")
     if not order_id:
         st.error("No order selected.")
-        if st.button("← Back to orders"):
+        if st.button("← Back to orders") or consume_action("nav.back"):
             navigation.go_back_to_list("orders", "orders_list")
         return
     _render_order_view(services, order_id)

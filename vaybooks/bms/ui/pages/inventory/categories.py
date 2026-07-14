@@ -179,6 +179,7 @@ def render(services: dict):
         primary_key="inv_categories_add_btn",
         count_label="categories",
         empty_text="No product categories yet.",
+        page_key_nav="inventory_categories_list",
     )
     if bar["primary_clicked"]:
         clear_all_dialog_flags()

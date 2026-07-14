@@ -77,10 +77,16 @@ def _line_items_table(line_items: list[dict], inventory=None) -> pd.DataFrame:
 
 
 def render(services: dict) -> None:
+    from vaybooks.bms.ui.keyboard.actions import consume_action
+    from vaybooks.bms.ui.keyboard.context import set_current_page
+    from vaybooks.bms.ui.keyboard.wired import mark_wired
+
+    set_current_page("sales_detail")
+    mark_wired("nav.back")
     accounting = services["accounting"]
     sale_id = navigation.current_detail_id("sales_detail")
 
-    if st.button("← Back to sales", key="sales_detail_back"):
+    if st.button("← Back to sales", key="sales_detail_back") or consume_action("nav.back"):
         navigation.go_back_to_list("store_sales", "sales_invoices_list")
         return
 

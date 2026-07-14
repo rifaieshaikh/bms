@@ -100,7 +100,9 @@ def ensure_indexes(db):
     _create_index(db.vouchers, "reference_order_id")
 
     _create_index(db.product_categories, [("parent_id", 1), ("name", 1)], unique=True)
+    _create_index(db.product_categories, "name")
     _create_index(db.product_units, "code", unique=True)
+    _create_index(db.product_units, "label")
     _create_index(db.product_field_definitions, "key", unique=True)
     _create_index(db.inventory_products, "sku", unique=True)
     _create_index(db.inventory_products, "category_id")
@@ -143,6 +145,9 @@ def ensure_indexes(db):
         db.purchase_price_history,
         [("item_id", 1), ("item_type", 1), ("vendor_id", 1), ("purchase_date", -1)],
     )
+    _create_index(db.product_selling_rate_history, [("product_id", 1), ("start_date", -1)])
+    _create_index(db.product_mrp_history, [("product_id", 1), ("start_date", -1)])
+    _create_index(db.product_gst_rate_history, [("product_id", 1), ("start_date", -1)])
 
 
 if __name__ == "__main__":

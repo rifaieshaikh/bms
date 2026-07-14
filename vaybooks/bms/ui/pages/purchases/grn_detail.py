@@ -8,6 +8,12 @@ from vaybooks.bms.ui import navigation
 
 
 def render(services: dict) -> None:
+    from vaybooks.bms.ui.keyboard.actions import consume_action
+    from vaybooks.bms.ui.keyboard.context import set_current_page
+    from vaybooks.bms.ui.keyboard.wired import mark_wired
+
+    set_current_page("grn_detail")
+    mark_wired("nav.back")
     grn_id = st.query_params.get("id")
     if not grn_id:
         st.warning("GRN not specified")
@@ -18,7 +24,7 @@ def render(services: dict) -> None:
         st.warning("Goods receipt not found")
         return
 
-    if st.button("← Back", key="grn_detail_back"):
+    if st.button("← Back", key="grn_detail_back") or consume_action("nav.back"):
         navigation.go_back_to_list("goods_receipt_list", "goods-receipt")
         return
 

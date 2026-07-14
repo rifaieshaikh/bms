@@ -46,13 +46,21 @@ from vaybooks.bms.ui.pages.purchases import (
     returns as purchase_returns_mod,
 )
 from vaybooks.bms.ui.pages import workers
-from vaybooks.bms.ui.pages import system_settings, system_logs, system_updates
+from vaybooks.bms.ui.pages import (
+    system_settings,
+    system_logs,
+    system_updates,
+    business_settings,
+    keyboard_shortcuts,
+)
 from vaybooks.bms.ui.pages.migration import (
     categories as migration_categories,
     customers as migration_customers,
     products as migration_products,
     vendors as migration_vendors,
 )
+from vaybooks.bms.ui.keyboard.resolve import resolve_pressed_shortcuts
+from vaybooks.bms.ui.keyboard.defaults import ensure_defaults_loaded
 from vaybooks.bms.ui.pages.finance import (
     accounting_invoices,
     journal as finance_journal,
@@ -72,6 +80,7 @@ st.set_page_config(
 )
 
 inject_global_css()
+ensure_defaults_loaded(force=True)
 
 
 def _page(module):
@@ -237,8 +246,16 @@ purchase_detail_page = st.Page(
 )
 
 system_settings_page = st.Page(
-    _page(system_settings), title="Settings", icon=":material/settings:",
+    _page(system_settings), title="System", icon=":material/settings:",
     url_path="system-settings",
+)
+business_settings_page = st.Page(
+    _page(business_settings), title="Business", icon=":material/store:",
+    url_path="business-settings",
+)
+keyboard_shortcuts_page = st.Page(
+    _page(keyboard_shortcuts), title="Keyboard Shortcuts",
+    icon=":material/keyboard:", url_path="keyboard-shortcuts",
 )
 system_updates_page = st.Page(
     _page(system_updates), title="Updates", icon=":material/system_update:",
@@ -323,6 +340,16 @@ navigation.register("inventory_stock_list", inventory_stock_page)
 navigation.register("inventory_stock_ledger_list", inventory_stock_ledger_page)
 navigation.register("inventory_movements_list", inventory_movements_page)
 navigation.register("inventory_product_detail", inventory_product_detail_page)
+navigation.register("export_backup", export_page)
+navigation.register("business_settings", business_settings_page)
+navigation.register("keyboard_shortcuts", keyboard_shortcuts_page)
+navigation.register("system_settings", system_settings_page)
+navigation.register("system_updates", system_updates_page)
+navigation.register("system_logs", system_logs_page)
+navigation.register("migration_categories", migration_categories_page)
+navigation.register("migration_products", migration_products_page)
+navigation.register("migration_customers", migration_customers_page)
+navigation.register("migration_vendors", migration_vendors_page)
 
 page_groups = {
     "": [dashboard_page, mtd_page],
@@ -373,6 +400,8 @@ page_groups = {
         migration_vendors_page,
     ],
     "Settings": [
+        business_settings_page,
+        keyboard_shortcuts_page,
         activities_page,
         services_page,
     ],
@@ -420,4 +449,6 @@ with st.sidebar:
     st.divider()
     st.caption(f"v{__version__}")
 
+# Parents navigate here; action chords only set session flags for page render.
+resolve_pressed_shortcuts()
 nav.run()

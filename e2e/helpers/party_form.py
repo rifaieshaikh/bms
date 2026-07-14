@@ -44,6 +44,23 @@ def dialog(page: Page) -> Locator:
     return page.get_by_test_id("stDialog")
 
 
+def _expand_section(dialog_el: Locator, label: str) -> None:
+    """Open a collapsed Streamlit expander by its summary label."""
+    summary = dialog_el.get_by_role("button", name=label, exact=True)
+    if summary.count() == 0:
+        summary = dialog_el.get_by_text(label, exact=True)
+    if summary.count() == 0:
+        return
+    target = summary.first
+    try:
+        if target.get_attribute("aria-expanded") == "true":
+            return
+    except Exception:
+        pass
+    target.click()
+    dialog_el.page.wait_for_timeout(300)
+
+
 def _fill_text(dialog_el: Locator, label: str, value: str) -> None:
     field = dialog_el.get_by_label(label, exact=False)
     field.click()
@@ -85,6 +102,7 @@ def _fill_address_tax(
     pan: str = "",
     msme: str = "",
 ) -> None:
+    _expand_section(dialog_el, "Address")
     _fill_text(dialog_el, "Address Line 1", data.address_line1)
     _fill_text(dialog_el, "Address Line 2", data.address_line2)
     _fill_text(dialog_el, "City", data.city)
@@ -92,6 +110,7 @@ def _fill_address_tax(
     if data.state_label:
         _select_option(page, dialog_el, "State", data.state_label)
     _fill_text(dialog_el, "Country", data.country)
+    _expand_section(dialog_el, "Tax")
     if registration:
         _select_option(page, dialog_el, "Registration Type", registration)
     if gstin:
@@ -103,7 +122,9 @@ def _fill_address_tax(
 
 
 def set_registration_type(page: Page, registration: str) -> None:
-    _select_option(page, dialog(page), "Registration Type", registration)
+    d = dialog(page)
+    _expand_section(d, "Tax")
+    _select_option(page, d, "Registration Type", registration)
 
 
 def fill_customer_minimal(page: Page, data: PartyMinimal) -> None:
@@ -115,6 +136,7 @@ def fill_customer_full(page: Page, data: PartyFull) -> None:
     _fill_basic(d, "Customer Name", data)
     _fill_optional_basic(d, data)
     _fill_address_tax(page, d, data, registration="Unregistered")
+    _expand_section(d, "Notes")
     _fill_text(d, "Notes", data.notes)
 
 
@@ -131,16 +153,19 @@ def fill_customer_registered(page: Page, data: PartyRegistered) -> None:
     d = dialog(page)
     _fill_basic(d, "Customer Name", data)
     _fill_optional_basic(d, data)
+    _expand_section(d, "Address")
     _fill_text(d, "Address Line 1", data.address_line1)
     _fill_text(d, "Address Line 2", data.address_line2)
     _fill_text(d, "City", data.city)
     _fill_text(d, "PIN Code", data.pincode)
     _select_state_by_name(page, d, "Maharashtra")
     _fill_text(d, "Country", data.country)
+    _expand_section(d, "Tax")
     _select_option(page, d, "Registration Type", "Registered")
     _fill_text(d, "GSTIN", data.gstin)
     _fill_text(d, "PAN", data.pan)
     _fill_text(d, "MSME (Udyam) Number", data.msme)
+    _expand_section(d, "Notes")
     _fill_text(d, "Notes", data.notes)
 
 
@@ -148,16 +173,19 @@ def fill_vendor_registered(page: Page, data: PartyRegistered) -> None:
     d = dialog(page)
     _fill_basic(d, "Vendor Name", data)
     _fill_optional_basic(d, data)
+    _expand_section(d, "Address")
     _fill_text(d, "Address Line 1", data.address_line1)
     _fill_text(d, "Address Line 2", data.address_line2)
     _fill_text(d, "City", data.city)
     _fill_text(d, "PIN Code", data.pincode)
     _select_state_by_name(page, d, "Maharashtra")
     _fill_text(d, "Country", data.country)
+    _expand_section(d, "Tax")
     _select_option(page, d, "Registration Type", "Registered")
     _fill_text(d, "GSTIN", data.gstin)
     _fill_text(d, "PAN", data.pan)
     _fill_text(d, "MSME (Udyam) Number", data.msme)
+    _expand_section(d, "Notes")
     _fill_text(d, "Notes", data.notes)
 
 
@@ -170,6 +198,7 @@ def fill_vendor_full(page: Page, data: PartyFull) -> None:
     _fill_basic(d, "Vendor Name", data)
     _fill_optional_basic(d, data)
     _fill_address_tax(page, d, data, registration="Unregistered")
+    _expand_section(d, "Notes")
     _fill_text(d, "Notes", data.notes)
 
 
@@ -182,6 +211,7 @@ def fill_vendor_banking(
     bank_name: str = "HDFC Bank",
 ) -> None:
     d = dialog(page)
+    _expand_section(d, "Banking")
     _fill_text(d, "Account Holder Name", holder)
     _fill_text(d, "Account Number", account)
     _fill_text(d, "IFSC", ifsc)

@@ -62,10 +62,12 @@ def test_and_semantics_excludes_partial_cross_field(entity_key):
     recs = FIXTURES[entity_key]
     if len(recs) < 2:
         pytest.skip("need at least two records")
-    exact_fields = [f for f in schema.filter_fields if f.type == F.EXACT]
-    if len(exact_fields) < 2:
-        pytest.skip("need two exact fields")
-    f1, f2 = exact_fields[0], exact_fields[1]
+    text_fields = [
+        f for f in schema.filter_fields if f.type in (F.EXACT, F.REGEX)
+    ]
+    if len(text_fields) < 2:
+        pytest.skip("need two text fields")
+    f1, f2 = text_fields[0], text_fields[1]
     v1 = getattr(recs[0], f1.attr, None) if not isinstance(recs[0], dict) else recs[0].get(f1.attr)
     v2 = getattr(recs[1], f2.attr, None) if not isinstance(recs[1], dict) else recs[1].get(f2.attr)
     if v1 is None or v2 is None:

@@ -383,11 +383,17 @@ FIXTURES = {
 # (entity_key, field_key, value, expected_count)
 FILTER_POSITIVE = [
     ("customers", "customer_name", "Alpha Customer", 1),
+    ("customers", "customer_name", "alpha", 1),
+    ("customers", "customer_name", "^Alpha", 1),
     ("customers", "phone_number", "9000000001", 1),
+    ("customers", "phone_number", r"9000000001$", 1),
     ("customers", "gstin", "27AAAAA0000A1Z5", 1),
+    ("customers", "gstin", "aaaaa", 1),
     ("customers", "registration_type", PartyRegistrationType.REGISTERED.value, 1),
     ("customers", "has_orders", "with", 1),
     ("vendors", "vendor_name", "Alpha Vendor", 1),
+    ("vendors", "vendor_name", "vendor$", 2),
+    ("vendors", "phone_number", r"^9100", 2),
     ("vendors", "balance_state", "dr", 1),
     ("orders", "order_number", "ZO1", 1),
     ("orders", "customer_name", "Alpha Customer", 1),
@@ -422,16 +428,17 @@ FILTER_POSITIVE = [
 ]
 
 FILTER_NEGATIVE = [
-    ("customers", "customer_name", "Alpha", 0),
+    ("customers", "customer_name", "NoSuchCustomer", 0),
+    ("customers", "customer_name", "[", 0),  # invalid regex
     ("customers", "phone_number", "9999999999", 0),
-    ("vendors", "vendor_name", "Alpha", 0),
+    ("vendors", "vendor_name", "NoSuchVendor", 0),
     ("orders", "order_number", "ZO", 0),
     ("items", "bill_number", "ZB", 0),
     ("accounts", "account_name", "Cas", 0),
     ("vouchers", "voucher_number", "V00", 0),
     ("store_sales", "party_name", "Walk", 0),
-    ("inventory_products", "sku", "SKU", 0),
-    ("inventory_categories", "name", "Fab", 0),
+    ("inventory_products", "sku", "SKU", 2),
+    ("inventory_categories", "name", "Fab", 1),
 ]
 
 SORT_CASES = [

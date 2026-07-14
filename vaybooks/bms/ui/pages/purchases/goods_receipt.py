@@ -28,6 +28,7 @@ def render(services: dict) -> None:
         title="Goods Receipt",
         count_label="receipts",
         empty_text="No goods receipts yet.",
+        page_key_nav="goods_receipt_list",
     )
     if bar["primary_clicked"]:
         arm_grn_dialog()

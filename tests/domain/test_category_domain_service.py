@@ -3,7 +3,7 @@
 import pytest
 
 from vaybooks.bms.domain.shared.exceptions import ValidationError
-from tests.conftest import make_inventory_app_service
+from tests.conftest import create_test_product, make_inventory_app_service
 
 
 def _service():
@@ -97,23 +97,42 @@ def test_delete_blocked_with_children():
 def test_delete_blocked_with_products():
     service = _service()
     cat = service.create_category("Fabric")
-    service.create_product("SKU-1", "Cotton", cat.id, opening_qty=0)
+    create_test_product(service, "SKU-1", "Cotton", [cat.id], opening_qty=0)
     with pytest.raises(ValidationError, match="has products"):
         service.delete_category(cat.id)
 
 
 def test_product_create_invalid_category():
     service = _service()
+    unit = service.find_or_create_unit("pcs")
     with pytest.raises(ValidationError, match="Category not found"):
-        service.create_product("SKU-1", "Item", "missing-cat", opening_qty=0)
+        service.create_product(
+            "SKU-1",
+            "Item",
+            "missing-cat",
+            unit_id=unit.id,
+            selling_rate=100,
+            mrp=200,
+            gst_rate=5,
+            opening_qty=0,
+        )
+
+
+def test_product_create_without_category():
+    service = _service()
+    product = create_test_product(service, "SKU-NC", "No Category Item", [], opening_qty=3)
+    assert product.category_ids == []
+    assert product.category_names == []
+    assert product.opening_qty == 3
+    assert product.current_qty == 3
 
 
 def test_multi_category_product_paths():
     service = _service()
     fabric = service.create_category("Fabric")
     cotton = service.create_category("Cotton", parent_id=fabric.id)
-    product = service.create_product(
-        "SKU-1", "Blend", [fabric.id, cotton.id], opening_qty=0
+    product = create_test_product(
+        service, "SKU-1", "Blend", [fabric.id, cotton.id], opening_qty=0
     )
     assert product.category_ids == [fabric.id, cotton.id]
     assert product.category_names == ["Fabric", "Fabric > Cotton"]

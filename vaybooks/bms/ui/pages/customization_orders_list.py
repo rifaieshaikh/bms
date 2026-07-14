@@ -47,6 +47,9 @@ def render(services: dict):
         primary_key="orders_new_btn",
         count_label="orders",
         empty_text="No orders found.",
+        page_key_nav="orders_list",
     )
     if bar["primary_clicked"]:
         _new_order_dialog(services)
+    if bar.get("view_nth"):
+        navigation.go_to_detail("order_detail", bar["view_nth"])

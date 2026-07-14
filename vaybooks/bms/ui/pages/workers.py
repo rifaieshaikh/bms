@@ -132,6 +132,7 @@ def render(services: dict):
         primary_key="workers_add_btn",
         count_label="employees",
         empty_text="No employees configured yet.",
+        page_key_nav="workers_list",
     )
     if bar["primary_clicked"]:
         _add_worker_dialog(worker_service, services)

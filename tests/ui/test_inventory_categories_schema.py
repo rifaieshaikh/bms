@@ -8,7 +8,7 @@ from vaybooks.bms.ui.inventory_list_schemas import (
 
 def test_inventory_categories_schema_fields():
     filter_keys = {f.key for f in INVENTORY_CATEGORIES.filter_fields}
-    assert filter_keys == {"name", "active_only"}
+    assert filter_keys == {"name", "path", "active_only"}
     sort_keys = {s.key for s in INVENTORY_CATEGORIES.sort_options}
     assert sort_keys == {"created_at", "name"}
     assert INVENTORY_CATEGORIES.default_sort == "created_at"

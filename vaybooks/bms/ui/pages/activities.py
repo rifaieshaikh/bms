@@ -192,6 +192,7 @@ def render(services: dict):
         primary_key="activities_add_btn",
         count_label="activities",
         empty_text="No activities configured yet.",
+        page_key_nav="activities_list",
     )
     if bar["primary_clicked"]:
         _add_activity_dialog(activity_service)

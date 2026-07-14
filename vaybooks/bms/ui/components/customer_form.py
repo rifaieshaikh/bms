@@ -15,18 +15,18 @@ def render_customer_form(
     key_prefix: str,
     customer: Optional[Customer] = None,
 ) -> CustomerInput:
-    st.markdown("**Basic**")
-    customer_name = st.text_input(
+    col_name, col_contact = st.columns(2)
+    customer_name = col_name.text_input(
         "Customer Name *",
         value=customer.customer_name if customer else "",
         key=f"{key_prefix}_name",
     )
-    contact_person = st.text_input(
+    contact_person = col_contact.text_input(
         "Contact Person",
         value=customer.contact_person if customer else "",
         key=f"{key_prefix}_contact",
     )
-    col_phone, col_alt = st.columns(2)
+    col_phone, col_alt, col_email = st.columns(3)
     phone_number = col_phone.text_input(
         "Phone Number *",
         value=customer.phone_number if customer else "",
@@ -38,7 +38,7 @@ def render_customer_form(
         value=customer.alternate_phone_number or "" if customer else "",
         key=f"{key_prefix}_alt",
     )
-    email = st.text_input(
+    email = col_email.text_input(
         "Email",
         value=customer.email if customer else "",
         key=f"{key_prefix}_email",
@@ -50,11 +50,13 @@ def render_customer_form(
         registration_type_enum=PartyRegistrationType,
     )
 
-    notes = st.text_area(
-        "Notes",
-        value=customer.notes if customer else "",
-        key=f"{key_prefix}_notes",
-    )
+    with st.expander("Notes", expanded=bool(customer and customer.notes)):
+        notes = st.text_area(
+            "Notes",
+            value=customer.notes if customer else "",
+            key=f"{key_prefix}_notes",
+            height=68,
+        )
 
     return CustomerInput(
         customer_name=customer_name,

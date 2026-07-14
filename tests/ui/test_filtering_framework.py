@@ -104,3 +104,37 @@ def test_checkbox_filter_only_when_true():
     f["active"] = True
     result = F.apply_filters(recs, schema, f)
     assert len(result) == 1
+
+
+def test_regex_is_case_insensitive_and_partial():
+    schema = ls.ListSchema(
+        entity_key="rx",
+        title="RX",
+        filter_fields=[ls.FilterField("name", "Name", F.REGEX)],
+        sort_options=[ls.SortOption("name", "Name")],
+        default_sort="name",
+    )
+    recs = [
+        SimpleNamespace(name="Alpha Customer"),
+        SimpleNamespace(name="Beta Customer"),
+    ]
+    f = F.default_filters(schema)
+    f["name"] = "alpha"
+    assert [r.name for r in F.apply_filters(recs, schema, f)] == ["Alpha Customer"]
+
+    f["name"] = r"Customer$"
+    assert len(F.apply_filters(recs, schema, f)) == 2
+
+
+def test_invalid_regex_matches_nothing():
+    schema = ls.ListSchema(
+        entity_key="rx",
+        title="RX",
+        filter_fields=[ls.FilterField("name", "Name", F.REGEX)],
+        sort_options=[ls.SortOption("name", "Name")],
+        default_sort="name",
+    )
+    recs = [SimpleNamespace(name="Alpha")]
+    f = F.default_filters(schema)
+    f["name"] = "["
+    assert F.apply_filters(recs, schema, f) == []

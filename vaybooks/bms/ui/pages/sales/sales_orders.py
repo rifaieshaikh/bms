@@ -28,6 +28,7 @@ def render(services: dict) -> None:
         title="Sales Orders",
         count_label="orders",
         empty_text="No sales orders yet.",
+        page_key_nav="sales_orders_list",
     )
     if bar["primary_clicked"]:
         arm_so_dialog()

@@ -9,11 +9,13 @@ from vaybooks.bms.ui.list_schemas import ITEMS
 
 
 def _render_item_editor(services: dict, order_id: str, item_id: str):
+    from vaybooks.bms.ui.keyboard.actions import consume_action
+
     order_service = services["orders"]
     invoice_service = services["invoices"]
     delivery_service = services["deliveries"]
 
-    if st.button("← Back to items", key="item_editor_back"):
+    if st.button("← Back to items", key="item_editor_back") or consume_action("nav.back"):
         navigation.go_back_to_list("items", "items_list")
         return
 
@@ -98,15 +100,22 @@ def render(services: dict):
         card_renderer=_render_cards,
         count_label="items",
         empty_text="No customization items found.",
+        page_key_nav="items_list",
     )
 
 
 def render_item_detail(services: dict):
+    from vaybooks.bms.ui.keyboard.actions import consume_action
+    from vaybooks.bms.ui.keyboard.context import set_current_page
+    from vaybooks.bms.ui.keyboard.wired import mark_wired
+
+    set_current_page("item_detail")
+    mark_wired("nav.back")
     item_id = navigation.current_detail_id("item_detail")
     order_id = navigation.current_detail_param("item_detail", "order_id")
     if not item_id or not order_id:
         st.error("No item selected.")
-        if st.button("← Back to items"):
+        if st.button("← Back to items") or consume_action("nav.back"):
             navigation.go_back_to_list("items", "items_list")
         return
     _render_item_editor(services, order_id, item_id)

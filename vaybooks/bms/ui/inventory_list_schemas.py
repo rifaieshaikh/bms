@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from vaybooks.bms.domain.shared.enums import StockMovementType, StockReferenceType
 from vaybooks.bms.ui import filtering as F
 from vaybooks.bms.ui.filtering import FilterField, ListSchema, SortOption
@@ -39,11 +41,23 @@ def _match_stock_ledger_reference(row, value) -> bool:
     return row.get("reference_type") == value
 
 
+def _match_product_category_names(product, pattern: str) -> bool:
+    names = list(getattr(product, "category_names", None) or [])
+    if not names and getattr(product, "category_name", ""):
+        names = [product.category_name]
+    joined = " | ".join(names)
+    try:
+        return re.search(str(pattern), joined, re.IGNORECASE) is not None
+    except re.error:
+        return False
+
+
 INVENTORY_CATEGORIES = ListSchema(
     entity_key="inventory_categories",
     title="Product Categories",
     filter_fields=[
-        FilterField("name", "Category name", F.EXACT),
+        FilterField("name", "Category name", F.REGEX),
+        FilterField("path", "Category path", F.REGEX, record_attr="path"),
         FilterField("active_only", "Active only", F.CHECKBOX,
                     match=_match_inv_category_active),
     ],
@@ -59,8 +73,15 @@ INVENTORY_PRODUCTS = ListSchema(
     entity_key="inventory_products",
     title="Inventory Products",
     filter_fields=[
-        FilterField("sku", "SKU", F.EXACT),
-        FilterField("name", "Product name", F.EXACT),
+        FilterField("sku", "SKU", F.REGEX),
+        FilterField("name", "Product name", F.REGEX),
+        FilterField("hsn_sac", "HSN", F.REGEX),
+        FilterField(
+            "category_path",
+            "Category path",
+            F.REGEX,
+            match=_match_product_category_names,
+        ),
         FilterField("category_id", "Category", F.ENTITY_SELECT,
                     options_loader="inventory_categories",
                     match=_match_inv_product_category),
@@ -81,8 +102,8 @@ INVENTORY_STOCK = ListSchema(
     entity_key="inventory_stock",
     title="Stock on Hand",
     filter_fields=[
-        FilterField("sku", "SKU", F.EXACT),
-        FilterField("name", "Product name", F.EXACT),
+        FilterField("sku", "SKU", F.REGEX),
+        FilterField("name", "Product name", F.REGEX),
         FilterField("category_id", "Category", F.ENTITY_SELECT,
                     options_loader="inventory_categories",
                     match=_match_inv_product_category),

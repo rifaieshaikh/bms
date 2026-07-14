@@ -146,6 +146,7 @@ def render(services: dict):
         primary_key="services_add_btn",
         count_label="services",
         empty_text="No services configured yet.",
+        page_key_nav="services_list",
     )
     if bar["primary_clicked"]:
         _add_service_dialog(service_config, accounting_service)

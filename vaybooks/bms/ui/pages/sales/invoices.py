@@ -35,6 +35,7 @@ def render(services: dict) -> None:
         title="Sales Invoices",
         count_label="invoices",
         empty_text="No sales invoices yet.",
+        page_key_nav="sales_invoices_list",
     )
     if bar["primary_clicked"]:
         arm_sales_record_dialog()

@@ -1,7 +1,8 @@
-"""Per-entity list schemas: exact-match filters + sort options.
+"""Per-entity list schemas: filters + sort options.
 
-All string filters are strict equality (no substring / regex). Cross-field
-combination is AND; within a single multiselect it is OR (value ``in`` list).
+Most string filters are strict equality (``EXACT``). Customers and vendors
+use case-insensitive ``REGEX`` on text fields. Cross-field combination is
+AND; within a single multiselect it is OR (value ``in`` list).
 """
 
 from __future__ import annotations
@@ -260,10 +261,10 @@ CUSTOMERS = ListSchema(
     entity_key="customers",
     title="Customers",
     filter_fields=[
-        FilterField("customer_name", "Customer name", F.EXACT),
-        FilterField("phone_number", "Phone", F.EXACT),
-        FilterField("alternate_phone_number", "Alternate phone", F.EXACT),
-        FilterField("gstin", "GSTIN", F.EXACT),
+        FilterField("customer_name", "Customer name", F.REGEX),
+        FilterField("phone_number", "Phone", F.REGEX),
+        FilterField("alternate_phone_number", "Alternate phone", F.REGEX),
+        FilterField("gstin", "GSTIN", F.REGEX),
         FilterField("registration_type", "Registration type", F.SELECT,
                     options=_enum_opts(PartyRegistrationType)),
         FilterField("has_orders", "Has orders", F.SELECT,
@@ -283,9 +284,9 @@ VENDORS = ListSchema(
     entity_key="vendors",
     title="Vendors",
     filter_fields=[
-        FilterField("vendor_name", "Vendor name", F.EXACT),
-        FilterField("phone_number", "Phone", F.EXACT),
-        FilterField("alternate_phone_number", "Alternate phone", F.EXACT),
+        FilterField("vendor_name", "Vendor name", F.REGEX),
+        FilterField("phone_number", "Phone", F.REGEX),
+        FilterField("alternate_phone_number", "Alternate phone", F.REGEX),
         FilterField("balance_state", "Payable balance", F.SELECT,
                     options=[("dr", "Dr"), ("cr", "Cr"), ("zero", "Zero")],
                     match=_match_vendor_balance),

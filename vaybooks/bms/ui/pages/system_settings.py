@@ -114,39 +114,6 @@ def render(services: dict):
     st.caption(f"VayBooks-BMS v{__version__}")
 
     settings = get_settings()
-    business = services["business"].get_profile()
-
-    st.subheader("Business GST profile")
-    with st.form("business_profile_form"):
-        from vaybooks.bms.domain.shared.enums import VendorRegistrationType
-        from vaybooks.bms.domain.shared.india import INDIAN_STATES
-
-        legal_name = st.text_input("Legal name", value=business.legal_name)
-        gstin = st.text_input("GSTIN", value=business.gstin)
-        state_labels = [f"{s['code']} — {s['name']}" for s in INDIAN_STATES]
-        code_by_label = {f"{s['code']} — {s['name']}": s["code"] for s in INDIAN_STATES}
-        default_state = 0
-        if business.state_code:
-            label = next(
-                (f"{s['code']} — {s['name']}" for s in INDIAN_STATES if s["code"] == business.state_code),
-                state_labels[0],
-            )
-            if label in state_labels:
-                default_state = state_labels.index(label)
-        state_label = st.selectbox("State", state_labels, index=default_state)
-        reg_types = [t.value for t in VendorRegistrationType]
-        reg_idx = reg_types.index(business.registration_type.value) if business.registration_type.value in reg_types else 0
-        registration = st.selectbox("Registration type", reg_types, index=reg_idx)
-        if st.form_submit_button("Save business profile", type="primary"):
-            services["business"].update_profile(
-                legal_name=legal_name,
-                gstin=gstin,
-                state_code=code_by_label.get(state_label, ""),
-                registration_type=VendorRegistrationType(registration),
-            )
-            st.success("Business profile saved.")
-
-    st.divider()
 
     _render_product_custom_fields(services)
 

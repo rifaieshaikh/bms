@@ -9,6 +9,12 @@ from vaybooks.bms.ui.components.delivery_note_dialog import arm_dn_dialog, open_
 
 
 def render(services: dict) -> None:
+    from vaybooks.bms.ui.keyboard.actions import consume_action
+    from vaybooks.bms.ui.keyboard.context import set_current_page
+    from vaybooks.bms.ui.keyboard.wired import mark_wired
+
+    set_current_page("sales_order_detail")
+    mark_wired("nav.back")
     order_id = navigation.current_detail_id("sales_order_detail")
     if not order_id:
         st.warning("Sales order not specified")
@@ -20,7 +26,7 @@ def render(services: dict) -> None:
         st.warning("Sales order not found")
         return
 
-    if st.button("← Back", key="so_detail_back"):
+    if st.button("← Back", key="so_detail_back") or consume_action("nav.back"):
         navigation.go_back_to_list("sales_orders", "sales_orders_list")
         return
 

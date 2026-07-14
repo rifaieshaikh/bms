@@ -44,7 +44,12 @@ def test_stock_on_hand_report_filters_active_only():
         "SKU-2", "Silk", category.id, opening_qty=3
     )
     service._inventory.update_product(
-        inactive.id, inactive.sku, inactive.name, category.id, inactive.unit, 0, False
+        inactive.id,
+        inactive.sku,
+        inactive.name,
+        category.id,
+        inactive.unit_id,
+        is_active=False,
     )
 
     rows = service.stock_on_hand_report(StockOnHandFilter(active_only=True))

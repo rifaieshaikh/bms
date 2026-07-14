@@ -1,7 +1,9 @@
-"""Exact-match filtering + sorting framework for list views.
+"""Filtering + sorting framework for list views.
 
-Locked policy:
-- String filters match on strict equality (no substring / regex / fuzzy).
+Policy:
+- ``exact`` string filters match on strict equality.
+- ``regex`` string filters use case-insensitive ``re.search`` (invalid
+  patterns match nothing).
 - Multiple filter fields are combined with AND.
 - A single ``multiselect`` field matches when the record value is in the
   selected values (the only OR allowed, within one field).
@@ -9,6 +11,7 @@ Locked policy:
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from enum import Enum
@@ -16,6 +19,7 @@ from typing import Any, Callable, Optional
 
 # Filter field types
 EXACT = "exact"
+REGEX = "regex"
 SELECT = "select"
 MULTISELECT = "multiselect"
 DATE_RANGE = "date_range"
@@ -108,7 +112,7 @@ def is_active_value(fld: FilterField, value: Any) -> bool:
     """Whether a stored filter value should constrain the results."""
     if value is None:
         return False
-    if fld.type in (EXACT,):
+    if fld.type in (EXACT, REGEX):
         return bool(str(value).strip())
     if fld.type in (SELECT, ENTITY_SELECT):
         return value not in (None, "", ALL_LABEL)
@@ -134,6 +138,13 @@ def _default_match(fld: FilterField, record: Any, value: Any) -> bool:
 
     if fld.type == EXACT:
         return str(_norm(rec_value)).strip() == str(value).strip()
+
+    if fld.type == REGEX:
+        text = "" if rec_value is None else str(_norm(rec_value))
+        try:
+            return re.search(str(value), text, re.IGNORECASE) is not None
+        except re.error:
+            return False
 
     if fld.type in (SELECT, ENTITY_SELECT):
         return str(_norm(rec_value)) == str(value)

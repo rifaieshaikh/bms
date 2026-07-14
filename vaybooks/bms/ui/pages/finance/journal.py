@@ -37,6 +37,7 @@ def render(services: dict):
         primary_key="journal_create_btn",
         count_label="entries",
         empty_text="No journal entries yet.",
+        page_key_nav="journal_list",
     )
     if bar["primary_clicked"]:
         clear_all_dialog_flags()

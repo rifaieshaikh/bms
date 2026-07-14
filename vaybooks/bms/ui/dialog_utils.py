@@ -46,6 +46,8 @@ DIALOG_FLAG_PREFIXES = (
     "customer_edit_dialog",
     "inv_category_add_dialog",
     "inv_category_edit_dialog",
+    "inv_product_add_dialog",
+    "inv_product_edit_dialog",
 )
 
 _ARMED_FLAGS = "_armed_dialog_flags"

@@ -11,22 +11,33 @@ from vaybooks.bms.domain.vendors.entities import Vendor, VendorInput
 from vaybooks.bms.ui.components.party_form_fields import render_party_address_tax_fields
 
 
+def _vendor_has_banking(vendor: Optional[Vendor]) -> bool:
+    if not vendor:
+        return False
+    return bool(
+        vendor.bank_account_holder
+        or vendor.bank_account_number
+        or vendor.bank_ifsc
+        or vendor.bank_name
+    )
+
+
 def render_vendor_form(
     key_prefix: str,
     vendor: Optional[Vendor] = None,
 ) -> VendorInput:
-    st.markdown("**Basic**")
-    vendor_name = st.text_input(
+    col_name, col_contact = st.columns(2)
+    vendor_name = col_name.text_input(
         "Vendor Name *",
         value=vendor.vendor_name if vendor else "",
         key=f"{key_prefix}_name",
     )
-    contact_person = st.text_input(
+    contact_person = col_contact.text_input(
         "Contact Person",
         value=vendor.contact_person if vendor else "",
         key=f"{key_prefix}_contact",
     )
-    col_phone, col_alt = st.columns(2)
+    col_phone, col_alt, col_email = st.columns(3)
     phone_number = col_phone.text_input(
         "Phone Number *",
         value=vendor.phone_number if vendor else "",
@@ -38,7 +49,7 @@ def render_vendor_form(
         value=vendor.alternate_phone_number or "" if vendor else "",
         key=f"{key_prefix}_alt",
     )
-    email = st.text_input(
+    email = col_email.text_input(
         "Email",
         value=vendor.email if vendor else "",
         key=f"{key_prefix}_email",
@@ -50,35 +61,38 @@ def render_vendor_form(
         registration_type_enum=PartyRegistrationType,
     )
 
-    st.markdown("**Banking** (optional)")
-    bank_account_holder = st.text_input(
-        "Account Holder Name",
-        value=vendor.bank_account_holder if vendor else "",
-        key=f"{key_prefix}_bank_holder",
-    )
-    col_acct, col_ifsc = st.columns(2)
-    bank_account_number = col_acct.text_input(
-        "Account Number",
-        value=vendor.bank_account_number if vendor else "",
-        key=f"{key_prefix}_bank_acct",
-    )
-    bank_ifsc = col_ifsc.text_input(
-        "IFSC",
-        value=vendor.bank_ifsc if vendor else "",
-        key=f"{key_prefix}_bank_ifsc",
-        placeholder="HDFC0001234",
-    )
-    bank_name = st.text_input(
-        "Bank Name",
-        value=vendor.bank_name if vendor else "",
-        key=f"{key_prefix}_bank_name",
-    )
+    with st.expander("Banking", expanded=_vendor_has_banking(vendor)):
+        col_holder, col_bank = st.columns(2)
+        bank_account_holder = col_holder.text_input(
+            "Account Holder Name",
+            value=vendor.bank_account_holder if vendor else "",
+            key=f"{key_prefix}_bank_holder",
+        )
+        bank_name = col_bank.text_input(
+            "Bank Name",
+            value=vendor.bank_name if vendor else "",
+            key=f"{key_prefix}_bank_name",
+        )
+        col_acct, col_ifsc = st.columns(2)
+        bank_account_number = col_acct.text_input(
+            "Account Number",
+            value=vendor.bank_account_number if vendor else "",
+            key=f"{key_prefix}_bank_acct",
+        )
+        bank_ifsc = col_ifsc.text_input(
+            "IFSC",
+            value=vendor.bank_ifsc if vendor else "",
+            key=f"{key_prefix}_bank_ifsc",
+            placeholder="HDFC0001234",
+        )
 
-    notes = st.text_area(
-        "Notes",
-        value=vendor.notes if vendor else "",
-        key=f"{key_prefix}_notes",
-    )
+    with st.expander("Notes", expanded=bool(vendor and vendor.notes)):
+        notes = st.text_area(
+            "Notes",
+            value=vendor.notes if vendor else "",
+            key=f"{key_prefix}_notes",
+            height=68,
+        )
 
     return VendorInput(
         vendor_name=vendor_name,

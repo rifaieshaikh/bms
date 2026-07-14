@@ -33,4 +33,5 @@ def render(services: dict):
         card_renderer=_render_cards,
         count_label="products",
         empty_text="No stock records yet.",
+        page_key_nav="inventory_stock_list",
     )

@@ -26,13 +26,19 @@ def _format_balance(balance: float) -> str:
 
 
 def render(services: dict):
+    from vaybooks.bms.ui.keyboard.actions import consume_action
+    from vaybooks.bms.ui.keyboard.context import set_current_page
+    from vaybooks.bms.ui.keyboard.wired import mark_wired
+
+    set_current_page("customer_detail")
+    mark_wired("nav.back", "customers.back")
     customer_service = services["customers"]
     order_service = services["orders"]
     accounting = services.get("accounting")
 
     customer_id = navigation.current_detail_id("customer_detail")
 
-    if st.button("← Back to customers", key="customer_back"):
+    if st.button("← Back to customers", key="customer_back") or consume_action("nav.back"):
         navigation.go_back_to_list("customers", "customers_list")
         return
 

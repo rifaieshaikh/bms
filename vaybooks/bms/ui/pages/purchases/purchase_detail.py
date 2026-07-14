@@ -10,6 +10,12 @@ from vaybooks.bms.ui.components.purchase_return_dialog import arm_return_dialog,
 
 
 def render(services: dict) -> None:
+    from vaybooks.bms.ui.keyboard.actions import consume_action
+    from vaybooks.bms.ui.keyboard.context import set_current_page
+    from vaybooks.bms.ui.keyboard.wired import mark_wired
+
+    set_current_page("purchase_detail")
+    mark_wired("nav.back")
     bill_id = st.query_params.get("id")
     if not bill_id:
         st.warning("Purchase bill not specified")
@@ -23,7 +29,7 @@ def render(services: dict) -> None:
         st.warning("Purchase bill not found")
         return
 
-    if st.button("← Back", key="purchase_detail_back"):
+    if st.button("← Back", key="purchase_detail_back") or consume_action("nav.back"):
         navigation.go_back_to_list("purchases_list", "purchases")
         return
 

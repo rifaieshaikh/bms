@@ -70,9 +70,12 @@ def _render_filter_widgets(schema: ListSchema, committed: dict, services) -> Non
     entity = schema.entity_key
     for fld in schema.filter_fields:
         wkey = _widget_key(entity, fld.key)
-        if fld.type == F.EXACT:
+        if fld.type in (F.EXACT, F.REGEX):
             _seed(wkey, committed.get(fld.key) or "")
-            st.text_input(fld.label, key=wkey, placeholder=fld.placeholder,
+            placeholder = fld.placeholder
+            if not placeholder and fld.type == F.REGEX:
+                placeholder = "regex, case-insensitive"
+            st.text_input(fld.label, key=wkey, placeholder=placeholder,
                           help=fld.help or None)
         elif fld.type in (F.SELECT, F.ENTITY_SELECT):
             options = _resolve_options(fld, services)
@@ -129,7 +132,7 @@ def _collect_filter_values(schema: ListSchema) -> dict:
     for fld in schema.filter_fields:
         wkey = _widget_key(entity, fld.key)
         value = st.session_state.get(wkey)
-        if fld.type == F.EXACT:
+        if fld.type in (F.EXACT, F.REGEX):
             result[fld.key] = (value or "").strip() or None
         elif fld.type == F.DATE_RANGE:
             if isinstance(value, (list, tuple)) and len(value) == 2:
@@ -193,9 +196,33 @@ def render_filter_sort_bar(
     title: Optional[str] = None,
 ) -> dict:
     """Render the header bar; return ``{filters, sort, primary_clicked}``."""
+    from vaybooks.bms.ui.keyboard.actions import consume_action
+    from vaybooks.bms.ui.keyboard.bindings import get_bindings
+    from vaybooks.bms.ui.keyboard.dom_click import click_popover_by_key
+    from vaybooks.bms.ui.keyboard.wired import mark_wired
+
     committed = _committed_filters(schema)
     sort_state = _committed_sort(schema)
     entity = schema.entity_key
+
+    bindings = get_bindings()
+    filter_help = bindings["actions"].get("list.filters.open", "ctrl+shift+q")
+    sort_help = bindings["actions"].get("list.sort.open", "ctrl+shift+s")
+    primary_help = bindings["actions"].get("list.primary", "ctrl+shift+n")
+
+    open_filters = consume_action("list.filters.open")
+    open_sort = consume_action("list.sort.open")
+
+    mark_wired(
+        "list.filters.open",
+        "list.sort.open",
+        "list.filters.apply",
+        "list.filters.clear",
+        "list.primary",
+    )
+
+    filters_popover_key = f"{entity}_filters_popover"
+    sort_popover_key = f"{entity}_sort_popover"
 
     left, mid_a, mid_b, right = st.columns([9, 1, 1, 1.6], vertical_alignment="center")
     with left:
@@ -205,7 +232,12 @@ def render_filter_sort_bar(
         n_active = _count_active(schema, committed)
         flabel = f":material/filter_list: {n_active}" if n_active else \
             ":material/filter_list:"
-        with st.popover(flabel, use_container_width=True):
+        with st.popover(
+            flabel,
+            use_container_width=True,
+            help=filter_help,
+            key=filters_popover_key,
+        ):
             st.markdown("**Filters**")
             _render_filter_widgets(schema, committed, services)
             btns = st.columns(2)
@@ -220,7 +252,12 @@ def render_filter_sort_bar(
                 st.rerun()
 
     with mid_b:
-        with st.popover(":material/sort:", use_container_width=True):
+        with st.popover(
+            ":material/sort:",
+            use_container_width=True,
+            help=sort_help,
+            key=sort_popover_key,
+        ):
             st.markdown("**Sort by**")
             sort_keys = [s.key for s in schema.sort_options]
             labels = {s.key: s.label for s in schema.sort_options}
@@ -251,7 +288,17 @@ def render_filter_sort_bar(
             primary_clicked = st.button(
                 primary_label, type="primary", use_container_width=True,
                 key=primary_key or f"{entity}_primary",
+                help=primary_help,
             )
+
+    if consume_action("list.primary"):
+        primary_clicked = True
+
+    # Open existing popovers only — no alternate Filter/Sort UI.
+    if open_filters:
+        click_popover_by_key(filters_popover_key)
+    if open_sort:
+        click_popover_by_key(sort_popover_key)
 
     _render_chips(schema, committed, services)
 

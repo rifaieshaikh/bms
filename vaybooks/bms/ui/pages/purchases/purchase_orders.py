@@ -36,6 +36,7 @@ def render(services: dict) -> None:
         title="Purchase Orders",
         count_label="orders",
         empty_text="No purchase orders yet.",
+        page_key_nav="purchase_orders_list",
     )
     if bar["primary_clicked"]:
         arm_po_dialog()

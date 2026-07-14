@@ -62,19 +62,14 @@ def catalog_item_dialog(services: dict) -> None:
     save_cols = st.columns(2)
 
     if mode == "product":
-        categories = inventory.list_categories(active_only=True)
-        if not categories:
-            st.error("Create a category first.")
-            return
-
         form_prefix = f"cat_product_{item_id or 'new'}"
         st.caption(f"Expense account: **{MATERIAL_PURCHASE_EXPENSE_NAME}** (auto)")
 
         payload = render_product_form(
             inventory=inventory,
             key_prefix=form_prefix,
-            categories=categories,
             existing=existing,
+            business=services["business"].get_profile(),
             submit_label="Save Product",
         )
         if payload:
@@ -86,13 +81,16 @@ def catalog_item_dialog(services: dict) -> None:
                         payload["name"],
                         payload["category_ids"],
                         payload["unit_id"],
-                        payload["selling_rate"],
                         is_active=existing.is_active,
                         hsn_sac=payload["hsn_sac"],
-                        gst_rates=payload["gst_rates"],
-                        mrp_entries=payload["mrp_entries"],
+                        selling_rate=payload["selling_rate"],
+                        mrp=payload["mrp"],
+                        gst_rate=payload["gst_rate"],
+                        gst_required=payload["gst_required"],
                         specifications=payload["specifications"],
                         custom_fields=payload["custom_fields"],
+                        pending_category_name=payload.get("pending_category_name"),
+                        pending_unit_code=payload.get("pending_unit_code"),
                     )
                 else:
                     saved = inventory.create_product(
@@ -100,12 +98,15 @@ def catalog_item_dialog(services: dict) -> None:
                         payload["name"],
                         payload["category_ids"],
                         selling_rate=payload["selling_rate"],
+                        mrp=payload["mrp"],
+                        gst_rate=payload["gst_rate"],
                         unit_id=payload["unit_id"],
                         hsn_sac=payload["hsn_sac"],
-                        gst_rates=payload["gst_rates"],
-                        mrp_entries=payload["mrp_entries"],
+                        gst_required=payload["gst_required"],
                         specifications=payload["specifications"],
                         custom_fields=payload["custom_fields"],
+                        pending_category_name=payload.get("pending_category_name"),
+                        pending_unit_code=payload.get("pending_unit_code"),
                     )
                 st.success(f"Saved {saved.name}")
                 clear_product_form_state(form_prefix)

@@ -8,11 +8,8 @@ from vaybooks.bms.domain.inventory.entities import (
     ProductUnit,
 )
 from vaybooks.bms.domain.inventory.field_definitions import ProductFieldDefinition, ProductFieldType
-from vaybooks.bms.domain.shared.item_tax import (
-    ItemTaxProfile,
-    ProductGstSlab,
-    ProductMrpSlab,
-)
+from vaybooks.bms.domain.inventory.rate_history import ProductRatePeriod
+from vaybooks.bms.domain.inventory.rate_history_service import ProductRateHistoryService
 from vaybooks.bms.domain.inventory.repository import (
     InventoryProductRepository,
     ProductCategoryRepository,
@@ -24,13 +21,6 @@ from vaybooks.bms.domain.inventory.services import InventoryDomainService
 from vaybooks.bms.domain.shared.enums import StockMovementType
 
 
-def _slabs_from_tax_profile(profile: ItemTaxProfile) -> tuple[list[ProductGstSlab], list[ProductMrpSlab]]:
-    return (
-        [InventoryProduct.default_gst_slab(gst_rate=profile.gst_rate, effective_from=date.today())],
-        [InventoryProduct.default_mrp_entry(mrp=profile.mrp, effective_from=date.today())],
-    )
-
-
 class InventoryAppService:
     def __init__(
         self,
@@ -39,13 +29,16 @@ class InventoryAppService:
         movement_repo: StockMovementRepository,
         unit_repo: Optional[ProductUnitRepository] = None,
         field_def_repo: Optional[ProductFieldDefinitionRepository] = None,
+        rate_history: Optional[ProductRateHistoryService] = None,
     ):
+        self._rate_history = rate_history
         self._domain = InventoryDomainService(
             category_repo,
             product_repo,
             movement_repo,
             unit_repo,
             field_def_repo,
+            rate_history,
         )
         self._product_repo = product_repo
         self._category_repo = category_repo
@@ -55,10 +48,25 @@ class InventoryAppService:
     def _hydrate_product(self, product: Optional[InventoryProduct]) -> Optional[InventoryProduct]:
         if not product:
             return None
-        return self._domain.resolve_unit_for_product(product)
+        product = self._domain.resolve_unit_for_product(product)
+        if self._rate_history:
+            self._rate_history.hydrate_active_values(product.id, product)
+        return product
 
     def list_units(self, active_only: bool = True) -> List[ProductUnit]:
         return self._domain.list_units(active_only=active_only)
+
+    def search_units(
+        self, query: str = "", *, active_only: bool = True, limit: int = 10
+    ) -> List[ProductUnit]:
+        if not self._unit_repo:
+            return []
+        return self._unit_repo.search(query, active_only=active_only, limit=limit)
+
+    def get_unit(self, unit_id: str) -> Optional[ProductUnit]:
+        if not self._unit_repo or not unit_id:
+            return None
+        return self._unit_repo.find_by_id(unit_id)
 
     def find_or_create_unit(self, code: str, label: str = "") -> ProductUnit:
         return self._domain.find_or_create_unit(code, label)
@@ -67,11 +75,37 @@ class InventoryAppService:
         return self._domain.update_unit(unit_id, label, is_active)
 
     def get_category_path(self, category_id: str) -> str:
-        categories = {c.id: c for c in self._category_repo.list_all(active_only=False)}
-        return build_category_path(category_id, categories)
+        paths = self.category_paths_for([category_id])
+        return paths.get(category_id, "")
+
+    def category_paths_for(self, category_ids: List[str]) -> Dict[str, str]:
+        ids = [cid for cid in category_ids if cid]
+        if not ids:
+            return {}
+        by_id: Dict[str, ProductCategory] = {
+            c.id: c for c in self._category_repo.find_by_ids(ids)
+        }
+        missing = {
+            c.parent_id
+            for c in by_id.values()
+            if c.parent_id and c.parent_id not in by_id
+        }
+        while missing:
+            parents = self._category_repo.find_by_ids(list(missing))
+            missing = set()
+            for parent in parents:
+                by_id[parent.id] = parent
+                if parent.parent_id and parent.parent_id not in by_id:
+                    missing.add(parent.parent_id)
+        return {cid: build_category_path(cid, by_id) for cid in ids if cid in by_id}
 
     def list_categories(self, active_only: bool = False) -> List[ProductCategory]:
         return self._category_repo.list_all(active_only=active_only)
+
+    def search_categories(
+        self, query: str = "", *, active_only: bool = True, limit: int = 10
+    ) -> List[ProductCategory]:
+        return self._category_repo.search(query, active_only=active_only, limit=limit)
 
     def get_category(self, category_id: str) -> Optional[ProductCategory]:
         return self._category_repo.find_by_id(category_id)
@@ -124,10 +158,14 @@ class InventoryAppService:
 
     def list_products(self, active_only: bool = False) -> List[InventoryProduct]:
         products = self._product_repo.list_all(active_only=active_only)
-        return [self._domain.resolve_unit_for_product(p) for p in products]
+        return [self._hydrate_product(p) for p in products if p]
 
     def search_products(self, query: str) -> List[InventoryProduct]:
-        return [self._domain.resolve_unit_for_product(p) for p in self._product_repo.search(query)]
+        return [
+            self._hydrate_product(p)
+            for p in self._product_repo.search(query)
+            if p
+        ]
 
     def get_product(self, product_id: str) -> Optional[InventoryProduct]:
         return self._hydrate_product(self._product_repo.find_by_id(product_id))
@@ -156,37 +194,38 @@ class InventoryAppService:
         sku: str,
         name: str,
         category_ids: Union[str, List[str]],
-        unit: str = "pcs",
-        selling_rate: float = 0.0,
         opening_qty: float = 0.0,
         *,
         unit_id: str = "",
+        unit_code: str = "",
         hsn_sac: str = "",
-        gst_rates: Optional[List[ProductGstSlab]] = None,
-        mrp_entries: Optional[List[ProductMrpSlab]] = None,
-        tax_profile: Optional[ItemTaxProfile] = None,
+        selling_rate: float = 0.0,
+        mrp: float = 0.0,
+        gst_rate: float = 0.0,
+        gst_required: bool = False,
         specifications: Optional[Dict[str, str]] = None,
         custom_fields: Optional[Dict[str, Any]] = None,
+        pending_category_name: Optional[Union[str, List[str]]] = None,
+        pending_unit_code: Optional[str] = None,
     ) -> InventoryProduct:
         ids = [category_ids] if isinstance(category_ids, str) else list(category_ids)
-        if tax_profile is not None and gst_rates is None and mrp_entries is None:
-            gst_rates, mrp_entries = _slabs_from_tax_profile(tax_profile)
-            if not hsn_sac:
-                hsn_sac = tax_profile.hsn_sac
-        return self._domain.create_product(
+        ids = self._resolve_pending_category(ids, pending_category_name)
+        unit_id = self._resolve_pending_unit(unit_id, pending_unit_code)
+        product = self._domain.create_product(
             sku,
             name,
             ids,
             unit_id=unit_id,
-            unit_code=unit,
-            selling_rate=selling_rate,
             opening_qty=opening_qty,
             hsn_sac=hsn_sac,
-            gst_rates=gst_rates,
-            mrp_entries=mrp_entries,
+            selling_rate=selling_rate,
+            mrp=mrp,
+            gst_rate=gst_rate,
+            gst_required=gst_required,
             specifications=specifications,
             custom_fields=custom_fields,
         )
+        return self._hydrate_product(product)
 
     def update_product(
         self,
@@ -195,45 +234,108 @@ class InventoryAppService:
         name: str,
         category_ids: Union[str, List[str]],
         unit_id: str,
-        selling_rate: float,
         is_active: bool = True,
         *,
         hsn_sac: Optional[str] = None,
-        gst_rates: Optional[List[ProductGstSlab]] = None,
-        mrp_entries: Optional[List[ProductMrpSlab]] = None,
-        tax_profile: Optional[ItemTaxProfile] = None,
+        selling_rate: Optional[float] = None,
+        mrp: Optional[float] = None,
+        gst_rate: Optional[float] = None,
+        gst_required: bool = False,
         specifications: Optional[Dict[str, str]] = None,
         custom_fields: Optional[Dict[str, Any]] = None,
+        pending_category_name: Optional[Union[str, List[str]]] = None,
+        pending_unit_code: Optional[str] = None,
     ) -> InventoryProduct:
         ids = [category_ids] if isinstance(category_ids, str) else list(category_ids)
-        if tax_profile is not None and gst_rates is None and mrp_entries is None:
-            gst_rates, mrp_entries = _slabs_from_tax_profile(tax_profile)
-            if hsn_sac is None:
-                hsn_sac = tax_profile.hsn_sac
-        return self._domain.update_product(
+        ids = self._resolve_pending_category(ids, pending_category_name)
+        unit_id = self._resolve_pending_unit(unit_id, pending_unit_code)
+        product = self._domain.update_product(
             product_id,
             sku,
             name,
             ids,
             unit_id,
-            selling_rate,
             is_active,
             hsn_sac=hsn_sac,
-            gst_rates=gst_rates,
-            mrp_entries=mrp_entries,
+            selling_rate=selling_rate,
+            mrp=mrp,
+            gst_rate=gst_rate,
+            gst_required=gst_required,
             specifications=specifications,
             custom_fields=custom_fields,
         )
+        return self._hydrate_product(product)
 
-    def set_product_tax_profile(
-        self, product_id: str, tax_profile: ItemTaxProfile
-    ) -> InventoryProduct:
-        product = self._product_repo.find_by_id(product_id)
-        if not product:
-            raise ValueError("Product not found")
-        gst_rates, mrp_entries = _slabs_from_tax_profile(tax_profile)
-        product.apply_tax_data(tax_profile.hsn_sac, gst_rates, mrp_entries)
-        return self._product_repo.save(product)
+    def _resolve_pending_category(
+        self,
+        category_ids: List[str],
+        pending_name: Optional[Union[str, List[str]]] = None,
+    ) -> List[str]:
+        if isinstance(pending_name, list):
+            names = pending_name
+        elif pending_name:
+            names = [pending_name]
+        else:
+            names = []
+        for raw in names:
+            name = (raw or "").strip()
+            if not name:
+                continue
+            created = self.create_category(name, parent_id=None)
+            if created.id not in category_ids:
+                category_ids = list(category_ids) + [created.id]
+        return category_ids
+
+    def _resolve_pending_unit(
+        self, unit_id: str, pending_code: Optional[str]
+    ) -> str:
+        if unit_id:
+            return unit_id
+        code = (pending_code or "").strip()
+        if not code:
+            raise ValueError("Unit is required")
+        return self.find_or_create_unit(code).id
+
+    def list_selling_rate_history(self, product_id: str) -> List[ProductRatePeriod]:
+        if not self._rate_history:
+            return []
+        return self._rate_history.list_selling_rates(product_id)
+
+    def list_mrp_history(self, product_id: str) -> List[ProductRatePeriod]:
+        if not self._rate_history:
+            return []
+        return self._rate_history.list_mrp(product_id)
+
+    def list_gst_rate_history(self, product_id: str) -> List[ProductRatePeriod]:
+        if not self._rate_history:
+            return []
+        return self._rate_history.list_gst_rates(product_id)
+
+    def add_scheduled_rate_period(
+        self,
+        rate_type: str,
+        product_id: str,
+        *,
+        value: float,
+        start_date: date,
+        end_date: Optional[date] = None,
+    ) -> ProductRatePeriod:
+        if not self._rate_history:
+            raise ValueError("Rate history is not configured")
+        return self._rate_history.add_scheduled_period(
+            rate_type,
+            product_id,
+            value=value,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+    def rate_period_status(self, period: ProductRatePeriod, as_of: Optional[date] = None):
+        if not self._rate_history:
+            from vaybooks.bms.domain.inventory.rate_history import period_status
+
+            return period_status(period, as_of or date.today())
+        return self._rate_history.status_for(period, as_of)
 
     def get_stock_on_hand(self) -> List[InventoryProduct]:
         return self.list_products(active_only=False)

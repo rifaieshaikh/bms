@@ -45,7 +45,7 @@ CATEGORY_FIELDS: List[TargetField] = [
 PRODUCT_FIELDS: List[TargetField] = [
     TargetField("sku", "SKU", required=True, aliases=("item code", "item_code", "product code", "code")),
     TargetField("name", "Name", required=True, aliases=("product", "product name", "item name", "item")),
-    TargetField("category", "Category", required=True, aliases=("category name", "category_name", "group")),
+    TargetField("category", "Category", aliases=("category name", "category_name", "group")),
     TargetField("unit", "Unit", aliases=("uom", "unit of measure")),
     TargetField("selling_rate", "Selling Rate", field_type=FieldType.FLOAT, aliases=("rate", "price", "selling price", "mrp rate")),
     TargetField("hsn_sac", "HSN/SAC", aliases=("hsn", "sac", "hsn code")),

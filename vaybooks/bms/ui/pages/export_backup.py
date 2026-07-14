@@ -48,6 +48,31 @@ def _render_export_card(
 
 
 def render(services: dict):
+    from vaybooks.bms.ui.keyboard.actions import consume_action
+    from vaybooks.bms.ui.keyboard.context import set_current_page
+    from vaybooks.bms.ui.keyboard.wired import mark_wired
+
+    set_current_page("export_backup")
+    mark_wired(
+        "export.csv.customers",
+        "export.csv.orders",
+        "export.csv.products",
+        "export.csv.vendors",
+        "export.backup.json",
+        "export.backup.zip",
+        "export.backup.save_disk",
+        "export.backup.restore",
+    )
+    # Queued export shortcuts surface a caption (download buttons remain mouse/keyboard-focus)
+    for aid, label in (
+        ("export.csv.customers", "Customers CSV"),
+        ("export.csv.orders", "Orders CSV"),
+        ("export.csv.products", "Products CSV"),
+        ("export.csv.vendors", "Vendors CSV"),
+    ):
+        if consume_action(aid):
+            st.info(f"Shortcut ready: use the **{label}** download button below.")
+
     st.title("Export / Backup")
     export_service = services["export"]
     settings = get_settings()

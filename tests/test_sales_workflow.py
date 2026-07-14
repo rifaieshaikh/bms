@@ -15,7 +15,6 @@ from vaybooks.bms.domain.shared.enums import (
     StockMovementType,
     VoucherType,
 )
-from vaybooks.bms.domain.shared.item_tax import ItemTaxProfile
 from tests.conftest import (
     FakeAccountRepository,
     FakeCounterRepository,
@@ -139,7 +138,12 @@ def _sales_stack(*, registered_business: bool = False):
     )
     inventory = make_inventory_app_service()
     category = inventory.create_category("Ready-made")
-    product = inventory.create_product("SKU-1", "Kurta", category.id, opening_qty=20)
+    product_kwargs: dict = {"opening_qty": 20}
+    if registered_business:
+        product_kwargs.update(hsn_sac="5208", gst_rate=18.0)
+    product = inventory.create_product(
+        "SKU-1", "Kurta", category.id, **product_kwargs
+    )
 
     sales = SalesAppService(
         InMemorySalesOrderRepository(),
@@ -272,16 +276,6 @@ def test_registered_business_invoice_posts_output_gst():
         accounting._account_repo.save(
             Account(account_name=name, account_type=AccountType.LIABILITY)
         )
-    saved_product = inventory.get_product(product.id)
-    inventory.update_product(
-        saved_product.id,
-        saved_product.sku,
-        saved_product.name,
-        saved_product.category_id,
-        saved_product.unit_id,
-        saved_product.selling_rate,
-        tax_profile=ItemTaxProfile(hsn_sac="5208", gst_rate=18.0),
-    )
 
     voucher = sales.create_direct_sale(
         customer_account_id=customer_acct.id,

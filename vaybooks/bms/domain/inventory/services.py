@@ -25,10 +25,10 @@ from vaybooks.bms.domain.inventory.repository import (
     ProductUnitRepository,
     StockMovementRepository,
 )
+from vaybooks.bms.domain.inventory.rate_history_service import ProductRateHistoryService
 from vaybooks.bms.domain.inventory.units import default_unit_label, normalize_unit_code
 from vaybooks.bms.domain.shared.enums import StockMovementType, StockReferenceType
 from vaybooks.bms.domain.shared.exceptions import ValidationError
-from vaybooks.bms.domain.shared.item_tax import ProductGstSlab, ProductMrpSlab
 
 INFLOW_TYPES = frozenset(
     {
@@ -65,12 +65,14 @@ class InventoryDomainService:
         movement_repo: StockMovementRepository,
         unit_repo: Optional[ProductUnitRepository] = None,
         field_def_repo: Optional[ProductFieldDefinitionRepository] = None,
+        rate_history: Optional[ProductRateHistoryService] = None,
     ):
         self._category_repo = category_repo
         self._product_repo = product_repo
         self._movement_repo = movement_repo
         self._unit_repo = unit_repo
         self._field_def_repo = field_def_repo
+        self._rate_history = rate_history
 
     def _categories_by_id(self) -> Dict[str, ProductCategory]:
         return {c.id: c for c in self._category_repo.list_all(active_only=False)}
@@ -124,11 +126,12 @@ class InventoryDomainService:
     def _resolve_categories(
         self, category_ids: List[str]
     ) -> tuple[List[str], List[str]]:
-        if not category_ids:
-            raise ValidationError("At least one category is required")
+        requested = [cid for cid in (category_ids or []) if cid]
+        if not requested:
+            return [], []
         categories_by_id = self._categories_by_id()
         resolved_ids: List[str] = []
-        for category_id in category_ids:
+        for category_id in requested:
             if category_id not in categories_by_id:
                 raise ValidationError("Category not found")
             if category_id not in resolved_ids:
@@ -270,13 +273,14 @@ class InventoryDomainService:
         name: str,
         category_ids: List[str],
         unit_id: str = "",
-        unit_code: str = "pcs",
-        selling_rate: float = 0.0,
+        unit_code: str = "",
         opening_qty: float = 0.0,
         *,
         hsn_sac: str = "",
-        gst_rates: Optional[List[ProductGstSlab]] = None,
-        mrp_entries: Optional[List[ProductMrpSlab]] = None,
+        selling_rate: float = 0.0,
+        mrp: float = 0.0,
+        gst_rate: float = 0.0,
+        gst_required: bool = False,
         specifications: Optional[Dict[str, str]] = None,
         custom_fields: Optional[Dict[str, Any]] = None,
     ) -> InventoryProduct:
@@ -289,14 +293,12 @@ class InventoryDomainService:
         if self._product_repo.find_by_sku(sku):
             raise ValidationError("A product with this SKU already exists")
         resolved_ids, paths = self._resolve_categories(category_ids)
-        unit = self.find_or_create_unit(unit_code) if not unit_id else None
-        if unit_id and self._unit_repo:
-            unit = self._unit_repo.find_by_id(unit_id)
-        if not unit:
-            unit = self.find_or_create_unit(unit_code or "pcs")
+        unit = self._resolve_unit(unit_id, unit_code)
+        if not self._rate_history:
+            raise ValidationError("Rate history is not configured")
+        if gst_required and not (hsn_sac or "").strip():
+            raise ValidationError("HSN code is required for registered businesses")
         opening_qty = round(max(opening_qty, 0.0), 2)
-        gst_slabs = gst_rates or [InventoryProduct.default_gst_slab()]
-        mrp_slabs = mrp_entries or [InventoryProduct.default_mrp_entry()]
         specs = {
             k.strip(): str(v).strip()
             for k, v in (specifications or {}).items()
@@ -315,15 +317,24 @@ class InventoryDomainService:
             category_names=paths,
             unit_id=unit.id,
             unit=unit.code,
-            selling_rate=round(max(selling_rate, 0.0), 2),
+            hsn_sac=(hsn_sac or "").strip(),
             opening_qty=opening_qty,
             current_qty=0.0,
             specifications=specs,
             custom_fields=field_values,
         )
         product.sync_legacy_category_fields()
-        product.apply_tax_data(hsn_sac, gst_slabs, mrp_slabs)
         saved = self._product_repo.save(product)
+        self._rate_history.apply_form_changes(
+            saved.id,
+            selling_rate=selling_rate,
+            mrp=mrp,
+            gst_rate=gst_rate,
+            is_new=True,
+            gst_required=gst_required,
+        )
+        self._rate_history.hydrate_active_values(saved.id, saved)
+        saved = self._product_repo.save(saved)
         if opening_qty > 0:
             self._record_movement(
                 saved,
@@ -336,6 +347,18 @@ class InventoryDomainService:
             )
         return saved
 
+    def _resolve_unit(self, unit_id: str, unit_code: str = "") -> ProductUnit:
+        if not self._unit_repo:
+            raise ValidationError("Unit repository not configured")
+        unit = None
+        if unit_id:
+            unit = self._unit_repo.find_by_id(unit_id)
+        if not unit and unit_code:
+            unit = self._unit_repo.find_by_code(unit_code)
+        if not unit:
+            raise ValidationError("Unit is required")
+        return unit
+
     def update_product(
         self,
         product_id: str,
@@ -343,18 +366,21 @@ class InventoryDomainService:
         name: str,
         category_ids: List[str],
         unit_id: str,
-        selling_rate: float,
         is_active: bool = True,
         *,
         hsn_sac: Optional[str] = None,
-        gst_rates: Optional[List[ProductGstSlab]] = None,
-        mrp_entries: Optional[List[ProductMrpSlab]] = None,
+        selling_rate: Optional[float] = None,
+        mrp: Optional[float] = None,
+        gst_rate: Optional[float] = None,
+        gst_required: bool = False,
         specifications: Optional[Dict[str, str]] = None,
         custom_fields: Optional[Dict[str, Any]] = None,
     ) -> InventoryProduct:
         product = self._product_repo.find_by_id(product_id)
         if not product:
             raise ValidationError("Product not found")
+        if not self._rate_history:
+            raise ValidationError("Rate history is not configured")
         resolved_ids, paths = self._resolve_categories(category_ids)
         sku = sku.strip()
         name = name.strip()
@@ -363,11 +389,9 @@ class InventoryDomainService:
         existing = self._product_repo.find_by_sku(sku)
         if existing and existing.id != product_id:
             raise ValidationError("A product with this SKU already exists")
-        unit = None
-        if self._unit_repo and unit_id:
-            unit = self._unit_repo.find_by_id(unit_id) or self._unit_repo.find_by_code(unit_id)
-        if not unit:
-            unit = self.find_or_create_unit(product.unit or unit_id or "pcs")
+        unit = self._resolve_unit(unit_id, "")
+        if gst_required and hsn_sac is not None and not (hsn_sac or "").strip():
+            raise ValidationError("HSN code is required for registered businesses")
         specs = product.specifications
         if specifications is not None:
             specs = {
@@ -390,19 +414,25 @@ class InventoryDomainService:
             category_names=paths,
             unit_id=unit.id,
             unit=unit.code,
-            selling_rate=round(max(selling_rate, 0.0), 2),
             is_active=is_active,
             specifications=specs,
             custom_fields=field_values,
         )
+        if hsn_sac is not None:
+            product.hsn_sac = (hsn_sac or "").strip()
         product.sync_legacy_category_fields()
-        if hsn_sac is not None or gst_rates is not None or mrp_entries is not None:
-            product.apply_tax_data(
-                hsn_sac if hsn_sac is not None else product.hsn_sac,
-                gst_rates if gst_rates is not None else product.gst_rates,
-                mrp_entries if mrp_entries is not None else product.mrp_entries,
+        saved = self._product_repo.save(product)
+        if selling_rate is not None and mrp is not None and gst_rate is not None:
+            self._rate_history.apply_form_changes(
+                saved.id,
+                selling_rate=selling_rate,
+                mrp=mrp,
+                gst_rate=gst_rate,
+                is_new=False,
+                gst_required=gst_required,
             )
-        return self._product_repo.save(product)
+        self._rate_history.hydrate_active_values(saved.id, saved)
+        return self._product_repo.save(saved)
 
     def record_manual_movement(
         self,

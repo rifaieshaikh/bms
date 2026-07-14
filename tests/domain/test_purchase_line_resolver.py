@@ -6,16 +6,14 @@ from vaybooks.bms.domain.business.entities import BusinessProfile
 from vaybooks.bms.domain.inventory.entities import InventoryProduct
 from vaybooks.bms.domain.purchases.purchase_line_resolver import PurchaseLineResolver
 from vaybooks.bms.domain.shared.enums import CatalogItemType, VendorRegistrationType
-from vaybooks.bms.domain.shared.item_tax import ItemTaxProfile, ProductGstSlab, ProductMrpSlab
+from vaybooks.bms.domain.shared.item_tax import ItemTaxProfile
 from vaybooks.bms.domain.vendor_services.entities import VendorService
 from vaybooks.bms.domain.vendors.entities import Vendor
 
 
 def test_product_maps_to_material_expense():
-    product = InventoryProduct(
-        sku="SKU1", name="Fabric", category_id="c1",
-        tax_profile=ItemTaxProfile(hsn_sac="5208", gst_rate=5.0),
-    )
+    product = InventoryProduct(sku="SKU1", name="Fabric", category_id="c1", hsn_sac="5208")
+    product.apply_active_rates(gst_rate=5.0)
     service = VendorService(
         service_name="Dyeing", expense_account_id="exp-dyeing",
         tax_profile=ItemTaxProfile(hsn_sac="9988", gst_rate=18.0),
@@ -67,16 +65,9 @@ def test_service_maps_to_configured_expense():
     assert lines[0].line_total > 1000
 
 
-def test_product_uses_active_gst_slab_not_inactive():
-    product = InventoryProduct(sku="SKU1", name="Fabric", category_id="c1")
-    product.apply_tax_data(
-        "5208",
-        [
-            ProductGstSlab(gst_rate=5.0, effective_from=date(2024, 1, 1), is_active=False),
-            ProductGstSlab(gst_rate=18.0, effective_from=date(2025, 4, 1), is_active=True),
-        ],
-        [ProductMrpSlab(mrp=0.0, effective_from=date.today(), is_active=True)],
-    )
+def test_product_uses_active_gst_rate():
+    product = InventoryProduct(sku="SKU1", name="Fabric", category_id="c1", hsn_sac="5208")
+    product.apply_active_rates(gst_rate=18.0)
     resolver = PurchaseLineResolver(
         get_product=lambda pid: product if pid == product.id else None,
         get_service=lambda sid: None,

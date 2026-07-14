@@ -35,6 +35,7 @@ def render(services: dict):
         primary_key="vouchers_create_btn",
         count_label="vouchers",
         empty_text="No vouchers recorded yet.",
+        page_key_nav="vouchers_list",
     )
     if bar["primary_clicked"]:
         clear_all_dialog_flags()

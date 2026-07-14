@@ -36,6 +36,11 @@ def _render_entries(services: dict, time_service, entries):
 
 
 def render(services: dict):
+    from vaybooks.bms.ui.keyboard.context import set_current_page
+    from vaybooks.bms.ui.keyboard.wired import mark_wired
+
+    set_current_page("time_list")
+    mark_wired("list.primary", "time.add", "list.filters.open", "list.sort.open")
     time_service = services["time_tracking"]
 
     bar = render_filter_sort_bar(

@@ -9,6 +9,12 @@ from vaybooks.bms.ui.components.grn_dialog import arm_grn_dialog, open_grn_dialo
 
 
 def render(services: dict) -> None:
+    from vaybooks.bms.ui.keyboard.actions import consume_action
+    from vaybooks.bms.ui.keyboard.context import set_current_page
+    from vaybooks.bms.ui.keyboard.wired import mark_wired
+
+    set_current_page("purchase_order_detail")
+    mark_wired("nav.back")
     order_id = st.query_params.get("id")
     if not order_id:
         st.warning("Purchase order not specified")
@@ -20,7 +26,7 @@ def render(services: dict) -> None:
         st.warning("Purchase order not found")
         return
 
-    if st.button("← Back", key="po_detail_back"):
+    if st.button("← Back", key="po_detail_back") or consume_action("nav.back"):
         navigation.go_back_to_list("purchase_orders_list", "purchase-orders")
         return
 
@@ -38,7 +44,10 @@ def render(services: dict) -> None:
             )
 
     if order.status.value not in ("Cancelled", "Closed", "Received"):
-        if st.button("Receive against PO", type="primary", key="po_receive_btn"):
+        mark_wired("purchases.orders.receive")
+        if st.button("Receive against PO", type="primary", key="po_receive_btn") or consume_action(
+            "purchases.orders.receive"
+        ):
             arm_grn_dialog(po_id=order.id)
             st.rerun()
 

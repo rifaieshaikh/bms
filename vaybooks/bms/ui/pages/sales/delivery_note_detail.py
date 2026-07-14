@@ -21,6 +21,12 @@ def arm_invoice_from_dn(dn_id: str) -> None:
 
 
 def render(services: dict) -> None:
+    from vaybooks.bms.ui.keyboard.actions import consume_action
+    from vaybooks.bms.ui.keyboard.context import set_current_page
+    from vaybooks.bms.ui.keyboard.wired import mark_wired
+
+    set_current_page("delivery_note_detail")
+    mark_wired("nav.back")
     dn_id = navigation.current_detail_id("delivery_note_detail")
     if not dn_id:
         st.warning("Delivery note not specified")
@@ -35,7 +41,7 @@ def render(services: dict) -> None:
         st.warning("Delivery note not found")
         return
 
-    if st.button("← Back", key="dn_detail_back"):
+    if st.button("← Back", key="dn_detail_back") or consume_action("nav.back"):
         navigation.go_back_to_list("delivery_notes", "delivery_notes_list")
         return
 

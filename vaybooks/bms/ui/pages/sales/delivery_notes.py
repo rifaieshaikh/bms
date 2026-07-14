@@ -28,6 +28,7 @@ def render(services: dict) -> None:
         title="Delivery Notes",
         count_label="deliveries",
         empty_text="No delivery notes yet.",
+        page_key_nav="delivery_notes_list",
     )
     if bar["primary_clicked"]:
         arm_dn_dialog()

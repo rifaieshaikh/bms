@@ -824,6 +824,7 @@ def render(services: dict):
         primary_key="accounts_create_btn",
         count_label="accounts",
         empty_text="No accounts yet.",
+        page_key_nav="accounts_list",
     )
     if bar["primary_clicked"]:
         clear_all_dialog_flags()
@@ -832,10 +833,16 @@ def render(services: dict):
 
 
 def render_account_detail(services: dict):
+    from vaybooks.bms.ui.keyboard.actions import consume_action
+    from vaybooks.bms.ui.keyboard.context import set_current_page
+    from vaybooks.bms.ui.keyboard.wired import mark_wired
+
+    set_current_page("account_detail")
+    mark_wired("nav.back")
     accounting_service = services["accounting"]
     account_id = navigation.current_detail_id("account_detail")
 
-    if st.button("← Back to accounts", key="account_detail_back"):
+    if st.button("← Back to accounts", key="account_detail_back") or consume_action("nav.back"):
         navigation.go_back_to_list("accounts", "accounts_list")
         return
 

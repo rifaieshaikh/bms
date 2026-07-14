@@ -46,5 +46,6 @@ def render(services: dict):
         card_renderer=_cards,
         count_label="invoices",
         empty_text="No invoices recorded yet.",
+        page_key_nav="accounting_invoices_list",
     )
     acc.open_pending_dialogs(services)

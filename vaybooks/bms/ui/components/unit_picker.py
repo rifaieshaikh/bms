@@ -1,10 +1,22 @@
-"""Unit picker and inline unit management for product forms."""
+"""Chip-style searchable unit picker for product forms."""
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, TypedDict
 
 import streamlit as st
+
+
+class UnitPickerResult(TypedDict):
+    unit_id: str
+    pending_unit_code: Optional[str]
+
+
+def _unit_label(unit) -> str:
+    label = (unit.label or "").strip()
+    if label and label.lower() != unit.code.lower():
+        return f"{unit.code} — {label}"
+    return unit.code
 
 
 def render_unit_picker(
@@ -12,61 +24,52 @@ def render_unit_picker(
     *,
     key_prefix: str,
     selected_unit_id: str = "",
-) -> str:
-    units = inventory.list_units(active_only=False)
-    active_units = [u for u in units if u.is_active] or units
-    labels = [f"{u.code} — {u.label}" for u in active_units]
-    id_by_label = {f"{u.code} — {u.label}": u.id for u in active_units}
-    default_index = 0
-    if selected_unit_id:
-        for i, unit in enumerate(active_units):
-            if unit.id == selected_unit_id:
-                default_index = i
-                break
-    pick = st.selectbox(
+    limit: int = 10,
+) -> UnitPickerResult:
+    """Single-select chip: filter existing units or type a new code.
+
+    ``limit`` is kept for API compatibility; native multiselect filters the
+    full active unit list client-side (one chip + accept_new_options).
+    """
+    _ = limit
+    units = inventory.list_units(active_only=True)
+    label_to_id = {_unit_label(u): u.id for u in units}
+    code_to_id = {u.code.strip().lower(): u.id for u in units if u.code}
+    options = sorted(label_to_id.keys(), key=lambda s: s.lower())
+
+    widget_key = f"{key_prefix}_unit_ms"
+    if widget_key not in st.session_state:
+        initial: list[str] = []
+        if selected_unit_id:
+            unit = inventory.get_unit(selected_unit_id)
+            if unit:
+                initial = [_unit_label(unit)]
+        st.session_state[widget_key] = initial
+
+    current = list(st.session_state.get(widget_key) or [])
+    for label in current:
+        if label and label not in options:
+            options = list(options) + [label]
+
+    selected_labels = st.multiselect(
         "Unit",
-        labels or ["pcs — Pieces"],
-        index=default_index if labels else 0,
-        key=f"{key_prefix}_unit_pick",
+        options=options,
+        key=widget_key,
+        max_selections=1,
+        accept_new_options=True,
+        placeholder="Type to search or add a unit…",
+        help="Select a unit or type a new code. New units are created when you save the product.",
+        label_visibility="collapsed",
     )
-    unit_id = id_by_label.get(pick, "")
 
-    with st.expander("Manage units", expanded=False):
-        st.caption("Add a unit or edit labels. Duplicate codes reuse the existing unit.")
-        add_cols = st.columns(2)
-        new_code = add_cols[0].text_input("Code", key=f"{key_prefix}_unit_new_code")
-        new_label = add_cols[1].text_input("Label", key=f"{key_prefix}_unit_new_label")
-        if st.button("Add unit", key=f"{key_prefix}_unit_add"):
-            try:
-                before = inventory.list_units(active_only=False)
-                before_codes = {u.code for u in before}
-                saved = inventory.find_or_create_unit(new_code, new_label)
-                if saved.code in before_codes:
-                    st.info("Unit already exists — selected existing.")
-                st.session_state[f"{key_prefix}_unit_pick"] = f"{saved.code} — {saved.label}"
-                st.rerun()
-            except Exception as exc:
-                st.error(str(exc))
+    if not selected_labels:
+        return {"unit_id": "", "pending_unit_code": None}
 
-        for unit in units:
-            with st.container(border=True):
-                e_cols = st.columns([2, 3, 1, 1])
-                e_cols[0].markdown(f"**{unit.code}**")
-                new_lbl = e_cols[1].text_input(
-                    "Label",
-                    value=unit.label,
-                    key=f"{key_prefix}_unit_lbl_{unit.id}",
-                    label_visibility="collapsed",
-                )
-                active = e_cols[2].checkbox(
-                    "Active",
-                    value=unit.is_active,
-                    key=f"{key_prefix}_unit_act_{unit.id}",
-                )
-                if e_cols[3].button("Save", key=f"{key_prefix}_unit_save_{unit.id}"):
-                    try:
-                        inventory.update_unit(unit.id, new_lbl, active)
-                        st.rerun()
-                    except Exception as exc:
-                        st.error(str(exc))
-    return unit_id
+    text = (selected_labels[0] or "").strip()
+    unit_id = label_to_id.get(text) or code_to_id.get(text.lower())
+    if unit_id:
+        return {"unit_id": unit_id, "pending_unit_code": None}
+
+    # Free-typed value: use the part before " — " as code if pasted as label form
+    pending = text.split(" — ", 1)[0].strip() or text
+    return {"unit_id": "", "pending_unit_code": pending}

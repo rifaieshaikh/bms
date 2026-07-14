@@ -31,6 +31,7 @@ def render(services: dict) -> None:
         title="Purchase Bills",
         count_label="bills",
         empty_text="No purchase bills yet.",
+        page_key_nav="purchases_list",
     )
     if bar["primary_clicked"]:
         arm_purchase_bill_dialog()

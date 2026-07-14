@@ -408,6 +408,9 @@ class FakeProductCategoryRepository:
     def find_by_id(self, category_id: str):
         return self._store.get(category_id)
 
+    def find_by_ids(self, category_ids):
+        return [self._store[cid] for cid in category_ids if cid in self._store]
+
     def find_by_name(self, name: str):
         name = (name or "").strip()
         for category in self._store.values():
@@ -431,6 +434,14 @@ class FakeProductCategoryRepository:
         if active_only:
             return [c for c in self._store.values() if c.is_active]
         return list(self._store.values())
+
+    def search(self, query: str, *, active_only: bool = True, limit: int = 25):
+        text = (query or "").strip().lower()
+        items = self.list_all(active_only=active_only)
+        if text:
+            items = [c for c in items if text in c.name.lower()]
+        items = sorted(items, key=lambda c: c.name.lower())
+        return items[: max(1, min(int(limit or 25), 50))]
 
     def delete(self, category_id: str) -> None:
         self._store.pop(category_id, None)
@@ -458,6 +469,18 @@ class FakeProductUnitRepository:
         if active_only:
             return [u for u in self._store.values() if u.is_active]
         return list(self._store.values())
+
+    def search(self, query: str, *, active_only: bool = True, limit: int = 25):
+        text = (query or "").strip().lower()
+        items = self.list_all(active_only=active_only)
+        if text:
+            items = [
+                u
+                for u in items
+                if text in u.code.lower() or text in (u.label or "").lower()
+            ]
+        items = sorted(items, key=lambda u: u.code.lower())
+        return items[: max(1, min(int(limit or 25), 50))]
 
     def count_products_using(self, unit_id: str) -> int:
         return 0
@@ -509,6 +532,24 @@ class FakeInventoryProductRepository:
         ]
 
 
+class FakeProductRateHistoryRepository:
+    def __init__(self):
+        self._store: Dict[str, "ProductRatePeriod"] = {}
+
+    def save(self, period):
+        self._store[period.id] = period
+        return period
+
+    def find_by_id(self, period_id: str):
+        return self._store.get(period_id)
+
+    def list_for_product(self, product_id: str):
+        return [p for p in self._store.values() if p.product_id == product_id]
+
+    def delete(self, period_id: str) -> None:
+        self._store.pop(period_id, None)
+
+
 class FakeStockMovementRepository:
     def __init__(self):
         self._store: Dict[str, "StockMovement"] = {}
@@ -534,10 +575,53 @@ class FakeStockMovementRepository:
 
 def make_inventory_app_service():
     from vaybooks.bms.application.inventory_app_service import InventoryAppService
+    from vaybooks.bms.domain.inventory.rate_history_service import ProductRateHistoryService
 
-    return InventoryAppService(
+    selling = FakeProductRateHistoryRepository()
+    mrp = FakeProductRateHistoryRepository()
+    gst = FakeProductRateHistoryRepository()
+    rate_history = ProductRateHistoryService(selling, mrp, gst)
+
+    service = InventoryAppService(
         FakeProductCategoryRepository(),
         FakeInventoryProductRepository(),
         FakeStockMovementRepository(),
         FakeProductUnitRepository(),
+        rate_history=rate_history,
     )
+    service.find_or_create_unit("pcs", "Pieces")
+    return _ensure_test_product_defaults(service)
+
+
+def create_test_product(service, sku: str, name: str, category_ids, **kwargs):
+    """Create a product with default unit and valid pricing for tests."""
+    unit = service.find_or_create_unit(kwargs.pop("unit_code", "pcs"))
+    return service.create_product(
+        sku,
+        name,
+        category_ids,
+        unit_id=unit.id,
+        selling_rate=kwargs.pop("selling_rate", 100.0),
+        mrp=kwargs.pop("mrp", 200.0),
+        gst_rate=kwargs.pop("gst_rate", 5.0),
+        **kwargs,
+    )
+
+
+def _ensure_test_product_defaults(service):
+    """Back-compat for tests that omit unit/pricing on create_product."""
+    original_create = service.create_product
+
+    def create_product_with_defaults(*args, **kwargs):
+        if not kwargs.get("unit_id") and not kwargs.get("pending_unit_code"):
+            kwargs["unit_id"] = service.find_or_create_unit("pcs").id
+        if float(kwargs.get("selling_rate") or 0) <= 0:
+            kwargs.setdefault("selling_rate", 100.0)
+        if float(kwargs.get("mrp") or 0) <= 0:
+            kwargs.setdefault("mrp", 200.0)
+        if "gst_rate" not in kwargs:
+            kwargs["gst_rate"] = 5.0
+        return original_create(*args, **kwargs)
+
+    service.create_product = create_product_with_defaults
+    return service

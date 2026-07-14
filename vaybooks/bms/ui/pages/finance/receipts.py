@@ -44,6 +44,7 @@ def render(services: dict):
         primary_key="receipts_create_btn",
         count_label="receipts",
         empty_text="No receipts recorded yet.",
+        page_key_nav="receipts_list",
     )
     if bar["primary_clicked"]:
         clear_all_dialog_flags()

@@ -14,11 +14,6 @@ from vaybooks.bms.domain.inventory.field_definitions import (
     ProductFieldType,
 )
 from vaybooks.bms.domain.shared.enums import StockMovementType, StockReferenceType
-from vaybooks.bms.domain.shared.item_tax import (
-    ItemTaxProfile,
-    ProductGstSlab,
-    ProductMrpSlab,
-)
 
 
 def _enum_value(value):
@@ -70,6 +65,20 @@ class MongoProductUnitRepository:
         query = {"is_active": True} if active_only else {}
         return [self._from_doc(d) for d in self._collection.find(query).sort("code", 1)]
 
+    def search(
+        self, query: str, *, active_only: bool = True, limit: int = 25
+    ) -> List[ProductUnit]:
+        limit = max(1, min(int(limit or 25), 50))
+        filters: dict = {}
+        if active_only:
+            filters["is_active"] = True
+        text = (query or "").strip()
+        if text:
+            regex = {"$regex": text, "$options": "i"}
+            filters["$or"] = [{"code": regex}, {"label": regex}]
+        cursor = self._collection.find(filters).sort("code", 1).limit(limit)
+        return [self._from_doc(d) for d in cursor]
+
     def count_products_using(self, unit_id: str) -> int:
         return self._products.count_documents({"unit_id": unit_id})
 
@@ -110,6 +119,14 @@ class MongoProductCategoryRepository:
         doc = self._collection.find_one({"_id": category_id})
         return self._from_doc(doc) if doc else None
 
+    def find_by_ids(self, category_ids: List[str]) -> List[ProductCategory]:
+        ids = [cid for cid in category_ids if cid]
+        if not ids:
+            return []
+        docs = self._collection.find({"_id": {"$in": ids}})
+        by_id = {d["_id"]: self._from_doc(d) for d in docs}
+        return [by_id[cid] for cid in ids if cid in by_id]
+
     def find_by_name(self, name: str) -> Optional[ProductCategory]:
         doc = self._collection.find_one({"name": name.strip()})
         return self._from_doc(doc) if doc else None
@@ -125,6 +142,19 @@ class MongoProductCategoryRepository:
     def list_all(self, active_only: bool = True) -> List[ProductCategory]:
         query = {"is_active": True} if active_only else {}
         return [self._from_doc(d) for d in self._collection.find(query)]
+
+    def search(
+        self, query: str, *, active_only: bool = True, limit: int = 25
+    ) -> List[ProductCategory]:
+        limit = max(1, min(int(limit or 25), 50))
+        filters: dict = {}
+        if active_only:
+            filters["is_active"] = True
+        text = (query or "").strip()
+        if text:
+            filters["name"] = {"$regex": text, "$options": "i"}
+        cursor = self._collection.find(filters).sort("name", 1).limit(limit)
+        return [self._from_doc(d) for d in cursor]
 
     def list_children(self, parent_id: Optional[str]) -> List[ProductCategory]:
         return [
@@ -198,35 +228,6 @@ class MongoInventoryProductRepository:
     def __init__(self, db: Database):
         self._collection = db.inventory_products
 
-    def _migrate_tax_from_legacy(self, doc: dict) -> tuple[str, list, list]:
-        legacy = ItemTaxProfile.from_dict(doc.get("tax_profile"))
-        hsn = str(doc.get("hsn_sac") or legacy.hsn_sac or "")
-        gst_rates = [
-            ProductGstSlab.from_dict(row) for row in doc.get("gst_rates") or []
-        ]
-        mrp_entries = [
-            ProductMrpSlab.from_dict(row) for row in doc.get("mrp_entries") or []
-        ]
-        if not gst_rates and (legacy.gst_rate or legacy.hsn_sac):
-            gst_rates = [
-                InventoryProduct.default_gst_slab(
-                    gst_rate=legacy.gst_rate,
-                    effective_from=date.today(),
-                )
-            ]
-        if not mrp_entries and legacy.mrp:
-            mrp_entries = [
-                InventoryProduct.default_mrp_entry(
-                    mrp=legacy.mrp,
-                    effective_from=date.today(),
-                )
-            ]
-        if not gst_rates:
-            gst_rates = [InventoryProduct.default_gst_slab()]
-        if not mrp_entries:
-            mrp_entries = [InventoryProduct.default_mrp_entry()]
-        return hsn, gst_rates, mrp_entries
-
     def _migrate_categories(self, doc: dict) -> tuple[list[str], list[str]]:
         category_ids = list(doc.get("category_ids") or [])
         category_names = list(doc.get("category_names") or [])
@@ -239,7 +240,6 @@ class MongoInventoryProductRepository:
 
     def _to_doc(self, product: InventoryProduct) -> dict:
         product.sync_legacy_category_fields()
-        product._sync_tax_profile()
         return {
             "_id": product.id,
             "sku": product.sku,
@@ -250,11 +250,7 @@ class MongoInventoryProductRepository:
             "category_name": product.category_name,
             "unit_id": product.unit_id,
             "unit": product.unit,
-            "selling_rate": product.selling_rate,
             "hsn_sac": product.hsn_sac,
-            "gst_rates": [s.to_dict() for s in product.gst_rates],
-            "mrp_entries": [e.to_dict() for e in product.mrp_entries],
-            "tax_profile": product.tax_profile.to_dict(),
             "specifications": dict(product.specifications or {}),
             "custom_fields": dict(product.custom_fields or {}),
             "weighted_avg_cost": product.weighted_avg_cost,
@@ -267,7 +263,6 @@ class MongoInventoryProductRepository:
         }
 
     def _from_doc(self, doc: dict) -> InventoryProduct:
-        hsn_sac, gst_rates, mrp_entries = self._migrate_tax_from_legacy(doc)
         category_ids, category_names = self._migrate_categories(doc)
         product = InventoryProduct(
             id=doc["_id"],
@@ -277,10 +272,7 @@ class MongoInventoryProductRepository:
             category_names=category_names,
             unit_id=str(doc.get("unit_id") or ""),
             unit=doc.get("unit", "pcs"),
-            selling_rate=float(doc.get("selling_rate") or 0),
-            hsn_sac=hsn_sac,
-            gst_rates=gst_rates,
-            mrp_entries=mrp_entries,
+            hsn_sac=str(doc.get("hsn_sac") or ""),
             specifications=dict(doc.get("specifications") or {}),
             custom_fields=dict(doc.get("custom_fields") or {}),
             weighted_avg_cost=float(doc.get("weighted_avg_cost") or 0),
@@ -292,7 +284,6 @@ class MongoInventoryProductRepository:
             updated_at=doc.get("updated_at", datetime.utcnow()),
         )
         product.sync_legacy_category_fields()
-        product._sync_tax_profile()
         return product
 
     def save(self, product: InventoryProduct) -> InventoryProduct:
