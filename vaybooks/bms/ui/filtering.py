@@ -1,7 +1,7 @@
 """Filtering + sorting framework for list views.
 
 Policy:
-- ``exact`` string filters match on strict equality.
+- ``exact`` string filters match on full-string equality, case-insensitive.
 - ``regex`` string filters use case-insensitive ``re.search`` (invalid
   patterns match nothing).
 - Multiple filter fields are combined with AND.
@@ -51,6 +51,13 @@ def _as_date(value: Any) -> Optional[date]:
     if isinstance(value, date):
         return value
     return None
+
+
+def string_equals(left: Any, right: Any) -> bool:
+    """Case-insensitive, whitespace-trimmed full-string equality."""
+    return (
+        str(_norm(left)).strip().casefold() == str(_norm(right)).strip().casefold()
+    )
 
 
 @dataclass
@@ -137,7 +144,7 @@ def _default_match(fld: FilterField, record: Any, value: Any) -> bool:
     rec_value = _get(record, attr)
 
     if fld.type == EXACT:
-        return str(_norm(rec_value)).strip() == str(value).strip()
+        return string_equals(rec_value, value)
 
     if fld.type == REGEX:
         text = "" if rec_value is None else str(_norm(rec_value))

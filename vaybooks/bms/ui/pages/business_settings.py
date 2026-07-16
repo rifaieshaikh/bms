@@ -56,6 +56,15 @@ def render(services: dict):
         col_gstin, col_pan = st.columns(2)
         gstin = col_gstin.text_input("GSTIN", value=business.gstin)
         pan = col_pan.text_input("PAN", value=business.pan, placeholder="ABCDE1234F")
+        composition_tax_rate = st.number_input(
+            "Composition GST rate (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=float(getattr(business, "composition_tax_rate", 1.0) or 0),
+            step=0.1,
+            disabled=registration != VendorRegistrationType.COMPOSITION.value,
+            help="Applied to sales when Registration type is Composition.",
+        )
 
         if st.form_submit_button("Save business settings", type="primary"):
             try:
@@ -73,6 +82,7 @@ def render(services: dict):
                     gstin=gstin,
                     pan=pan,
                     registration_type=VendorRegistrationType(registration),
+                    composition_tax_rate=composition_tax_rate,
                 )
                 st.success("Business settings saved.")
                 st.rerun()

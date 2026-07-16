@@ -801,44 +801,29 @@ class AccountingDomainService:
                 ),
             ]
             gst_accounts = gst_output_accounts or {}
-            if cgst_total > 0 and gst_accounts.get("cgst"):
-                lines.append(
-                    VoucherLine(
-                        account_id=gst_accounts["cgst"]["id"],
-                        account_name=gst_accounts["cgst"]["name"],
-                        debit_amount=0,
-                        credit_amount=cgst_total,
-                        description="CGST output",
+            gst_totals = [
+                ("cgst", cgst_total, "CGST"),
+                ("sgst", sgst_total, "SGST"),
+                ("igst", igst_total, "IGST"),
+                ("utgst", utgst_total, "UTGST"),
+            ]
+            for key, total, label in gst_totals:
+                if total <= 0:
+                    continue
+                account = gst_accounts.get(key)
+                if not account:
+                    raise ValidationError(
+                        f'"{label} Output" account not found — it is required '
+                        f"to post ₹{total:,.2f} of {label}. Create the account "
+                        "or restart the app to seed it."
                     )
-                )
-            if sgst_total > 0 and gst_accounts.get("sgst"):
                 lines.append(
                     VoucherLine(
-                        account_id=gst_accounts["sgst"]["id"],
-                        account_name=gst_accounts["sgst"]["name"],
+                        account_id=account["id"],
+                        account_name=account["name"],
                         debit_amount=0,
-                        credit_amount=sgst_total,
-                        description="SGST output",
-                    )
-                )
-            if igst_total > 0 and gst_accounts.get("igst"):
-                lines.append(
-                    VoucherLine(
-                        account_id=gst_accounts["igst"]["id"],
-                        account_name=gst_accounts["igst"]["name"],
-                        debit_amount=0,
-                        credit_amount=igst_total,
-                        description="IGST output",
-                    )
-                )
-            if utgst_total > 0 and gst_accounts.get("utgst"):
-                lines.append(
-                    VoucherLine(
-                        account_id=gst_accounts["utgst"]["id"],
-                        account_name=gst_accounts["utgst"]["name"],
-                        debit_amount=0,
-                        credit_amount=utgst_total,
-                        description="UTGST output",
+                        credit_amount=total,
+                        description=f"{label} output",
                     )
                 )
         else:

@@ -2,6 +2,10 @@
 
 from vaybooks.bms.application.customer_app_service import CustomerAppService
 from vaybooks.bms.domain.customers.entities import Customer
+from vaybooks.bms.ui.components.customer_identity_selector import (
+    CustomerIdentitySelection,
+    resolve_customer_identity,
+)
 from tests.conftest import FakeAccountRepository, FakeCustomerRepository
 
 
@@ -48,5 +52,42 @@ def test_find_or_create_creates_customer_when_phone_new():
 
     assert resolved.customer_name == "New Buyer"
     assert resolved.phone_number == "9000000001"
+    assert len(customer_repo.list_all()) == 1
+    assert account_repo.find_customer_account(resolved.id) is not None
+
+
+def test_customer_identity_resolves_selected_existing_customer():
+    service, customer_repo, _ = _service()
+    existing = customer_repo.save(
+        Customer(id="c1", customer_name="Aysha", phone_number="9876543210")
+    )
+
+    resolved = resolve_customer_identity(
+        service,
+        CustomerIdentitySelection(
+            customer_id=existing.id,
+            customer_name=existing.customer_name,
+            phone_number=existing.phone_number,
+            customer=existing,
+        ),
+    )
+
+    assert resolved.id == existing.id
+    assert len(customer_repo.list_all()) == 1
+
+
+def test_customer_identity_creates_new_customer_and_account():
+    service, customer_repo, account_repo = _service()
+
+    resolved = resolve_customer_identity(
+        service,
+        CustomerIdentitySelection(
+            customer_id="",
+            customer_name="New Buyer",
+            phone_number="9000000001",
+        ),
+    )
+
+    assert resolved.customer_name == "New Buyer"
     assert len(customer_repo.list_all()) == 1
     assert account_repo.find_customer_account(resolved.id) is not None

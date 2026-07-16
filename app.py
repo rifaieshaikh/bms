@@ -23,13 +23,18 @@ from vaybooks.bms.ui.pages import mtd_dashboard, sales_detail, time_tracking
 from vaybooks.bms.ui.pages.sales import (
     delivery_note_detail as sales_delivery_note_detail_mod,
     delivery_notes as sales_delivery_notes_mod,
+    estimate_detail as sales_estimate_detail_mod,
+    estimates as sales_estimates_mod,
     invoices as sales_invoices_mod,
+    quotation_detail as sales_quotation_detail_mod,
+    quotations as sales_quotations_mod,
     returns as sales_returns_mod,
     sales_order_detail as sales_order_detail_mod,
     sales_orders as sales_orders_mod,
 )
 from vaybooks.bms.ui.pages.inventory import (
     categories as inventory_categories,
+    customer_prices as inventory_customer_prices,
     movements as inventory_movements,
     product_detail as inventory_product_detail,
     products as inventory_products,
@@ -51,6 +56,7 @@ from vaybooks.bms.ui.pages import (
     system_logs,
     system_updates,
     business_settings,
+    print_settings,
     keyboard_shortcuts,
 )
 from vaybooks.bms.ui.pages.migration import (
@@ -153,6 +159,14 @@ sales_orders_page = st.Page(
     _page(sales_orders_mod), title="Sales Orders", icon=":material/assignment:",
     url_path="sales-orders",
 )
+sales_estimates_page = st.Page(
+    _page(sales_estimates_mod), title="Estimates", icon=":material/request_quote:",
+    url_path="estimates",
+)
+sales_quotations_page = st.Page(
+    _page(sales_quotations_mod), title="Quotations", icon=":material/description:",
+    url_path="quotations",
+)
 sales_delivery_notes_page = st.Page(
     _page(sales_delivery_notes_mod), title="Delivery Notes", icon=":material/local_shipping:",
     url_path="delivery-notes",
@@ -235,6 +249,10 @@ inventory_movements_page = st.Page(
     _page(inventory_movements), title="Movements", icon=":material/swap_horiz:",
     url_path="inventory-movements",
 )
+inventory_customer_prices_page = st.Page(
+    _page(inventory_customer_prices), title="Customer Prices",
+    icon=":material/sell:", url_path="inventory-customer-prices",
+)
 purchase_order_detail_page = st.Page(
     _page(purchase_order_detail_mod), title="PO Detail", url_path="purchase-order-detail",
 )
@@ -252,6 +270,10 @@ system_settings_page = st.Page(
 business_settings_page = st.Page(
     _page(business_settings), title="Business", icon=":material/store:",
     url_path="business-settings",
+)
+print_settings_page = st.Page(
+    _page(print_settings), title="Print Settings", icon=":material/print:",
+    url_path="print-settings",
 )
 keyboard_shortcuts_page = st.Page(
     _page(keyboard_shortcuts), title="Keyboard Shortcuts",
@@ -288,6 +310,14 @@ sales_detail_page = st.Page(
 sales_order_detail_page = st.Page(
     _page(sales_order_detail_mod), title="SO Detail", url_path="sales-order-detail",
 )
+sales_estimate_detail_page = st.Page(
+    _page(sales_estimate_detail_mod), title="Estimate Detail",
+    url_path="estimate-detail",
+)
+sales_quotation_detail_page = st.Page(
+    _page(sales_quotation_detail_mod), title="Quotation Detail",
+    url_path="quotation-detail",
+)
 sales_delivery_note_detail_page = st.Page(
     _page(sales_delivery_note_detail_mod), title="DN Detail", url_path="delivery-note-detail",
 )
@@ -318,6 +348,10 @@ navigation.register("trial_balance_list", trial_balance_page)
 navigation.register("mtd_dashboard", mtd_page)
 navigation.register("sales_orders_list", sales_orders_page)
 navigation.register("sales_order_detail", sales_order_detail_page)
+navigation.register("estimates_list", sales_estimates_page)
+navigation.register("estimate_detail", sales_estimate_detail_page)
+navigation.register("quotations_list", sales_quotations_page)
+navigation.register("quotation_detail", sales_quotation_detail_page)
 navigation.register("delivery_notes_list", sales_delivery_notes_page)
 navigation.register("delivery_note_detail", sales_delivery_note_detail_page)
 navigation.register("sales_invoices_list", sales_invoices_page)
@@ -339,9 +373,11 @@ navigation.register("inventory_products_list", inventory_products_page)
 navigation.register("inventory_stock_list", inventory_stock_page)
 navigation.register("inventory_stock_ledger_list", inventory_stock_ledger_page)
 navigation.register("inventory_movements_list", inventory_movements_page)
+navigation.register("inventory_customer_prices_list", inventory_customer_prices_page)
 navigation.register("inventory_product_detail", inventory_product_detail_page)
 navigation.register("export_backup", export_page)
 navigation.register("business_settings", business_settings_page)
+navigation.register("print_settings", print_settings_page)
 navigation.register("keyboard_shortcuts", keyboard_shortcuts_page)
 navigation.register("system_settings", system_settings_page)
 navigation.register("system_updates", system_updates_page)
@@ -364,6 +400,8 @@ page_groups = {
         time_page,
     ],
     "Sales": [
+        sales_estimates_page,
+        sales_quotations_page,
         sales_orders_page,
         sales_delivery_notes_page,
         sales_invoices_page,
@@ -381,6 +419,7 @@ page_groups = {
         inventory_stock_page,
         inventory_stock_ledger_page,
         inventory_movements_page,
+        inventory_customer_prices_page,
     ],
     "Finance": [
         accounts_page,
@@ -401,6 +440,7 @@ page_groups = {
     ],
     "Settings": [
         business_settings_page,
+        print_settings_page,
         keyboard_shortcuts_page,
         activities_page,
         services_page,
@@ -422,6 +462,8 @@ hidden_pages = [
     account_detail_page,
     sales_detail_page,
     sales_order_detail_page,
+    sales_estimate_detail_page,
+    sales_quotation_detail_page,
     sales_delivery_note_detail_page,
     inventory_product_detail_page,
     purchase_order_detail_page,

@@ -8,6 +8,7 @@ from vaybooks.bms.domain.accounting.services import (
     AccountingDomainService,
 )
 from vaybooks.bms.domain.shared.enums import AccountType, VoucherType
+from vaybooks.bms.domain.sales.invoice_lock import assert_invoice_editable
 from vaybooks.bms.domain.shared.india import (
     CGST_INPUT_ACCOUNT_NAME,
     CGST_OUTPUT_ACCOUNT_NAME,
@@ -882,14 +883,18 @@ class AccountingAppService:
         store_invoice_number: str,
         line_items_note: str = "",
         voucher_date: Optional[date] = None,
+        sales_lines: Optional[list[dict]] = None,
+        allow_erp_linked: bool = False,
     ) -> Voucher:
         old = self._voucher_repo.find_by_id(voucher_id)
         if not old or old.voucher_type != VoucherType.SALES_INVOICE:
             raise ValueError("Sales invoice not found")
+        assert_invoice_editable(old.voucher_date)
         if old.reference_order_id or old.reference_invoice_id:
             raise ValueError("Order-linked sales invoices cannot be edited here")
-        if old.reference_so_id or old.reference_dn_id:
+        if (old.reference_so_id or old.reference_dn_id) and not allow_erp_linked:
             raise ValueError("ERP-linked sales invoices cannot be edited here")
+        assert_invoice_editable(voucher_date or old.voucher_date)
         customer = self._account_repo.find_by_id(customer_account_id)
         store = self._account_repo.find_by_id(store_account_id)
         sales = self.get_sales_account()
@@ -900,7 +905,9 @@ class AccountingAppService:
         if not sales:
             raise ValueError('No "Sales" revenue account found')
         discount_account = (
-            self.get_discount_account() if discount_amount > 0 else None
+            self.get_discount_account()
+            if discount_amount > 0 and not sales_lines
+            else None
         )
         number = (store_invoice_number or "").strip()
         if not number:
@@ -924,6 +931,12 @@ class AccountingAppService:
             amount_received=amount_received,
             discount_account_id=discount_account.id if discount_account else None,
             discount_account_name=discount_account.account_name if discount_account else None,
+            reference_so_id=old.reference_so_id,
+            reference_dn_id=old.reference_dn_id,
+            sales_lines=sales_lines,
+            gst_output_accounts=(
+                self.get_gst_output_accounts() if sales_lines else None
+            ),
         )
         voucher.id = old.id
         return self._domain.update_voucher(voucher)
@@ -1148,6 +1161,9 @@ class AccountingAppService:
         return None
 
     def void_voucher(self, voucher_id: str) -> None:
+        voucher = self._voucher_repo.find_by_id(voucher_id)
+        if voucher and voucher.voucher_type == VoucherType.SALES_INVOICE:
+            assert_invoice_editable(voucher.voucher_date)
         self._domain.reverse_and_delete_voucher(voucher_id)
 
     def create_journal_entry(

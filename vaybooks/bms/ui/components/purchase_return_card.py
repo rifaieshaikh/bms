@@ -34,4 +34,4 @@ def _return_card(row: dict, suffix: str) -> None:
 
 
 def purchase_return_cards(rows: list[dict], suffix: str = "returns") -> None:
-    render_card_grid(rows, lambda row: _return_card(row, suffix))
+    render_card_grid(rows, lambda row, _idx: _return_card(row, suffix), suffix=suffix)

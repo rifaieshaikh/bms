@@ -160,6 +160,7 @@ def serialize_sales_line_items(
     line_items: list[dict],
     invoice_discount: float = 0.0,
     tax_summary: dict | None = None,
+    document_content: dict | None = None,
 ) -> str:
     payload: dict = {
         "items": line_items,
@@ -167,6 +168,8 @@ def serialize_sales_line_items(
     }
     if tax_summary:
         payload["tax_summary"] = tax_summary
+    if document_content:
+        payload["document_content"] = document_content
     return json.dumps(payload, ensure_ascii=False)
 
 
@@ -187,3 +190,14 @@ def parse_sales_line_items_note(
         return items, round(invoice_discount, 2), tax_summary
     except (json.JSONDecodeError, TypeError, ValueError):
         return [], 0.0, None
+
+
+def parse_sales_document_content(description: str) -> dict:
+    if not description or "\n" not in description:
+        return {}
+    try:
+        data = json.loads(description.split("\n", 1)[1].strip())
+        content = data.get("document_content")
+        return content if isinstance(content, dict) else {}
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return {}

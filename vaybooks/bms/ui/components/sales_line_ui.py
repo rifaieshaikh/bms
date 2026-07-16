@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from vaybooks.bms.domain.shared.india import compute_sales_gst
 from vaybooks.bms.domain.shared.item_tax import ItemTaxProfile
+from vaybooks.bms.domain.sales.sales_line_resolver import effective_sales_gst_rate
 
 
 def line_tax_profile(item) -> ItemTaxProfile:
@@ -21,15 +22,21 @@ def preview_sales_line_gst(
     tax_profile: ItemTaxProfile,
     *,
     business_registered: bool,
+    business=None,
     business_state_code: str = "",
     customer_state_code: str = "",
 ) -> dict:
     line_gross = round(float(qty or 0) * float(rate or 0), 2)
     discount = round(min(max(float(line_discount or 0), 0.0), line_gross), 2)
     taxable = round(max(line_gross - discount, 0.0), 2)
+    gst_rate = (
+        effective_sales_gst_rate(business, tax_profile.gst_rate)
+        if business is not None
+        else (tax_profile.gst_rate if business_registered else 0.0)
+    )
     gst = compute_sales_gst(
         taxable,
-        tax_profile.gst_rate,
+        gst_rate,
         business_registered=business_registered,
         business_state_code=business_state_code,
         customer_state_code=customer_state_code,
@@ -42,7 +49,7 @@ def preview_sales_line_gst(
         "igst_amount": gst.igst_amount,
         "utgst_amount": gst.utgst_amount,
         "line_total": gst.line_total,
-        "gst_rate": tax_profile.gst_rate,
+        "gst_rate": gst_rate,
     }
 
 

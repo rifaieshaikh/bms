@@ -136,6 +136,9 @@ class FakeVoucherRepository:
     def list_all(self) -> List[Voucher]:
         return list(self._store.values())
 
+    def delete(self, voucher_id: str) -> None:
+        self._store.pop(voucher_id, None)
+
 
 class FakeOrderRepository:
     def __init__(self):
@@ -378,6 +381,8 @@ class FakeCounterRepository:
             "so_number": 0,
             "dn_number": 0,
             "sales_return_number": 0,
+            "estimate_number": 0,
+            "quotation_number": 0,
         }
         self._prefixes = {
             "order_number": "CO",
@@ -389,6 +394,8 @@ class FakeCounterRepository:
             "so_number": "SO",
             "dn_number": "DN",
             "sales_return_number": "SR",
+            "estimate_number": "EST",
+            "quotation_number": "QT",
         }
 
     def next(self, counter_name: str) -> str:

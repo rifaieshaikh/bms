@@ -21,6 +21,56 @@ def _match_sales_customer(row, value):
     return False
 
 
+ESTIMATES = ListSchema(
+    entity_key="estimates",
+    title="Estimates",
+    filter_fields=[
+        FilterField("estimate_number", "Estimate number", F.EXACT),
+        FilterField("customer_name", "Customer", F.EXACT),
+        FilterField("estimate_date", "Estimate date", F.DATE_RANGE),
+        FilterField("status", "Status", F.EXACT),
+        FilterField(
+            "customer_id",
+            "Customer",
+            F.ENTITY_SELECT,
+            options_loader="customers",
+            match=_match_customer,
+        ),
+    ],
+    sort_options=[
+        SortOption("estimate_date", "Date (newest)"),
+        SortOption("estimate_number", "Estimate number"),
+        SortOption("status", "Status"),
+    ],
+    default_sort="estimate_date",
+    page_size=VOUCHER_PAGE_SIZE,
+)
+
+QUOTATIONS = ListSchema(
+    entity_key="quotations",
+    title="Quotations",
+    filter_fields=[
+        FilterField("quotation_number", "Quotation number", F.EXACT),
+        FilterField("customer_name", "Customer", F.EXACT),
+        FilterField("quotation_date", "Quotation date", F.DATE_RANGE),
+        FilterField("status", "Status", F.EXACT),
+        FilterField(
+            "customer_id",
+            "Customer",
+            F.ENTITY_SELECT,
+            options_loader="customers",
+            match=_match_customer,
+        ),
+    ],
+    sort_options=[
+        SortOption("quotation_date", "Date (newest)"),
+        SortOption("quotation_number", "Quotation number"),
+        SortOption("status", "Status"),
+    ],
+    default_sort="quotation_date",
+    page_size=VOUCHER_PAGE_SIZE,
+)
+
 SALES_ORDERS = ListSchema(
     entity_key="sales_orders",
     title="Sales Orders",

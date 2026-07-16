@@ -48,6 +48,13 @@ DIALOG_FLAG_PREFIXES = (
     "inv_category_edit_dialog",
     "inv_product_add_dialog",
     "inv_product_edit_dialog",
+    "estimate_document_dialog",
+    "quotation_document_dialog",
+    "so_edit_dialog",
+    "so_invoice_dialog",
+    "dn_edit_dialog",
+    "dn_invoice_dialog",
+    "invoice_edit_dialog",
 )
 
 _ARMED_FLAGS = "_armed_dialog_flags"

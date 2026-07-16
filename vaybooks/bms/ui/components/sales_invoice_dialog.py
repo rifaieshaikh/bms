@@ -7,8 +7,12 @@ from datetime import date
 import streamlit as st
 
 from vaybooks.bms.domain.sales.sales_line_resolver import business_is_registered
+from vaybooks.bms.domain.shared.enums import PartyRegistrationType
+from vaybooks.bms.ui.components.customer_identity_selector import (
+    render_customer_identity_selector,
+    resolve_customer_identity,
+)
 from vaybooks.bms.ui.components.sales_invoice_form import (
-    default_line_item,
     line_items_discount,
     line_items_gross,
 )
@@ -18,13 +22,10 @@ from vaybooks.bms.ui.components.sales_line_ui import (
     preview_sales_line_gst,
     tax_summary_from_previews,
 )
+from vaybooks.bms.ui.components.sales_lines_editor import render_sales_lines_editor
 from vaybooks.bms.ui.dialog_utils import make_dismiss_handler
 
 SALES_RECORD_DIALOG = "sales_record_dialog"
-_LINES_KEY = f"{SALES_RECORD_DIALOG}_line_items"
-_MOBILE_KEY = f"{SALES_RECORD_DIALOG}_cust_mobile"
-_NAME_KEY = f"{SALES_RECORD_DIALOG}_cust_name"
-_MATCHED_KEY = f"{SALES_RECORD_DIALOG}_matched_id"
 
 
 def _index_of(options: dict, target_id, default: int = 0) -> int:
@@ -33,6 +34,9 @@ def _index_of(options: dict, target_id, default: int = 0) -> int:
 
 
 def arm_sales_record_dialog() -> None:
+    for key in list(st.session_state.keys()):
+        if key.startswith(SALES_RECORD_DIALOG):
+            st.session_state.pop(key, None)
     st.session_state[SALES_RECORD_DIALOG] = "new"
 
 
@@ -41,7 +45,6 @@ def _clear_dialog_session() -> None:
         if key.startswith(SALES_RECORD_DIALOG):
             st.session_state.pop(key, None)
     st.session_state.pop(SALES_RECORD_DIALOG, None)
-    st.session_state.pop(_LINES_KEY, None)
 
 
 @st.dialog(
@@ -79,35 +82,21 @@ def sales_record_dialog(services: dict) -> None:
             st.rerun()
         return
 
-    if _LINES_KEY not in st.session_state:
-        st.session_state[_LINES_KEY] = [default_line_item()]
-
-    def _on_mobile_change() -> None:
-        mobile = (st.session_state.get(_MOBILE_KEY) or "").strip()
-        if not mobile:
-            st.session_state.pop(_MATCHED_KEY, None)
-            return
-        customer = customer_service.lookup_customer_by_phone(mobile)
-        if customer:
-            st.session_state[_NAME_KEY] = customer.customer_name
-            st.session_state[_MATCHED_KEY] = customer.id
-        else:
-            st.session_state.pop(_MATCHED_KEY, None)
-
-    customer_mobile = st.text_input(
-        "Mobile",
-        key=_MOBILE_KEY,
-        on_change=_on_mobile_change,
+    customer_selection = render_customer_identity_selector(
+        customer_service,
+        key_prefix=SALES_RECORD_DIALOG,
     )
-    matched_id = st.session_state.get(_MATCHED_KEY)
-    matched_customer = None
-    if matched_id:
-        matched_customer = customer_service.get_customer_detail(matched_id)
-        if matched_customer:
-            st.caption(f"Existing customer: **{matched_customer.customer_name}**")
-
-    customer_name = st.text_input("Customer name", key=_NAME_KEY)
+    matched_customer = customer_selection.customer
     customer_state = matched_customer.state_code if matched_customer else ""
+    customer_registered = bool(
+        matched_customer
+        and (
+            matched_customer.registration_type == PartyRegistrationType.REGISTERED
+            or (matched_customer.gstin or "").strip()
+        )
+    )
+    if not customer_registered and not customer_state:
+        customer_state = business_state
 
     store_opts = {a.account_name: a.id for a in store_accounts}
     store_names = list(store_opts.keys())
@@ -130,120 +119,66 @@ def sales_record_dialog(services: dict) -> None:
         key=f"{SALES_RECORD_DIALOG}_store",
     )
 
+    products = inventory_service.list_products(active_only=True) if inventory_service else []
+    if not products:
+        st.error("Add inventory products first.")
+        return
+
     st.markdown("**Line items**")
-    line_items: list[dict] = list(st.session_state.get(_LINES_KEY, [default_line_item()]))
-    product_options: dict[str, str | None] = {"— Manual —": None}
-    if inventory_service:
-        for product in inventory_service.list_products(active_only=True):
-            product_options[f"{product.sku} — {product.name}"] = product.id
+    editor_lines, gst_errors = render_sales_lines_editor(
+        key_prefix=SALES_RECORD_DIALOG,
+        products=products,
+        initial_lines=None,
+        customer_id=matched_customer.id if matched_customer else None,
+        use_customer_pricing=True,
+        show_discount=True,
+        sales_service=services.get("sales"),
+        inventory_service=inventory_service,
+        business_registered=business_registered,
+        business=business,
+        business_state_code=business_state,
+        customer_state_code=customer_state or "",
+        qty_field="qty",
+    )
 
-    def _product_index(target_id) -> int:
-        ids = list(product_options.values())
-        return ids.index(target_id) if target_id in ids else 0
+    line_items = [
+        {
+            "description": row.get("product_name") or "",
+            "qty": float(row.get("qty") or 0),
+            "rate": float(row.get("rate") or 0),
+            "discount": float(row.get("discount") or 0),
+            "product_id": row.get("product_id"),
+        }
+        for row in editor_lines
+    ]
 
-    remove_idx = None
     gst_previews: list[dict] = []
-    for idx, row in enumerate(line_items):
-        with st.container(border=True):
-            prod_labels = list(product_options.keys())
-            product_label = st.selectbox(
-                "Product",
-                prod_labels,
-                index=_product_index(row.get("product_id")),
-                key=f"{SALES_RECORD_DIALOG}_line_product_{idx}",
-            )
-            product_id = product_options[product_label]
-            head = st.columns([4, 1, 1, 1, 1])
-            desc = head[0].text_input(
-                "Description",
-                value=row.get("description", ""),
-                key=f"{SALES_RECORD_DIALOG}_line_desc_{idx}",
-            )
-            qty = head[1].number_input(
-                "Qty",
-                min_value=0.0,
-                value=float(row.get("qty") or 1.0),
-                key=f"{SALES_RECORD_DIALOG}_line_qty_{idx}",
-            )
-            rate = head[2].number_input(
-                "Rate (ex-GST)",
-                min_value=0.0,
-                value=float(row.get("rate") or 0.0),
-                key=f"{SALES_RECORD_DIALOG}_line_rate_{idx}",
-            )
-            line_disc = head[3].number_input(
-                "Disc (₹)",
-                min_value=0.0,
-                value=float(row.get("discount") or 0.0),
-                key=f"{SALES_RECORD_DIALOG}_line_disc_{idx}",
-            )
-            if head[4].button("Remove", key=f"{SALES_RECORD_DIALOG}_line_rm_{idx}"):
-                remove_idx = idx
-            product = None
-            if product_id and inventory_service:
-                product = inventory_service.get_product(product_id)
-                if product:
-                    if not (desc or "").strip():
-                        desc = product.name
-                    if float(rate or 0) == 0.0:
-                        rate = float(product.selling_rate or 0)
-            line_gross = round(qty * rate, 2)
-            line_disc = round(min(max(line_disc, 0.0), line_gross), 2)
-            tax_profile = line_tax_profile(product)
-            preview = preview_sales_line_gst(
-                qty,
-                rate,
-                line_disc,
-                tax_profile,
+    for row in line_items:
+        product = (
+            inventory_service.get_product(row["product_id"])
+            if inventory_service and row.get("product_id")
+            else None
+        )
+        gst_previews.append(
+            preview_sales_line_gst(
+                float(row["qty"] or 0),
+                float(row["rate"] or 0),
+                float(row["discount"] or 0),
+                line_tax_profile(product),
                 business_registered=business_registered,
+                business=business,
                 business_state_code=business_state,
-                customer_state_code=customer_state,
+                customer_state_code=customer_state or "",
             )
-            gst_previews.append(preview)
-            if show_gst and preview["line_total"] > 0:
-                gst_bits = []
-                if preview["cgst_amount"]:
-                    gst_bits.append(f"CGST ₹{preview['cgst_amount']:,.2f}")
-                if preview["sgst_amount"]:
-                    gst_bits.append(f"SGST ₹{preview['sgst_amount']:,.2f}")
-                if preview["utgst_amount"]:
-                    gst_bits.append(f"UTGST ₹{preview['utgst_amount']:,.2f}")
-                if preview["igst_amount"]:
-                    gst_bits.append(f"IGST ₹{preview['igst_amount']:,.2f}")
-                hsn = preview.get("hsn_sac") or ""
-                hsn_bit = f"HSN {hsn} · " if hsn else ""
-                st.caption(
-                    f"{hsn_bit}Taxable ₹{preview['taxable_amount']:,.2f}"
-                    + (f" · {' · '.join(gst_bits)}" if gst_bits else "")
-                    + f" · Line total ₹{preview['line_total']:,.2f}"
-                )
-            elif preview["line_total"] > 0:
-                st.caption(f"Line total ₹{preview['line_total']:,.2f}")
-
-            line_items[idx] = {
-                "description": desc,
-                "qty": qty,
-                "rate": rate,
-                "discount": line_disc,
-                "product_id": product_id,
-            }
-
-    if remove_idx is not None and len(line_items) > 1:
-        line_items.pop(remove_idx)
-        st.session_state[_LINES_KEY] = line_items
-        st.rerun()
-    st.session_state[_LINES_KEY] = line_items
-
-    if st.button("+ Add line", key=f"{SALES_RECORD_DIALOG}_add_line"):
-        line_items.append(default_line_item())
-        st.session_state[_LINES_KEY] = line_items
-        st.rerun()
+        )
 
     gross = line_items_gross(line_items)
     line_discount_total = line_items_discount(line_items)
     taxable_sub = round(sum(p.get("taxable_amount", 0) for p in gst_previews), 2)
     tax_summary = tax_summary_from_previews(gst_previews) if gst_previews else {}
-    grand_before_inv_disc = tax_summary.get("grand_total", line_items_total(line_items, gst_previews))
+    grand_before_inv_disc = tax_summary.get(
+        "grand_total", line_items_total(line_items, gst_previews)
+    )
 
     inv_disc_cols = st.columns(2)
     invoice_discount = inv_disc_cols[0].number_input(
@@ -265,7 +200,7 @@ def sales_record_dialog(services: dict) -> None:
             adjusted_tax = round(tax_summary.get("total_tax", 0) * factor, 2)
             net_due = round(taxable_sub - invoice_discount + adjusted_tax, 2)
         else:
-            net_due = round(grand_before_inv_disc - invoice_discount, 2)
+            net_due = round(adjusted_grand - invoice_discount, 2)
     else:
         net_due = round(max(grand_before_inv_disc - invoice_discount, 0.0), 2)
 
@@ -305,17 +240,19 @@ def sales_record_dialog(services: dict) -> None:
     cols = st.columns(2)
     if cols[0].button("Save", type="primary", use_container_width=True):
         try:
+            if gst_errors:
+                raise ValueError(gst_errors[0])
+            if not line_items:
+                raise ValueError("Add at least one product line")
             if net_due <= 0:
                 raise ValueError("Invoice net amount must be positive")
             if received < 0:
                 raise ValueError("Amount received cannot be negative")
             if total_discount > 0 and not show_gst and not discount_account:
                 raise ValueError('A "Discount Allowed" account is required for discounts')
-            if not (customer_name or "").strip() or not (customer_mobile or "").strip():
-                raise ValueError("Customer name and mobile are required")
-            customer = customer_service.find_or_create_customer(
-                customer_name.strip(),
-                customer_mobile.strip(),
+            customer = resolve_customer_identity(
+                customer_service,
+                customer_selection,
             )
             customer_account = accounting_service.get_customer_account(customer.id)
             if not customer_account:

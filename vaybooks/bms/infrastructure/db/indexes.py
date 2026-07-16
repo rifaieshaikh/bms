@@ -141,10 +141,25 @@ def ensure_indexes(db):
     _create_index(db.sales_returns, "customer_id")
     _create_index(db.sales_returns, "return_date")
 
+    _create_index(db.estimates, "estimate_number", unique=True)
+    _create_index(db.estimates, "customer_id")
+    _create_index(db.estimates, "estimate_date")
+    _create_index(db.estimates, "status")
+
+    _create_index(db.quotations, "quotation_number", unique=True)
+    _create_index(db.quotations, "customer_id")
+    _create_index(db.quotations, "quotation_date")
+    _create_index(db.quotations, "status")
+
     _create_index(
         db.purchase_price_history,
         [("item_id", 1), ("item_type", 1), ("vendor_id", 1), ("purchase_date", -1)],
     )
+    _create_index(
+        db.customer_prices,
+        [("customer_id", 1), ("product_id", 1), ("effective_date", -1)],
+    )
+    _create_index(db.customer_prices, "voucher_id")
     _create_index(db.product_selling_rate_history, [("product_id", 1), ("start_date", -1)])
     _create_index(db.product_mrp_history, [("product_id", 1), ("start_date", -1)])
     _create_index(db.product_gst_rate_history, [("product_id", 1), ("start_date", -1)])

@@ -50,6 +50,9 @@ from vaybooks.bms.infrastructure.repositories.mongo_product_rate_history_reposit
 from vaybooks.bms.infrastructure.repositories.mongo_purchase_price_history_repository import (
     MongoPurchasePriceHistoryRepository,
 )
+from vaybooks.bms.infrastructure.repositories.mongo_customer_price_repository import (
+    MongoCustomerPriceRepository,
+)
 from vaybooks.bms.infrastructure.repositories.mongo_accounting_repository import (
     MongoAccountRepository,
     MongoVoucherRepository,
@@ -89,6 +92,8 @@ from vaybooks.bms.infrastructure.repositories.mongo_purchase_repository import (
 )
 from vaybooks.bms.infrastructure.repositories.mongo_sales_repository import (
     MongoDeliveryNoteRepository,
+    MongoEstimateRepository,
+    MongoQuotationRepository,
     MongoSalesOrderRepository,
     MongoSalesReturnRepository,
 )
@@ -162,8 +167,11 @@ def get_services():
     so_repo = MongoSalesOrderRepository(db)
     dn_repo = MongoDeliveryNoteRepository(db)
     sales_return_repo = MongoSalesReturnRepository(db)
+    estimate_repo = MongoEstimateRepository(db)
+    quotation_repo = MongoQuotationRepository(db)
     business_profile_repo = MongoBusinessProfileRepository(db)
     price_history_repo = MongoPurchasePriceHistoryRepository(db)
+    customer_price_repo = MongoCustomerPriceRepository(db)
     selling_rate_history_repo = MongoProductRateHistoryRepository(
         db, "product_selling_rate_history"
     )
@@ -228,6 +236,9 @@ def get_services():
         inventory_service,
         customer_service=customer_service,
         business_service=business_service,
+        estimate_repo=estimate_repo,
+        quotation_repo=quotation_repo,
+        customer_price_repo=customer_price_repo,
     )
     report_facade = ReportAppService(
         report_repo,

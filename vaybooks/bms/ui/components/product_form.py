@@ -9,7 +9,7 @@ import streamlit as st
 
 from vaybooks.bms.domain.business.entities import BusinessProfile
 from vaybooks.bms.domain.inventory.entities import InventoryProduct
-from vaybooks.bms.domain.sales.sales_line_resolver import business_is_registered
+from vaybooks.bms.domain.shared.enums import PartyRegistrationType
 from vaybooks.bms.ui.components.category_picker import render_category_picker
 from vaybooks.bms.ui.components.custom_fields_renderer import render_custom_fields
 from vaybooks.bms.ui.components.unit_picker import render_unit_picker
@@ -44,7 +44,10 @@ def render_product_form(
     spec_key = f"{key_prefix}_spec_rows"
     _init_spec_rows(spec_key, dict(existing.specifications) if existing else {})
 
-    registered = business_is_registered(business)
+    registered = bool(
+        business
+        and business.registration_type == PartyRegistrationType.REGISTERED
+    )
 
     st.markdown("**Basic**")
     cols = st.columns(2)

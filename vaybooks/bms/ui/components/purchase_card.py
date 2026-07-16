@@ -45,4 +45,4 @@ def _purchase_card(row: dict, suffix: str) -> None:
 
 
 def purchase_cards(rows: list[dict], suffix: str = "purchases") -> None:
-    render_card_grid(rows, lambda row: _purchase_card(row, suffix))
+    render_card_grid(rows, lambda row, _idx: _purchase_card(row, suffix), suffix=suffix)

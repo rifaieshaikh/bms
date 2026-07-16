@@ -14,9 +14,20 @@ from vaybooks.bms.domain.shared.item_tax import ItemTaxProfile
 def business_is_registered(business: Optional[BusinessProfile]) -> bool:
     if not business:
         return False
-    if business.registration_type == PartyRegistrationType.REGISTERED:
-        return True
-    return bool((business.gstin or "").strip())
+    return business.registration_type in {
+        PartyRegistrationType.REGISTERED,
+        PartyRegistrationType.COMPOSITION,
+    }
+
+
+def effective_sales_gst_rate(
+    business: Optional[BusinessProfile], product_gst_rate: float
+) -> float:
+    if not business or business.registration_type == PartyRegistrationType.UNREGISTERED:
+        return 0.0
+    if business.registration_type == PartyRegistrationType.COMPOSITION:
+        return round(float(getattr(business, "composition_tax_rate", 1.0) or 0), 2)
+    return round(float(product_gst_rate or 0), 2)
 
 
 class SalesLineResolver:
@@ -33,6 +44,15 @@ class SalesLineResolver:
         business_registered = business_is_registered(business)
         business_state = business.state_code if business else ""
         customer_state = customer.state_code if customer else ""
+        customer_registered = bool(
+            customer
+            and (
+                customer.registration_type == PartyRegistrationType.REGISTERED
+                or (customer.gstin or "").strip()
+            )
+        )
+        if not customer_registered and not customer_state:
+            customer_state = business_state
         resolved: List[SalesInvoiceLine] = []
 
         for raw in raw_lines:
@@ -50,7 +70,7 @@ class SalesLineResolver:
                 taxable = round(max(line_gross - line_discount, 0.0), 2)
                 gst = compute_sales_gst(
                     taxable,
-                    0.0,
+                    effective_sales_gst_rate(business, 0.0),
                     business_registered=business_registered,
                     business_state_code=business_state,
                     customer_state_code=customer_state,
@@ -61,6 +81,7 @@ class SalesLineResolver:
                         tax_profile=ItemTaxProfile(),
                         gst=gst,
                         item_name=desc,
+                        gst_rate=effective_sales_gst_rate(business, 0.0),
                     )
                 )
                 continue
@@ -69,6 +90,7 @@ class SalesLineResolver:
             if not product:
                 raise ValidationError("Product not found")
             tax_profile = product.active_tax_profile()
+            gst_rate = effective_sales_gst_rate(business, tax_profile.gst_rate)
             if rate == 0:
                 rate = float(getattr(product, "selling_rate", 0) or 0)
             line_gross = round(qty * rate, 2)
@@ -76,7 +98,7 @@ class SalesLineResolver:
             taxable = round(max(line_gross - line_discount, 0.0), 2)
             gst = compute_sales_gst(
                 taxable,
-                tax_profile.gst_rate,
+                gst_rate,
                 business_registered=business_registered,
                 business_state_code=business_state,
                 customer_state_code=customer_state,
@@ -87,7 +109,7 @@ class SalesLineResolver:
                     tax_profile=tax_profile,
                     gst=gst,
                     item_name=product.name,
-                    gst_rate=tax_profile.gst_rate,
+                    gst_rate=gst_rate,
                 )
             )
 

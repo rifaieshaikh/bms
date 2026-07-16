@@ -6,18 +6,26 @@ import streamlit as st
 
 from vaybooks.bms.domain.sales.sales_line_resolver import business_is_registered
 from vaybooks.bms.domain.shared.enums import DeliveryNoteStatus
+from vaybooks.bms.infrastructure.pdf.sales_doc_pdf import generate_sales_document_pdf
 from vaybooks.bms.ui import navigation
+from vaybooks.bms.ui.components.delivery_note_edit_dialog import (
+    arm_dn_edit_dialog,
+    arm_dn_invoice_dialog,
+    open_dn_detail_dialogs_if_armed,
+)
+from vaybooks.bms.ui.components.document_detail import (
+    document_actions,
+    document_header,
+    format_document_date,
+    line_items_table,
+    secondary_sections,
+    totals_ladder,
+)
 from vaybooks.bms.ui.components.sales_line_ui import (
     line_tax_profile,
     preview_sales_line_gst,
     tax_summary_from_previews,
 )
-
-INVOICE_FROM_DN_KEY = "invoice_from_dn_dialog"
-
-
-def arm_invoice_from_dn(dn_id: str) -> None:
-    st.session_state[INVOICE_FROM_DN_KEY] = dn_id
 
 
 def render(services: dict) -> None:
@@ -33,7 +41,6 @@ def render(services: dict) -> None:
         return
 
     sales = services["sales"]
-    accounting = services["accounting"]
     inventory = services.get("inventory")
     business_service = services.get("business")
     dn = sales.get_delivery_note(dn_id)
@@ -45,121 +52,152 @@ def render(services: dict) -> None:
         navigation.go_back_to_list("delivery_notes", "delivery_notes_list")
         return
 
-    st.title(dn.dn_number)
-    st.caption(f"Customer: {dn.customer_name}")
-    if dn.so_number:
-        st.caption(f"SO: {dn.so_number}")
-    st.caption(f"Status: {dn.status.value}")
-    st.caption(f"Delivery date: {dn.delivery_date}")
-
     business = business_service.get_profile() if business_service else None
     business_registered = business_is_registered(business)
     business_state = business.state_code if business else ""
-    customer_state = ""
     customers = services.get("customers")
-    if customers:
-        customer = customers.get_customer_detail(dn.customer_id)
-        if customer:
-            customer_state = customer.state_code or ""
+    customer = customers.get_customer_detail(dn.customer_id) if customers else None
+    customer_state = (customer.state_code if customer else "") or ""
 
-    gst_previews: list[dict] = []
-    for line in dn.lines:
-        with st.container(border=True):
-            st.write(line.product_name or line.product_id)
-            product = inventory.get_product(line.product_id) if inventory else None
-            tax_profile = line_tax_profile(product)
-            preview = preview_sales_line_gst(
-                line.qty_delivered,
-                line.rate,
-                0.0,
-                tax_profile,
-                business_registered=business_registered,
-                business_state_code=business_state,
-                customer_state_code=customer_state,
-            )
-            gst_previews.append(preview)
-            if business_registered and preview["line_total"] > 0:
-                gst_bits = []
-                if preview["cgst_amount"]:
-                    gst_bits.append(f"CGST ₹{preview['cgst_amount']:,.2f}")
-                if preview["sgst_amount"]:
-                    gst_bits.append(f"SGST ₹{preview['sgst_amount']:,.2f}")
-                if preview["utgst_amount"]:
-                    gst_bits.append(f"UTGST ₹{preview['utgst_amount']:,.2f}")
-                if preview["igst_amount"]:
-                    gst_bits.append(f"IGST ₹{preview['igst_amount']:,.2f}")
-                st.caption(
-                    f"Qty {line.qty_delivered:g} @ ₹{line.rate:,.2f} (ex-GST)"
-                    f" · Taxable ₹{preview['taxable_amount']:,.2f}"
-                    + (f" · {' · '.join(gst_bits)}" if gst_bits else "")
-                    + f" · Line total ₹{preview['line_total']:,.2f}"
-                )
-            else:
-                st.caption(f"Qty {line.qty_delivered:g} @ ₹{line.rate:,.2f}")
+    caption_parts = [
+        dn.customer_name,
+        format_document_date(dn.delivery_date),
+    ]
+    if dn.so_number:
+        caption_parts.append(f"SO {dn.so_number}")
 
-    if gst_previews and business_registered:
-        summary = tax_summary_from_previews(gst_previews)
-        st.caption(
-            f"Invoice taxable ₹{summary['taxable']:,.2f}"
-            f" · GST ₹{summary['total_tax']:,.2f}"
-            f" · Grand total ₹{summary['grand_total']:,.2f}"
-        )
-
-    if dn.status == DeliveryNoteStatus.DELIVERED and not dn.voucher_id:
-        if st.button("Create invoice from DN", type="primary", key="dn_invoice_btn"):
-            arm_invoice_from_dn(dn.id)
-            st.rerun()
-
-    pending_dn = st.session_state.get(INVOICE_FROM_DN_KEY)
-    if pending_dn == dn.id:
-        store_accounts = accounting.get_store_accounts()
-        if not store_accounts:
-            st.error("Need at least one cash/bank store account.")
-        else:
-            store_opts = {a.account_name: a.id for a in store_accounts}
-            store_name = st.selectbox(
-                "Received in",
-                list(store_opts.keys()),
-                key=f"dn_inv_store_{dn.id}",
-            )
-            inv_no = st.text_input(
-                "Invoice number",
-                value=dn.dn_number,
-                key=f"dn_inv_no_{dn.id}",
-            )
-            received = st.number_input(
-                "Amount received",
-                min_value=0.0,
-                value=float(
-                    tax_summary_from_previews(gst_previews)["grand_total"]
-                    if gst_previews and business_registered
-                    else dn.total_amount
-                ),
-                key=f"dn_inv_recv_{dn.id}",
-            )
-            discount = st.number_input(
-                "Discount",
-                min_value=0.0,
-                value=0.0,
-                key=f"dn_inv_disc_{dn.id}",
-            )
-            if st.button("Post invoice", type="primary", key=f"dn_inv_save_{dn.id}"):
-                try:
-                    sales.create_sales_invoice_from_dn(
-                        dn_id=dn.id,
-                        store_account_id=store_opts[store_name],
-                        store_invoice_number=inv_no,
-                        discount_amount=discount,
-                        amount_received=received,
-                    )
-                    st.session_state.pop(INVOICE_FROM_DN_KEY, None)
-                    st.rerun()
-                except Exception as exc:
-                    st.error(str(exc))
-            if st.button("Cancel", key=f"dn_inv_cancel_{dn.id}"):
-                st.session_state.pop(INVOICE_FROM_DN_KEY, None)
-                st.rerun()
-
+    left_facts = [("Customer", dn.customer_name)]
+    if customer and customer.phone_number:
+        left_facts.append(("Mobile", customer.phone_number))
+    if customer and customer.gstin:
+        left_facts.append(("GSTIN", customer.gstin))
+    right_facts = [("Delivery date", format_document_date(dn.delivery_date))]
+    if dn.so_number:
+        right_facts.append(("Sales order", dn.so_number))
     if dn.voucher_id:
-        if st.button("View invoice →", key=f"dn_view_inv_{dn.id}"):
-            navigation.go_to_detail("sales_detail", dn.voucher_id)
+        right_facts.append(("Invoice", "Created"))
+
+    document_header(
+        number=dn.dn_number,
+        status=dn.status.value,
+        caption_parts=caption_parts,
+        left_facts=left_facts,
+        right_facts=right_facts,
+        suffix=f"dn_{dn.id}",
+    )
+
+    item_rows = []
+    gst_previews = []
+    for line in dn.lines:
+        product = inventory.get_product(line.product_id) if inventory else None
+        tax_profile = line_tax_profile(product)
+        preview = preview_sales_line_gst(
+            line.qty_delivered,
+            line.rate,
+            0.0,
+            tax_profile,
+            business_registered=business_registered,
+            business=business,
+            business_state_code=business_state,
+            customer_state_code=customer_state,
+        )
+        gst_previews.append(preview)
+        item_rows.append(
+            {
+                "sku": getattr(product, "sku", "") if product else "",
+                "product": line.product_name or line.product_id,
+                "hsn_sac": preview.get("hsn_sac") or "",
+                "qty": line.qty_delivered,
+                "rate": line.rate,
+                "taxable": preview.get("taxable_amount") or 0,
+                "gst_rate": preview.get("gst_rate") or 0,
+                "cgst": preview.get("cgst_amount") or 0,
+                "sgst": preview.get("sgst_amount") or 0,
+                "utgst": preview.get("utgst_amount") or 0,
+                "igst": preview.get("igst_amount") or 0,
+                "total": preview.get("line_total") or round(
+                    line.qty_delivered * line.rate, 2
+                ),
+            }
+        )
+    summary = (
+        tax_summary_from_previews(gst_previews)
+        if gst_previews
+        else {"grand_total": dn.total_amount}
+    )
+
+    template = business.document_templates.get("delivery_note") if business else None
+    pdf_bytes = None
+    try:
+        pdf_bytes = generate_sales_document_pdf(
+            "delivery_note",
+            dn,
+            business,
+            template.print_settings if template else None,
+        )
+    except Exception as exc:
+        st.error(f"Could not generate PDF: {exc}")
+
+    can_edit = dn.status == DeliveryNoteStatus.DRAFT
+    can_invoice = dn.status == DeliveryNoteStatus.DELIVERED and not dn.voucher_id
+
+    actions = []
+    if pdf_bytes is not None:
+        actions.append(
+            {
+                "label": "Download PDF",
+                "key": "pdf",
+                "kind": "download",
+                "data": pdf_bytes,
+                "file_name": f"{dn.dn_number}.pdf",
+                "mime": "application/pdf",
+            }
+        )
+    if can_edit:
+        actions.append({"label": "Edit", "key": "edit"})
+    if can_invoice:
+        actions.append(
+            {
+                "label": "Create invoice from DN",
+                "key": "invoice",
+                "type": "primary",
+            }
+        )
+    if dn.voucher_id:
+        actions.append({"label": "View invoice →", "key": "view_invoice"})
+
+    clicked = document_actions(actions, suffix=f"dn_{dn.id}")
+    if clicked.get("edit"):
+        arm_dn_edit_dialog(dn.id)
+        st.rerun()
+    if clicked.get("invoice"):
+        arm_dn_invoice_dialog(dn.id)
+        st.rerun()
+    if clicked.get("view_invoice") and dn.voucher_id:
+        navigation.go_to_detail("sales_detail", dn.voucher_id)
+        return
+
+    line_items_table(
+        item_rows,
+        show_gst=business_registered,
+        suffix=f"dn_{dn.id}",
+    )
+    totals_ladder(
+        summary,
+        show_gst=business_registered,
+        grand_total=summary.get("grand_total", dn.total_amount),
+        suffix=f"dn_{dn.id}",
+    )
+    secondary_sections(
+        notes=dn.notes,
+        document_content=dn.document_content,
+    )
+
+    default_received = float(
+        summary.get("grand_total")
+        if business_registered and gst_previews
+        else dn.total_amount or 0
+    )
+    open_dn_detail_dialogs_if_armed(
+        services, default_received=default_received
+    )

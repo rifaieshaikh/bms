@@ -41,6 +41,25 @@ def _match_stock_ledger_reference(row, value) -> bool:
     return row.get("reference_type") == value
 
 
+def _match_customer_price_customer(row, value) -> bool:
+    return row.get("customer_id") == value
+
+
+def _match_customer_price_product(row, value) -> bool:
+    sku = (row.get("sku") or "").lower()
+    name = (row.get("product_name") or "").lower()
+    needle = str(value or "").lower()
+    if not needle:
+        return True
+    try:
+        return (
+            re.search(needle, sku, re.IGNORECASE) is not None
+            or re.search(needle, name, re.IGNORECASE) is not None
+        )
+    except re.error:
+        return needle in sku or needle in name
+
+
 def _match_product_category_names(product, pattern: str) -> bool:
     names = list(getattr(product, "category_names", None) or [])
     if not names and getattr(product, "category_name", ""):
@@ -146,6 +165,35 @@ INVENTORY_STOCK_LEDGER = ListSchema(
     page_size=VOUCHER_PAGE_SIZE,
 )
 
+INVENTORY_CUSTOMER_PRICES = ListSchema(
+    entity_key="inventory_customer_prices",
+    title="Customer Prices",
+    filter_fields=[
+        FilterField(
+            "customer_id",
+            "Customer",
+            F.ENTITY_SELECT,
+            options_loader="customers",
+            match=_match_customer_price_customer,
+        ),
+        FilterField(
+            "sku",
+            "SKU / Product",
+            F.REGEX,
+            match=_match_customer_price_product,
+        ),
+        FilterField("effective_date", "Effective date", F.DATE_RANGE),
+    ],
+    sort_options=[
+        SortOption("effective_date", "Effective date (newest)"),
+        SortOption("customer_name", "Customer"),
+        SortOption("sku", "SKU"),
+        SortOption("product_name", "Product"),
+    ],
+    default_sort="effective_date",
+    page_size=VOUCHER_PAGE_SIZE,
+)
+
 INVENTORY_SCHEMAS = {
     s.entity_key: s
     for s in [
@@ -153,5 +201,6 @@ INVENTORY_SCHEMAS = {
         INVENTORY_PRODUCTS,
         INVENTORY_STOCK,
         INVENTORY_STOCK_LEDGER,
+        INVENTORY_CUSTOMER_PRICES,
     ]
 }

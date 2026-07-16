@@ -85,6 +85,25 @@ class DeliveryNoteStatus(str, Enum):
     CANCELLED = "Cancelled"
 
 
+class EstimateStatus(str, Enum):
+    DRAFT = "Draft"
+    SENT = "Sent"
+    ACCEPTED = "Accepted"
+    REJECTED = "Rejected"
+    EXPIRED = "Expired"
+    CANCELLED = "Cancelled"
+
+
+class QuotationStatus(str, Enum):
+    DRAFT = "Draft"
+    SENT = "Sent"
+    ACCEPTED = "Accepted"
+    REJECTED = "Rejected"
+    EXPIRED = "Expired"
+    CONVERTED = "Converted"
+    CANCELLED = "Cancelled"
+
+
 class PurchaseOrderStatus(str, Enum):
     DRAFT = "Draft"
     SENT = "Sent"

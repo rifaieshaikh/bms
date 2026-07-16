@@ -1,6 +1,12 @@
 from typing import List, Optional, Protocol
 
-from vaybooks.bms.domain.sales.entities import DeliveryNote, SalesOrder, SalesReturn
+from vaybooks.bms.domain.sales.entities import (
+    DeliveryNote,
+    Estimate,
+    Quotation,
+    SalesOrder,
+    SalesReturn,
+)
 
 
 class SalesOrderRepository(Protocol):
@@ -37,3 +43,27 @@ class SalesReturnRepository(Protocol):
     def list_all(self) -> List[SalesReturn]: ...
 
     def delete(self, return_id: str) -> None: ...
+
+
+class EstimateRepository(Protocol):
+    def save(self, estimate: Estimate) -> Estimate: ...
+
+    def find_by_id(self, estimate_id: str) -> Optional[Estimate]: ...
+
+    def find_by_number(self, estimate_number: str) -> Optional[Estimate]: ...
+
+    def list_all(self) -> List[Estimate]: ...
+
+    def delete(self, estimate_id: str) -> None: ...
+
+
+class QuotationRepository(Protocol):
+    def save(self, quotation: Quotation) -> Quotation: ...
+
+    def find_by_id(self, quotation_id: str) -> Optional[Quotation]: ...
+
+    def find_by_number(self, quotation_number: str) -> Optional[Quotation]: ...
+
+    def list_all(self) -> List[Quotation]: ...
+
+    def delete(self, quotation_id: str) -> None: ...

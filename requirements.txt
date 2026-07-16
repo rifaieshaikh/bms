@@ -1,10 +1,13 @@
 streamlit>=1.48
+streamlit-pdf>=1.0.0
 streamlit-js-eval
 streamlit-hotkeys>=0.6.0
 pymongo
 pandas
+Pillow
 openpyxl
 python-dotenv
 pytest
 dnspython
 packaging
+fpdf2

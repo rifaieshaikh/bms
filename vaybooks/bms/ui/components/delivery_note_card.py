@@ -42,4 +42,4 @@ def _dn_card(row: dict, suffix: str) -> None:
 
 
 def delivery_note_cards(rows: list[dict], suffix: str = "dn") -> None:
-    render_card_grid(rows, lambda row: _dn_card(row, suffix))
+    render_card_grid(rows, lambda row, _idx: _dn_card(row, suffix), suffix=suffix)

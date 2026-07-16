@@ -1,4 +1,5 @@
 from datetime import datetime
+import re
 from typing import List, Optional
 
 from pymongo.database import Database
@@ -95,7 +96,7 @@ class MongoCustomerRepository:
         return self._from_doc(doc) if doc else None
 
     def search(self, query: str) -> List[Customer]:
-        regex = {"$regex": query, "$options": "i"}
+        regex = {"$regex": re.escape((query or "").strip()), "$options": "i"}
         docs = self._collection.find(
             {
                 "$or": [

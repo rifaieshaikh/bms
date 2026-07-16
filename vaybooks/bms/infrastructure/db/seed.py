@@ -102,6 +102,8 @@ COUNTERS = [
     ("so_number", "SO"),
     ("dn_number", "DN"),
     ("sales_return_number", "SR"),
+    ("estimate_number", "EST"),
+    ("quotation_number", "QT"),
 ]
 
 # (service_name, expense_account_name) — the expense account each vendor

@@ -40,4 +40,4 @@ def _so_card(row: dict, suffix: str) -> None:
 
 
 def sales_order_cards(rows: list[dict], suffix: str = "so") -> None:
-    render_card_grid(rows, lambda row: _so_card(row, suffix))
+    render_card_grid(rows, lambda row, _idx: _so_card(row, suffix), suffix=suffix)

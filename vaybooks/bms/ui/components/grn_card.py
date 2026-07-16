@@ -42,4 +42,4 @@ def _grn_card(row: dict, suffix: str) -> None:
 
 
 def grn_cards(rows: list[dict], suffix: str = "grn") -> None:
-    render_card_grid(rows, lambda row: _grn_card(row, suffix))
+    render_card_grid(rows, lambda row, _idx: _grn_card(row, suffix), suffix=suffix)

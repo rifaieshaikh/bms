@@ -8,12 +8,24 @@ from pymongo.database import Database
 from vaybooks.bms.domain.sales.entities import (
     DeliveryNote,
     DeliveryNoteLine,
+    Estimate,
+    EstimateLine,
+    Quotation,
     SalesOrder,
     SalesOrderLine,
     SalesReturn,
     SalesReturnLine,
 )
-from vaybooks.bms.domain.shared.enums import DeliveryNoteStatus, SalesOrderStatus
+from vaybooks.bms.domain.shared.document_customization import (
+    dataclass_to_dict,
+    snapshot_from_dict,
+)
+from vaybooks.bms.domain.shared.enums import (
+    DeliveryNoteStatus,
+    EstimateStatus,
+    QuotationStatus,
+    SalesOrderStatus,
+)
 
 
 def _enum_value(value) -> str:
@@ -33,6 +45,13 @@ class MongoSalesOrderRepository:
             "qty_delivered": line.qty_delivered,
             "qty_invoiced": line.qty_invoiced,
             "rate": line.rate,
+            "hsn_sac": line.hsn_sac,
+            "gst_rate": line.gst_rate,
+            "taxable_amount": line.taxable_amount,
+            "cgst_amount": line.cgst_amount,
+            "sgst_amount": line.sgst_amount,
+            "igst_amount": line.igst_amount,
+            "utgst_amount": line.utgst_amount,
         }
 
     def _line_from_doc(self, doc: dict) -> SalesOrderLine:
@@ -44,6 +63,13 @@ class MongoSalesOrderRepository:
             qty_delivered=float(doc.get("qty_delivered") or 0),
             qty_invoiced=float(doc.get("qty_invoiced") or 0),
             rate=float(doc.get("rate") or 0),
+            hsn_sac=doc.get("hsn_sac", ""),
+            gst_rate=float(doc.get("gst_rate") or 0),
+            taxable_amount=float(doc.get("taxable_amount") or 0),
+            cgst_amount=float(doc.get("cgst_amount") or 0),
+            sgst_amount=float(doc.get("sgst_amount") or 0),
+            igst_amount=float(doc.get("igst_amount") or 0),
+            utgst_amount=float(doc.get("utgst_amount") or 0),
         )
 
     def _to_doc(self, order: SalesOrder) -> dict:
@@ -59,6 +85,8 @@ class MongoSalesOrderRepository:
             "status": _enum_value(order.status),
             "lines": [self._line_to_doc(line) for line in order.lines],
             "notes": order.notes,
+            "supply_type": order.supply_type,
+            "document_content": dataclass_to_dict(order.document_content),
             "created_at": order.created_at,
             "updated_at": order.updated_at,
         }
@@ -80,6 +108,8 @@ class MongoSalesOrderRepository:
             status=SalesOrderStatus(doc.get("status", SalesOrderStatus.DRAFT.value)),
             lines=[self._line_from_doc(line) for line in doc.get("lines", [])],
             notes=doc.get("notes", ""),
+            supply_type=doc.get("supply_type", ""),
+            document_content=snapshot_from_dict(doc.get("document_content")),
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
         )
@@ -141,6 +171,7 @@ class MongoDeliveryNoteRepository:
             "lines": [self._line_to_doc(line) for line in dn.lines],
             "notes": dn.notes,
             "voucher_id": dn.voucher_id,
+            "document_content": dataclass_to_dict(dn.document_content),
             "created_at": dn.created_at,
             "updated_at": dn.updated_at,
         }
@@ -161,6 +192,7 @@ class MongoDeliveryNoteRepository:
             lines=[self._line_from_doc(line) for line in doc.get("lines", [])],
             notes=doc.get("notes", ""),
             voucher_id=doc.get("voucher_id"),
+            document_content=snapshot_from_dict(doc.get("document_content")),
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
         )
@@ -261,3 +293,136 @@ class MongoSalesReturnRepository:
 
     def delete(self, return_id: str) -> None:
         self._collection.delete_one({"_id": return_id})
+
+
+class _MongoPricedDocumentRepository:
+    document_class = Estimate
+    status_class = EstimateStatus
+    collection_name = "estimates"
+    number_field = "estimate_number"
+    date_field = "estimate_date"
+
+    def __init__(self, db: Database):
+        self._collection = db[self.collection_name]
+
+    @staticmethod
+    def _line_to_doc(line: EstimateLine) -> dict:
+        return {
+            "id": line.id,
+            "product_id": line.product_id,
+            "product_name": line.product_name,
+            "qty": line.qty,
+            "rate": line.rate,
+            "hsn_sac": line.hsn_sac,
+            "gst_rate": line.gst_rate,
+            "taxable_amount": line.taxable_amount,
+            "cgst_amount": line.cgst_amount,
+            "sgst_amount": line.sgst_amount,
+            "igst_amount": line.igst_amount,
+            "utgst_amount": line.utgst_amount,
+        }
+
+    @staticmethod
+    def _line_from_doc(doc: dict) -> EstimateLine:
+        return EstimateLine(
+            id=str(doc.get("id") or ""),
+            product_id=str(doc.get("product_id") or ""),
+            product_name=str(doc.get("product_name") or ""),
+            qty=float(doc.get("qty") or 0),
+            rate=float(doc.get("rate") or 0),
+            hsn_sac=str(doc.get("hsn_sac") or ""),
+            gst_rate=float(doc.get("gst_rate") or 0),
+            taxable_amount=float(doc.get("taxable_amount") or 0),
+            cgst_amount=float(doc.get("cgst_amount") or 0),
+            sgst_amount=float(doc.get("sgst_amount") or 0),
+            igst_amount=float(doc.get("igst_amount") or 0),
+            utgst_amount=float(doc.get("utgst_amount") or 0),
+        )
+
+    def _to_doc(self, value) -> dict:
+        document_date = getattr(value, self.date_field)
+        valid_until = value.valid_until
+        doc = {
+            "_id": value.id,
+            self.number_field: getattr(value, self.number_field),
+            "customer_id": value.customer_id,
+            "customer_name": value.customer_name,
+            self.date_field: (
+                document_date.isoformat()
+                if isinstance(document_date, date)
+                else document_date
+            ),
+            "valid_until": (
+                valid_until.isoformat() if isinstance(valid_until, date) else valid_until
+            ),
+            "status": _enum_value(value.status),
+            "lines": [self._line_to_doc(line) for line in value.lines],
+            "notes": value.notes,
+            "supply_type": value.supply_type,
+            "document_content": dataclass_to_dict(value.document_content),
+            "created_at": value.created_at,
+            "updated_at": value.updated_at,
+        }
+        if isinstance(value, Quotation):
+            doc["converted_sales_order_id"] = value.converted_sales_order_id
+        return doc
+
+    def _from_doc(self, doc: dict):
+        document_date = doc.get(self.date_field)
+        if isinstance(document_date, str):
+            document_date = date.fromisoformat(document_date)
+        valid_until = doc.get("valid_until")
+        if isinstance(valid_until, str):
+            valid_until = date.fromisoformat(valid_until)
+        kwargs = {
+            "id": str(doc["_id"]),
+            self.number_field: str(doc.get(self.number_field) or ""),
+            "customer_id": str(doc.get("customer_id") or ""),
+            "customer_name": str(doc.get("customer_name") or ""),
+            self.date_field: document_date,
+            "valid_until": valid_until,
+            "status": self.status_class(doc.get("status", self.status_class.DRAFT.value)),
+            "lines": [self._line_from_doc(line) for line in doc.get("lines", [])],
+            "notes": str(doc.get("notes") or ""),
+            "supply_type": str(doc.get("supply_type") or ""),
+            "document_content": snapshot_from_dict(doc.get("document_content")),
+            "created_at": doc.get("created_at", datetime.utcnow()),
+            "updated_at": doc.get("updated_at", datetime.utcnow()),
+        }
+        if self.document_class is Quotation:
+            kwargs["converted_sales_order_id"] = doc.get("converted_sales_order_id")
+        return self.document_class(**kwargs)
+
+    def save(self, value):
+        self._collection.replace_one({"_id": value.id}, self._to_doc(value), upsert=True)
+        return value
+
+    def find_by_id(self, value_id: str):
+        doc = self._collection.find_one({"_id": value_id})
+        return self._from_doc(doc) if doc else None
+
+    def find_by_number(self, number: str):
+        doc = self._collection.find_one({self.number_field: number})
+        return self._from_doc(doc) if doc else None
+
+    def list_all(self):
+        return [self._from_doc(doc) for doc in self._collection.find()]
+
+    def delete(self, value_id: str) -> None:
+        self._collection.delete_one({"_id": value_id})
+
+
+class MongoEstimateRepository(_MongoPricedDocumentRepository):
+    document_class = Estimate
+    status_class = EstimateStatus
+    collection_name = "estimates"
+    number_field = "estimate_number"
+    date_field = "estimate_date"
+
+
+class MongoQuotationRepository(_MongoPricedDocumentRepository):
+    document_class = Quotation
+    status_class = QuotationStatus
+    collection_name = "quotations"
+    number_field = "quotation_number"
+    date_field = "quotation_date"
