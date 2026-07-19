@@ -14,6 +14,7 @@ from vaybooks.bms.domain.shared.enums import (
     CustomizationItemStatus,
     OrderStatus,
     PartyRegistrationType,
+    PersonType,
     VoucherType,
 )
 from vaybooks.bms.ui import filtering as F
@@ -254,6 +255,39 @@ ITEMS = ListSchema(
         SortOption("margin_per_hour", "MPH"),
     ],
     default_sort="bill_number",
+    page_size=CARD_PAGE_SIZE,
+)
+
+MEASUREMENTS = ListSchema(
+    entity_key="measurements",
+    title="Measurements",
+    filter_fields=[
+        FilterField("measurement_number", "Measurement number", F.EXACT),
+        FilterField(
+            "customer_id",
+            "Customer",
+            F.ENTITY_SELECT,
+            options_loader="customers",
+        ),
+        FilterField("customer_name", "Customer name", F.REGEX),
+        FilterField("wearer_name", "Wearer name", F.REGEX),
+        FilterField(
+            "person_types",
+            "Person type",
+            F.MULTISELECT,
+            record_attr="person_type",
+            options=_enum_opts(PersonType),
+        ),
+        FilterField("measured_at", "Measured on", F.DATE_RANGE),
+    ],
+    sort_options=[
+        SortOption("measured_at", "Measured (newest)"),
+        SortOption("created_at", "Created (newest)"),
+        SortOption("measurement_number", "Measurement number"),
+        SortOption("customer_name", "Customer name"),
+        SortOption("wearer_name", "Wearer name"),
+    ],
+    default_sort="measured_at",
     page_size=CARD_PAGE_SIZE,
 )
 
@@ -551,7 +585,7 @@ SERVICES = ListSchema(
 SCHEMAS = {
     s.entity_key: s
     for s in [
-        ORDERS, ITEMS, CUSTOMERS, VENDORS, TIME, ACCOUNTS, VOUCHERS, RECEIPTS,
+        ORDERS, ITEMS, MEASUREMENTS, CUSTOMERS, VENDORS, TIME, ACCOUNTS, VOUCHERS, RECEIPTS,
         PAYMENTS, ACCOUNTING_INVOICES, STORE_SALES, JOURNAL, TRIAL_BALANCE, ACTIVITIES,
         SERVICES, INVENTORY_CATEGORIES, INVENTORY_PRODUCTS, INVENTORY_STOCK,
         INVENTORY_STOCK_LEDGER,

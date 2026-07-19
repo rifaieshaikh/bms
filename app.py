@@ -20,7 +20,12 @@ from vaybooks.bms.ui.pages import customization_orders_list, customization_order
 from vaybooks.bms.ui.pages import customization_item_detail, customer_detail, vendor_detail
 from vaybooks.bms.ui.pages import account_detail
 from vaybooks.bms.ui.pages import mtd_dashboard, sales_detail, time_tracking
-from vaybooks.bms.ui.pages import measurement_specs, order_workspace
+from vaybooks.bms.ui.pages import (
+    measurement_detail,
+    measurement_specs,
+    measurements,
+    order_workspace,
+)
 from vaybooks.bms.ui.pages.sales import (
     delivery_note_detail as sales_delivery_note_detail_mod,
     delivery_notes as sales_delivery_notes_mod,
@@ -120,6 +125,10 @@ orders_list_page = st.Page(
 items_page = st.Page(
     _page(customization_items), title="Customization Items",
     icon=":material/inventory_2:", url_path="customizationItems",
+)
+measurements_page = st.Page(
+    _page(measurements), title="Measurements",
+    icon=":material/straighten:", url_path="measurements",
 )
 time_page = st.Page(
     _page(time_tracking), title="Time Log", icon=":material/schedule:",
@@ -305,6 +314,10 @@ order_detail_page = st.Page(
 item_detail_page = st.Page(
     _page(customization_item_detail), title="Item Detail", url_path="item-detail",
 )
+measurement_detail_page = st.Page(
+    _page(measurement_detail), title="Measurement Detail",
+    url_path="measurement-detail",
+)
 customer_detail_page = st.Page(
     _page(customer_detail), title="Customer Detail", url_path="customer-detail",
 )
@@ -348,6 +361,8 @@ navigation.register("orders_list", orders_list_page)
 navigation.register("order_detail", order_detail_page)
 navigation.register("items_list", items_page)
 navigation.register("item_detail", item_detail_page)
+navigation.register("measurements_list", measurements_page)
+navigation.register("measurement_detail", measurement_detail_page)
 navigation.register("customer_detail", customer_detail_page)
 navigation.register("vendor_detail", vendor_detail_page)
 navigation.register("time_list", time_page)
@@ -413,6 +428,7 @@ page_groups = {
     ],
     "Boutique": [
         orders_list_page,
+        measurements_page,
         items_page,
         time_page,
     ],
@@ -476,6 +492,7 @@ hidden_pages = [
     order_detail_page,
     order_workspace_page,
     item_detail_page,
+    measurement_detail_page,
     customer_detail_page,
     vendor_detail_page,
     account_detail_page,

@@ -177,6 +177,10 @@ class MeasurementAppService:
 
     # --- Records ---
 
+    def list_all(self) -> List[MeasurementRecord]:
+        """List customer-owned measurement records, newest first."""
+        return self._record_repo.list_all()
+
     def list_by_customer(self, customer_id: str) -> List[MeasurementRecord]:
         return self._record_repo.list_by_customer(customer_id)
 

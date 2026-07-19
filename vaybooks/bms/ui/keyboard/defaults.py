@@ -19,6 +19,7 @@ _PARENTS = [
     ParentShortcut("workers_list", "Employees", "Parties", "ctrl+e"),
     ParentShortcut("orders_list", "Customization Orders", "Customization", "ctrl+o"),
     ParentShortcut("items_list", "Customization Items", "Customization", "ctrl+i"),
+    ParentShortcut("measurements_list", "Measurements", "Customization", "ctrl+alt+5"),
     ParentShortcut("time_list", "Time Log", "Customization", "ctrl+t"),
     ParentShortcut("sales_orders_list", "Sales Orders", "Sales", "ctrl+shift+o"),
     ParentShortcut("delivery_notes_list", "Delivery Notes", "Sales", "ctrl+shift+d"),

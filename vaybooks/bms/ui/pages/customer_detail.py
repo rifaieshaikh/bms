@@ -79,6 +79,12 @@ def render(services: dict):
         summary = order_service.get_customer_summary(customer.id)
     except Exception:
         summary = {"order_count": 0, "active_count": 0, "total_invoiced": 0.0}
+    try:
+        measurement_count = len(
+            services["measurements"].list_by_customer(customer.id)
+        )
+    except Exception:
+        measurement_count = 0
 
     try:
         account = accounting.get_customer_account(customer.id) if accounting else None
@@ -100,14 +106,23 @@ def render(services: dict):
         [
             ("Total Orders", str(total_orders)),
             ("Active Orders", str(summary.get("active_count", 0))),
+            ("Measurements", str(measurement_count)),
             ("Total Invoiced", f"\u20b9{summary.get('total_invoiced', 0.0):,.0f}"),
         ],
         suffix=f"cust_{customer.id}",
     )
 
-    header = st.columns([3, 1])
+    header = st.columns([2, 1, 1])
     header[0].subheader("Recent Orders")
     with header[1]:
+        if st.button(
+            "Measurements →",
+            use_container_width=True,
+            key="cd_view_measurements",
+        ):
+            navigation.go_to_list("measurements_list", customer=customer.id)
+            return
+    with header[2]:
         if st.button(
             "View all orders →",
             use_container_width=True,
