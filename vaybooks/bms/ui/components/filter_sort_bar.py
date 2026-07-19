@@ -101,9 +101,8 @@ def _render_filter_widgets(schema: ListSchema, committed: dict, services) -> Non
                 help=fld.help or None,
             )
         elif fld.type == F.DATE_RANGE:
-            current = committed.get(fld.key)
-            _seed(wkey, list(current) if current else [])
-            st.date_input(fld.label, key=wkey, help=fld.help or None)
+            # Presets must run before date_input: Streamlit forbids writing a
+            # widget's session key after that widget is instantiated.
             quick = st.columns(2)
             if quick[0].button("MTD", key=f"{wkey}_mtd", use_container_width=True):
                 today = date.today()
@@ -114,6 +113,9 @@ def _render_filter_widgets(schema: ListSchema, committed: dict, services) -> Non
                 today = date.today()
                 st.session_state[wkey] = (today - timedelta(days=30), today)
                 st.rerun()
+            current = committed.get(fld.key)
+            _seed(wkey, list(current) if current else [])
+            st.date_input(fld.label, key=wkey, help=fld.help or None)
         elif fld.type == F.DATE:
             _seed(wkey, committed.get(fld.key) or date.today())
             st.date_input(fld.label, key=wkey, help=fld.help or None)

@@ -39,6 +39,8 @@ def _render_period_picker() -> tuple[date, date]:
     """Quick presets + date range; persists in session state."""
     today = date.today()
     default = (today.replace(day=1), today)
+    # Own the value only via Session State — pass value=None so Streamlit's
+    # implicit date_input default ("today") does not conflict and warn.
     if PERIOD_WIDGET_KEY not in st.session_state:
         st.session_state[PERIOD_WIDGET_KEY] = default
 
@@ -61,7 +63,7 @@ def _render_period_picker() -> tuple[date, date]:
 
     picked = st.date_input(
         "Custom period",
-        value=st.session_state[PERIOD_WIDGET_KEY],
+        value=None,
         max_value=today,
         format="DD/MM/YYYY",
         key=PERIOD_WIDGET_KEY,
