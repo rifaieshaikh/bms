@@ -1,4 +1,4 @@
-"""Customization Orders list route (filter/sort + new-order dialog)."""
+"""Customization Orders list route (filter/sort + new-order workspace)."""
 
 import streamlit as st
 
@@ -6,7 +6,6 @@ from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.components.list_view import render_list
 from vaybooks.bms.ui.components.order_card import order_cards
 from vaybooks.bms.ui.list_schemas import ORDERS
-from vaybooks.bms.ui.pages.customization_orders import _new_order_dialog
 from vaybooks.bms.ui.session_keys import filters_key
 
 
@@ -50,6 +49,8 @@ def render(services: dict):
         page_key_nav="orders_list",
     )
     if bar["primary_clicked"]:
-        _new_order_dialog(services)
+        st.session_state.pop("order_workspace_order_id", None)
+        st.session_state["order_workspace_step"] = "Customer"
+        navigation.go_to_list("order_workspace")
     if bar.get("view_nth"):
         navigation.go_to_detail("order_detail", bar["view_nth"])

@@ -3,6 +3,7 @@ from typing import List, Optional
 
 from vaybooks.bms.application.accounting_app_service import AccountingAppService
 from vaybooks.bms.application.dtos import ActivityCompletionResult, CreateOrderRequest
+from vaybooks.bms.domain.accounting.entities import Voucher
 from vaybooks.bms.domain.accounting.repository import AccountRepository, CounterRepository, VoucherRepository
 from vaybooks.bms.domain.accounting.services import AccountingDomainService
 from vaybooks.bms.domain.activities.repository import ActivityRepository
@@ -13,11 +14,14 @@ from vaybooks.bms.domain.deliveries.repository import DeliveryRepository
 from vaybooks.bms.domain.expenses.repository import ExpenseRepository
 from vaybooks.bms.domain.expenses.services import ExpenseDomainService
 from vaybooks.bms.domain.invoices.repository import InvoiceRepository
+from vaybooks.bms.domain.measurements.repository import MeasurementRecordRepository
 from vaybooks.bms.domain.orders.entities import CustomizationItem, CustomizationOrder
 from vaybooks.bms.domain.orders.repository import BillRegistryRepository, OrderRepository
 from vaybooks.bms.domain.orders.services import OrderDomainService
 from vaybooks.bms.domain.orders.order_refs import compact_order_ref
 from vaybooks.bms.domain.shared.date_utils import today, utc_now
+from vaybooks.bms.domain.shared.enums import OrderStatus, VoucherType
+from vaybooks.bms.domain.shared.exceptions import ValidationError
 from vaybooks.bms.domain.time_tracking.repository import TimeTrackingRepository
 
 
@@ -36,8 +40,11 @@ class OrderAppService:
         invoice_repo: Optional[InvoiceRepository] = None,
         delivery_repo: Optional[DeliveryRepository] = None,
         accounting_service: Optional[AccountingAppService] = None,
+        measurement_repo: Optional[MeasurementRecordRepository] = None,
+        attachment_service=None,
     ):
         self._order_repo = order_repo
+        self._bill_registry_repo = bill_registry_repo
         self._order_domain = OrderDomainService(order_repo, bill_registry_repo)
         self._customer_domain = CustomerDomainService(customer_repo)
         self._activity_domain = ActivityDomainService()
@@ -49,6 +56,9 @@ class OrderAppService:
         self._invoice_repo = invoice_repo
         self._delivery_repo = delivery_repo
         self._accounting_service = accounting_service
+        self._measurement_repo = measurement_repo
+        self._attachment_service = attachment_service
+        self._voucher_repo = voucher_repo
 
     def _release_order_advance(self, order: CustomizationOrder) -> None:
         if not self._accounting_service:
@@ -70,6 +80,193 @@ class OrderAppService:
             self._delivery_repo.list_by_order(order.id) if self._delivery_repo else []
         )
         self._order_domain.recalculate_status(order, invoices, deliveries)
+
+    def create_draft_order(
+        self,
+        customer_name: str,
+        phone_number: str,
+        notes: str = "",
+        alternate_phone_number: Optional[str] = None,
+        address: str = "",
+        expected_delivery_date: Optional[date] = None,
+        customer_id: Optional[str] = None,
+    ) -> CustomizationOrder:
+        if customer_id:
+            customer = self._customer_domain._customer_repo.find_by_id(customer_id)
+            if not customer:
+                raise ValidationError("Customer not found")
+        else:
+            customer = self._customer_domain.find_or_create(
+                customer_name=customer_name,
+                phone_number=phone_number,
+                alternate_phone_number=alternate_phone_number,
+                address=address,
+            )
+        account_name = CustomerDomainService.build_account_name(customer)
+        self._accounting_domain.ensure_customer_account(customer.id, account_name)
+
+        order = CustomizationOrder(
+            order_number=self._counter_repo.next("order_number"),
+            customer_id=customer.id,
+            customer_name=customer.customer_name,
+            phone_number=customer.phone_number,
+            order_date=today(),
+            expected_delivery_date=expected_delivery_date
+            or (today() + timedelta(days=7)),
+            advance_amount=0.0,
+            notes=(notes or "").strip(),
+            order_status=OrderStatus.DRAFT,
+        )
+        self._order_domain.validate_order(order)
+        return self._order_repo.save(order)
+
+    def confirm_order(self, order_id: str) -> CustomizationOrder:
+        order = self._order_repo.find_by_id(order_id)
+        if not order:
+            raise ValidationError("Order not found")
+        if order.order_status == OrderStatus.CANCELLED:
+            raise ValidationError("Cancelled orders cannot be confirmed")
+        if not order.expected_delivery_date:
+            raise ValidationError("Order ETD is required before confirming")
+        order.order_status = OrderStatus.IN_PROGRESS
+        self._order_domain.validate_order(order)
+        order.updated_at = utc_now()
+        return self._order_repo.save(order)
+
+    def update_order_notes(
+        self, order_id: str, notes: str
+    ) -> CustomizationOrder:
+        order = self._order_repo.find_by_id(order_id)
+        if not order:
+            raise ValidationError("Order not found")
+        order.notes = (notes or "").strip()
+        order.updated_at = utc_now()
+        return self._order_repo.save(order)
+
+    def update_order_etd(
+        self, order_id: str, expected_delivery_date: date
+    ) -> CustomizationOrder:
+        order = self._order_repo.find_by_id(order_id)
+        if not order:
+            raise ValidationError("Order not found")
+        order.expected_delivery_date = expected_delivery_date
+        for item in order.customization_items:
+            # Only items that still track the previous order ETD stay in sync
+            # when staff haven't overridden them; keep simple: set blank ones.
+            if item.expected_delivery_date is None:
+                item.expected_delivery_date = expected_delivery_date
+        order.updated_at = utc_now()
+        return self._order_repo.save(order)
+
+    def find_advance_voucher(self, order_id: str) -> Optional[Voucher]:
+        vouchers = self._voucher_repo.list_by_order(order_id) if hasattr(
+            self._voucher_repo, "list_by_order"
+        ) else []
+        if not vouchers and self._accounting_service:
+            vouchers = self._accounting_service.list_vouchers_by_order(order_id)
+        advances = [
+            v for v in vouchers if v.voucher_type == VoucherType.ADVANCE
+        ]
+        if not advances:
+            return None
+        return sorted(advances, key=lambda v: v.created_at or utc_now())[-1]
+
+    def save_order_advance(
+        self,
+        order_id: str,
+        advance_amount: float,
+        receiving_account_id: Optional[str] = None,
+    ) -> tuple[CustomizationOrder, Optional[Voucher]]:
+        order = self._order_repo.find_by_id(order_id)
+        if not order:
+            raise ValidationError("Order not found")
+        amount = float(advance_amount or 0)
+        if amount < 0:
+            raise ValidationError("Advance amount cannot be negative")
+        order.advance_amount = amount
+        order.updated_at = utc_now()
+        saved = self._order_repo.save(order)
+        voucher = None
+        if amount > 0:
+            if not receiving_account_id:
+                raise ValidationError(
+                    "Receiving account is required when advance is greater than zero"
+                )
+            if not self._accounting_service:
+                raise ValidationError("Accounting service is unavailable")
+            customer_account = self._accounting_service.get_customer_account(
+                saved.customer_id
+            )
+            if not customer_account:
+                raise ValidationError("Customer account not found")
+            existing = self.find_advance_voucher(saved.id)
+            description = f"Advance for {saved.order_number}"
+            if existing:
+                voucher = self._accounting_service.update_advance_receipt(
+                    existing.id,
+                    receiving_account_id=receiving_account_id,
+                    customer_account_id=customer_account.id,
+                    amount=amount,
+                    description=description,
+                )
+            else:
+                voucher = self._accounting_service.create_advance_receipt(
+                    receiving_account_id=receiving_account_id,
+                    customer_account_id=customer_account.id,
+                    amount=amount,
+                    description=description,
+                    reference_order_id=saved.id,
+                )
+        return saved, voucher
+
+    def allocate_measurement_bill_number(self, measurement_number: str) -> str:
+        return self._order_domain.next_measurement_bill_number(measurement_number)
+
+    def add_item_to_order(
+        self,
+        order_id: str,
+        description: str,
+        required_activities: dict,
+        bill_number: Optional[str] = None,
+        expected_delivery_date=None,
+        customer_specification: str = "",
+        measurement_id: Optional[str] = None,
+    ) -> CustomizationItem:
+        order = self._order_repo.find_by_id(order_id)
+        if not order:
+            raise ValidationError("Order not found")
+        measurement_number = None
+        if measurement_id:
+            if not self._measurement_repo:
+                raise ValidationError("Measurement repository is unavailable")
+            record = self._measurement_repo.find_by_id(measurement_id)
+            if not record:
+                raise ValidationError("Measurement not found")
+            measurement_number = record.measurement_number
+            if not bill_number:
+                bill_number = self._order_domain.next_measurement_bill_number(
+                    measurement_number
+                )
+            if not record.order_id:
+                record.order_id = order.id
+                record.updated_at = utc_now()
+                self._measurement_repo.save(record)
+        if not bill_number:
+            raise ValidationError("Bill number is required")
+        activity_configs = self._activity_repo.list_all()
+        item = self._order_domain.add_customization_item(
+            order,
+            bill_number,
+            description,
+            activity_configs,
+            required_activities or {},
+            expected_delivery_date=expected_delivery_date,
+            customer_specification=customer_specification,
+            measurement_id=measurement_id,
+            measurement_number=measurement_number,
+        )
+        self._order_repo.save(order)
+        return item
 
     def create_customization_order(self, request: CreateOrderRequest) -> CustomizationOrder:
         customer = self._customer_domain.find_or_create(

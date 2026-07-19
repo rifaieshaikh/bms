@@ -11,6 +11,9 @@ DOCUMENT_TYPES = (
     "sales_order",
     "delivery_note",
     "sales_invoice",
+    "measurement_sheet",
+    "customization_item",
+    "advance_receipt",
 )
 
 
@@ -102,31 +105,29 @@ class DocumentContentSnapshot:
     policies: list[PolicySection] = field(default_factory=list)
 
 
+DEFAULT_TEMPLATE_STYLE = "classic"
+DEFAULT_ACCENT_COLOR = "#1F4E78"
+
+
 def default_document_templates() -> dict[str, DocumentTemplateSettings]:
+    # All documents share one visual identity (style + accent) by default;
+    # only functional toggles and footer wording differ per document type.
     defaults = {
         "estimate": SalesPrintSettings(
-            template_style="modern",
-            accent_color="#2563EB",
             show_gst_columns=True,
             show_discount_column=False,
             footer_text="This estimate is subject to confirmation.",
         ),
         "quotation": SalesPrintSettings(
-            template_style="modern",
-            accent_color="#0F766E",
             show_gst_columns=True,
             show_discount_column=False,
             footer_text="Thank you for the opportunity to quote.",
         ),
         "sales_order": SalesPrintSettings(
-            template_style="classic",
-            accent_color="#7C3AED",
             show_gst_columns=True,
             show_discount_column=False,
         ),
         "delivery_note": SalesPrintSettings(
-            template_style="compact",
-            accent_color="#475569",
             show_gst_columns=False,
             show_discount_column=False,
             show_amount_in_words=False,
@@ -135,14 +136,42 @@ def default_document_templates() -> dict[str, DocumentTemplateSettings]:
             show_terms=False,
         ),
         "sales_invoice": SalesPrintSettings(
-            template_style="classic",
-            accent_color="#1F4E78",
             show_gst_columns=True,
             show_discount_column=True,
         ),
+        "measurement_sheet": SalesPrintSettings(
+            show_gst_columns=False,
+            show_discount_column=False,
+            show_amount_in_words=False,
+            show_bank_details=False,
+            show_bank_qr=False,
+            show_terms=False,
+            footer_text="Please verify measurements before stitching.",
+        ),
+        "customization_item": SalesPrintSettings(
+            show_gst_columns=False,
+            show_discount_column=False,
+            show_amount_in_words=False,
+            show_bank_details=False,
+            show_bank_qr=False,
+            footer_text="Customization item work order.",
+        ),
+        "advance_receipt": SalesPrintSettings(
+            show_gst_columns=False,
+            show_discount_column=False,
+            show_amount_in_words=True,
+            show_bank_details=False,
+            show_bank_qr=False,
+            footer_text="This is an advance receipt, not a final invoice.",
+        ),
     }
+    for settings in defaults.values():
+        settings.template_style = DEFAULT_TEMPLATE_STYLE
+        settings.accent_color = DEFAULT_ACCENT_COLOR
     return {
-        name: DocumentTemplateSettings(print_settings=defaults[name])
+        name: DocumentTemplateSettings(
+            print_settings=defaults.get(name, SalesPrintSettings())
+        )
         for name in DOCUMENT_TYPES
     }
 

@@ -79,6 +79,15 @@ class SalesOrderStatus(str, Enum):
     CANCELLED = "Cancelled"
 
 
+class SalesReturnStatus(str, Enum):
+    PENDING = "Pending Approval"
+    APPROVED = "Approved"
+    REJECTED = "Rejected"
+    GOODS_RECEIVED = "Goods Received"
+    REFUND_PROCESSED = "Refund Processed"
+    CLOSED = "Closed"
+
+
 class DeliveryNoteStatus(str, Enum):
     DRAFT = "Draft"
     DELIVERED = "Delivered"
@@ -152,3 +161,39 @@ VendorRegistrationType = PartyRegistrationType
 class CatalogItemType(str, Enum):
     PRODUCT = "Product"
     SERVICE = "Service"
+
+
+class PersonType(str, Enum):
+    MEN = "Men"
+    WOMEN = "Women"
+    BOY_CHILD = "Boy Child"
+    GIRL_CHILD = "Girl Child"
+    INFANT = "Infant"
+
+
+class MeasurementFieldType(str, Enum):
+    TEXT = "text"
+    NUMBER = "number"
+    SELECT = "select"
+
+
+class MeasurementSection(str, Enum):
+    META = "Meta"
+    HEAD = "Head"
+    TORSO = "Torso"
+    ARMS = "Arms"
+    LOWER = "Lower"
+    LENGTHS = "Lengths"
+
+
+class AttachmentCategory(str, Enum):
+    REFERENCE = "reference"
+    DESIGN = "design"
+    PATTERN = "pattern"
+    FILE_OUT = "file_out"
+
+
+class FitPreference(str, Enum):
+    SLIM = "Slim"
+    REGULAR = "Regular"
+    COMFORT = "Comfort"

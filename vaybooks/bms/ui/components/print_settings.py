@@ -8,6 +8,7 @@ from datetime import date
 import streamlit as st
 
 from vaybooks.bms.domain.shared.document_customization import (
+    DEFAULT_ACCENT_COLOR,
     DOCUMENT_TYPES,
     DocumentContentSnapshot,
     SalesPrintSettings,
@@ -24,15 +25,12 @@ _LABELS = {
     "sales_order": "Sales Order",
     "delivery_note": "Delivery Note",
     "sales_invoice": "Sales Invoice",
+    "measurement_sheet": "Measurement Sheet",
+    "customization_item": "Customization Item",
+    "advance_receipt": "Advance Receipt",
 }
 
-_ACCENTS = {
-    "estimate": "#2563EB",
-    "quotation": "#0F766E",
-    "sales_order": "#7C3AED",
-    "delivery_note": "#475569",
-    "sales_invoice": "#1F4E78",
-}
+_ACCENTS = {name: DEFAULT_ACCENT_COLOR for name in _LABELS}
 
 _STYLE_LABELS = {
     "classic": ":material/table_rows: Classic",
@@ -48,6 +46,22 @@ _FONT_LABELS = {
 
 
 def _sample_document(document_type: str, business) -> dict:
+    if document_type in (
+        "measurement_sheet",
+        "customization_item",
+        "advance_receipt",
+    ):
+        return {
+            "document_type": document_type,
+            "order_number": "CO-0001",
+            "bill_number": "MS-0001-01",
+            "measurement_number": "MS-0001",
+            "voucher_number": "VCH-0001",
+            "customer_name": "Sample Customer",
+            "phone_number": "9876543210",
+            "description": "Sample boutique document",
+            "lines": [],
+        }
     number_fields = {
         "estimate": ("estimate_number", "EST-2026-001"),
         "quotation": ("quotation_number", "QUO-2026-001"),
@@ -363,12 +377,91 @@ def render_print_settings(services: dict, business) -> None:
 
     with preview:
         try:
-            pdf_bytes = generate_sales_document_pdf(
-                document_type,
-                _sample_document(document_type, business),
-                business,
-                settings,
-            )
+            if document_type in (
+                "measurement_sheet",
+                "customization_item",
+                "advance_receipt",
+            ):
+                from datetime import date
+                from types import SimpleNamespace
+
+                from vaybooks.bms.domain.shared.enums import (
+                    FitPreference,
+                    PersonType,
+                )
+                from vaybooks.bms.infrastructure.pdf.boutique_pdf import (
+                    generate_advance_receipt_pdf,
+                    generate_customization_item_pdf,
+                    generate_measurement_sheet_pdf,
+                )
+
+                customer = SimpleNamespace(
+                    customer_name="Sample Customer", phone_number="9876543210"
+                )
+                if document_type == "measurement_sheet":
+                    record = SimpleNamespace(
+                        measurement_number="MS-0001",
+                        person_type=PersonType.WOMEN,
+                        wearer_name="",
+                        wearer_age="",
+                        fit_preference=FitPreference.REGULAR,
+                        measured_at=date.today(),
+                        measured_by="Staff",
+                        notes="Sample",
+                        print_notes="",
+                        values=[
+                            SimpleNamespace(
+                                field_key="bust", value="36", unit="inch"
+                            ),
+                            SimpleNamespace(
+                                field_key="waist", value="30", unit="inch"
+                            ),
+                        ],
+                    )
+                    pdf_bytes = generate_measurement_sheet_pdf(
+                        record, customer, business, settings
+                    )
+                elif document_type == "customization_item":
+                    order = SimpleNamespace(
+                        order_number="CO-0001",
+                        customer_name="Sample Customer",
+                        phone_number="9876543210",
+                        expected_delivery_date=date.today(),
+                        order_activities=[],
+                    )
+                    item = SimpleNamespace(
+                        bill_number="MS-0001-01",
+                        description="Blouse",
+                        expected_delivery_date=date.today(),
+                        customer_specification="Deep neck",
+                        item_id="item1",
+                    )
+                    pdf_bytes = generate_customization_item_pdf(
+                        order, item, customer, business, None, [], settings
+                    )
+                else:
+                    order = SimpleNamespace(
+                        order_number="CO-0001",
+                        customer_name="Sample Customer",
+                        phone_number="9876543210",
+                        advance_amount=1000.0,
+                    )
+                    voucher = SimpleNamespace(
+                        voucher_number="VCH-0001",
+                        voucher_date=date.today(),
+                        description="Advance for CO-0001",
+                        lines=[],
+                    )
+                    pdf_bytes = generate_advance_receipt_pdf(
+                        voucher, order, customer, business, settings
+                    )
+            else:
+                pdf_bytes = generate_sales_document_pdf(
+                    document_type,
+                    _sample_document(document_type, business),
+                    business,
+                    settings,
+                )
             st.pdf(pdf_bytes, height=760, key=f"pdf_preview_{document_type}")
             st.download_button(
                 "Download preview",

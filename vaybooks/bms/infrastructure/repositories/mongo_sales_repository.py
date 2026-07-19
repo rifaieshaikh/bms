@@ -25,6 +25,7 @@ from vaybooks.bms.domain.shared.enums import (
     EstimateStatus,
     QuotationStatus,
     SalesOrderStatus,
+    SalesReturnStatus,
 )
 
 
@@ -252,9 +253,22 @@ class MongoSalesReturnRepository:
             "return_date": rd.isoformat() if isinstance(rd, date) else rd,
             "lines": [self._line_to_doc(line) for line in sales_return.lines],
             "source_invoice_id": sales_return.source_invoice_id,
+            "source_invoice_number": sales_return.source_invoice_number,
             "source_dn_id": sales_return.source_dn_id,
             "voucher_id": sales_return.voucher_id,
             "notes": sales_return.notes,
+            "return_reason": sales_return.return_reason,
+            "refund_option": sales_return.refund_option,
+            "amount_refunded": sales_return.amount_refunded,
+            "refund_account_id": sales_return.refund_account_id,
+            "status": _enum_value(sales_return.status),
+            "restock_items": sales_return.restock_items,
+            "attachments": sales_return.attachments,
+            "approved_at": sales_return.approved_at,
+            "rejected_at": sales_return.rejected_at,
+            "goods_received_at": sales_return.goods_received_at,
+            "refund_processed_at": sales_return.refund_processed_at,
+            "closed_at": sales_return.closed_at,
             "created_at": sales_return.created_at,
             "updated_at": sales_return.updated_at,
         }
@@ -271,9 +285,26 @@ class MongoSalesReturnRepository:
             return_date=rd,
             lines=[self._line_from_doc(line) for line in doc.get("lines", [])],
             source_invoice_id=doc.get("source_invoice_id"),
+            source_invoice_number=doc.get("source_invoice_number", ""),
             source_dn_id=doc.get("source_dn_id"),
             voucher_id=doc.get("voucher_id"),
             notes=doc.get("notes", ""),
+            return_reason=doc.get("return_reason", ""),
+            refund_option=doc.get("refund_option", "Customer credit"),
+            amount_refunded=float(doc.get("amount_refunded") or 0),
+            refund_account_id=doc.get("refund_account_id"),
+            status=SalesReturnStatus(
+                SalesReturnStatus.PENDING.value
+                if doc.get("status") == "Draft"
+                else doc.get("status", SalesReturnStatus.APPROVED.value)
+            ),
+            restock_items=bool(doc.get("restock_items", True)),
+            attachments=list(doc.get("attachments") or []),
+            approved_at=doc.get("approved_at"),
+            rejected_at=doc.get("rejected_at"),
+            goods_received_at=doc.get("goods_received_at"),
+            refund_processed_at=doc.get("refund_processed_at"),
+            closed_at=doc.get("closed_at"),
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
         )

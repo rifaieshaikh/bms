@@ -96,6 +96,7 @@ COUNTERS = [
     ("order_number", "CO"),
     ("voucher_number", "VCH"),
     ("invoice_number", "INV"),
+    ("measurement_number", "MS"),
     ("po_number", "PO"),
     ("grn_number", "GRN"),
     ("purchase_return_number", "PR"),
@@ -248,6 +249,10 @@ def run_seed(db):
                 "updated_at": now,
             },
         )
+
+    from vaybooks.bms.infrastructure.db.measurement_seed import ensure_measurement_specs
+
+    ensure_measurement_specs(db)
 
 
 def _insert_ignoring_duplicates(collection, document):

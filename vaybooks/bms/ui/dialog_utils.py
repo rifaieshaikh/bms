@@ -55,6 +55,8 @@ DIALOG_FLAG_PREFIXES = (
     "dn_edit_dialog",
     "dn_invoice_dialog",
     "invoice_edit_dialog",
+    "sales_return_dialog",
+    "sales_return_edit_dialog",
 )
 
 _ARMED_FLAGS = "_armed_dialog_flags"

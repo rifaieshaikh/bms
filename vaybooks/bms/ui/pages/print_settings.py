@@ -23,6 +23,9 @@ _LABELS = {
     "sales_order": "Sales Order",
     "delivery_note": "Delivery Note",
     "sales_invoice": "Sales Invoice",
+    "measurement_sheet": "Measurement Sheet",
+    "customization_item": "Customization Item",
+    "advance_receipt": "Advance Receipt",
 }
 
 _BANK_COLUMNS = [

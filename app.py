@@ -20,6 +20,7 @@ from vaybooks.bms.ui.pages import customization_orders_list, customization_order
 from vaybooks.bms.ui.pages import customization_item_detail, customer_detail, vendor_detail
 from vaybooks.bms.ui.pages import account_detail
 from vaybooks.bms.ui.pages import mtd_dashboard, sales_detail, time_tracking
+from vaybooks.bms.ui.pages import measurement_specs, order_workspace
 from vaybooks.bms.ui.pages.sales import (
     delivery_note_detail as sales_delivery_note_detail_mod,
     delivery_notes as sales_delivery_notes_mod,
@@ -28,6 +29,7 @@ from vaybooks.bms.ui.pages.sales import (
     invoices as sales_invoices_mod,
     quotation_detail as sales_quotation_detail_mod,
     quotations as sales_quotations_mod,
+    return_detail as sales_return_detail_mod,
     returns as sales_returns_mod,
     sales_order_detail as sales_order_detail_mod,
     sales_orders as sales_orders_mod,
@@ -79,7 +81,7 @@ from vaybooks.bms.ui.pages.finance import (
 setup_logging()
 
 st.set_page_config(
-    page_title="Zahcci Customization Orders",
+    page_title="VayBooks",
     page_icon="👗",
     layout="wide",
     initial_sidebar_state="auto",
@@ -113,11 +115,11 @@ vendors_page = st.Page(
 )
 orders_list_page = st.Page(
     _page(customization_orders_list), title="Customization Orders",
-    icon=":material/shopping_bag:", url_path="orders",
+    icon=":material/shopping_bag:", url_path="customizationOrders",
 )
 items_page = st.Page(
     _page(customization_items), title="Customization Items",
-    icon=":material/inventory_2:", url_path="items",
+    icon=":material/inventory_2:", url_path="customizationItems",
 )
 time_page = st.Page(
     _page(time_tracking), title="Time Log", icon=":material/schedule:",
@@ -222,6 +224,14 @@ activities_page = st.Page(
     _page(activities), title="Activity Configuration", icon=":material/checklist:",
     url_path="activities",
 )
+measurement_specs_page = st.Page(
+    _page(measurement_specs), title="Measurement Specs", icon=":material/straighten:",
+    url_path="measurement-specs",
+)
+order_workspace_page = st.Page(
+    _page(order_workspace), title="Order Workspace", icon=":material/edit_note:",
+    url_path="order-workspace",
+)
 services_page = st.Page(
     _page(vendor_services), title="Service Configuration", icon=":material/category:",
     url_path="services",
@@ -321,6 +331,10 @@ sales_quotation_detail_page = st.Page(
 sales_delivery_note_detail_page = st.Page(
     _page(sales_delivery_note_detail_mod), title="DN Detail", url_path="delivery-note-detail",
 )
+sales_return_detail_page = st.Page(
+    _page(sales_return_detail_mod), title="Sales Return Detail",
+    url_path="sales-return-detail",
+)
 inventory_product_detail_page = st.Page(
     _page(inventory_product_detail), title="Product Detail",
     url_path="inventory-product-detail",
@@ -357,6 +371,7 @@ navigation.register("delivery_note_detail", sales_delivery_note_detail_page)
 navigation.register("sales_invoices_list", sales_invoices_page)
 navigation.register("sales_detail", sales_detail_page)
 navigation.register("sales_returns_list", sales_returns_page)
+navigation.register("sales_return_detail", sales_return_detail_page)
 navigation.register("purchase_orders_list", purchase_orders_page)
 navigation.register("purchase_order_detail", purchase_order_detail_page)
 navigation.register("goods_receipt_list", purchase_grn_page)
@@ -366,6 +381,8 @@ navigation.register("purchase_detail", purchase_detail_page)
 navigation.register("purchase_returns_list", purchase_returns_page)
 navigation.register("reports", reports_page)
 navigation.register("activities_list", activities_page)
+navigation.register("measurement_specs", measurement_specs_page)
+navigation.register("order_workspace", order_workspace_page)
 navigation.register("services_list", services_page)
 navigation.register("workers_list", workers_page)
 navigation.register("inventory_categories_list", inventory_categories_page)
@@ -394,7 +411,7 @@ page_groups = {
         vendors_page,
         workers_page,
     ],
-    "Customization": [
+    "Boutique": [
         orders_list_page,
         items_page,
         time_page,
@@ -443,6 +460,7 @@ page_groups = {
         print_settings_page,
         keyboard_shortcuts_page,
         activities_page,
+        measurement_specs_page,
         services_page,
     ],
 }
@@ -456,6 +474,7 @@ if is_desktop():
 
 hidden_pages = [
     order_detail_page,
+    order_workspace_page,
     item_detail_page,
     customer_detail_page,
     vendor_detail_page,
@@ -465,6 +484,7 @@ hidden_pages = [
     sales_estimate_detail_page,
     sales_quotation_detail_page,
     sales_delivery_note_detail_page,
+    sales_return_detail_page,
     inventory_product_detail_page,
     purchase_order_detail_page,
     purchase_grn_detail_page,
@@ -481,7 +501,6 @@ nav = st.navigation(nav_pages, position="hidden")
 
 with st.sidebar:
     st.markdown("## VayBooks")
-    st.caption("Boutique Management")
     st.divider()
     for header, pages in page_groups.items():
         if header:

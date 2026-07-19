@@ -16,6 +16,9 @@ class CustomizationItem:
     # Per-item ETD. Defaults to the order ETD when not explicitly set; older
     # items without one fall back to the order ETD at display time.
     expected_delivery_date: Optional[date] = None
+    customer_specification: str = ""
+    measurement_id: Optional[str] = None
+    measurement_number: Optional[str] = None
     # Per-item profitability snapshot, frozen once the item is both invoiced
     # and delivered. `mph_snapshot_at` being set marks the numbers as final.
     sell_amount: float = 0.0

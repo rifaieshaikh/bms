@@ -7,8 +7,8 @@ from playwright.sync_api import Page, expect
 LIST_PAGES = [
     ("customers", "Customers", "h3"),
     ("vendors", "Vendors", "strong"),
-    ("orders", "Customization Orders", "h3"),
-    ("items", "Customization Items", "h3"),
+    ("customizationOrders", "Customization Orders", "h3"),
+    ("customizationItems", "Customization Items", "h3"),
     ("time", "Time Log", "h3"),
     ("accounts", "Chart of Accounts", "h3"),
     ("vouchers", "All Vouchers", "h3"),
@@ -127,13 +127,13 @@ def wait_for_rerun(page: Page, ms: int = 2000) -> None:
 
 def open_filter_popover(page: Page) -> None:
     close_popovers(page)
-    page.locator('[data-testid="stPopover"] > div > button').first.click()
+    page.locator('[data-testid="stPopoverButton"]').first.click()
     page.get_by_text("Filters", exact=True).wait_for()
 
 
 def open_sort_popover(page: Page) -> None:
     close_popovers(page)
-    page.locator('[data-testid="stPopover"] > div > button').nth(1).click()
+    page.locator('[data-testid="stPopoverButton"]').nth(1).click()
     page.get_by_text("Sort by", exact=True).wait_for()
 
 
@@ -148,11 +148,24 @@ def apply_filter(page: Page, label: str, value: str) -> None:
 
 def clear_filters(page: Page) -> None:
     open_filter_popover(page)
-    clear_btn = page.get_by_role("button", name="Clear all")
-    if clear_btn.count() > 0 and clear_btn.is_visible():
-        clear_btn.click()
-        # Prefer UI signal over a long fixed sleep when chips disappear.
-        wait_for_rerun(page, 800)
+    clear_btn = page.get_by_role("button", name="Clear all", exact=True)
+    # Prefer the Filters panel Apply-row button over multiselect chip clear icons.
+    panel_clear = page.locator('[data-testid="stPopoverBody"]').get_by_role(
+        "button", name="Clear all", exact=True
+    )
+    if panel_clear.count() > 0:
+        clear_btn = panel_clear
+    elif clear_btn.count() > 1:
+        clear_btn = page.locator(
+            'button[data-testid="stBaseButton-secondary"]'
+        ).filter(has_text="Clear all")
+    if clear_btn.count() > 0:
+        try:
+            if clear_btn.first.is_visible():
+                clear_btn.first.click()
+                wait_for_rerun(page, 800)
+        except Exception:
+            pass
     close_popovers(page)
     wait_for_streamlit_ready(page, min_ms=300)
 

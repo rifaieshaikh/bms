@@ -65,6 +65,21 @@ def ensure_indexes(db):
     _create_index(db.bill_registry, "bill_number", unique=True)
     _create_index(db.bill_registry, "order_id")
 
+    _create_index(db.measurement_records, "measurement_number", unique=True)
+    _create_index(db.measurement_records, "customer_id")
+    _create_index(db.measurement_records, "order_id")
+    _create_index(db.measurement_records, "person_type")
+    _create_index(db.measurement_specs, "key")
+    _create_index(db.measurement_specs, "person_types")
+    _create_index(db.measurement_specs, "sort_order")
+    _create_index(db.measurement_sections, "key", unique=True)
+    _create_index(db.measurement_sections, "sort_order")
+
+    _create_index(db.attachments, "order_id")
+    _create_index(db.attachments, "item_id")
+    _create_index(db.attachments, "category")
+    _create_index(db.attachments, [("item_id", 1), ("category", 1)])
+
     _create_index(db.activity_config, "activity_name", unique=True)
 
     _create_index(db.vendor_services, "service_name", unique=True)

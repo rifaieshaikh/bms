@@ -27,6 +27,7 @@ from vaybooks.bms.domain.shared.enums import (
     EstimateStatus,
     QuotationStatus,
     SalesOrderStatus,
+    SalesReturnStatus,
 )
 from vaybooks.bms.domain.shared.exceptions import ValidationError
 
@@ -325,24 +326,17 @@ class SalesDomainService:
         return_date: date,
         lines: List[dict],
         source_invoice_id: Optional[str] = None,
+        source_invoice_number: str = "",
         source_dn_id: Optional[str] = None,
         notes: str = "",
+        return_reason: str = "",
+        refund_option: str = "Customer credit",
+        amount_refunded: float = 0.0,
+        refund_account_id: Optional[str] = None,
+        restock_items: bool = True,
+        attachments: Optional[List[dict]] = None,
     ) -> SalesReturn:
-        if not lines:
-            raise ValidationError("At least one return line is required")
-        ret_lines = []
-        for raw in lines:
-            qty = float(raw.get("qty") or 0)
-            if qty <= 0:
-                raise ValidationError("Return quantity must be positive")
-            ret_lines.append(
-                SalesReturnLine(
-                    product_id=str(raw.get("product_id") or ""),
-                    product_name=(raw.get("product_name") or "").strip(),
-                    qty=round(qty, 2),
-                    rate=round(float(raw.get("rate") or 0), 2),
-                )
-            )
+        ret_lines = self._sales_return_lines(lines)
         sales_return = SalesReturn(
             return_number=return_number,
             customer_id=customer_id,
@@ -350,10 +344,79 @@ class SalesDomainService:
             return_date=return_date,
             lines=ret_lines,
             source_invoice_id=source_invoice_id,
+            source_invoice_number=source_invoice_number,
             source_dn_id=source_dn_id,
             notes=notes.strip(),
+            return_reason=return_reason.strip(),
+            refund_option=refund_option,
+            amount_refunded=round(float(amount_refunded or 0), 2),
+            refund_account_id=refund_account_id,
+            status=SalesReturnStatus.PENDING,
+            restock_items=bool(restock_items),
+            attachments=list(attachments or []),
         )
         return self._return_repo.save(sales_return)
+
+    def update_sales_return(
+        self,
+        return_id: str,
+        *,
+        customer_id: str,
+        customer_name: str,
+        return_date: date,
+        lines: List[dict],
+        source_invoice_id: Optional[str] = None,
+        source_invoice_number: str = "",
+        notes: str = "",
+        return_reason: str = "",
+        refund_option: str = "Customer credit",
+        amount_refunded: float = 0.0,
+        refund_account_id: Optional[str] = None,
+        restock_items: bool = True,
+        attachments: Optional[List[dict]] = None,
+    ) -> SalesReturn:
+        current = self._return_repo.find_by_id(return_id)
+        if not current:
+            raise ValidationError("Sales return not found")
+        if current.status != SalesReturnStatus.PENDING:
+            raise ValidationError("Only pending returns can be edited")
+        current.update(
+            customer_id=customer_id,
+            customer_name=customer_name,
+            return_date=return_date,
+            lines=self._sales_return_lines(lines),
+            source_invoice_id=source_invoice_id,
+            source_invoice_number=source_invoice_number,
+            notes=notes.strip(),
+            return_reason=return_reason.strip(),
+            refund_option=refund_option,
+            amount_refunded=round(float(amount_refunded or 0), 2),
+            refund_account_id=refund_account_id,
+            restock_items=bool(restock_items),
+            attachments=list(attachments or []),
+        )
+        current.source_invoice_id = source_invoice_id
+        current.refund_account_id = refund_account_id
+        return self._return_repo.save(current)
+
+    @staticmethod
+    def _sales_return_lines(lines: List[dict]) -> List[SalesReturnLine]:
+        if not lines:
+            raise ValidationError("At least one return line is required")
+        result = []
+        for raw in lines:
+            qty = float(raw.get("qty") or 0)
+            if qty <= 0:
+                raise ValidationError("Return quantity must be positive")
+            result.append(
+                SalesReturnLine(
+                    product_id=str(raw.get("product_id") or ""),
+                    product_name=(raw.get("product_name") or "").strip(),
+                    qty=round(qty, 2),
+                    rate=round(float(raw.get("rate") or 0), 2),
+                )
+            )
+        return result
 
     def mark_so_invoiced(self, sales_order_id: str, lines: List[dict]) -> None:
         if not sales_order_id:

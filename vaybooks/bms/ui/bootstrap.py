@@ -33,6 +33,8 @@ from vaybooks.bms.application.inventory_app_service import InventoryAppService
 from vaybooks.bms.application.purchase_app_service import PurchaseAppService
 from vaybooks.bms.application.sales_app_service import SalesAppService
 from vaybooks.bms.application.worker_app_service import WorkerAppService
+from vaybooks.bms.application.measurement_app_service import MeasurementAppService
+from vaybooks.bms.application.attachment_app_service import AttachmentAppService
 from vaybooks.bms.domain.inventory.rate_history_service import ProductRateHistoryService
 from vaybooks.bms.infrastructure.db.connection import get_database
 from vaybooks.bms.infrastructure.db.indexes import ensure_indexes
@@ -99,6 +101,14 @@ from vaybooks.bms.infrastructure.repositories.mongo_sales_repository import (
 )
 from vaybooks.bms.infrastructure.repositories.mongo_time_tracking_repository import (
     MongoTimeTrackingRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_measurement_repository import (
+    MongoMeasurementRecordRepository,
+    MongoMeasurementSectionRepository,
+    MongoMeasurementSpecRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_attachment_repository import (
+    MongoAttachmentRepository,
 )
 
 
@@ -183,6 +193,10 @@ def get_services():
         gst_rate_history_repo,
     )
     mapping_profile_repo = MongoImportMappingProfileRepository(db)
+    measurement_spec_repo = MongoMeasurementSpecRepository(db)
+    measurement_record_repo = MongoMeasurementRecordRepository(db)
+    measurement_section_repo = MongoMeasurementSectionRepository(db)
+    attachment_repo = MongoAttachmentRepository(db)
 
     accounting_service = AccountingAppService(account_repo, voucher_repo, counter_repo)
     customer_service = CustomerAppService(customer_repo, account_repo)
@@ -269,6 +283,14 @@ def get_services():
         time_repo=time_repo,
     )
 
+    measurement_service = MeasurementAppService(
+        measurement_spec_repo,
+        measurement_record_repo,
+        counter_repo,
+        measurement_section_repo,
+    )
+    attachment_service = AttachmentAppService(attachment_repo)
+
     return {
         "customers": customer_service,
         "vendors": vendor_service,
@@ -287,6 +309,8 @@ def get_services():
             invoice_repo=invoice_repo,
             delivery_repo=delivery_repo,
             accounting_service=accounting_service,
+            measurement_repo=measurement_record_repo,
+            attachment_service=attachment_service,
         ),
         "activities": ActivityAppService(activity_repo, order_repo),
         "workers": WorkerAppService(worker_repo, account_repo),
@@ -297,6 +321,8 @@ def get_services():
             delivery_repo, order_repo, invoice_repo, expense_repo
         ),
         "accounting": accounting_service,
+        "measurements": measurement_service,
+        "attachments": attachment_service,
         "reports_business": reports_business,
         "reports_profitability": reports_profitability,
         "reports_operations": reports_operations,

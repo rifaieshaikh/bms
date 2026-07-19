@@ -34,6 +34,8 @@ class OrderDomainService:
         self._bill_registry_repo = bill_registry_repo
 
     def validate_order(self, order: CustomizationOrder) -> None:
+        if order.order_status == OrderStatus.DRAFT:
+            return
         if not order.customization_items:
             raise ValidationError(
                 "Customization order must have at least one customization item"
@@ -44,6 +46,22 @@ class OrderDomainService:
                 "Customization order must have at least one required activity"
             )
 
+    def next_measurement_bill_number(self, measurement_number: str) -> str:
+        """Allocate MS-####-01, MS-####-02, ... for a measurement."""
+        base = measurement_number.strip().upper()
+        if not base:
+            raise ValidationError("Measurement number is required")
+        suffix = 1
+        while True:
+            candidate = f"{base}-{suffix:02d}"
+            if not self._bill_registry_repo.exists(candidate):
+                return candidate
+            suffix += 1
+            if suffix > 99:
+                raise ValidationError(
+                    f"No free bill-number suffix left for {base}"
+                )
+
     def add_customization_item(
         self,
         order: CustomizationOrder,
@@ -52,6 +70,9 @@ class OrderDomainService:
         activity_configs: List[ActivityConfig],
         required_map: dict,
         expected_delivery_date=None,
+        customer_specification: str = "",
+        measurement_id: Optional[str] = None,
+        measurement_number: Optional[str] = None,
     ) -> CustomizationItem:
         bill_number = bill_number.strip().upper()
         if not bill_number:
@@ -72,6 +93,9 @@ class OrderDomainService:
             bill_number=bill_number,
             description=description.strip(),
             expected_delivery_date=expected_delivery_date or order.expected_delivery_date,
+            customer_specification=(customer_specification or "").strip(),
+            measurement_id=measurement_id,
+            measurement_number=(measurement_number or "").strip().upper() or None,
         )
         if not existing:
             entry = BillRegistryEntry(

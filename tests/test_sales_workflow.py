@@ -2,6 +2,8 @@
 
 from datetime import date
 
+import pytest
+
 from vaybooks.bms.application.accounting_app_service import AccountingAppService
 from vaybooks.bms.application.sales_app_service import SalesAppService
 from vaybooks.bms.domain.accounting.entities import Account
@@ -12,6 +14,7 @@ from vaybooks.bms.domain.shared.enums import (
     DeliveryNoteStatus,
     PartyRegistrationType,
     SalesOrderStatus,
+    SalesReturnStatus,
     StockMovementType,
     VoucherType,
 )
@@ -249,13 +252,163 @@ def test_sales_return_restores_stock():
         amount_refunded=100,
         refund_account_id=cash.id,
     )
-    assert ret.voucher_id
+    assert ret.status == SalesReturnStatus.PENDING
+    assert ret.voucher_id is None
+    assert inventory.get_product(product.id).current_qty == 17
+
+    approved = sales.approve_sales_return(ret.id)
+    assert approved.status == SalesReturnStatus.APPROVED
+    assert approved.voucher_id is None
+    assert inventory.get_product(product.id).current_qty == 17
+
+    received = sales.mark_sales_return_goods_received(ret.id)
+    assert received.status == SalesReturnStatus.GOODS_RECEIVED
     assert inventory.get_product(product.id).current_qty == 18
     ledger = inventory.get_product_ledger(product.id)
     return_rows = [
         r for r in ledger if r["movement_type"] == StockMovementType.SALES_RETURN.value
     ]
     assert len(return_rows) == 1
+
+    refunded = sales.process_sales_return_refund(ret.id)
+    assert refunded.status == SalesReturnStatus.REFUND_PROCESSED
+    assert refunded.voucher_id
+
+    closed = sales.close_sales_return(ret.id)
+    assert closed.status == SalesReturnStatus.CLOSED
+
+
+def test_pending_sales_return_posts_only_after_approval():
+    sales, inventory, product, _, _, _ = _sales_stack()
+    starting_qty = inventory.get_product(product.id).current_qty
+    reserved_number = sales.reserve_sales_return_number()
+
+    ret = sales.create_sales_return(
+        customer_id="c1",
+        return_date=date.today(),
+        return_number=reserved_number,
+        lines=[
+            {
+                "product_id": product.id,
+                "product_name": product.name,
+                "qty": 1,
+                "rate": 100,
+            }
+        ],
+        return_reason="Wrong size",
+    )
+
+    assert ret.status == SalesReturnStatus.PENDING
+    assert ret.return_number == reserved_number
+    assert ret.voucher_id is None
+    assert inventory.get_product(product.id).current_qty == starting_qty
+
+    approved = sales.approve_sales_return(ret.id)
+    assert approved.status == SalesReturnStatus.APPROVED
+    assert approved.voucher_id is None
+    assert inventory.get_product(product.id).current_qty == starting_qty
+
+    received = sales.mark_sales_return_goods_received(ret.id)
+    assert received.status == SalesReturnStatus.GOODS_RECEIVED
+    assert inventory.get_product(product.id).current_qty == starting_qty + 1
+
+    refunded = sales.process_sales_return_refund(ret.id)
+    assert refunded.status == SalesReturnStatus.REFUND_PROCESSED
+    assert refunded.voucher_id
+
+
+def test_rejected_sales_return_has_no_further_effects():
+    sales, inventory, product, _, _, _ = _sales_stack()
+    starting_qty = inventory.get_product(product.id).current_qty
+    ret = sales.create_sales_return(
+        customer_id="c1",
+        return_date=date.today(),
+        lines=[
+            {
+                "product_id": product.id,
+                "product_name": product.name,
+                "qty": 1,
+                "rate": 100,
+            }
+        ],
+        return_reason="Not eligible",
+    )
+
+    rejected = sales.reject_sales_return(ret.id)
+    assert rejected.status == SalesReturnStatus.REJECTED
+    assert rejected.voucher_id is None
+    assert inventory.get_product(product.id).current_qty == starting_qty
+
+    with pytest.raises(ValueError, match="Only pending returns"):
+        sales.approve_sales_return(ret.id)
+
+
+def test_invoice_is_available_again_only_after_return_rejection():
+    sales, _, product, customer_acct, cash, _ = _sales_stack()
+    invoice = sales.create_direct_sale(
+        customer_account_id=customer_acct.id,
+        store_account_id=cash.id,
+        gross_amount=100,
+        discount_amount=0,
+        amount_received=100,
+        store_invoice_number="POS-RETURN-1",
+        line_items=[
+            {
+                "product_id": product.id,
+                "qty": 1,
+                "rate": 100,
+                "description": product.name,
+            }
+        ],
+    )
+    return_data = {
+        "customer_id": "c1",
+        "return_date": date.today(),
+        "source_invoice_id": invoice.id,
+        "lines": [
+            {
+                "product_id": product.id,
+                "product_name": product.name,
+                "qty": 1,
+                "rate": 100,
+            }
+        ],
+        "return_reason": "Wrong size",
+    }
+    first = sales.create_sales_return(**return_data)
+
+    with pytest.raises(ValueError, match="already exists"):
+        sales.create_sales_return(**return_data)
+
+    sales.reject_sales_return(first.id)
+    replacement = sales.create_sales_return(**return_data)
+    assert replacement.status == SalesReturnStatus.PENDING
+
+
+def test_goods_received_does_not_add_stock_when_restock_disabled():
+    sales, inventory, product, _, _, _ = _sales_stack()
+    starting_qty = inventory.get_product(product.id).current_qty
+    ret = sales.create_sales_return(
+        customer_id="c1",
+        return_date=date.today(),
+        lines=[
+            {
+                "product_id": product.id,
+                "product_name": product.name,
+                "qty": 1,
+                "rate": 100,
+            }
+        ],
+        return_reason="Damaged",
+        restock_items=False,
+    )
+
+    sales.approve_sales_return(ret.id)
+    sales.mark_sales_return_goods_received(ret.id)
+    assert inventory.get_product(product.id).current_qty == starting_qty
+
+    with pytest.raises(ValueError, match="refund-processed"):
+        sales.close_sales_return(ret.id)
 
 
 def test_registered_business_invoice_posts_output_gst():

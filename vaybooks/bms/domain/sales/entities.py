@@ -10,6 +10,7 @@ from vaybooks.bms.domain.shared.enums import (
     EstimateStatus,
     QuotationStatus,
     SalesOrderStatus,
+    SalesReturnStatus,
 )
 
 
@@ -159,9 +160,22 @@ class SalesReturn:
     id: str = field(default_factory=lambda: uuid4().hex)
     customer_name: str = ""
     source_invoice_id: Optional[str] = None
+    source_invoice_number: str = ""
     source_dn_id: Optional[str] = None
     voucher_id: Optional[str] = None
     notes: str = ""
+    return_reason: str = ""
+    refund_option: str = "Customer credit"
+    amount_refunded: float = 0.0
+    refund_account_id: Optional[str] = None
+    status: SalesReturnStatus = SalesReturnStatus.PENDING
+    restock_items: bool = True
+    attachments: List[dict] = field(default_factory=list)
+    approved_at: Optional[datetime] = None
+    rejected_at: Optional[datetime] = None
+    goods_received_at: Optional[datetime] = None
+    refund_processed_at: Optional[datetime] = None
+    closed_at: Optional[datetime] = None
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
 

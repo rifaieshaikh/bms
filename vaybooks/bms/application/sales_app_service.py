@@ -7,7 +7,10 @@ from typing import List, Optional
 from vaybooks.bms.application.accounting_app_service import AccountingAppService
 from vaybooks.bms.application.inventory_app_service import InventoryAppService
 from vaybooks.bms.domain.accounting.entities import Voucher
-from vaybooks.bms.domain.accounting.sales_parsing import sales_row_from_voucher
+from vaybooks.bms.domain.accounting.sales_parsing import (
+    sales_amounts_from_lines,
+    sales_row_from_voucher,
+)
 from vaybooks.bms.domain.customers.entities import Customer
 from vaybooks.bms.domain.sales.customer_prices import CustomerPriceEntry
 from vaybooks.bms.domain.sales.entities import (
@@ -36,12 +39,14 @@ from vaybooks.bms.domain.sales.sales_line_resolver import (
     effective_sales_gst_rate,
 )
 from vaybooks.bms.domain.sales.services import SalesDomainService
+from vaybooks.bms.domain.shared.date_utils import utc_now
 from vaybooks.bms.domain.shared.enums import (
     DeliveryNoteStatus,
     EstimateStatus,
     QuotationStatus,
     PartyRegistrationType,
     SalesOrderStatus,
+    SalesReturnStatus,
     StockReferenceType,
     VoucherType,
 )
@@ -843,28 +848,57 @@ class SalesAppService:
     def get_sales_return(self, return_id: str) -> Optional[SalesReturn]:
         return self._return_repo.find_by_id(return_id)
 
+    def reserve_sales_return_number(self) -> str:
+        """Reserve a visible return number for a new-return form."""
+        return self._counter_repo.next("sales_return_number")
+
     def create_sales_return(
         self,
         customer_id: str,
         return_date: date,
         lines: list[dict],
+        return_number: Optional[str] = None,
         source_invoice_id: Optional[str] = None,
         source_dn_id: Optional[str] = None,
         amount_refunded: float = 0.0,
         refund_account_id: Optional[str] = None,
         notes: str = "",
+        return_reason: str = "",
+        refund_option: str = "Customer credit",
+        restock_items: bool = True,
+        attachments: Optional[list[dict]] = None,
     ) -> SalesReturn:
         customer_account = self._accounting.get_customer_account(customer_id)
         if not customer_account:
             raise ValueError("Customer account not found")
         source_invoice = None
+        source_invoice_number = ""
         if source_invoice_id:
+            if any(
+                prior.source_invoice_id == source_invoice_id
+                and prior.status != SalesReturnStatus.REJECTED
+                for prior in self._return_repo.list_all()
+            ):
+                raise ValueError(
+                    "A sales return already exists for this invoice"
+                )
             source_invoice = self._accounting.get_voucher(source_invoice_id)
             if (
                 not source_invoice
                 or source_invoice.voucher_type != VoucherType.SALES_INVOICE
             ):
                 raise ValueError("Source sales invoice not found")
+            source_customer_account_id = sales_amounts_from_lines(
+                source_invoice.lines
+            ).get("customer_account_id")
+            if source_customer_account_id != customer_account.id:
+                raise ValueError("Original invoice does not belong to this customer")
+            source_row = self.get_sales_invoice(source_invoice_id) or {}
+            source_invoice_number = (
+                source_row.get("store_invoice_number")
+                or source_row.get("voucher_number")
+                or ""
+            )
             invoice_items, _, _ = parse_sales_line_items_note(
                 source_invoice.description
             )
@@ -878,7 +912,10 @@ class SalesAppService:
                 )
             already_returned: dict[str, float] = {}
             for prior in self._return_repo.list_all():
-                if prior.source_invoice_id != source_invoice_id:
+                if (
+                    prior.source_invoice_id != source_invoice_id
+                    or prior.status == SalesReturnStatus.REJECTED
+                ):
                     continue
                 for line in prior.lines:
                     already_returned[line.product_id] = round(
@@ -896,7 +933,14 @@ class SalesAppService:
                     raise ValueError(
                         f"Return quantity exceeds invoiced quantity for {product_id}"
                     )
-        return_number = self._counter_repo.next("sales_return_number")
+        if return_number:
+            if any(
+                item.return_number == return_number
+                for item in self._return_repo.list_all()
+            ):
+                raise ValueError("Return number already exists")
+        else:
+            return_number = self.reserve_sales_return_number()
         sales_return = self._domain.create_sales_return(
             return_number=return_number,
             customer_id=customer_id,
@@ -904,36 +948,57 @@ class SalesAppService:
             return_date=return_date,
             lines=lines,
             source_invoice_id=source_invoice_id,
+            source_invoice_number=source_invoice_number,
             source_dn_id=source_dn_id,
             notes=notes,
+            return_reason=return_reason,
+            refund_option=refund_option,
+            amount_refunded=amount_refunded,
+            refund_account_id=refund_account_id,
+            restock_items=restock_items,
+            attachments=attachments,
         )
+        return sales_return
+
+    def _process_sales_return_refund(
+        self,
+        sales_return: SalesReturn,
+        *,
+        source_invoice=None,
+    ) -> SalesReturn:
+        if sales_return.voucher_id:
+            sales_return.status = SalesReturnStatus.REFUND_PROCESSED
+            sales_return.refund_processed_at = utc_now()
+            self._return_repo.save(sales_return)
+            return sales_return
+        customer_account = self._accounting.get_customer_account(
+            sales_return.customer_id
+        )
+        if not customer_account:
+            raise ValueError("Customer account not found")
+        if source_invoice is None and sales_return.source_invoice_id:
+            source_invoice = self._accounting.get_voucher(
+                sales_return.source_invoice_id
+            )
         return_amount = sales_return.total_amount
-        description = f"Sales return {return_number}"
-        if notes.strip():
-            description = f"{description} — {notes.strip()}"
+        description = f"Sales return {sales_return.return_number}"
+        detail = sales_return.return_reason or sales_return.notes
+        if detail.strip():
+            description = f"{description} — {detail.strip()}"
         voucher = self._accounting.create_sales_return_voucher(
             customer_account_id=customer_account.id,
             return_amount=return_amount,
             description=description,
-            amount_refunded=amount_refunded,
-            refund_account_id=refund_account_id,
-            voucher_date=return_date,
-            reference_dn_id=source_dn_id,
-            source_invoice_id=source_invoice_id,
+            amount_refunded=sales_return.amount_refunded,
+            refund_account_id=sales_return.refund_account_id,
+            voucher_date=sales_return.return_date,
+            reference_dn_id=sales_return.source_dn_id,
+            source_invoice_id=sales_return.source_invoice_id,
         )
         sales_return.voucher_id = voucher.id
+        sales_return.status = SalesReturnStatus.REFUND_PROCESSED
+        sales_return.refund_processed_at = utc_now()
         self._return_repo.save(sales_return)
-        stock_lines = [
-            {
-                "product_id": line.product_id,
-                "qty": line.qty,
-                "description": line.product_name or "Return",
-            }
-            for line in sales_return.lines
-        ]
-        self._inventory.apply_sales_return(
-            sales_return.id, stock_lines, return_date
-        )
         if source_invoice and source_invoice.reference_so_id:
             self._domain.unmark_so_invoiced(
                 source_invoice.reference_so_id,
@@ -943,6 +1008,191 @@ class SalesAppService:
                 ],
             )
         return sales_return
+
+    def approve_sales_return(self, return_id: str) -> SalesReturn:
+        sales_return = self.get_sales_return(return_id)
+        if not sales_return:
+            raise ValueError("Sales return not found")
+        if sales_return.status != SalesReturnStatus.PENDING:
+            raise ValueError("Only pending returns can be approved")
+        sales_return.status = SalesReturnStatus.APPROVED
+        sales_return.approved_at = utc_now()
+        return self._return_repo.save(sales_return)
+
+    def reject_sales_return(self, return_id: str) -> SalesReturn:
+        sales_return = self.get_sales_return(return_id)
+        if not sales_return:
+            raise ValueError("Sales return not found")
+        if sales_return.status != SalesReturnStatus.PENDING:
+            raise ValueError("Only pending returns can be rejected")
+        sales_return.status = SalesReturnStatus.REJECTED
+        sales_return.rejected_at = utc_now()
+        return self._return_repo.save(sales_return)
+
+    def mark_sales_return_goods_received(self, return_id: str) -> SalesReturn:
+        sales_return = self.get_sales_return(return_id)
+        if not sales_return:
+            raise ValueError("Sales return not found")
+        if sales_return.status != SalesReturnStatus.APPROVED:
+            raise ValueError("Only approved returns can be marked goods received")
+        # Legacy approved returns already have a voucher and were restocked by
+        # the previous workflow. Do not apply their inventory movement twice.
+        if sales_return.restock_items and not sales_return.voucher_id:
+            stock_lines = [
+                {
+                    "product_id": line.product_id,
+                    "qty": line.qty,
+                    "description": line.product_name or "Return",
+                }
+                for line in sales_return.lines
+            ]
+            self._inventory.apply_sales_return(
+                sales_return.id, stock_lines, sales_return.return_date
+            )
+        sales_return.status = SalesReturnStatus.GOODS_RECEIVED
+        sales_return.goods_received_at = utc_now()
+        return self._return_repo.save(sales_return)
+
+    def process_sales_return_refund(self, return_id: str) -> SalesReturn:
+        sales_return = self.get_sales_return(return_id)
+        if not sales_return:
+            raise ValueError("Sales return not found")
+        if sales_return.status != SalesReturnStatus.GOODS_RECEIVED:
+            raise ValueError(
+                "Refund can only be processed after goods are received"
+            )
+        return self._process_sales_return_refund(sales_return)
+
+    def close_sales_return(self, return_id: str) -> SalesReturn:
+        sales_return = self.get_sales_return(return_id)
+        if not sales_return:
+            raise ValueError("Sales return not found")
+        if sales_return.status != SalesReturnStatus.REFUND_PROCESSED:
+            raise ValueError("Only refund-processed returns can be closed")
+        sales_return.status = SalesReturnStatus.CLOSED
+        sales_return.closed_at = utc_now()
+        return self._return_repo.save(sales_return)
+
+    def update_sales_return(
+        self,
+        return_id: str,
+        *,
+        customer_id: str,
+        return_date: date,
+        lines: list[dict],
+        source_invoice_id: Optional[str] = None,
+        notes: str = "",
+        return_reason: str = "",
+        refund_option: str = "Customer credit",
+        amount_refunded: float = 0.0,
+        refund_account_id: Optional[str] = None,
+        restock_items: bool = True,
+        attachments: Optional[list[dict]] = None,
+    ) -> SalesReturn:
+        customer_account = self._accounting.get_customer_account(customer_id)
+        if not customer_account:
+            raise ValueError("Customer account not found")
+        source_invoice_number = ""
+        if source_invoice_id:
+            if any(
+                prior.id != return_id
+                and prior.source_invoice_id == source_invoice_id
+                and prior.status != SalesReturnStatus.REJECTED
+                for prior in self._return_repo.list_all()
+            ):
+                raise ValueError(
+                    "A sales return already exists for this invoice"
+                )
+            source_invoice = self._accounting.get_voucher(source_invoice_id)
+            if (
+                not source_invoice
+                or source_invoice.voucher_type != VoucherType.SALES_INVOICE
+            ):
+                raise ValueError("Source sales invoice not found")
+            source_customer_account_id = sales_amounts_from_lines(
+                source_invoice.lines
+            ).get("customer_account_id")
+            if source_customer_account_id != customer_account.id:
+                raise ValueError("Original invoice does not belong to this customer")
+            source_row = self.get_sales_invoice(source_invoice_id) or {}
+            source_invoice_number = (
+                source_row.get("store_invoice_number")
+                or source_row.get("voucher_number")
+                or ""
+            )
+            invoice_items, _, _ = parse_sales_line_items_note(
+                source_invoice.description
+            )
+            invoiced_by_product: dict[str, float] = {}
+            for item in invoice_items:
+                product_id = str(item.get("product_id") or "")
+                invoiced_by_product[product_id] = round(
+                    invoiced_by_product.get(product_id, 0.0)
+                    + float(item.get("qty") or 0),
+                    2,
+                )
+            already_returned: dict[str, float] = {}
+            for prior in self._return_repo.list_all():
+                if (
+                    prior.id == return_id
+                    or prior.source_invoice_id != source_invoice_id
+                    or prior.status == SalesReturnStatus.REJECTED
+                ):
+                    continue
+                for line in prior.lines:
+                    already_returned[line.product_id] = round(
+                        already_returned.get(line.product_id, 0.0) + line.qty, 2
+                    )
+            for raw in lines:
+                product_id = str(raw.get("product_id") or "")
+                remaining = round(
+                    invoiced_by_product.get(product_id, 0.0)
+                    - already_returned.get(product_id, 0.0),
+                    2,
+                )
+                if float(raw.get("qty") or 0) > remaining + 0.001:
+                    raise ValueError(
+                        f"Return quantity exceeds invoiced quantity for {product_id}"
+                    )
+        return self._domain.update_sales_return(
+            return_id,
+            customer_id=customer_id,
+            customer_name=self._customer_name(customer_id),
+            return_date=return_date,
+            lines=lines,
+            source_invoice_id=source_invoice_id,
+            source_invoice_number=source_invoice_number,
+            notes=notes,
+            return_reason=return_reason,
+            refund_option=refund_option,
+            amount_refunded=amount_refunded,
+            refund_account_id=refund_account_id,
+            restock_items=restock_items,
+            attachments=attachments,
+        )
+
+    def update_sales_return_details(
+        self,
+        return_id: str,
+        *,
+        return_reason: str,
+        notes: str = "",
+        attachments: Optional[list[dict]] = None,
+    ) -> SalesReturn:
+        """Update non-financial fields without changing posted accounting or stock."""
+        sales_return = self.get_sales_return(return_id)
+        if not sales_return:
+            raise ValueError("Sales return not found")
+        if sales_return.status != SalesReturnStatus.PENDING:
+            raise ValueError("Only pending returns can be edited")
+        if not return_reason.strip():
+            raise ValueError("Return reason is required")
+        sales_return.update(
+            return_reason=return_reason.strip(),
+            notes=notes.strip(),
+            attachments=list(attachments or []),
+        )
+        return self._return_repo.save(sales_return)
 
     def list_sales_invoices(self) -> list[dict]:
         discount = self._accounting.get_discount_account()

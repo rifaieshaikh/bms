@@ -1,5 +1,6 @@
 """List schemas for Sales module pages."""
 
+from vaybooks.bms.domain.shared.enums import SalesReturnStatus
 from vaybooks.bms.ui.list_schemas import (
     F,
     FilterField,
@@ -139,10 +140,21 @@ SALES_RETURNS = ListSchema(
         FilterField("return_number", "Return number", F.EXACT),
         FilterField("customer_name", "Customer", F.EXACT),
         FilterField("return_date", "Return date", F.DATE_RANGE),
+        FilterField(
+            "statuses",
+            "Status",
+            F.MULTISELECT,
+            record_attr="status",
+            options=[
+                (status.value, status.value)
+                for status in SalesReturnStatus
+            ],
+        ),
     ],
     sort_options=[
         SortOption("return_date", "Date (newest)"),
         SortOption("return_number", "Return number"),
+        SortOption("status", "Status"),
     ],
     default_sort="return_date",
     page_size=VOUCHER_PAGE_SIZE,

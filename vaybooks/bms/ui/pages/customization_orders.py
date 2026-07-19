@@ -238,6 +238,118 @@ def _render_items_tab(services: dict, order, invoices: list, deliveries: list):
     )
 
 
+def _render_order_measurements_tab(services: dict, order) -> None:
+    from vaybooks.bms.ui.components.measurement_form import measurement_form
+
+    measurement_service = services["measurements"]
+    records = measurement_service.list_by_customer(order.customer_id)
+    if st.button("Add measurement", key=f"detail_add_ms_{order.id}"):
+        st.session_state[f"detail_show_ms_form_{order.id}"] = True
+    for rec in records:
+        with st.expander(
+            f"{rec.measurement_number} · {rec.person_type.value}"
+            + (f" · {rec.wearer_name}" if rec.wearer_name else ""),
+        ):
+            for value in rec.values:
+                st.write(
+                    f"{value.field_key.replace('_', ' ').title()}: "
+                    f"{value.value} {value.unit}"
+                )
+            try:
+                from vaybooks.bms.infrastructure.pdf.measurement_pdf import (
+                    generate_measurement_sheet_pdf,
+                )
+
+                business = services["business"].get_profile()
+                customer = services["customers"].get_customer_detail(order.customer_id)
+                pdf_bytes = generate_measurement_sheet_pdf(rec, customer, business)
+                st.download_button(
+                    "Download PDF",
+                    data=pdf_bytes,
+                    file_name=f"{rec.measurement_number}.pdf",
+                    mime="application/pdf",
+                    key=f"detail_ms_pdf_{rec.id}",
+                )
+            except Exception as exc:
+                st.caption(str(exc))
+    if st.session_state.get(f"detail_show_ms_form_{order.id}"):
+        saved = measurement_form(
+            services,
+            customer_id=order.customer_id,
+            order_id=order.id,
+            key_prefix=f"detail_ms_{order.id}",
+        )
+        if saved:
+            st.session_state.pop(f"detail_show_ms_form_{order.id}", None)
+            st.success(f"Saved {saved.measurement_number}")
+            st.rerun()
+
+
+def _render_order_advance_tab(services: dict, order) -> None:
+    from datetime import date, timedelta
+
+    order_service = services["orders"]
+    accounting = services["accounting"]
+    etd = st.date_input(
+        "Order ETD",
+        value=order.expected_delivery_date or date.today() + timedelta(days=7),
+        key=f"detail_adv_etd_{order.id}",
+    )
+    advance = st.number_input(
+        "Advance amount",
+        min_value=0.0,
+        value=float(order.advance_amount or 0),
+        step=100.0,
+        key=f"detail_adv_amt_{order.id}",
+    )
+    cash_accounts = accounting.get_store_accounts()
+    account_labels = {a.id: a.account_name for a in cash_accounts}
+    receiving_id = None
+    if account_labels:
+        choice = st.selectbox(
+            "Receiving account",
+            options=list(account_labels.values()),
+            key=f"detail_adv_recv_{order.id}",
+        )
+        receiving_id = next(
+            aid for aid, name in account_labels.items() if name == choice
+        )
+    if st.button("Save advance", key=f"detail_adv_save_{order.id}"):
+        try:
+            order_service.update_order_etd(order.id, etd)
+            _, voucher = order_service.save_order_advance(
+                order.id, advance, receiving_id
+            )
+            if voucher:
+                st.success(f"Advance saved · {voucher.voucher_number}")
+            else:
+                st.success("Advance cleared")
+            st.rerun()
+        except Exception as exc:
+            st.error(str(exc))
+    voucher = order_service.find_advance_voucher(order.id)
+    if voucher:
+        try:
+            from vaybooks.bms.infrastructure.pdf.advance_receipt_pdf import (
+                generate_advance_receipt_pdf,
+            )
+
+            business = services["business"].get_profile()
+            customer = services["customers"].get_customer_detail(order.customer_id)
+            pdf_bytes = generate_advance_receipt_pdf(
+                voucher, order, customer, business
+            )
+            st.download_button(
+                "Download advance receipt",
+                data=pdf_bytes,
+                file_name=f"{voucher.voucher_number}_advance.pdf",
+                mime="application/pdf",
+                key=f"detail_adv_pdf_{order.id}",
+            )
+        except Exception as exc:
+            st.caption(str(exc))
+
+
 # --- invoice dialog ----------------------------------------------------------
 def _inv_amt_key(order_id: str, bill_id: str) -> str:
     return f"inv_amt_{order_id}_{bill_id}"
@@ -1170,11 +1282,60 @@ def _render_order_view(services: dict, order_id: str):
 
     _render_order_financials(services, order, invoices)
 
-    tab_items, tab_inv, tab_del, tab_rcpt, tab_pay, tab_refund = st.tabs(
-        ["Items", "Invoices", "Deliveries", "Receipts", "Payments", "Refunds"]
+    if order.order_status == OrderStatus.DRAFT:
+        draft_cols = st.columns(3)
+        if draft_cols[0].button("Continue workspace", type="primary", key=f"resume_ws_{order.id}"):
+            st.session_state["order_workspace_order_id"] = order.id
+            st.session_state["order_workspace_step"] = "Measurements"
+            navigation.go_to_list("order_workspace")
+        if draft_cols[1].button("Confirm order", key=f"confirm_ord_{order.id}"):
+            try:
+                order_service.confirm_order(order.id)
+                st.success("Order confirmed")
+                st.rerun()
+            except Exception as exc:
+                st.error(str(exc))
+
+    (
+        tab_overview,
+        tab_meas,
+        tab_items,
+        tab_adv,
+        tab_inv,
+        tab_del,
+        tab_rcpt,
+        tab_pay,
+        tab_refund,
+    ) = st.tabs(
+        [
+            "Overview",
+            "Measurements",
+            "Items",
+            "Advance & ETD",
+            "Invoices",
+            "Deliveries",
+            "Receipts",
+            "Payments",
+            "Refunds",
+        ]
     )
+    with tab_overview:
+        st.write(f"Order date: {order.order_date}")
+        st.write(f"ETD: {order.expected_delivery_date}")
+        st.write(f"Items: {len(order.customization_items)}")
+        if order.notes:
+            st.write(f"Notes: {order.notes}")
+    with tab_meas:
+        _render_order_measurements_tab(services, order)
     with tab_items:
+        add_cols = st.columns([1, 3])
+        if add_cols[0].button("Add item", key=f"detail_add_item_{order.id}"):
+            st.session_state["order_workspace_order_id"] = order.id
+            st.session_state["order_workspace_step"] = "Items"
+            navigation.go_to_list("order_workspace")
         _render_items_tab(services, order, invoices, deliveries)
+    with tab_adv:
+        _render_order_advance_tab(services, order)
     with tab_inv:
         _render_invoices_tab(services, order, invoices)
     with tab_del:
