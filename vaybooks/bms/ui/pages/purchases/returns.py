@@ -39,4 +39,8 @@ def render(services: dict) -> None:
     if bar["primary_clicked"]:
         arm_return_dialog()
         st.rerun()
+    if bar.get("view_nth"):
+        from vaybooks.bms.ui import navigation
+
+        navigation.go_to_detail("purchase_return_detail", bar["view_nth"])
     open_return_dialog_if_armed(services)

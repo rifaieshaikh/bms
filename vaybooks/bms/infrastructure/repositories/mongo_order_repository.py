@@ -50,6 +50,9 @@ class MongoBillRegistryRepository:
     def exists(self, bill_number: str) -> bool:
         return self._collection.find_one({"bill_number": bill_number.upper()}) is not None
 
+    def unregister(self, bill_number: str) -> None:
+        self._collection.delete_one({"bill_number": bill_number.upper()})
+
 
 class MongoOrderRepository:
     def __init__(self, db: Database):
@@ -72,6 +75,7 @@ class MongoOrderRepository:
             "margin_amount": item.margin_amount,
             "margin_per_hour": item.margin_per_hour,
             "mph_snapshot_at": item.mph_snapshot_at,
+            "is_cancellation_charge": item.is_cancellation_charge,
             "created_at": item.created_at,
             "updated_at": item.updated_at,
         }
@@ -95,6 +99,7 @@ class MongoOrderRepository:
             margin_amount=doc.get("margin_amount"),
             margin_per_hour=doc.get("margin_per_hour"),
             mph_snapshot_at=doc.get("mph_snapshot_at"),
+            is_cancellation_charge=bool(doc.get("is_cancellation_charge", False)),
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
         )

@@ -22,8 +22,7 @@ def _render_cards(page_orders, services):
 
 def _apply_customer_deep_link(services) -> None:
     """`/orders?customer=<id>` (or session fallback) seeds the customer filter
-    once, then strips it. Uses ``consume_list_param`` so it survives the query
-    param being dropped across ``st.switch_page``."""
+    once, then strips it via ``consume_list_param``."""
     customer_id = navigation.consume_list_param("orders_list", "customer")
     if not customer_id:
         return

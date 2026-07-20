@@ -30,6 +30,7 @@ DIALOG_FLAG_PREFIXES = (
     "rcpt_dialog_",
     "pay_dialog_",
     "refund_dialog_",
+    "cancel_dialog_",
     "acc_create_dialog",
     "acc_edit_dialog",
     "acc_ledger_dialog",
@@ -57,6 +58,12 @@ DIALOG_FLAG_PREFIXES = (
     "invoice_edit_dialog",
     "sales_return_dialog",
     "sales_return_edit_dialog",
+    "ws_add_item_dialog",
+    "ws_edit_item_dialog",
+    "ws_remove_item_dialog",
+    "ws_add_measurement_dialog",
+    "ws_edit_measurement_dialog",
+    "ws_remove_measurement_dialog",
 )
 
 _ARMED_FLAGS = "_armed_dialog_flags"

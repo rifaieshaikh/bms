@@ -113,6 +113,10 @@ def render(services: dict):
                     ("Current stock", f"{product.current_qty:g} {product.unit}"),
                     ("Opening qty", f"{product.opening_qty:g}"),
                     ("Selling price", f"₹{product.active_selling_rate:,.2f}"),
+                    (
+                        "Purchase price",
+                        f"₹{float(product.last_purchase_rate or 0):,.2f}",
+                    ),
                     ("MRP", f"₹{product.active_mrp:,.2f}"),
                     ("HSN", product.hsn_sac or "—"),
                     ("GST", f"{product.active_gst_rate:g}%"),
@@ -167,17 +171,46 @@ def render(services: dict):
         st.dataframe(pd.DataFrame(cf_rows), use_container_width=True, hide_index=True)
 
     st.subheader("Purchase price history")
+    st.caption(
+        "Rates are ex-GST. The newest rate for a vendor becomes active for that vendor; "
+        "the product Purchase price shows the latest overall rate."
+    )
     history = services["purchases"].list_purchase_price_history(
         CatalogItemType.PRODUCT, product_id
     )
     if not history:
         st.caption("No purchase history yet.")
     else:
-        for row in history[:20]:
-            st.caption(
-                f"{row.purchase_date} · Qty {row.qty:g} @ ₹{row.rate:,.2f} "
-                f"(₹{row.line_total:,.2f}) · Bill {row.vendor_bill_number or '—'}"
+        vendors = services.get("vendors")
+        vendor_names: dict[str, str] = {}
+        rows = []
+        for idx, row in enumerate(history[:50]):
+            vendor_id = row.vendor_id
+            if vendor_id not in vendor_names:
+                vendor = (
+                    vendors.get_vendor_detail(vendor_id)
+                    if vendors and vendor_id
+                    else None
+                )
+                vendor_names[vendor_id] = (
+                    vendor.vendor_name if vendor else (vendor_id[:8] if vendor_id else "—")
+                )
+            is_latest_for_vendor = not any(
+                earlier.vendor_id == vendor_id
+                for earlier in history[:idx]
             )
+            rows.append(
+                {
+                    "Status": "Active" if is_latest_for_vendor else "Previous",
+                    "Date": _fmt_date(row.purchase_date),
+                    "Vendor": vendor_names[vendor_id],
+                    "Qty": row.qty,
+                    "Rate (ex-GST)": row.rate,
+                    "Line total": row.line_total,
+                    "Bill": row.vendor_bill_number or "—",
+                }
+            )
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
     st.subheader("Stock ledger")
     ledger = inventory.get_product_ledger(product_id)

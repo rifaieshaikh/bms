@@ -35,10 +35,12 @@ def invoice_card(
     *,
     posted: bool = False,
     edit: InvoiceEditAction | None = None,
+    pdf_bytes: bytes | None = None,
 ) -> None:
     item_labels = _item_labels(order, invoice)
     items_text = ", ".join(item_labels) or "—"
     item_count = len(item_labels)
+    display_amount = invoice.grand_total if invoice.is_generated else invoice.net_amount
 
     with st.container(border=True):
         st.markdown(
@@ -46,14 +48,14 @@ def invoice_card(
             unsafe_allow_html=True,
         )
 
-        if invoice.discount_amount > 0:
+        if invoice.discount_amount > 0 or (invoice.is_generated and invoice.total_tax > 0):
             st.markdown(
                 f'<p class="z-card-amount" style="color:#2E7D46">'
-                f"₹{invoice.net_amount:,.0f}</p>",
+                f"₹{display_amount:,.0f}</p>",
                 unsafe_allow_html=True,
             )
             badges = status_badge(
-                f"Gross ₹{invoice.invoice_amount:,.0f}", "gray", compact=True
+                f"Taxable ₹{invoice.net_amount:,.0f}", "gray", compact=True
             )
         else:
             st.markdown(
@@ -63,6 +65,12 @@ def invoice_card(
             )
             badges = ""
 
+        if invoice.is_generated:
+            badges = (badges + " ") if badges else ""
+            badges += status_badge("Generated", "green", compact=True)
+        if invoice.is_cancellation:
+            badges = (badges + " ") if badges else ""
+            badges += status_badge("Cancellation", "orange", compact=True)
         if posted:
             badges = (badges + " ") if badges else ""
             badges += status_badge("Posted", "blue", compact=True)
@@ -78,6 +86,8 @@ def invoice_card(
 
         if invoice.discount_amount > 0:
             st.caption(f"Discount ₹{invoice.discount_amount:,.0f}")
+        if invoice.is_generated and invoice.total_tax > 0:
+            st.caption(f"GST ₹{invoice.total_tax:,.0f}")
 
         margin_badges = (
             status_badge(f"Margin ₹{invoice.margin_amount:,.0f}", "violet", compact=True)
@@ -92,7 +102,19 @@ def invoice_card(
         )
         st.markdown(margin_badges, unsafe_allow_html=True)
 
-        if edit and st.button(
+        action_cols = st.columns(2 if pdf_bytes else 1)
+        col_idx = 0
+        if pdf_bytes:
+            action_cols[col_idx].download_button(
+                "Download PDF",
+                data=pdf_bytes,
+                file_name=f"{invoice.invoice_number}.pdf",
+                mime="application/pdf",
+                key=f"dl_inv_pdf_{invoice.id}",
+                use_container_width=True,
+            )
+            col_idx += 1
+        if edit and action_cols[col_idx].button(
             "Edit",
             key=edit.button_key,
             type="primary",

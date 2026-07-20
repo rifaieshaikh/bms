@@ -34,7 +34,14 @@ class _FakeCursor:
     def __init__(self, docs):
         self._docs = list(docs)
 
-    def sort(self, field, direction):
+    def sort(self, field, direction=-1):
+        if isinstance(field, list):
+            for key, direction in reversed(field):
+                self._docs.sort(
+                    key=lambda d, k=key: d.get(k) or "",
+                    reverse=(direction == -1),
+                )
+            return self
         self._docs.sort(key=lambda d: d.get(field, ""), reverse=(direction == -1))
         return self
 
@@ -73,3 +80,6 @@ def test_price_history_latest_rate():
         )
     )
     assert repo.latest_rate(CatalogItemType.PRODUCT, "p1", "v1") == 120.0
+    # Prior rate remains in history; latest is active for that vendor.
+    history = repo.list_for_item(CatalogItemType.PRODUCT, "p1", vendor_id="v1")
+    assert [h.rate for h in history] == [120.0, 100.0]

@@ -1,16 +1,29 @@
 from datetime import date
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 
 from vaybooks.bms.domain.accounting.repository import CounterRepository
 from vaybooks.bms.domain.expenses.repository import ExpenseRepository
-from vaybooks.bms.domain.invoices.entities import Invoice
+from vaybooks.bms.domain.invoices.entities import (
+    DEFAULT_CUSTOMIZATION_GST_RATE,
+    DEFAULT_CUSTOMIZATION_SAC,
+    INVOICE_KIND_CANCELLATION,
+    INVOICE_KIND_STANDARD,
+    INVOICE_SOURCE_GENERATED,
+    INVOICE_SOURCE_RECORDED,
+    Invoice,
+)
 from vaybooks.bms.domain.invoices.repository import InvoiceRepository
 from vaybooks.bms.domain.invoices.services import InvoiceDomainService
 from vaybooks.bms.domain.orders.repository import OrderRepository
 from vaybooks.bms.domain.orders.services import OrderDomainService
 from vaybooks.bms.domain.shared.date_utils import utc_now
-from vaybooks.bms.domain.shared.enums import VoucherType
+from vaybooks.bms.domain.shared.enums import PartyRegistrationType, VoucherType
 from vaybooks.bms.domain.shared.exceptions import ValidationError
+from vaybooks.bms.domain.shared.india import compute_sales_gst
+from vaybooks.bms.domain.sales.sales_line_resolver import (
+    business_is_registered,
+    effective_sales_gst_rate,
+)
 
 
 class InvoiceAppService:
@@ -31,6 +44,75 @@ class InvoiceAppService:
         self._accounting = accounting_service
         self._domain = InvoiceDomainService(invoice_repo)
         self._order_domain = OrderDomainService(order_repo, None)
+
+    @staticmethod
+    def _customer_is_registered(customer) -> bool:
+        if not customer:
+            return False
+        return bool(
+            customer.registration_type == PartyRegistrationType.REGISTERED
+            or (getattr(customer, "gstin", "") or "").strip()
+        )
+
+    @classmethod
+    def resolve_place_of_supply(
+        cls,
+        customer,
+        business,
+    ) -> Tuple[str, str]:
+        """Return (place_of_supply_state_code, supply_type B2B/B2C)."""
+        business_state = (getattr(business, "state_code", "") or "").strip()
+        customer_state = (getattr(customer, "state_code", "") or "").strip() if customer else ""
+        supply_type = "B2B" if cls._customer_is_registered(customer) else "B2C"
+        if supply_type == "B2C" and not customer_state:
+            customer_state = business_state
+        return customer_state, supply_type
+
+    def peek_next_invoice_number(self) -> str:
+        return self._counter_repo.peek("invoice_number")
+
+    def preview_invoice_gst(
+        self,
+        net_taxable: float,
+        gst_rate: float,
+        *,
+        business,
+        place_of_supply_state: str,
+    ) -> dict:
+        registered = business_is_registered(business)
+        business_state = getattr(business, "state_code", "") if business else ""
+        effective_rate = effective_sales_gst_rate(business, gst_rate)
+        if not registered or net_taxable <= 0:
+            return {
+                "gst_rate": 0.0,
+                "taxable_amount": round(max(net_taxable, 0.0), 2),
+                "cgst_amount": 0.0,
+                "sgst_amount": 0.0,
+                "igst_amount": 0.0,
+                "utgst_amount": 0.0,
+                "total_tax": 0.0,
+                "grand_total": round(max(net_taxable, 0.0), 2),
+            }
+        gst = compute_sales_gst(
+            net_taxable,
+            effective_rate,
+            business_registered=True,
+            business_state_code=business_state,
+            customer_state_code=place_of_supply_state,
+        )
+        total_tax = round(
+            gst.cgst_amount + gst.sgst_amount + gst.igst_amount + gst.utgst_amount, 2
+        )
+        return {
+            "gst_rate": effective_rate,
+            "taxable_amount": gst.taxable_amount,
+            "cgst_amount": gst.cgst_amount,
+            "sgst_amount": gst.sgst_amount,
+            "igst_amount": gst.igst_amount,
+            "utgst_amount": gst.utgst_amount,
+            "total_tax": total_tax,
+            "grand_total": round(gst.taxable_amount + total_tax, 2),
+        }
 
     def _snapshot_item_mph(self, order, invoices: List[Invoice]) -> None:
         """Freeze per-item MPH for items that are both invoiced and delivered.
@@ -108,6 +190,17 @@ class InvoiceAppService:
             "Restart the app to seed defaults or create one in Accounts."
         )
 
+    def _resolve_income_account_id(self, invoice: Invoice) -> str:
+        if invoice.is_cancellation:
+            account = self._accounting.get_cancellation_charges_account()
+            if account:
+                return account.id
+            raise ValueError(
+                'No "Cancellation Charges" revenue account found. '
+                "Restart the app to seed defaults or create one in Accounts."
+            )
+        return self._resolve_customization_account_id()
+
     def _resolve_discount_account_id(self) -> str:
         account = self._accounting.get_discount_account()
         if not account:
@@ -134,7 +227,7 @@ class InvoiceAppService:
         customer_account = self._accounting.get_customer_account(order.customer_id)
         if not customer_account:
             raise ValueError("No customer account found for this order")
-        income_id = self._resolve_customization_account_id()
+        income_id = self._resolve_income_account_id(invoice)
         discount = round(invoice.discount_amount or 0.0, 2)
         discount_account_id = (
             self._resolve_discount_account_id() if discount > 0 else None
@@ -143,13 +236,43 @@ class InvoiceAppService:
             order.id,
             exclude_invoice_id=invoice.id if existing else None,
         )
-        advance_applied = round(min(unapplied, invoice.net_amount), 2)
+        due_amount = (
+            invoice.grand_total
+            if invoice.is_generated and invoice.total_tax > 0
+            else invoice.net_amount
+        )
+        advance_applied = round(min(unapplied, due_amount), 2)
         if advance_applied > unapplied:
             raise ValueError(
                 f"Cannot apply ₹{advance_applied:,.2f} advance; "
                 f"only ₹{unapplied:,.2f} unapplied advance available on this order"
             )
         description = f"Invoice {invoice.invoice_number} - {order.order_number}"
+
+        if invoice.is_generated and invoice.total_tax > 0:
+            if existing:
+                self._accounting.update_customization_gst_invoice(
+                    existing.id,
+                    customer_account.id,
+                    income_id,
+                    invoice,
+                    description,
+                    invoice.invoice_date,
+                    advance_applied=advance_applied,
+                )
+            else:
+                self._accounting.create_customization_gst_invoice(
+                    customer_account.id,
+                    income_id,
+                    invoice,
+                    description,
+                    invoice.invoice_date,
+                    reference_order_id=order.id,
+                    reference_invoice_id=invoice.id,
+                    advance_applied=advance_applied,
+                )
+            return
+
         if existing:
             self._accounting.update_sales_invoice(
                 existing.id,
@@ -185,7 +308,14 @@ class InvoiceAppService:
         invoice_amount: float,
         invoice_date: Optional[date] = None,
         allow_already_invoiced: bool = False,
+        post_entry: bool = False,
+        discount_amount: float = 0.0,
         item_amounts: Optional[Dict[str, float]] = None,
+        item_discounts: Optional[Dict[str, float]] = None,
+        gst_rate: float = DEFAULT_CUSTOMIZATION_GST_RATE,
+        hsn_sac: str = DEFAULT_CUSTOMIZATION_SAC,
+        business=None,
+        customer=None,
     ) -> Invoice:
         order = self._order_repo.find_by_id(order_id)
         expenses = self._expense_repo.find_by_order(order_id)
@@ -202,6 +332,8 @@ class InvoiceAppService:
 
         invoice_number = self._counter_repo.next("invoice_number")
         inv_date = invoice_date or date.today()
+        pos_state, supply_type = self.resolve_place_of_supply(customer, business)
+        registered = business_is_registered(business)
 
         invoice = self._domain.build_invoice(
             order=order,
@@ -212,9 +344,21 @@ class InvoiceAppService:
             expenses=expenses,
             existing_invoices=existing,
             allow_already_invoiced=allow_already_invoiced,
+            discount_amount=discount_amount,
             item_amounts=item_amounts,
+            item_discounts=item_discounts,
+            invoice_source=INVOICE_SOURCE_GENERATED,
+            gst_rate=gst_rate,
+            hsn_sac=hsn_sac,
+            place_of_supply_state=pos_state,
+            supply_type=supply_type,
+            business_registered=registered,
+            business_state_code=getattr(business, "state_code", "") if business else "",
+            business=business,
         )
         saved = self._invoice_repo.save(invoice)
+
+        self._sync_sales_posting(order, saved, post_entry)
 
         invoices = existing + [saved]
         deliveries = (
@@ -297,6 +441,10 @@ class InvoiceAppService:
         discount_amount: float = 0.0,
         item_amounts: Optional[Dict[str, float]] = None,
         item_discounts: Optional[Dict[str, float]] = None,
+        gst_rate: Optional[float] = None,
+        hsn_sac: Optional[str] = None,
+        business=None,
+        customer=None,
     ) -> Invoice:
         invoice = self._invoice_repo.find_by_id(invoice_id)
         if not invoice:
@@ -345,6 +493,36 @@ class InvoiceAppService:
         net_revenue = round(invoice_amount - discount_amount, 2)
         mph = self._domain.calculate_mph(net_revenue, scoped)
 
+        if invoice.is_generated:
+            pos_state, supply_type = self.resolve_place_of_supply(customer, business)
+            registered = business_is_registered(business)
+            rate = (
+                float(gst_rate)
+                if gst_rate is not None
+                else float(invoice.gst_rate or DEFAULT_CUSTOMIZATION_GST_RATE)
+            )
+            sac = (hsn_sac or invoice.hsn_sac or DEFAULT_CUSTOMIZATION_SAC).strip()
+            gst_preview = self.preview_invoice_gst(
+                net_revenue,
+                rate,
+                business=business,
+                place_of_supply_state=pos_state,
+            )
+            invoice.gst_rate = gst_preview["gst_rate"]
+            invoice.hsn_sac = sac
+            invoice.place_of_supply_state = pos_state
+            invoice.supply_type = supply_type
+            invoice.taxable_amount = gst_preview["taxable_amount"]
+            invoice.cgst_amount = gst_preview["cgst_amount"]
+            invoice.sgst_amount = gst_preview["sgst_amount"]
+            invoice.igst_amount = gst_preview["igst_amount"]
+            invoice.utgst_amount = gst_preview["utgst_amount"]
+            if not registered:
+                invoice.gst_rate = 0.0
+                invoice.taxable_amount = net_revenue
+                invoice.cgst_amount = invoice.sgst_amount = 0.0
+                invoice.igst_amount = invoice.utgst_amount = 0.0
+
         invoice.invoice_number = invoice_number.strip()
         invoice.bill_ids = list(bill_ids)
         invoice.item_amounts = item_amounts
@@ -357,6 +535,12 @@ class InvoiceAppService:
         invoice.total_in_house_hours = mph["total_in_house_hours"]
         invoice.margin_amount = mph["margin_amount"]
         invoice.margin_per_hour = mph["margin_per_hour"]
+        cancel_item = order.get_cancellation_charge_item()
+        invoice.invoice_kind = (
+            INVOICE_KIND_CANCELLATION
+            if cancel_item and set(bill_ids) == {cancel_item.item_id}
+            else INVOICE_KIND_STANDARD
+        )
         invoice.updated_at = utc_now()
         saved = self._invoice_repo.save(invoice)
 

@@ -724,6 +724,122 @@ class AccountingDomainService:
             reference_invoice_id=reference_invoice_id,
         )
 
+    def build_customization_gst_invoice_voucher(
+        self,
+        voucher_number: str,
+        voucher_date,
+        description: str,
+        customer_account_id: str,
+        customer_account_name: str,
+        income_account_id: str,
+        income_account_name: str,
+        taxable_amount: float,
+        cgst_amount: float = 0.0,
+        sgst_amount: float = 0.0,
+        igst_amount: float = 0.0,
+        utgst_amount: float = 0.0,
+        reference_order_id: Optional[str] = None,
+        reference_invoice_id: Optional[str] = None,
+        advance_account_id: Optional[str] = None,
+        advance_account_name: Optional[str] = None,
+        advance_applied: float = 0.0,
+        gst_output_accounts: Optional[dict] = None,
+        voucher_type=None,
+    ) -> Voucher:
+        """Customization tax invoice: revenue + GST output, optional advance."""
+        from vaybooks.bms.domain.shared.enums import VoucherType
+
+        if voucher_type is None:
+            voucher_type = VoucherType.CUSTOMIZATION_INVOICE
+
+        taxable_amount = round(float(taxable_amount or 0), 2)
+        cgst_amount = round(float(cgst_amount or 0), 2)
+        sgst_amount = round(float(sgst_amount or 0), 2)
+        igst_amount = round(float(igst_amount or 0), 2)
+        utgst_amount = round(float(utgst_amount or 0), 2)
+        if taxable_amount <= 0:
+            raise ValidationError("Taxable amount must be positive")
+
+        grand_total = round(
+            taxable_amount + cgst_amount + sgst_amount + igst_amount + utgst_amount, 2
+        )
+        advance_applied = round(max(advance_applied or 0.0, 0.0), 2)
+        if advance_applied > grand_total:
+            raise ValidationError("Advance applied cannot exceed the invoice grand total")
+        if advance_applied > 0 and not advance_account_id:
+            raise ValidationError(
+                f'An "{ADVANCE_FROM_CUSTOMERS_ACCOUNT_NAME}" account is required to apply advance'
+            )
+
+        lines = [
+            VoucherLine(
+                account_id=customer_account_id,
+                account_name=customer_account_name,
+                debit_amount=grand_total,
+                credit_amount=0,
+                description=description,
+            ),
+            VoucherLine(
+                account_id=income_account_id,
+                account_name=income_account_name,
+                debit_amount=0,
+                credit_amount=taxable_amount,
+                description="Customization invoice",
+            ),
+        ]
+        gst_accounts = gst_output_accounts or {}
+        for key, amount, label in (
+            ("cgst", cgst_amount, "CGST"),
+            ("sgst", sgst_amount, "SGST"),
+            ("igst", igst_amount, "IGST"),
+            ("utgst", utgst_amount, "UTGST"),
+        ):
+            if amount <= 0:
+                continue
+            account = gst_accounts.get(key)
+            if not account:
+                raise ValidationError(
+                    f'"{label} Output" account not found — required to post '
+                    f"₹{amount:,.2f} of {label}."
+                )
+            lines.append(
+                VoucherLine(
+                    account_id=account["id"],
+                    account_name=account["name"],
+                    debit_amount=0,
+                    credit_amount=amount,
+                    description=f"{label} output",
+                )
+            )
+        if advance_applied > 0:
+            lines.extend(
+                [
+                    VoucherLine(
+                        account_id=advance_account_id,
+                        account_name=advance_account_name or ADVANCE_FROM_CUSTOMERS_ACCOUNT_NAME,
+                        debit_amount=advance_applied,
+                        credit_amount=0,
+                        description="Advance applied",
+                    ),
+                    VoucherLine(
+                        account_id=customer_account_id,
+                        account_name=customer_account_name,
+                        debit_amount=0,
+                        credit_amount=advance_applied,
+                        description="Advance applied",
+                    ),
+                ]
+            )
+        return Voucher(
+            voucher_number=voucher_number,
+            voucher_type=voucher_type,
+            voucher_date=voucher_date,
+            description=description,
+            lines=lines,
+            reference_order_id=reference_order_id,
+            reference_invoice_id=reference_invoice_id,
+        )
+
     def build_cash_sales_invoice_voucher(
         self,
         voucher_number: str,

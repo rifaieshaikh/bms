@@ -1,4 +1,4 @@
-streamlit>=1.48
+streamlit>=1.52
 streamlit-pdf>=1.0.0
 streamlit-js-eval
 streamlit-hotkeys>=0.6.0

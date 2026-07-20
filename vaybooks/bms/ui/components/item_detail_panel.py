@@ -159,13 +159,52 @@ def _render_item_mph(item, invoiced: bool, delivered: bool):
 
 
 # --- inline item edit --------------------------------------------------------
+def _render_item_print(services, order, item, key_prefix):
+    try:
+        from vaybooks.bms.infrastructure.pdf.customization_item_pdf import (
+            generate_customization_item_pdf,
+        )
+
+        business = services["business"].get_profile()
+        customer = services["customers"].get_customer_detail(order.customer_id)
+        measurement = None
+        if item.measurement_id and "measurements" in services:
+            measurement = services["measurements"].get_record(item.measurement_id)
+        attachments = []
+        if "attachments" in services:
+            attachments = services["attachments"].list_by_item(item.item_id)
+        pdf_bytes = generate_customization_item_pdf(
+            order, item, customer, business, measurement, attachments
+        )
+        st.download_button(
+            "Print Customization Item with Notes",
+            data=pdf_bytes,
+            file_name=f"{item.bill_number}.pdf",
+            mime="application/pdf",
+            key=f"item_pdf_{key_prefix}",
+            icon=":material/print:",
+            use_container_width=True,
+        )
+    except Exception as exc:
+        st.caption(f"Print unavailable: {exc}")
+
+
 def _render_item_edit_inline(services, order, item, key_prefix):
     order_service = services["orders"]
+    has_measurement = bool(item.measurement_id)
     with st.container(border=True):
         st.markdown("**Item details**")
         cols = st.columns([1, 2, 1, 1])
         bill_number = cols[0].text_input(
-            "Bill Number", value=item.bill_number, key=f"edit_bill_{key_prefix}"
+            "Measurement Bill Number",
+            value=item.bill_number,
+            key=f"edit_bill_{key_prefix}",
+            disabled=has_measurement,
+            help=(
+                f"Assigned from measurement {item.measurement_number}."
+                if has_measurement
+                else "Required when the item has no linked measurement."
+            ),
         )
         description = cols[1].text_input(
             "Item Description", value=item.description, key=f"edit_desc_{key_prefix}"
@@ -186,7 +225,9 @@ def _render_item_edit_inline(services, order, item, key_prefix):
                 st.rerun()
             except Exception as exc:
                 st.error(str(exc))
-
+        if has_measurement and item.measurement_number:
+            st.caption(f"Linked measurement: {item.measurement_number}")
+        _render_item_print(services, order, item, key_prefix)
 
 # --- activity dialogs --------------------------------------------------------
 def _on_status_change(services, order_id, order_activity_id, widget_key, err_key):
@@ -865,6 +906,8 @@ def customization_item_detail_panel(
 
     if show_item_edit:
         _render_item_edit_inline(services, order, item, key_prefix)
+    else:
+        _render_item_print(services, order, item, key_prefix)
 
     section_key = f"section_{key_prefix}"
     section = st.segmented_control(

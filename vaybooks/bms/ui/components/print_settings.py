@@ -25,8 +25,9 @@ _LABELS = {
     "sales_order": "Sales Order",
     "delivery_note": "Delivery Note",
     "sales_invoice": "Sales Invoice",
+    "customization_invoice": "Customization Tax Invoice",
     "measurement_sheet": "Measurement Sheet",
-    "customization_item": "Customization Item",
+    "customization_item": "Customization Item with Notes",
     "advance_receipt": "Advance Receipt",
 }
 
@@ -267,19 +268,52 @@ def _layout_controls(
 
 
 def _content_controls(document_type: str, current: SalesPrintSettings) -> dict:
+    boutique = document_type in ("measurement_sheet", "customization_item")
     toggles = [
         ("show_logo", "Business logo / mark", current.show_logo),
         ("show_signature", "Signature", current.show_signature),
-        ("show_gst_columns", "GST columns", current.show_gst_columns),
-        ("show_hsn_column", "HSN/SAC", current.show_hsn_column),
-        ("show_discount_column", "Discount", current.show_discount_column),
-        ("show_amount_in_words", "Amount in words", current.show_amount_in_words),
-        ("show_bank_details", "Bank details", current.show_bank_details),
-        ("show_bank_qr", "Payment QR", current.show_bank_qr),
-        ("show_terms", "Terms and policies", current.show_terms),
-        ("show_custom_fields", "Custom fields", current.show_custom_fields),
     ]
-    values: dict = {}
+    if boutique:
+        toggles.append(("show_notes", "Notes", current.show_notes))
+        if document_type == "customization_item":
+            toggles.extend(
+                [
+                    (
+                        "show_linked_measurements",
+                        "Linked measurements",
+                        current.show_linked_measurements,
+                    ),
+                    ("show_activities", "Production checklist", current.show_activities),
+                    ("show_media", "Visual references / files", current.show_media),
+                ]
+            )
+    else:
+        toggles.extend(
+            [
+                ("show_gst_columns", "GST columns", current.show_gst_columns),
+                ("show_hsn_column", "HSN/SAC", current.show_hsn_column),
+                ("show_discount_column", "Discount", current.show_discount_column),
+                ("show_amount_in_words", "Amount in words", current.show_amount_in_words),
+                ("show_bank_details", "Bank details", current.show_bank_details),
+                ("show_bank_qr", "Payment QR", current.show_bank_qr),
+                ("show_terms", "Terms and policies", current.show_terms),
+                ("show_custom_fields", "Custom fields", current.show_custom_fields),
+            ]
+        )
+    values: dict = {
+        "show_gst_columns": current.show_gst_columns,
+        "show_hsn_column": current.show_hsn_column,
+        "show_discount_column": current.show_discount_column,
+        "show_amount_in_words": current.show_amount_in_words,
+        "show_bank_details": current.show_bank_details,
+        "show_bank_qr": current.show_bank_qr,
+        "show_terms": current.show_terms,
+        "show_custom_fields": current.show_custom_fields,
+        "show_notes": current.show_notes,
+        "show_linked_measurements": current.show_linked_measurements,
+        "show_activities": current.show_activities,
+        "show_media": current.show_media,
+    }
     with st.container(border=True):
         st.markdown(":material/visibility: **Visible content**")
         columns = st.columns(2)
@@ -428,6 +462,7 @@ def render_print_settings(services: dict, business) -> None:
                         phone_number="9876543210",
                         expected_delivery_date=date.today(),
                         order_activities=[],
+                        notes="Prefer soft lining; deliver before Diwali.",
                     )
                     item = SimpleNamespace(
                         bill_number="MS-0001-01",
@@ -435,9 +470,29 @@ def render_print_settings(services: dict, business) -> None:
                         expected_delivery_date=date.today(),
                         customer_specification="Deep neck",
                         item_id="item1",
+                        measurement_number="MS-0001",
+                    )
+                    measurement = SimpleNamespace(
+                        measurement_number="MS-0001",
+                        notes="Slightly loose around bust.",
+                        print_notes="",
+                        values=[
+                            SimpleNamespace(
+                                field_key="bust", value="36", unit="inch"
+                            ),
+                            SimpleNamespace(
+                                field_key="waist", value="30", unit="inch"
+                            ),
+                        ],
                     )
                     pdf_bytes = generate_customization_item_pdf(
-                        order, item, customer, business, None, [], settings
+                        order,
+                        item,
+                        customer,
+                        business,
+                        measurement,
+                        [],
+                        settings,
                     )
                 else:
                     order = SimpleNamespace(

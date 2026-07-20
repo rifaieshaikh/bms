@@ -117,17 +117,28 @@ def line_items_table(
     *,
     show_gst: bool = True,
     suffix: str = "items",
+    item_column_label: str = "Product",
 ) -> None:
-    """Render a dense ERP-style items dataframe."""
+    """Render a dense ERP-style items dataframe.
+
+    ``item_column_label`` is typically ``Product`` (sales) or ``Item`` (purchase).
+    Display name prefers ``item_name``, then ``product``, then ``description``.
+    """
     st.subheader("Line items")
     if not rows:
         st.info("No line items recorded.")
         return
 
+    name_col = item_column_label or "Product"
     frame_rows: list[dict[str, Any]] = []
     for row in rows:
         item = {
-            "Product": row.get("product") or row.get("description") or "—",
+            name_col: (
+                row.get("item_name")
+                or row.get("product")
+                or row.get("description")
+                or "—"
+            ),
             "Qty": float(row.get("qty") or 0),
             "Rate": float(row.get("rate") or 0),
             "Total": float(row.get("total") or row.get("line_total") or 0),
@@ -146,6 +157,8 @@ def line_items_table(
             item["Ordered"] = float(row.get("qty_ordered") or 0)
         if row.get("qty_delivered") is not None:
             item["Delivered"] = float(row.get("qty_delivered") or 0)
+        if row.get("qty_received") is not None:
+            item["Received"] = float(row.get("qty_received") or 0)
         if row.get("qty_invoiced") is not None:
             item["Invoiced"] = float(row.get("qty_invoiced") or 0)
         if row.get("discount") is not None:
@@ -162,10 +175,11 @@ def line_items_table(
 
     preferred = [
         "SKU",
-        "Product",
+        name_col,
         "HSN/SAC",
         "Ordered",
         "Delivered",
+        "Received",
         "Invoiced",
         "Qty",
         "Rate",
@@ -191,7 +205,7 @@ def line_items_table(
         "IGST",
         "Total",
     }
-    qty_cols = {"Qty", "Ordered", "Delivered", "Invoiced", "GST %"}
+    qty_cols = {"Qty", "Ordered", "Delivered", "Received", "Invoiced", "GST %"}
     column_config: dict[str, Any] = {}
     for col in df.columns:
         if col in money_cols:

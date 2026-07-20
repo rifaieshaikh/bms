@@ -32,6 +32,7 @@ from vaybooks.bms.infrastructure.pdf.boutique_pdf import (
 from vaybooks.bms.domain.shared.document_customization import (
     DocumentTemplateSettings,
     SalesPrintSettings,
+    print_settings_from_dict,
 )
 from vaybooks.bms.application.measurement_app_service import MeasurementAppService
 from tests.conftest import FakeBillRegistryRepository, FakeOrderRepository
@@ -88,6 +89,86 @@ def test_measurement_bill_suffix_allocation():
     )
     second = domain.next_measurement_bill_number("MS-0025")
     assert second == "MS-0025-02"
+
+
+def test_add_item_requires_measurement_bill_number_without_measurement():
+    domain = OrderDomainService(FakeOrderRepository(), FakeBillRegistryRepository())
+    order = CustomizationOrder(
+        order_number="CO-0001",
+        customer_id="c1",
+        customer_name="Test",
+        phone_number="9999999999",
+        order_date=date.today(),
+        expected_delivery_date=date.today(),
+        order_status=OrderStatus.DRAFT,
+    )
+    with pytest.raises(ValidationError, match="Measurement bill number is required"):
+        domain.add_customization_item(order, "  ", "Blouse", [], {"Stitching": True})
+
+
+def test_add_item_accepts_manual_measurement_bill_number():
+    domain = OrderDomainService(FakeOrderRepository(), FakeBillRegistryRepository())
+    order = CustomizationOrder(
+        order_number="CO-0001",
+        customer_id="c1",
+        customer_name="Test",
+        phone_number="9999999999",
+        order_date=date.today(),
+        expected_delivery_date=date.today(),
+        order_status=OrderStatus.DRAFT,
+    )
+    item = domain.add_customization_item(
+        order, "ZB-100", "Blouse", [], {"Stitching": True}
+    )
+    assert item.bill_number == "ZB-100"
+    assert item.measurement_id is None
+
+
+def test_remove_customization_item_unregisters_bill():
+    registry = FakeBillRegistryRepository()
+    domain = OrderDomainService(FakeOrderRepository(), registry)
+    order = CustomizationOrder(
+        order_number="CO-0001",
+        customer_id="c1",
+        customer_name="Test",
+        phone_number="9999999999",
+        order_date=date.today(),
+        expected_delivery_date=date.today(),
+        order_status=OrderStatus.DRAFT,
+    )
+    item = domain.add_customization_item(
+        order, "ZB-200", "Blouse", [], {"Stitching": True}
+    )
+    assert registry.exists("ZB-200")
+    domain.remove_customization_item(order, item.item_id)
+    assert order.customization_items == []
+    assert order.order_activities == []
+    assert not registry.exists("ZB-200")
+
+
+def test_update_customization_item_saves_specification():
+    domain = OrderDomainService(FakeOrderRepository(), FakeBillRegistryRepository())
+    order = CustomizationOrder(
+        order_number="CO-0001",
+        customer_id="c1",
+        customer_name="Test",
+        phone_number="9999999999",
+        order_date=date.today(),
+        expected_delivery_date=date.today(),
+        order_status=OrderStatus.DRAFT,
+    )
+    item = domain.add_customization_item(
+        order, "ZB-300", "Blouse", [], {"Stitching": True}
+    )
+    domain.update_customization_item(
+        order,
+        item.item_id,
+        "ZB-300",
+        "Silk blouse",
+        customer_specification="Deep neck",
+    )
+    assert item.description == "Silk blouse"
+    assert item.customer_specification == "Deep neck"
 
 
 def test_measurement_record_requires_wearer_for_child():
@@ -158,6 +239,7 @@ def test_item_and_advance_pdf_smoke():
         order_date=date.today(),
         expected_delivery_date=date.today(),
         advance_amount=500,
+        notes="Deliver before festival; soft lining preferred.",
     )
     item = CustomizationItem(
         bill_number="MS-0001-01",
@@ -180,6 +262,54 @@ def test_item_and_advance_pdf_smoke():
     adv_pdf = generate_advance_receipt_pdf(voucher, order, customer, business)
     assert adv_pdf.startswith(b"%PDF")
     assert len(adv_pdf) > 10_000
+
+
+def test_customization_item_pdf_respects_notes_toggle():
+    order = CustomizationOrder(
+        order_number="CO-0001",
+        customer_id="c1",
+        customer_name="Asha",
+        phone_number="9000000000",
+        order_date=date.today(),
+        expected_delivery_date=date.today(),
+        notes="Unique note marker XYZ123",
+    )
+    item = CustomizationItem(
+        bill_number="MS-0001-01",
+        description="Blouse",
+        customer_specification="Deep neck",
+    )
+    customer = SimpleNamespace(customer_name="Asha", phone_number="9000000000")
+    business = SimpleNamespace(business_name="Zahcci Boutique")
+    with_notes = generate_customization_item_pdf(
+        order,
+        item,
+        customer,
+        business,
+        None,
+        [],
+        SalesPrintSettings(show_notes=True),
+    )
+    without_notes = generate_customization_item_pdf(
+        order,
+        item,
+        customer,
+        business,
+        None,
+        [],
+        SalesPrintSettings(show_notes=False),
+    )
+    assert with_notes.startswith(b"%PDF")
+    assert without_notes.startswith(b"%PDF")
+    assert len(with_notes) > len(without_notes)
+
+
+def test_old_print_settings_receive_boutique_note_defaults():
+    settings = print_settings_from_dict({"paper_size": "A4"})
+    assert settings.show_notes is True
+    assert settings.show_linked_measurements is True
+    assert settings.show_activities is True
+    assert settings.show_media is True
 
 
 def test_boutique_pdf_uses_saved_document_print_settings():

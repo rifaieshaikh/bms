@@ -129,6 +129,56 @@ def test_generate_invoice_sets_total_amount_and_invoice_generated_status():
     assert persisted.total_amount == expected_total
 
 
+def test_generate_invoice_marks_source_and_computes_gst():
+    from vaybooks.bms.domain.business.entities import BusinessProfile
+    from vaybooks.bms.domain.customers.entities import Customer
+    from vaybooks.bms.domain.invoices.entities import INVOICE_SOURCE_GENERATED
+    from vaybooks.bms.domain.shared.enums import PartyRegistrationType
+
+    order_repo = FakeOrderRepository()
+    invoice_repo = FakeInvoiceRepository()
+    expense_repo = FakeExpenseRepository()
+    counter_repo = FakeCounterRepository()
+
+    order = _build_o1001_order()
+    order_repo.save(order)
+
+    business = BusinessProfile(
+        state_code="29",
+        registration_type=PartyRegistrationType.REGISTERED,
+    )
+    customer = Customer(
+        customer_name="Ananya Rao",
+        phone_number="9876543210",
+        state_code="29",
+    )
+
+    service = InvoiceAppService(
+        invoice_repo,
+        order_repo,
+        expense_repo,
+        counter_repo,
+    )
+
+    invoice = service.generate_invoice(
+        order_id=order.id,
+        bill_ids=["bill-zb005"],
+        invoice_amount=4500.0,
+        item_amounts={"bill-zb005": 4500.0},
+        gst_rate=5.0,
+        business=business,
+        customer=customer,
+    )
+
+    assert invoice.invoice_source == INVOICE_SOURCE_GENERATED
+    assert invoice.invoice_number == "INV-0001"
+    assert invoice.taxable_amount == 4500.0
+    assert invoice.cgst_amount == 112.5
+    assert invoice.sgst_amount == 112.5
+    assert invoice.grand_total == 4725.0
+    assert invoice.margin_amount == 4500.0
+
+
 def test_empty_bill_ids_leaves_order_status_unchanged():
     order_repo = FakeOrderRepository()
     invoice_repo = FakeInvoiceRepository()
@@ -518,3 +568,87 @@ def test_reinvoicing_with_discount_reduces_item_mph():
     assert row["cumulative_net"] == 1400.0
     # Cumulative margin: 1400 - 800 expense = 600 over 4 h = 150/h.
     assert row["margin_per_hour"] == 150.0
+
+
+def test_incomplete_item_cannot_be_invoiced_on_active_order():
+    domain = InvoiceDomainService(FakeInvoiceRepository())
+    order = CustomizationOrder(
+        id="O-INC",
+        order_number="O-INC",
+        customer_id="c1",
+        customer_name="Test",
+        phone_number="9000000000",
+        order_date=date.today(),
+        expected_delivery_date=date.today(),
+        order_status=OrderStatus.IN_PROGRESS,
+        customization_items=[
+            CustomizationItem(
+                item_id="bill-1",
+                bill_number="ZB001",
+                description="Blouse",
+            )
+        ],
+    )
+    order.order_activities.append(
+        OrderActivity(
+            activity_id="act-1",
+            activity_name="Stitching",
+            bill_id="bill-1",
+            activity_status=ActivityStatus.PENDING,
+            current_status="Created",
+        )
+    )
+    with pytest.raises(ValidationError, match="Only completed customization items"):
+        domain.validate_bill_ids(order, ["bill-1"], [])
+
+
+def test_cancelled_order_allows_cancellation_charge_invoice():
+    from vaybooks.bms.domain.invoices.entities import INVOICE_KIND_CANCELLATION
+    from vaybooks.bms.domain.orders.services import OrderDomainService
+
+    invoice_repo = FakeInvoiceRepository()
+    order_repo = FakeOrderRepository()
+    expense_repo = FakeExpenseRepository()
+    counter_repo = FakeCounterRepository()
+
+    order = CustomizationOrder(
+        id="O-CAN",
+        order_number="O-CAN",
+        customer_id="c1",
+        customer_name="Test",
+        phone_number="9000000000",
+        order_date=date.today(),
+        expected_delivery_date=date.today(),
+        order_status=OrderStatus.CANCELLED,
+        customization_items=[
+            CustomizationItem(
+                item_id="bill-svc",
+                bill_number="ZB-SVC",
+                description="Blouse",
+            )
+        ],
+    )
+    OrderDomainService.ensure_cancellation_charge_item(order)
+    order_repo.save(order)
+    cancel_item = order.get_cancellation_charge_item()
+    assert cancel_item is not None
+
+    domain = InvoiceDomainService(invoice_repo)
+    domain.validate_bill_ids(order, [cancel_item.item_id], [])
+
+    with pytest.raises(ValidationError, match="only invoice the cancellation charge"):
+        domain.validate_bill_ids(order, ["bill-svc"], [])
+
+    service = InvoiceAppService(
+        invoice_repo, order_repo, expense_repo, counter_repo
+    )
+    invoice = service.record_invoice(
+        order.id,
+        "INV-CANCEL-1",
+        [cancel_item.item_id],
+        1500.0,
+        item_amounts={cancel_item.item_id: 1500.0},
+    )
+    assert invoice.bill_ids == [cancel_item.item_id]
+    assert invoice.invoice_kind == INVOICE_KIND_CANCELLATION
+    assert invoice.invoice_amount == 1500.0

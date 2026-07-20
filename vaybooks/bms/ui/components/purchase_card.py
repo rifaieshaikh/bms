@@ -41,7 +41,7 @@ def _purchase_card(row: dict, suffix: str) -> None:
         )
         st.markdown(_payment_badge(outstanding), unsafe_allow_html=True)
         if st.button("View", key=f"purchase_view_{suffix}_{row.get('id')}", use_container_width=True):
-            navigation.go_to_detail("purchase_detail", "purchases_list", row.get("id"))
+            navigation.go_to_detail("purchase_detail", row.get("id"))
 
 
 def purchase_cards(rows: list[dict], suffix: str = "purchases") -> None:

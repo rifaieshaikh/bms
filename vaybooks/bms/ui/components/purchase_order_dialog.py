@@ -1,4 +1,4 @@
-"""Create purchase order dialog."""
+"""Create purchase order dialog (product-only lines)."""
 
 from __future__ import annotations
 
@@ -13,14 +13,10 @@ from vaybooks.bms.ui.components.purchase_invoice_form import (
     vendor_option_map,
     vendor_select_index,
 )
-from vaybooks.bms.ui.components.purchase_line_ui import (
-    default_purchase_line,
-    item_option_map,
-)
+from vaybooks.bms.ui.components.purchase_lines_editor import render_purchase_lines_editor
 from vaybooks.bms.ui.dialog_utils import make_dismiss_handler
 
 PO_DIALOG = "purchase_order_dialog"
-_LINES_KEY = f"{PO_DIALOG}_lines"
 
 
 def arm_po_dialog() -> None:
@@ -42,7 +38,7 @@ def purchase_order_dialog(services: dict) -> None:
     purchases = services["purchases"]
     vendors = services["vendors"]
     inventory = services.get("inventory")
-    vendor_services = services["vendor_services"]
+    business = services["business"].get_profile()
 
     vendor_list = vendors.list_all_vendors()
     if not vendor_list:
@@ -62,78 +58,60 @@ def purchase_order_dialog(services: dict) -> None:
     if not vendor_id:
         st.warning("Select a vendor.")
         return
+    vendor = vendors.get_vendor_detail(vendor_id)
 
     products = inventory.list_products(active_only=True) if inventory else []
-    services_list = vendor_services.list_services(active_only=True)
-
-    if _LINES_KEY not in st.session_state:
-        st.session_state[_LINES_KEY] = [default_purchase_line()]
 
     c1, c2 = st.columns(2)
     order_date = c1.date_input("Order date", value=date.today(), key=f"{PO_DIALOG}_date")
     expected_date = c2.date_input("Expected date", value=date.today(), key=f"{PO_DIALOG}_expected")
     notes = st.text_input("Notes", key=f"{PO_DIALOG}_notes")
 
-    line_items = list(st.session_state[_LINES_KEY])
-    for i, row in enumerate(line_items):
-        with st.container(border=True):
-            type_col, item_col = st.columns([1, 3])
-            item_type = type_col.selectbox(
-                "Type",
-                [CatalogItemType.PRODUCT.value, CatalogItemType.SERVICE.value],
-                index=0 if row.get("item_type") != CatalogItemType.SERVICE.value else 1,
-                key=f"{PO_DIALOG}_type_{i}",
-            )
-            row["item_type"] = item_type
-            if item_type == CatalogItemType.SERVICE.value:
-                opts = item_option_map(services_list, lambda s: s.service_name)
-            else:
-                opts = item_option_map(products, lambda p: f"{p.sku} — {p.name}")
-            labels = ["—"] + list(opts.keys())
-            current = "—"
-            if row.get("item_id") in opts.values():
-                current = next(k for k, v in opts.items() if v == row.get("item_id"))
-            picked = item_col.selectbox(
-                "Item", labels,
-                index=labels.index(current) if current in labels else 0,
-                key=f"{PO_DIALOG}_item_{i}",
-            )
-            if picked != "—":
-                row["item_id"] = opts[picked]
-                row["product_id"] = row["item_id"] if item_type == CatalogItemType.PRODUCT.value else None
-                row["product_name"] = picked
-            c2, c3 = st.columns(2)
-            row["qty_ordered"] = c2.number_input(
-                "Qty", min_value=0.0, value=float(row.get("qty") or row.get("qty_ordered") or 1),
-                key=f"{PO_DIALOG}_qty_{i}",
-            )
-            row["qty"] = row["qty_ordered"]
-            row["rate"] = c3.number_input(
-                "Rate (ex-GST)", min_value=0.0, value=float(row.get("rate") or 0),
-                key=f"{PO_DIALOG}_rate_{i}",
-            )
-        line_items[i] = row
-    st.session_state[_LINES_KEY] = line_items
-
-    if st.button("+ Add line", key=f"{PO_DIALOG}_add"):
-        line_items.append(default_purchase_line())
-        st.session_state[_LINES_KEY] = line_items
-        st.rerun()
+    st.markdown("**Line items**")
+    st.caption("Purchase orders are product-only. Services belong on purchase bills.")
+    line_items, gst_errors = render_purchase_lines_editor(
+        key_prefix=PO_DIALOG,
+        products=products,
+        services=[],
+        vendor_id=vendor_id,
+        purchases_service=purchases,
+        inventory_service=inventory,
+        allow_services=False,
+        qty_field="qty_ordered",
+        vendor_registered=False,
+        business=business,
+        business_state_code=business.state_code if business else "",
+        vendor_state_code=vendor.state_code if vendor else "",
+        catalog_return_to=PO_DIALOG,
+    )
 
     if st.button("Save PO", type="primary"):
         try:
+            if gst_errors:
+                raise ValueError(gst_errors[0])
+            if not line_items:
+                raise ValueError("Add at least one product line")
+            # Ensure product-only before resolve
+            for row in line_items:
+                row["item_type"] = CatalogItemType.PRODUCT.value
+                if not row.get("product_id"):
+                    row["product_id"] = row.get("item_id")
             resolved = purchases.resolve_purchase_lines(line_items, vendor_id)
             po_lines = []
-            for raw, line in zip(line_items, resolved):
+            for line in resolved:
+                if line.item_type != CatalogItemType.PRODUCT:
+                    continue
                 po_lines.append(
                     {
-                        "product_id": raw.get("product_id") or "",
+                        "product_id": line.product_id or line.item_id,
                         "product_name": line.item_name,
                         "qty_ordered": line.qty,
                         "rate": line.rate,
                         "expense_account_id": line.expense_account_id,
                     }
                 )
+            if not po_lines:
+                raise ValueError("Add at least one product line")
             purchases.create_purchase_order(
                 vendor_id=vendor_id,
                 order_date=order_date,
@@ -149,5 +127,12 @@ def purchase_order_dialog(services: dict) -> None:
 
 
 def open_po_dialog_if_armed(services: dict) -> None:
-    if st.session_state.get(PO_DIALOG) == "new":
+    from vaybooks.bms.ui.components.catalog_item_dialog import (
+        CATALOG_ITEM_DIALOG,
+        catalog_item_dialog,
+    )
+
+    if st.session_state.get(CATALOG_ITEM_DIALOG):
+        catalog_item_dialog(services)
+    elif st.session_state.get(PO_DIALOG) == "new":
         purchase_order_dialog(services)

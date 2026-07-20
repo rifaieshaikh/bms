@@ -33,6 +33,7 @@ class CustomizationItem:
     margin_amount: Optional[float] = None
     margin_per_hour: Optional[float] = None
     mph_snapshot_at: Optional[datetime] = None
+    is_cancellation_charge: bool = False
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
 
@@ -114,6 +115,19 @@ class CustomizationOrder:
             if item.item_id == item_id:
                 return item
         return None
+
+    def get_cancellation_charge_item(self) -> Optional[CustomizationItem]:
+        for item in self.customization_items:
+            if item.is_cancellation_charge:
+                return item
+        return None
+
+    def has_completed_items(self) -> bool:
+        return any(
+            self.item_activities_complete(item.item_id)
+            for item in self.customization_items
+            if not item.is_cancellation_charge
+        )
 
     def get_bill_by_id(self, bill_id: str) -> Optional[BillNumber]:
         item = self.get_item_by_id(bill_id)

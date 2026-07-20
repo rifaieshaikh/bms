@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import streamlit as st
 
 from vaybooks.bms.domain.shared.enums import CatalogItemType
@@ -17,7 +19,52 @@ def arm_catalog_item_dialog(mode: str = "product", **context) -> None:
     st.session_state[CATALOG_ITEM_DIALOG] = {"mode": mode, **context}
 
 
+def _clear_catalog_form_state() -> None:
+    for key in list(st.session_state):
+        if key.startswith("cat_product_") or key.startswith("cat_svc_") or key in {
+            "cat_hsn",
+            "cat_gst",
+            "cat_mrp",
+        }:
+            st.session_state.pop(key, None)
+
+
+def _product_prefill(text: str) -> tuple[str, str]:
+    value = (text or "").strip()
+    if "—" in value:
+        sku, name = value.split("—", 1)
+        return sku.strip(), name.strip()
+    sku = re.sub(r"[^A-Za-z0-9]+", "-", value).strip("-").upper()
+    return sku, value
+
+
 def _apply_to_bill_line(ctx: dict, saved_item, mode: str) -> None:
+    editor_df_key = ctx.get("editor_df_key")
+    if editor_df_key and editor_df_key in st.session_state:
+        idx = int(ctx["line_index"])
+        rows = list(st.session_state[editor_df_key])
+        if 0 <= idx < len(rows):
+            label = (
+                f"{saved_item.sku} — {saved_item.name}"
+                if mode == "product"
+                else saved_item.service_name
+            )
+            rows[idx]["Item"] = label
+            rows[idx]["Name"] = (
+                saved_item.name if mode == "product" else saved_item.service_name
+            )
+            if "Type" in rows[idx]:
+                rows[idx]["Type"] = (
+                    CatalogItemType.PRODUCT.value
+                    if mode == "product"
+                    else CatalogItemType.SERVICE.value
+                )
+            st.session_state[editor_df_key] = rows
+            editor_key = ctx.get("editor_key")
+            if editor_key:
+                st.session_state.pop(editor_key, None)
+        return
+
     lines_key = f"{ctx['return_to']}_lines"
     if lines_key not in st.session_state:
         return
@@ -64,6 +111,10 @@ def catalog_item_dialog(services: dict) -> None:
     if mode == "product":
         form_prefix = f"cat_product_{item_id or 'new'}"
         st.caption(f"Expense account: **{MATERIAL_PURCHASE_EXPENSE_NAME}** (auto)")
+        if not existing and ctx.get("prefill_text"):
+            sku, name = _product_prefill(str(ctx["prefill_text"]))
+            st.session_state.setdefault(f"{form_prefix}_sku", sku)
+            st.session_state.setdefault(f"{form_prefix}_name", name)
 
         payload = render_product_form(
             inventory=inventory,
@@ -108,6 +159,11 @@ def catalog_item_dialog(services: dict) -> None:
                         pending_category_name=payload.get("pending_category_name"),
                         pending_unit_code=payload.get("pending_unit_code"),
                     )
+                inventory.set_product_cost_fields(
+                    saved.id,
+                    last_purchase_rate=float(payload.get("purchase_rate") or 0),
+                )
+                saved = inventory.get_product(saved.id) or saved
                 st.success(f"Saved {saved.name}")
                 clear_product_form_state(form_prefix)
                 if ctx.get("return_to") and ctx.get("line_index") is not None:
@@ -131,6 +187,10 @@ def catalog_item_dialog(services: dict) -> None:
 
         expense_accounts = accounting.get_expense_accounts()
         exp_opts = {a.account_name: a.id for a in expense_accounts}
+        if not existing and ctx.get("prefill_text"):
+            st.session_state.setdefault(
+                "cat_svc_name", str(ctx["prefill_text"]).strip()
+            )
         svc_name = st.text_input(
             "Service name",
             value=existing.service_name if existing else "",
@@ -162,12 +222,14 @@ def catalog_item_dialog(services: dict) -> None:
                 st.success(f"Saved {saved.service_name}")
                 if ctx.get("return_to") and ctx.get("line_index") is not None:
                     _apply_to_bill_line(ctx, saved, mode)
+                    _clear_catalog_form_state()
                     st.session_state.pop(CATALOG_ITEM_DIALOG, None)
                 st.rerun()
             except Exception as exc:
                 st.error(str(exc))
 
     if save_cols[1].button("Close", key="cat_close"):
+        _clear_catalog_form_state()
         st.session_state.pop(CATALOG_ITEM_DIALOG, None)
         st.rerun()
 
@@ -176,12 +238,17 @@ def catalog_item_dialog(services: dict) -> None:
         hist_type = CatalogItemType.PRODUCT if mode == "product" else CatalogItemType.SERVICE
         history = purchases.list_purchase_price_history(hist_type, show_id)
         st.markdown("**Purchase price history**")
+        st.caption("Ex-GST rates. Newest per vendor is Active.")
         if not history:
             st.caption("No purchase history yet.")
         else:
-            for row in history[:10]:
+            for idx, row in enumerate(history[:10]):
+                is_active = not any(
+                    h.vendor_id == row.vendor_id for h in history[:idx]
+                )
+                status = "Active" if is_active else "Previous"
                 st.caption(
-                    f"{row.purchase_date} · Qty {row.qty:g} @ ₹{row.rate:,.2f} "
+                    f"{status} · {row.purchase_date} · Qty {row.qty:g} @ ₹{row.rate:,.2f} "
                     f"(total ₹{row.line_total:,.2f}) · Bill {row.vendor_bill_number or '—'}"
                 )
 

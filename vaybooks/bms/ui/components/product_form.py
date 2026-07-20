@@ -81,21 +81,30 @@ def render_product_form(
     sell_default = float(existing.active_selling_rate if existing else 0.0)
     mrp_default = float(existing.active_mrp if existing else 0.0)
     gst_default = float(existing.active_gst_rate if existing else 0.0)
+    purchase_default = float(existing.last_purchase_rate if existing else 0.0)
 
-    price_cols = st.columns(3)
+    price_cols = st.columns(2)
     selling_rate = price_cols[0].number_input(
         "Selling price (ex-GST) (₹)",
         min_value=0.0,
         value=sell_default,
         key=f"{key_prefix}_sell",
     )
-    mrp = price_cols[1].number_input(
+    purchase_rate = price_cols[1].number_input(
+        "Purchase price (ex-GST) (₹)",
+        min_value=0.0,
+        value=purchase_default,
+        key=f"{key_prefix}_purchase",
+        help="Active purchase price. Vendor-specific latest rates from bills override this when loading lines.",
+    )
+    price_cols2 = st.columns(2)
+    mrp = price_cols2[0].number_input(
         "MRP (₹)",
         min_value=0.0,
         value=mrp_default,
         key=f"{key_prefix}_mrp",
     )
-    gst_rate = price_cols[2].number_input(
+    gst_rate = price_cols2[1].number_input(
         "GST rate (%)",
         min_value=0.0,
         max_value=100.0,
@@ -195,6 +204,7 @@ def render_product_form(
             "pending_unit_code": unit_pick.get("pending_unit_code"),
             "hsn_sac": (hsn_sac or "").strip(),
             "selling_rate": float(selling_rate),
+            "purchase_rate": float(purchase_rate),
             "mrp": float(mrp),
             "gst_rate": float(gst_rate),
             "gst_required": registered,

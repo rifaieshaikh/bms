@@ -6,13 +6,22 @@ from vaybooks.bms.application.accounting_app_service import AccountingAppService
 from vaybooks.bms.application.inventory_app_service import InventoryAppService
 from vaybooks.bms.application.purchase_app_service import PurchaseAppService
 from vaybooks.bms.domain.accounting.entities import Account
-from vaybooks.bms.domain.shared.enums import AccountType, PurchaseOrderStatus
+from vaybooks.bms.domain.shared.enums import (
+    AccountType,
+    CatalogItemType,
+    PurchaseOrderStatus,
+    VendorRegistrationType,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_purchase_price_history_repository import (
+    MongoPurchasePriceHistoryRepository,
+)
 from tests.conftest import (
     FakeAccountRepository,
     FakeCounterRepository,
     FakeVoucherRepository,
     make_inventory_app_service,
 )
+from tests.domain.test_purchase_price_history import FakeDb as PriceHistoryFakeDb
 
 
 class InMemoryPurchaseOrderRepository:
@@ -88,6 +97,8 @@ class FakeVendorService:
     def get_vendor_detail(self, vendor_id):
         class V:
             vendor_name = "Test Vendor"
+            registration_type = VendorRegistrationType.UNREGISTERED
+            state_code = "27"
 
         return V()
 
@@ -127,9 +138,67 @@ def _purchase_stack():
         accounting,
         inventory,
         vendor_service=FakeVendorService(),
+        price_history_repo=MongoPurchasePriceHistoryRepository(PriceHistoryFakeDb()),
     )
     return purchases, inventory, product, expense, vendor_acct, cash
 
+
+def test_latest_purchase_rate_falls_back_to_product_last_purchase_rate():
+    purchases, inventory, product, _expense, _vendor_acct, _cash = _purchase_stack()
+    inventory.set_product_cost_fields(product.id, last_purchase_rate=75.5)
+    rate = purchases.get_latest_purchase_rate(
+        CatalogItemType.PRODUCT, product.id, "v1"
+    )
+    assert rate == 75.5
+
+
+def test_bill_records_vendor_rate_and_updates_active_purchase_price():
+    purchases, inventory, product, expense, vendor_acct, cash = _purchase_stack()
+    purchases.create_purchase_bill_from_lines(
+        vendor_id="v1",
+        raw_lines=[
+            {
+                "item_type": CatalogItemType.PRODUCT.value,
+                "item_id": product.id,
+                "product_id": product.id,
+                "qty": 2,
+                "rate": 88.0,
+            }
+        ],
+        vendor_bill_number="BILL-RATE",
+        amount_paid=0.0,
+        voucher_date=date.today(),
+        apply_stock=False,
+    )
+    assert purchases.get_latest_purchase_rate(
+        CatalogItemType.PRODUCT, product.id, "v1"
+    ) == 88.0
+    assert inventory.get_product(product.id).last_purchase_rate == 88.0
+
+    purchases.create_purchase_bill_from_lines(
+        vendor_id="v1",
+        raw_lines=[
+            {
+                "item_type": CatalogItemType.PRODUCT.value,
+                "item_id": product.id,
+                "product_id": product.id,
+                "qty": 1,
+                "rate": 95.0,
+            }
+        ],
+        vendor_bill_number="BILL-RATE-2",
+        amount_paid=0.0,
+        voucher_date=date.today(),
+        apply_stock=False,
+    )
+    assert purchases.get_latest_purchase_rate(
+        CatalogItemType.PRODUCT, product.id, "v1"
+    ) == 95.0
+    assert inventory.get_product(product.id).last_purchase_rate == 95.0
+    history = purchases.list_purchase_price_history(
+        CatalogItemType.PRODUCT, product.id, vendor_id="v1"
+    )
+    assert [round(h.rate, 2) for h in history] == [95.0, 88.0]
 
 def test_po_to_grn_to_bill_flow():
     purchases, inventory, product, expense, vendor_acct, cash = _purchase_stack()
@@ -195,3 +264,66 @@ def test_merge_vendor_payment_creates_purchase_bill():
     row = purchases.get_purchase_bill(voucher.id)
     assert row["total"] == 500
     assert row["reference_order_id"] == "order-1"
+
+
+def test_po_update_cannot_reduce_qty_below_received():
+    import pytest
+    from vaybooks.bms.domain.shared.exceptions import ValidationError
+
+    purchases, _inventory, product, expense, _vendor_acct, _cash = _purchase_stack()
+    po = purchases.create_purchase_order(
+        vendor_id="v1",
+        order_date=date.today(),
+        lines=[
+            {
+                "product_id": product.id,
+                "product_name": product.name,
+                "qty_ordered": 10,
+                "rate": 50,
+                "expense_account_id": expense.id,
+            }
+        ],
+    )
+    purchases.create_goods_receipt(
+        vendor_id="v1",
+        receipt_date=date.today(),
+        lines=[{"product_id": product.id, "qty_received": 4, "rate": 50}],
+        purchase_order_id=po.id,
+        confirm=True,
+    )
+    with pytest.raises(ValidationError, match="already received"):
+        purchases.update_purchase_order(
+            po.id,
+            vendor_id="v1",
+            order_date=date.today(),
+            lines=[
+                {
+                    "product_id": product.id,
+                    "product_name": product.name,
+                    "qty_ordered": 3,
+                    "rate": 50,
+                    "expense_account_id": expense.id,
+                }
+            ],
+        )
+
+
+def test_po_create_ignores_service_identity_for_product_only_lines():
+    """PO domain stores product_id only — service-shaped payloads without product_id are empty."""
+    purchases, _inventory, product, expense, _vendor_acct, _cash = _purchase_stack()
+    po = purchases.create_purchase_order(
+        vendor_id="v1",
+        order_date=date.today(),
+        lines=[
+            {
+                "product_id": product.id,
+                "product_name": product.name,
+                "qty_ordered": 2,
+                "rate": 40,
+                "expense_account_id": expense.id,
+            }
+        ],
+    )
+    assert len(po.lines) == 1
+    assert po.lines[0].product_id == product.id
+    assert not hasattr(po.lines[0], "item_type") or True

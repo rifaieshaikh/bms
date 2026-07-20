@@ -128,6 +128,8 @@ def test_old_print_settings_receive_new_defaults():
     assert settings.paper_size == "Letter"
     assert settings.template_style == "classic"
     assert settings.show_bank_qr is True
+    assert settings.show_notes is True
+    assert settings.show_linked_measurements is True
     assert settings.invoice_copy_mode == "select"
     assert settings.default_invoice_copy == "Original for Recipient"
     assert (

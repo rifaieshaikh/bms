@@ -204,7 +204,7 @@ ORDERS = ListSchema(
     title="Customization Orders",
     filter_fields=[
         FilterField("order_number", "Order number", F.EXACT),
-        FilterField("bill_number", "Bill number", F.EXACT, match=_match_order_bill),
+        FilterField("bill_number", "Measurement bill number", F.EXACT, match=_match_order_bill),
         FilterField("customer_id", "Customer", F.ENTITY_SELECT,
                     options_loader="customers"),
         FilterField("customer_name", "Customer name", F.EXACT),
@@ -232,7 +232,7 @@ ITEMS = ListSchema(
     entity_key="items",
     title="Customization Items",
     filter_fields=[
-        FilterField("bill_number", "Bill number", F.EXACT),
+        FilterField("bill_number", "Measurement bill number", F.EXACT),
         FilterField("description", "Description", F.EXACT),
         FilterField("order_number", "Order number", F.EXACT),
         FilterField("customer_name", "Customer name", F.EXACT),
@@ -249,7 +249,7 @@ ITEMS = ListSchema(
                     record_attr="margin_per_hour"),
     ],
     sort_options=[
-        SortOption("bill_number", "Bill number"),
+        SortOption("bill_number", "Measurement bill number"),
         SortOption("customer_name", "Customer name"),
         SortOption("item_status", "Item status"),
         SortOption("margin_per_hour", "MPH"),
@@ -339,7 +339,7 @@ TIME = ListSchema(
     title="Time Log",
     filter_fields=[
         FilterField("work_date", "Work date", F.DATE_RANGE),
-        FilterField("bill_number", "Bill number", F.EXACT),
+        FilterField("bill_number", "Measurement bill number", F.EXACT),
         FilterField("order_number", "Order number", F.EXACT),
         FilterField("worker_name", "Employee", F.EXACT),
         FilterField("activity_name", "Activity", F.SELECT,
@@ -349,7 +349,7 @@ TIME = ListSchema(
         SortOption("work_date", "Work date (newest)"),
         SortOption("created_at", "Created (newest)"),
         SortOption("duration_minutes", "Duration"),
-        SortOption("bill_number", "Bill number"),
+        SortOption("bill_number", "Measurement bill number"),
     ],
     default_sort="work_date",
     page_size=CARD_PAGE_SIZE,

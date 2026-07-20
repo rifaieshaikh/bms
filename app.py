@@ -55,6 +55,7 @@ from vaybooks.bms.ui.pages.purchases import (
     purchase_detail as purchase_bill_detail_mod,
     purchase_order_detail as purchase_order_detail_mod,
     purchase_orders as purchase_orders_mod,
+    return_detail as purchase_return_detail_mod,
     returns as purchase_returns_mod,
 )
 from vaybooks.bms.ui.pages import workers
@@ -281,6 +282,11 @@ purchase_grn_detail_page = st.Page(
 purchase_detail_page = st.Page(
     _page(purchase_bill_detail_mod), title="Purchase Detail", url_path="purchase-detail",
 )
+purchase_return_detail_page = st.Page(
+    _page(purchase_return_detail_mod),
+    title="Purchase Return Detail",
+    url_path="purchase-return-detail",
+)
 
 system_settings_page = st.Page(
     _page(system_settings), title="System", icon=":material/settings:",
@@ -394,6 +400,7 @@ navigation.register("grn_detail", purchase_grn_detail_page)
 navigation.register("purchases_list", purchase_bills_page)
 navigation.register("purchase_detail", purchase_detail_page)
 navigation.register("purchase_returns_list", purchase_returns_page)
+navigation.register("purchase_return_detail", purchase_return_detail_page)
 navigation.register("reports", reports_page)
 navigation.register("activities_list", activities_page)
 navigation.register("measurement_specs", measurement_specs_page)
@@ -506,6 +513,7 @@ hidden_pages = [
     purchase_order_detail_page,
     purchase_grn_detail_page,
     purchase_detail_page,
+    purchase_return_detail_page,
 ]
 
 # All pages must be registered with st.navigation for routing to work.

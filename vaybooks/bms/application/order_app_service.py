@@ -243,16 +243,18 @@ class OrderAppService:
             if not record:
                 raise ValidationError("Measurement not found")
             measurement_number = record.measurement_number
-            if not bill_number:
-                bill_number = self._order_domain.next_measurement_bill_number(
-                    measurement_number
-                )
+            # With a linked measurement, bill number is assigned from it.
+            bill_number = self._order_domain.next_measurement_bill_number(
+                measurement_number
+            )
             if not record.order_id:
                 record.order_id = order.id
                 record.updated_at = utc_now()
                 self._measurement_repo.save(record)
         if not bill_number:
-            raise ValidationError("Bill number is required")
+            raise ValidationError(
+                "Measurement bill number is required when no measurement is linked"
+            )
         activity_configs = self._activity_repo.list_all()
         item = self._order_domain.add_customization_item(
             order,
@@ -530,10 +532,17 @@ class OrderAppService:
 
     def cancel_order(self, order_id: str) -> CustomizationOrder:
         order = self._order_repo.find_by_id(order_id)
+        if not order:
+            raise ValidationError("Order not found")
         self._order_domain.cancel_order(order)
-        saved = self._order_repo.save(order)
-        self._release_order_advance(saved)
-        return saved
+        return self._order_repo.save(order)
+
+    def ensure_cancellation_charge_item(self, order_id: str) -> CustomizationOrder:
+        order = self._order_repo.find_by_id(order_id)
+        if not order:
+            raise ValidationError("Order not found")
+        self._order_domain.ensure_cancellation_charge_item(order)
+        return self._order_repo.save(order)
 
     def complete_order(self, order_id: str) -> CustomizationOrder:
         order = self._order_repo.find_by_id(order_id)
@@ -593,12 +602,31 @@ class OrderAppService:
         bill_number: str,
         description: str,
         expected_delivery_date=None,
+        customer_specification: Optional[str] = None,
     ) -> CustomizationOrder:
         order = self._order_repo.find_by_id(order_id)
+        if not order:
+            raise ValidationError("Order not found")
         self._order_domain.update_customization_item(
-            order, item_id, bill_number, description,
+            order,
+            item_id,
+            bill_number,
+            description,
             expected_delivery_date=expected_delivery_date,
+            customer_specification=customer_specification,
         )
+        self._recalculate_order(order)
+        return self._order_repo.save(order)
+
+    def remove_customization_item(
+        self,
+        order_id: str,
+        item_id: str,
+    ) -> CustomizationOrder:
+        order = self._order_repo.find_by_id(order_id)
+        if not order:
+            raise ValidationError("Order not found")
+        self._order_domain.remove_customization_item(order, item_id)
         self._recalculate_order(order)
         return self._order_repo.save(order)
 

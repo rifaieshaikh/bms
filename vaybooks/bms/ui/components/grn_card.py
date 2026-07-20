@@ -38,7 +38,7 @@ def _grn_card(row: dict, suffix: str) -> None:
         st.caption(_fmt_date(row.get("receipt_date")))
         st.markdown(status_badge(row.get("status") or "Draft", compact=True), unsafe_allow_html=True)
         if st.button("View", key=f"grn_view_{suffix}_{row.get('id')}", use_container_width=True):
-            navigation.go_to_detail("grn_detail", "goods_receipt_list", row.get("id"))
+            navigation.go_to_detail("grn_detail", row.get("id"))
 
 
 def grn_cards(rows: list[dict], suffix: str = "grn") -> None:

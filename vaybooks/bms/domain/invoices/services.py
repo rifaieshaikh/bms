@@ -3,13 +3,23 @@ from typing import Dict, List, Optional, Set
 
 from vaybooks.bms.domain.deliveries.entities import Delivery
 from vaybooks.bms.domain.expenses.entities import Expense
-from vaybooks.bms.domain.invoices.entities import Invoice
+from vaybooks.bms.domain.invoices.entities import (
+    DEFAULT_CUSTOMIZATION_GST_RATE,
+    DEFAULT_CUSTOMIZATION_SAC,
+    INVOICE_KIND_CANCELLATION,
+    INVOICE_KIND_STANDARD,
+    INVOICE_SOURCE_GENERATED,
+    INVOICE_SOURCE_RECORDED,
+    Invoice,
+)
 from vaybooks.bms.domain.invoices.repository import InvoiceRepository
 from vaybooks.bms.domain.orders.bill_status import delivered_bill_ids
 from vaybooks.bms.domain.orders.entities import CustomizationItem, CustomizationOrder
 from vaybooks.bms.domain.shared.date_utils import utc_now
-from vaybooks.bms.domain.shared.enums import ExpenseSource
+from vaybooks.bms.domain.shared.enums import ExpenseSource, OrderStatus
 from vaybooks.bms.domain.shared.exceptions import ValidationError
+from vaybooks.bms.domain.shared.india import compute_sales_gst
+from vaybooks.bms.domain.sales.sales_line_resolver import effective_sales_gst_rate
 
 
 class InvoiceDomainService:
@@ -283,13 +293,29 @@ class InvoiceDomainService:
             raise ValidationError("Select at least one bill for the invoice")
 
         order_bill_ids = {item.item_id for item in order.customization_items}
-        for bill_id in bill_ids:
-            if bill_id not in order_bill_ids:
-                raise ValidationError(f"Item {bill_id} does not belong to this order")
-            if not order.item_activities_complete(bill_id):
+        if order.order_status == OrderStatus.CANCELLED:
+            cancel_item = order.get_cancellation_charge_item()
+            if not cancel_item:
                 raise ValidationError(
-                    "Only completed customization items can be invoiced"
+                    "Cancellation charge item is missing on this cancelled order"
                 )
+            if set(bill_ids) != {cancel_item.item_id}:
+                raise ValidationError(
+                    "Cancelled orders can only invoice the cancellation charge"
+                )
+        else:
+            for bill_id in bill_ids:
+                if bill_id not in order_bill_ids:
+                    raise ValidationError(f"Item {bill_id} does not belong to this order")
+                item = order.get_item_by_id(bill_id)
+                if item and item.is_cancellation_charge:
+                    raise ValidationError(
+                        "Cancellation charge can only be invoiced on cancelled orders"
+                    )
+                if not order.item_activities_complete(bill_id):
+                    raise ValidationError(
+                        "Only completed customization items can be invoiced"
+                    )
 
         if not allow_already_invoiced:
             already = self.invoiced_bill_ids(existing_invoices)
@@ -313,6 +339,14 @@ class InvoiceDomainService:
         discount_amount: float = 0.0,
         item_amounts: Optional[Dict[str, float]] = None,
         item_discounts: Optional[Dict[str, float]] = None,
+        invoice_source: str = INVOICE_SOURCE_RECORDED,
+        gst_rate: float = 0.0,
+        hsn_sac: str = "",
+        place_of_supply_state: str = "",
+        supply_type: str = "",
+        business_registered: bool = False,
+        business_state_code: str = "",
+        business=None,
     ) -> Invoice:
         existing = existing_invoices or self._invoice_repo.list_by_order(order.id)
         self.validate_bill_ids(
@@ -356,6 +390,32 @@ class InvoiceDomainService:
             item_amounts=item_amounts,
             invoice_amount=invoice_amount,
         )
+
+        taxable_amount = net_revenue
+        cgst_amount = sgst_amount = igst_amount = utgst_amount = 0.0
+        effective_rate = 0.0
+        cancel_item = order.get_cancellation_charge_item()
+        invoice_kind = (
+            INVOICE_KIND_CANCELLATION
+            if cancel_item and set(bill_ids) == {cancel_item.item_id}
+            else INVOICE_KIND_STANDARD
+        )
+        if invoice_source == INVOICE_SOURCE_GENERATED and business_registered:
+            base_rate = float(gst_rate or DEFAULT_CUSTOMIZATION_GST_RATE)
+            effective_rate = effective_sales_gst_rate(business, base_rate)
+            gst = compute_sales_gst(
+                taxable_amount,
+                effective_rate,
+                business_registered=True,
+                business_state_code=business_state_code,
+                customer_state_code=place_of_supply_state,
+            )
+            taxable_amount = gst.taxable_amount
+            cgst_amount = gst.cgst_amount
+            sgst_amount = gst.sgst_amount
+            igst_amount = gst.igst_amount
+            utgst_amount = gst.utgst_amount
+
         return Invoice(
             order_id=order.id,
             order_number=order.order_number,
@@ -367,6 +427,17 @@ class InvoiceDomainService:
             item_amounts=item_amounts,
             item_discounts=item_discounts,
             discount_amount=discount_amount,
+            invoice_source=invoice_source,
+            invoice_kind=invoice_kind,
+            gst_rate=effective_rate if invoice_source == INVOICE_SOURCE_GENERATED else 0.0,
+            hsn_sac=(hsn_sac or DEFAULT_CUSTOMIZATION_SAC).strip(),
+            place_of_supply_state=(place_of_supply_state or "").strip(),
+            supply_type=(supply_type or "").strip(),
+            taxable_amount=taxable_amount,
+            cgst_amount=cgst_amount,
+            sgst_amount=sgst_amount,
+            igst_amount=igst_amount,
+            utgst_amount=utgst_amount,
             **mph_data,
         )
 

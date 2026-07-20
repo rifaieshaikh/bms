@@ -31,7 +31,7 @@ def _add_product_dialog(services):
     )
     if payload:
         try:
-            inventory.create_product(
+            created = inventory.create_product(
                 payload["sku"],
                 payload["name"],
                 payload["category_ids"],
@@ -46,6 +46,10 @@ def _add_product_dialog(services):
                 custom_fields=payload["custom_fields"],
                 pending_category_name=payload.get("pending_category_name"),
                 pending_unit_code=payload.get("pending_unit_code"),
+            )
+            inventory.set_product_cost_fields(
+                created.id,
+                last_purchase_rate=float(payload.get("purchase_rate") or 0),
             )
             clear_product_form_state(ADD_FORM_PREFIX)
             st.session_state.pop(P_ADD, None)
@@ -92,6 +96,10 @@ def _edit_product_dialog(services, product_id: str):
                 custom_fields=payload["custom_fields"],
                 pending_category_name=payload.get("pending_category_name"),
                 pending_unit_code=payload.get("pending_unit_code"),
+            )
+            inventory.set_product_cost_fields(
+                product_id,
+                last_purchase_rate=float(payload.get("purchase_rate") or 0),
             )
             clear_product_form_state(f"{EDIT_FORM_PREFIX}_{product_id}")
             st.session_state.pop(P_EDIT, None)

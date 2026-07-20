@@ -17,3 +17,11 @@ class MongoCounterRepository:
         prefix = result.get("prefix", "")
         value = result["current_value"]
         return f"{prefix}-{value:04d}"
+
+    def peek(self, counter_name: str) -> str:
+        result = self._collection.find_one({"_id": counter_name})
+        if not result:
+            raise ValueError(f"Counter {counter_name} not found")
+        prefix = result.get("prefix", "")
+        value = int(result.get("current_value", 0)) + 1
+        return f"{prefix}-{value:04d}"

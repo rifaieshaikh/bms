@@ -11,6 +11,7 @@ DOCUMENT_TYPES = (
     "sales_order",
     "delivery_note",
     "sales_invoice",
+    "customization_invoice",
     "measurement_sheet",
     "customization_item",
     "advance_receipt",
@@ -77,6 +78,11 @@ class SalesPrintSettings:
     show_custom_fields: bool = True
     footer_text: str = ""
     show_signature: bool = True
+    # Boutique document sections (measurement sheet / customization item).
+    show_notes: bool = True
+    show_linked_measurements: bool = True
+    show_activities: bool = True
+    show_media: bool = True
     invoice_copy_mode: str = "select"
     invoice_copy_labels: list[str] = field(
         default_factory=lambda: [
@@ -139,6 +145,11 @@ def default_document_templates() -> dict[str, DocumentTemplateSettings]:
             show_gst_columns=True,
             show_discount_column=True,
         ),
+        "customization_invoice": SalesPrintSettings(
+            show_gst_columns=True,
+            show_discount_column=True,
+            footer_text="Thank you for your business.",
+        ),
         "measurement_sheet": SalesPrintSettings(
             show_gst_columns=False,
             show_discount_column=False,
@@ -146,6 +157,7 @@ def default_document_templates() -> dict[str, DocumentTemplateSettings]:
             show_bank_details=False,
             show_bank_qr=False,
             show_terms=False,
+            show_notes=True,
             footer_text="Please verify measurements before stitching.",
         ),
         "customization_item": SalesPrintSettings(
@@ -154,7 +166,11 @@ def default_document_templates() -> dict[str, DocumentTemplateSettings]:
             show_amount_in_words=False,
             show_bank_details=False,
             show_bank_qr=False,
-            footer_text="Customization item work order.",
+            show_notes=True,
+            show_linked_measurements=True,
+            show_activities=True,
+            show_media=True,
+            footer_text="Customization item with notes — please verify before stitching.",
         ),
         "advance_receipt": SalesPrintSettings(
             show_gst_columns=False,
@@ -213,6 +229,10 @@ def print_settings_from_dict(raw: dict | None) -> SalesPrintSettings:
         show_custom_fields=bool(raw.get("show_custom_fields", True)),
         footer_text=str(raw.get("footer_text") or ""),
         show_signature=bool(raw.get("show_signature", True)),
+        show_notes=bool(raw.get("show_notes", True)),
+        show_linked_measurements=bool(raw.get("show_linked_measurements", True)),
+        show_activities=bool(raw.get("show_activities", True)),
+        show_media=bool(raw.get("show_media", True)),
         invoice_copy_mode=str(raw.get("invoice_copy_mode") or "select"),
         invoice_copy_labels=copy_labels,
         default_invoice_copy=str(

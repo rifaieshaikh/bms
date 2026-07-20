@@ -321,13 +321,14 @@ def generate_measurement_sheet_pdf(
         [name_w, value_w, unit_w],
         settings,
     )
-    _section(pdf, "Notes", settings)
-    _note_card(
-        pdf,
-        "Tailor notes",
-        record.notes or record.print_notes or "No additional notes.",
-        settings,
-    )
+    if settings.show_notes:
+        _section(pdf, "Notes", settings)
+        _note_card(
+            pdf,
+            "Tailor notes",
+            record.notes or record.print_notes or "No additional notes.",
+            settings,
+        )
     _footer(pdf, settings, "CUSTOMER CONFIRMATION", business)
     return bytes(pdf.output())
 
@@ -343,12 +344,12 @@ def generate_customization_item_pdf(
 ) -> bytes:
     settings = _settings_for(business, "customization_item", settings)
     pdf = _configure_pdf(settings)
-    _header(pdf, business, "Customization Item", item.bill_number, settings)
+    _header(pdf, business, "Customization Item with Notes", item.bill_number, settings)
     _info_grid(
         pdf,
         [
             ("Order", order.order_number),
-            ("Bill number", item.bill_number),
+            ("Measurement bill number", item.bill_number),
             ("Delivery date", item.expected_delivery_date or order.expected_delivery_date),
             ("Customer", getattr(customer, "customer_name", order.customer_name)),
             ("Mobile", getattr(customer, "phone_number", order.phone_number)),
@@ -367,7 +368,21 @@ def generate_customization_item_pdf(
         item.customer_specification or "No special specification.",
         settings,
     )
-    if measurement:
+    if settings.show_notes:
+        order_notes = (getattr(order, "notes", None) or "").strip()
+        measurement_notes = ""
+        if measurement:
+            measurement_notes = (
+                getattr(measurement, "notes", None)
+                or getattr(measurement, "print_notes", None)
+                or ""
+            ).strip()
+        notes_body = order_notes or measurement_notes or "No additional notes."
+        _section(pdf, "Notes", settings)
+        _note_card(pdf, "Order / tailor notes", notes_body, settings)
+        if order_notes and measurement_notes and order_notes != measurement_notes:
+            _note_card(pdf, "Measurement notes", measurement_notes, settings)
+    if settings.show_linked_measurements and measurement:
         _section(pdf, f"Measurements · {measurement.measurement_number}", settings)
         name_w = pdf.epw * 0.55
         value_w = pdf.epw * 0.28
@@ -390,7 +405,7 @@ def generate_customization_item_pdf(
         for activity in getattr(order, "order_activities", [])
         if activity.bill_id == item.item_id
     ]
-    if activities:
+    if settings.show_activities and activities:
         _section(pdf, "Production Checklist", settings)
         _table(
             pdf,
@@ -416,7 +431,7 @@ def generate_customization_item_pdf(
         if getattr(getattr(attachment, "category", ""), "value", getattr(attachment, "category", ""))
         == "file_out"
     ]
-    if images:
+    if settings.show_media and images:
         _section(pdf, "Visual References", settings)
         thumb_w, thumb_h, gap = 52, 42, 5
         per_row = max(1, int((pdf.epw + gap) // (thumb_w + gap)))
@@ -444,7 +459,7 @@ def generate_customization_item_pdf(
                 pdf.set_font(pdf.font_family, size=6)
                 pdf.cell(thumb_w - 4, 4, attachment.name[:28], align="C")
             pdf.set_y(y + thumb_h + 5)
-    if files:
+    if settings.show_media and files:
         _section(pdf, "Production Files", settings)
         _table(
             pdf,
@@ -523,4 +538,108 @@ def generate_advance_receipt_pdf(
         settings,
     )
     _footer(pdf, settings, "CUSTOMER / PAYER", business)
+    return bytes(pdf.output())
+
+
+def generate_customization_invoice_pdf(
+    invoice: Any,
+    order: Any,
+    customer: Any,
+    business: Any,
+    settings: Optional[SalesPrintSettings] = None,
+) -> bytes:
+    """Tax invoice PDF for system-generated customization invoices."""
+    settings = _settings_for(business, "customization_invoice", settings)
+    pdf = _configure_pdf(settings)
+    _header(pdf, business, "Tax Invoice", invoice.invoice_number, settings)
+
+    pos_label = ""
+    if getattr(invoice, "place_of_supply_state", ""):
+        from vaybooks.bms.domain.shared.india import state_name_for_code
+
+        pos_label = state_name_for_code(invoice.place_of_supply_state)
+
+    _info_grid(
+        pdf,
+        [
+            ("Invoice date", getattr(invoice, "invoice_date", "")),
+            ("Order", getattr(order, "order_number", "")),
+            ("Supply type", getattr(invoice, "supply_type", "") or "—"),
+            ("Place of supply", pos_label or "—"),
+            ("Customer", getattr(customer, "customer_name", getattr(order, "customer_name", ""))),
+            ("Mobile", getattr(customer, "phone_number", getattr(order, "phone_number", ""))),
+            ("Customer GSTIN", getattr(customer, "gstin", "") or "—"),
+        ],
+        columns=2,
+    )
+    if customer and getattr(customer, "formatted_address", ""):
+        _section(pdf, "Billing Address", settings)
+        _note_card(pdf, "Bill to", customer.formatted_address, settings)
+
+    _section(pdf, "Line Items", settings)
+    rows = []
+    for bill_id in getattr(invoice, "bill_ids", []) or []:
+        item = order.get_item_by_id(bill_id) if hasattr(order, "get_item_by_id") else None
+        label = getattr(item, "bill_number", bill_id) if item else bill_id
+        desc = getattr(item, "description", "") if item else ""
+        gross = float((getattr(invoice, "item_amounts", {}) or {}).get(bill_id, 0) or 0)
+        disc = float((getattr(invoice, "item_discounts", {}) or {}).get(bill_id, 0) or 0)
+        net = round(gross - disc, 2)
+        sac = getattr(invoice, "hsn_sac", "") or ""
+        rate = float(getattr(invoice, "gst_rate", 0) or 0)
+        rows.append(
+            [
+                label,
+                desc[:30] or "—",
+                sac,
+                f"{rate:g}%",
+                f"{net:,.2f}",
+            ]
+        )
+    if not rows:
+        rows.append(["—", "Customization services", "", "", f"{invoice.net_amount:,.2f}"])
+
+    name_w = pdf.epw * 0.14
+    desc_w = pdf.epw * 0.28
+    sac_w = pdf.epw * 0.12
+    rate_w = pdf.epw * 0.12
+    amt_w = pdf.epw - name_w - desc_w - sac_w - rate_w
+    _table(
+        pdf,
+        ["Bill", "Description", "SAC", "GST %", "Taxable"],
+        rows,
+        [name_w, desc_w, sac_w, rate_w, amt_w],
+        settings,
+    )
+
+    taxable = float(getattr(invoice, "taxable_amount", 0) or invoice.net_amount)
+    cgst = float(getattr(invoice, "cgst_amount", 0) or 0)
+    sgst = float(getattr(invoice, "sgst_amount", 0) or 0)
+    utgst = float(getattr(invoice, "utgst_amount", 0) or 0)
+    igst = float(getattr(invoice, "igst_amount", 0) or 0)
+    grand = float(getattr(invoice, "grand_total", taxable))
+
+    _section(pdf, "Tax Summary", settings)
+    summary_rows = [("Taxable value", f"Rs. {taxable:,.2f}")]
+    if cgst:
+        summary_rows.append(("CGST", f"Rs. {cgst:,.2f}"))
+    if sgst:
+        summary_rows.append(("SGST", f"Rs. {sgst:,.2f}"))
+    if utgst:
+        summary_rows.append(("UTGST", f"Rs. {utgst:,.2f}"))
+    if igst:
+        summary_rows.append(("IGST", f"Rs. {igst:,.2f}"))
+    summary_rows.append(("Grand total", f"Rs. {grand:,.2f}"))
+    for label, value in summary_rows:
+        pdf.set_font(pdf.font_family, size=9)
+        pdf.cell(pdf.epw * 0.55, 6, label)
+        pdf.cell(pdf.epw * 0.45, 6, value, align="R", new_x="LMARGIN", new_y="NEXT")
+
+    if settings.show_amount_in_words:
+        pdf.ln(2)
+        pdf.set_text_color(*MUTED)
+        pdf.set_font(pdf.font_family, size=8)
+        pdf.multi_cell(0, 4, _amount_in_words(grand))
+
+    _footer(pdf, settings, "RECIPIENT", business)
     return bytes(pdf.output())

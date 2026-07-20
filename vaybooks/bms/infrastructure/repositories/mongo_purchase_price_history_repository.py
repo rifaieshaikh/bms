@@ -85,7 +85,7 @@ class MongoPurchasePriceHistoryRepository:
             query["vendor_id"] = vendor_id
         docs = (
             self._collection.find(query)
-            .sort("purchase_date", -1)
+            .sort([("purchase_date", -1), ("created_at", -1)])
             .limit(limit)
         )
         return [self._from_doc(d) for d in docs]

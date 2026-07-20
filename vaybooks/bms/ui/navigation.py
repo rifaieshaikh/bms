@@ -33,17 +33,21 @@ def _detail_param_key(page_key: str, param: str) -> str:
 
 
 def go_to_detail(page_key: str, entity_id: str, **extra_params) -> None:
-    """Navigate to a detail route, seeding ``?id=`` (with session fallback)."""
+    """Navigate to a detail route with ``?id=`` visible in the address bar.
+
+    Session fallbacks remain so mid-session state still resolves if the URL
+    is missing params.
+    """
     target = _pages.get(page_key)
-    st.session_state[_detail_session_key(page_key)] = str(entity_id)
-    st.query_params.clear()
-    st.query_params["id"] = str(entity_id)
+    entity_id = str(entity_id)
+    st.session_state[_detail_session_key(page_key)] = entity_id
+    params: dict[str, str] = {"id": entity_id}
     for key, value in extra_params.items():
         if value is not None:
-            st.query_params[key] = str(value)
+            params[key] = str(value)
             st.session_state[_detail_param_key(page_key, key)] = str(value)
     if target is not None:
-        st.switch_page(target)
+        st.switch_page(target, query_params=params)
 
 
 def current_detail_id(page_key: str) -> Optional[str]:
@@ -69,17 +73,17 @@ def _list_param_key(page_key: str, param: str) -> str:
 def go_to_list(page_key: str, **params) -> None:
     """Navigate to a list route, optionally seeding query params (deep link).
 
-    Params are also stashed in session state because query params do not
-    reliably survive ``st.switch_page``; ``consume_list_param`` reads either.
+    Params are passed via ``st.switch_page(..., query_params=...)`` so they
+    appear in the address bar. Session fallbacks remain for ``consume_list_param``.
     """
     target = _pages.get(page_key)
-    st.query_params.clear()
+    query: dict[str, str] = {}
     for key, value in params.items():
         if value is not None:
-            st.query_params[key] = str(value)
+            query[key] = str(value)
             st.session_state[_list_param_key(page_key, key)] = str(value)
     if target is not None:
-        st.switch_page(target)
+        st.switch_page(target, query_params=query)
 
 
 def consume_list_param(page_key: str, param: str) -> Optional[str]:
@@ -99,7 +103,6 @@ def go_back_to_list(entity_key: str, list_page_key: str) -> None:
     """Back button: clear this entity's filters/sort/pagination, then leave."""
     clear_list_state(entity_key)
     st.session_state.pop(_detail_session_key(list_page_key), None)
-    st.query_params.clear()
     target = _pages.get(list_page_key)
     if target is not None:
-        st.switch_page(target)
+        st.switch_page(target, query_params={})

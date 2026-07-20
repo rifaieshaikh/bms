@@ -16,7 +16,7 @@ SORT_FIELD_BY_PAGE = {
     "customers": "Customer name",
     "vendors": "Vendor name",
     "orders": "Order number",
-    "items": "Bill number",
+    "items": "Measurement bill number",
     "accounts": "Account name",
     "vouchers": "Voucher number",
     "inventory-products": "Product name",

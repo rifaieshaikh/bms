@@ -72,6 +72,7 @@ DEFAULT_ACCOUNTS = [
     ("Bank", AccountType.ASSET, True),
     ("Sales", AccountType.REVENUE, False),
     ("Customization", AccountType.REVENUE, False),
+    ("Cancellation Charges", AccountType.REVENUE, False),
     ("Discount Allowed", AccountType.EXPENSE, False),
     ("Cutting Expense", AccountType.EXPENSE, False),
     ("Stitching Expense", AccountType.EXPENSE, False),

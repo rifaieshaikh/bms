@@ -2,6 +2,7 @@ import streamlit as st
 
 from vaybooks.bms.domain.orders.bill_status import bill_is_invoiced
 from vaybooks.bms.domain.orders.entities import CustomizationOrder
+from vaybooks.bms.domain.shared.enums import OrderStatus
 
 
 def invoice_form(services: dict, order: CustomizationOrder, invoices: list):
@@ -10,23 +11,32 @@ def invoice_form(services: dict, order: CustomizationOrder, invoices: list):
         "Allow re-invoicing already invoiced items",
         key=f"inv_override_{order.id}",
     )
+    allow_incomplete = order.order_status == OrderStatus.CANCELLED
+    if allow_incomplete:
+        st.caption(
+            "Cancelled order — incomplete items can be invoiced as service charges."
+        )
 
     if allow_override:
         available = [
             item
             for item in order.customization_items
-            if order.item_activities_complete(item.item_id)
+            if allow_incomplete or order.item_activities_complete(item.item_id)
         ]
     else:
         available = [
             item
             for item in order.customization_items
-            if order.item_activities_complete(item.item_id)
+            if (allow_incomplete or order.item_activities_complete(item.item_id))
             and not bill_is_invoiced(item.item_id, invoices)
         ]
 
     if not available:
-        st.info("No completed items are available to invoice.")
+        st.info(
+            "No items are available to invoice."
+            if allow_incomplete
+            else "No completed items are available to invoice."
+        )
         return
 
     labels = {

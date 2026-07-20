@@ -560,6 +560,12 @@ class AccountingAppService:
                 return account
         return None
 
+    def get_cancellation_charges_account(self) -> Optional[Account]:
+        for account in self._account_repo.list_all():
+            if account.account_name.strip().lower() == "cancellation charges":
+                return account
+        return None
+
     def get_sales_account(self) -> Optional[Account]:
         for account in self._account_repo.list_all():
             if account.account_name.strip().lower() == "sales":
@@ -809,6 +815,98 @@ class AccountingAppService:
             advance_account_name=advance.account_name if advance else None,
             advance_applied=advance_applied,
             voucher_type=voucher_type or old.voucher_type,
+        )
+        voucher.id = old.id
+        return self._domain.update_voucher(voucher)
+
+    def create_customization_gst_invoice(
+        self,
+        customer_account_id: str,
+        income_account_id: str,
+        invoice: "Invoice",
+        description: str,
+        voucher_date: Optional[date] = None,
+        reference_order_id: Optional[str] = None,
+        reference_invoice_id: Optional[str] = None,
+        advance_applied: float = 0.0,
+    ) -> Voucher:
+        from vaybooks.bms.domain.invoices.entities import Invoice
+
+        if not isinstance(invoice, Invoice):
+            raise ValueError("Invoice entity required")
+        customer = self._account_repo.find_by_id(customer_account_id)
+        income = self._account_repo.find_by_id(income_account_id)
+        if not customer or not income:
+            raise ValueError("Customer or income account not found")
+        advance = self.get_advance_from_customers_account() if advance_applied > 0 else None
+        voucher_number = self._counter_repo.next("voucher_number")
+        v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
+        voucher = self._domain.build_customization_gst_invoice_voucher(
+            voucher_number=voucher_number,
+            voucher_date=v_date,
+            description=description,
+            customer_account_id=customer.id,
+            customer_account_name=customer.account_name,
+            income_account_id=income.id,
+            income_account_name=income.account_name,
+            taxable_amount=invoice.taxable_amount or invoice.net_amount,
+            cgst_amount=invoice.cgst_amount,
+            sgst_amount=invoice.sgst_amount,
+            igst_amount=invoice.igst_amount,
+            utgst_amount=invoice.utgst_amount,
+            reference_order_id=reference_order_id,
+            reference_invoice_id=reference_invoice_id,
+            advance_account_id=advance.id if advance else None,
+            advance_account_name=advance.account_name if advance else None,
+            advance_applied=advance_applied,
+            gst_output_accounts=self.get_gst_output_accounts(),
+            voucher_type=VoucherType.CUSTOMIZATION_INVOICE,
+        )
+        return self._domain.save_voucher(voucher)
+
+    def update_customization_gst_invoice(
+        self,
+        voucher_id: str,
+        customer_account_id: str,
+        income_account_id: str,
+        invoice: "Invoice",
+        description: str,
+        voucher_date: Optional[date] = None,
+        advance_applied: float = 0.0,
+    ) -> Voucher:
+        from vaybooks.bms.domain.invoices.entities import Invoice
+
+        if not isinstance(invoice, Invoice):
+            raise ValueError("Invoice entity required")
+        old = self._voucher_repo.find_by_id(voucher_id)
+        if not old:
+            raise ValueError("Sales voucher not found")
+        customer = self._account_repo.find_by_id(customer_account_id)
+        income = self._account_repo.find_by_id(income_account_id)
+        if not customer or not income:
+            raise ValueError("Customer or income account not found")
+        advance = self.get_advance_from_customers_account() if advance_applied > 0 else None
+        v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
+        voucher = self._domain.build_customization_gst_invoice_voucher(
+            voucher_number=old.voucher_number,
+            voucher_date=v_date,
+            description=description,
+            customer_account_id=customer.id,
+            customer_account_name=customer.account_name,
+            income_account_id=income.id,
+            income_account_name=income.account_name,
+            taxable_amount=invoice.taxable_amount or invoice.net_amount,
+            cgst_amount=invoice.cgst_amount,
+            sgst_amount=invoice.sgst_amount,
+            igst_amount=invoice.igst_amount,
+            utgst_amount=invoice.utgst_amount,
+            reference_order_id=old.reference_order_id,
+            reference_invoice_id=old.reference_invoice_id,
+            advance_account_id=advance.id if advance else None,
+            advance_account_name=advance.account_name if advance else None,
+            advance_applied=advance_applied,
+            gst_output_accounts=self.get_gst_output_accounts(),
+            voucher_type=old.voucher_type,
         )
         voucher.id = old.id
         return self._domain.update_voucher(voucher)
@@ -1338,15 +1436,29 @@ class AccountingAppService:
             acct = self._account_repo.find_by_id(str(raw.get("expense_account_id") or ""))
             if not acct:
                 raise ValueError("Expense account not found")
-            amount = round(float(raw.get("amount") or 0), 2)
-            if amount <= 0:
+            line_total = round(
+                float(raw.get("line_total") or raw.get("amount") or 0), 2
+            )
+            if line_total <= 0:
                 continue
             resolved_lines.append(
                 {
                     "expense_account_id": acct.id,
                     "expense_account_name": acct.account_name,
-                    "amount": amount,
+                    "amount": line_total,
+                    "line_total": line_total,
+                    "taxable_amount": round(
+                        float(raw.get("taxable_amount") or line_total), 2
+                    ),
+                    "cgst_amount": round(float(raw.get("cgst_amount") or 0), 2),
+                    "sgst_amount": round(float(raw.get("sgst_amount") or 0), 2),
+                    "igst_amount": round(float(raw.get("igst_amount") or 0), 2),
+                    "utgst_amount": round(float(raw.get("utgst_amount") or 0), 2),
                     "product_id": raw.get("product_id"),
+                    "item_type": raw.get("item_type"),
+                    "item_id": raw.get("item_id"),
+                    "item_name": raw.get("item_name"),
+                    "hsn_sac": raw.get("hsn_sac"),
                     "qty": raw.get("qty"),
                     "rate": raw.get("rate"),
                     "landed_cost_alloc": raw.get("landed_cost_alloc"),
@@ -1363,6 +1475,7 @@ class AccountingAppService:
                 raise ValueError("Paying account not found")
         description = build_purchase_description(vendor_bill_number, resolved_lines)
         v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
+        gst_input_accounts = self.get_gst_input_accounts()
         voucher = self._domain.build_purchase_bill_voucher(
             voucher_number=old.voucher_number,
             voucher_date=v_date,
@@ -1379,6 +1492,7 @@ class AccountingAppService:
             else old.reference_service_id,
             reference_po_id=old.reference_po_id,
             reference_grn_id=old.reference_grn_id,
+            gst_input_accounts=gst_input_accounts,
         )
         voucher.id = old.id
         return self._domain.update_voucher(voucher)

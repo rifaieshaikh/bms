@@ -5,6 +5,10 @@ from vaybooks.bms.domain.activities.entities import ActivityConfig
 from vaybooks.bms.domain.deliveries.entities import Delivery
 from vaybooks.bms.domain.invoices.entities import Invoice
 from vaybooks.bms.domain.order_status import resolve_order_status
+from vaybooks.bms.domain.orders.cancellation import (
+    CANCELLATION_CHARGE_BILL_SUFFIX,
+    CANCELLATION_CHARGE_DESCRIPTION,
+)
 from vaybooks.bms.domain.orders.entities import (
     COMPLETED_ACTIVITY_STATUS,
     CREATED_ACTIVITY_STATUS,
@@ -59,7 +63,7 @@ class OrderDomainService:
             suffix += 1
             if suffix > 99:
                 raise ValidationError(
-                    f"No free bill-number suffix left for {base}"
+                    f"No free measurement bill number suffix left for {base}"
                 )
 
     def add_customization_item(
@@ -76,17 +80,19 @@ class OrderDomainService:
     ) -> CustomizationItem:
         bill_number = bill_number.strip().upper()
         if not bill_number:
-            raise ValidationError("Bill number is required")
+            raise ValidationError(
+                "Measurement bill number is required when no measurement is linked"
+            )
 
         if order.get_items_by_bill_number(bill_number):
             raise BillNumberExistsError(
-                f"Bill number {bill_number} is already used in this order"
+                f"Measurement bill number {bill_number} is already used in this order"
             )
 
         existing = self._bill_registry_repo.find_by_bill_number(bill_number)
         if existing and existing.order_id != order.id:
             raise BillNumberExistsError(
-                f"Bill number {bill_number} already belongs to another order"
+                f"Measurement bill number {bill_number} already belongs to another order"
             )
 
         item = CustomizationItem(
@@ -285,9 +291,29 @@ class OrderDomainService:
         return order
 
     def cancel_order(self, order: CustomizationOrder) -> CustomizationOrder:
+        if order.order_status == OrderStatus.CANCELLED:
+            raise ValidationError("Order is already cancelled")
+        if order.order_status == OrderStatus.COMPLETED:
+            raise ValidationError("Completed orders cannot be cancelled")
         order.order_status = OrderStatus.CANCELLED
+        self.ensure_cancellation_charge_item(order)
         order.updated_at = utc_now()
         return order
+
+    @staticmethod
+    def ensure_cancellation_charge_item(order: CustomizationOrder) -> CustomizationItem:
+        existing = order.get_cancellation_charge_item()
+        if existing:
+            return existing
+        item = CustomizationItem(
+            bill_number=f"{order.order_number}-{CANCELLATION_CHARGE_BILL_SUFFIX}",
+            description=CANCELLATION_CHARGE_DESCRIPTION,
+            is_cancellation_charge=True,
+            item_status=CustomizationItemStatus.COMPLETED,
+        )
+        order.customization_items.append(item)
+        order.updated_at = utc_now()
+        return item
 
     def complete_order(self, order: CustomizationOrder) -> CustomizationOrder:
         if order.order_status == OrderStatus.CANCELLED:
@@ -309,6 +335,7 @@ class OrderDomainService:
         bill_number: str,
         description: str,
         expected_delivery_date=None,
+        customer_specification: Optional[str] = None,
     ) -> CustomizationItem:
         item = order.get_item_by_id(item_id)
         if not item:
@@ -316,20 +343,21 @@ class OrderDomainService:
 
         bill_number = bill_number.strip().upper()
         if not bill_number:
-            raise ValidationError("Bill number is required")
+            raise ValidationError("Measurement bill number is required")
 
-        if bill_number != item.bill_number:
+        previous_bill = item.bill_number
+        if bill_number != previous_bill:
             if any(
                 i.item_id != item_id
                 for i in order.get_items_by_bill_number(bill_number)
             ):
                 raise BillNumberExistsError(
-                    f"Bill number {bill_number} is already used in this order"
+                    f"Measurement bill number {bill_number} is already used in this order"
                 )
             existing = self._bill_registry_repo.find_by_bill_number(bill_number)
             if existing and existing.order_id != order.id:
                 raise BillNumberExistsError(
-                    f"Bill number {bill_number} already belongs to another order"
+                    f"Measurement bill number {bill_number} already belongs to another order"
                 )
             if not existing:
                 entry = BillRegistryEntry(
@@ -338,14 +366,51 @@ class OrderDomainService:
                     bill_id=item.item_id,
                 )
                 self._bill_registry_repo.register(entry)
+            self._bill_registry_repo.unregister(previous_bill)
 
         item.bill_number = bill_number
         item.description = description.strip()
         if expected_delivery_date is not None:
             item.expected_delivery_date = expected_delivery_date
+        if customer_specification is not None:
+            item.customer_specification = customer_specification.strip()
         item.updated_at = utc_now()
         order.updated_at = utc_now()
         return item
+
+    def remove_customization_item(
+        self,
+        order: CustomizationOrder,
+        item_id: str,
+    ) -> None:
+        item = order.get_item_by_id(item_id)
+        if not item:
+            raise ValidationError("Customization item not found")
+        if item.mph_snapshot_at:
+            raise ValidationError(
+                "Cannot remove an item that already has a profitability snapshot"
+            )
+        completed = [
+            activity
+            for activity in order.activities_for_item(item_id)
+            if activity.activity_status == ActivityStatus.COMPLETED
+            or activity.current_status == COMPLETED_ACTIVITY_STATUS
+        ]
+        if completed:
+            raise ValidationError(
+                "Cannot remove an item with completed activities"
+            )
+
+        order.customization_items = [
+            row for row in order.customization_items if row.item_id != item_id
+        ]
+        order.order_activities = [
+            activity
+            for activity in order.order_activities
+            if activity.bill_id != item_id
+        ]
+        self._bill_registry_repo.unregister(item.bill_number)
+        order.updated_at = utc_now()
 
     def add_activity_to_item(
         self,

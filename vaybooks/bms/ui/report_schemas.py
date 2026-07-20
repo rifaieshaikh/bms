@@ -63,7 +63,7 @@ ITEM_PROFITABILITY = ListSchema(
         SortOption("margin_per_hour", "MPH"),
         SortOption("margin_amount", "Margin"),
         SortOption("delivered_on", "Delivered date"),
-        SortOption("bill_number", "Bill number"),
+        SortOption("bill_number", "Measurement bill number"),
         SortOption("customer_name", "Customer"),
     ],
     default_sort="margin_per_hour",
@@ -487,7 +487,7 @@ BILLS_PENDING = ListSchema(
     sort_options=[
         SortOption("order_number", "Order number"),
         SortOption("customer_name", "Customer"),
-        SortOption("bill_number", "Bill number"),
+        SortOption("bill_number", "Measurement bill number"),
     ],
     default_sort="order_number",
     page_size=REPORT_PAGE_SIZE,

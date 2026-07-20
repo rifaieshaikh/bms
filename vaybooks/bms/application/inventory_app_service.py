@@ -207,6 +207,7 @@ class InventoryAppService:
         custom_fields: Optional[Dict[str, Any]] = None,
         pending_category_name: Optional[Union[str, List[str]]] = None,
         pending_unit_code: Optional[str] = None,
+        last_purchase_rate: float = 0.0,
     ) -> InventoryProduct:
         ids = [category_ids] if isinstance(category_ids, str) else list(category_ids)
         ids = self._resolve_pending_category(ids, pending_category_name)
@@ -225,6 +226,10 @@ class InventoryAppService:
             specifications=specifications,
             custom_fields=custom_fields,
         )
+        if float(last_purchase_rate or 0) > 0:
+            product = self.set_product_cost_fields(
+                product.id, last_purchase_rate=last_purchase_rate
+            )
         return self._hydrate_product(product)
 
     def update_product(
@@ -245,6 +250,7 @@ class InventoryAppService:
         custom_fields: Optional[Dict[str, Any]] = None,
         pending_category_name: Optional[Union[str, List[str]]] = None,
         pending_unit_code: Optional[str] = None,
+        last_purchase_rate: Optional[float] = None,
     ) -> InventoryProduct:
         ids = [category_ids] if isinstance(category_ids, str) else list(category_ids)
         ids = self._resolve_pending_category(ids, pending_category_name)
@@ -264,6 +270,10 @@ class InventoryAppService:
             specifications=specifications,
             custom_fields=custom_fields,
         )
+        if last_purchase_rate is not None:
+            product = self.set_product_cost_fields(
+                product.id, last_purchase_rate=last_purchase_rate
+            )
         return self._hydrate_product(product)
 
     def _resolve_pending_category(

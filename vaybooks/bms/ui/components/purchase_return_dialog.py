@@ -1,4 +1,4 @@
-"""Purchase return dialog."""
+"""Purchase return dialog with optional source-bill prefill."""
 
 from __future__ import annotations
 
@@ -13,11 +13,11 @@ from vaybooks.bms.ui.components.purchase_invoice_form import (
     vendor_option_map,
     vendor_select_index,
 )
-from vaybooks.bms.ui.components.purchase_line_ui import default_purchase_line, item_option_map
+from vaybooks.bms.ui.components.purchase_lines_editor import render_purchase_lines_editor
 from vaybooks.bms.ui.dialog_utils import make_dismiss_handler
+from vaybooks.bms.ui.purchase_display import product_lines_from_bill_row
 
 RETURN_DIALOG = "purchase_return_dialog"
-_LINES_KEY = f"{RETURN_DIALOG}_lines"
 
 
 def arm_return_dialog(source_bill_id: str | None = None) -> None:
@@ -33,6 +33,28 @@ def _clear() -> None:
             st.session_state.pop(key, None)
 
 
+def _prefill_from_source_bill(services: dict, source_bill_id: str) -> tuple[str | None, list[dict], int]:
+    """Return (vendor_id, product lines, skipped_service_count)."""
+    purchases = services["purchases"]
+    accounting = services["accounting"]
+    row = purchases.get_purchase_bill(source_bill_id)
+    voucher = accounting.get_voucher(source_bill_id)
+    if not row or not voucher:
+        return None, [], 0
+
+    vendor_account_id = row.get("vendor_account_id")
+    vendor_id = None
+    if vendor_account_id:
+        account = accounting.get_account(vendor_account_id)
+        if account and getattr(account, "linked_vendor_id", None):
+            vendor_id = account.linked_vendor_id
+
+    product_lines, skipped = product_lines_from_bill_row(
+        row, voucher.description or ""
+    )
+    return vendor_id, product_lines, skipped
+
+
 @st.dialog("Record Purchase Return", width="large", on_dismiss=make_dismiss_handler(RETURN_DIALOG))
 def purchase_return_dialog(services: dict) -> None:
     if st.session_state.get(RETURN_DIALOG) != "new":
@@ -42,6 +64,26 @@ def purchase_return_dialog(services: dict) -> None:
     accounting = services["accounting"]
     vendors = services["vendors"]
     inventory = services.get("inventory")
+    business = services["business"].get_profile()
+
+    source_bill_id = st.session_state.get(f"{RETURN_DIALOG}_bill_id")
+    prefill_vendor_id = None
+    initial_lines = None
+    skipped_services = 0
+    if source_bill_id and f"{RETURN_DIALOG}_prefilled" not in st.session_state:
+        prefill_vendor_id, initial_lines, skipped_services = _prefill_from_source_bill(
+            services, source_bill_id
+        )
+        st.session_state[f"{RETURN_DIALOG}_prefilled"] = True
+        st.session_state[f"{RETURN_DIALOG}_skipped_services"] = skipped_services
+        if prefill_vendor_id:
+            st.session_state[f"{RETURN_DIALOG}_pre_vendor_id"] = prefill_vendor_id
+        if initial_lines:
+            st.session_state[f"{RETURN_DIALOG}_seed_lines"] = initial_lines
+
+    skipped_services = int(st.session_state.get(f"{RETURN_DIALOG}_skipped_services") or 0)
+    pre_vendor = st.session_state.get(f"{RETURN_DIALOG}_pre_vendor_id")
+    seed_lines = st.session_state.get(f"{RETURN_DIALOG}_seed_lines")
 
     vendor_list = vendors.list_all_vendors()
     if not vendor_list:
@@ -54,46 +96,41 @@ def purchase_return_dialog(services: dict) -> None:
     vendor_name = st.selectbox(
         "Vendor",
         vendor_names,
-        index=vendor_select_index(vendor_opts, None),
+        index=vendor_select_index(vendor_opts, pre_vendor),
         key=vendor_key,
     )
     vendor_id = vendor_opts.get(vendor_name)
     if not vendor_id:
         st.warning("Select a vendor.")
         return
+    vendor = vendors.get_vendor_detail(vendor_id)
 
     products = inventory.list_products(active_only=True) if inventory else []
-    product_opts = item_option_map(products, lambda p: f"{p.sku} — {p.name}")
-    product_names = ["—"] + list(product_opts.keys())
-
-    if _LINES_KEY not in st.session_state:
-        st.session_state[_LINES_KEY] = [default_purchase_line()]
 
     return_date = st.date_input("Return date", value=date.today(), key=f"{RETURN_DIALOG}_date")
-    source_bill_id = st.session_state.get(f"{RETURN_DIALOG}_bill_id")
+    if source_bill_id:
+        st.caption(f"Linked to purchase bill `{source_bill_id[:8]}…`")
+    if skipped_services:
+        st.caption(
+            f"{skipped_services} service line(s) from the bill are not returnable here."
+        )
 
-    line_items = list(st.session_state[_LINES_KEY])
-    for i, row in enumerate(line_items):
-        with st.container(border=True):
-            c1, c2, c3 = st.columns([3, 1, 1])
-            prod_key = f"{RETURN_DIALOG}_prod_{i}"
-            ensure_selectbox_option(prod_key, product_names)
-            picked = c1.selectbox("Product", product_names, key=prod_key)
-            if picked != "—":
-                row["product_id"] = product_opts[picked]
-                row["item_id"] = row["product_id"]
-                row["item_type"] = CatalogItemType.PRODUCT.value
-                row["product_name"] = picked
-            row["qty"] = c2.number_input(
-                "Qty", min_value=0.0, value=float(row.get("qty") or 1),
-                key=f"{RETURN_DIALOG}_qty_{i}",
-            )
-            row["rate"] = c3.number_input(
-                "Rate (ex-GST)", min_value=0.0, value=float(row.get("rate") or 0),
-                key=f"{RETURN_DIALOG}_rate_{i}",
-            )
-        line_items[i] = row
-    st.session_state[_LINES_KEY] = line_items
+    st.markdown("**Line items**")
+    line_items, gst_errors = render_purchase_lines_editor(
+        key_prefix=RETURN_DIALOG,
+        products=products,
+        services=[],
+        initial_lines=seed_lines,
+        vendor_id=vendor_id,
+        purchases_service=purchases,
+        inventory_service=inventory,
+        allow_services=False,
+        qty_field="qty",
+        vendor_registered=False,
+        business=business,
+        business_state_code=business.state_code if business else "",
+        vendor_state_code=vendor.state_code if vendor else "",
+    )
 
     refund = st.number_input("Cash refund", min_value=0.0, value=0.0, key=f"{RETURN_DIALOG}_refund")
     refund_acct = None
@@ -111,18 +148,28 @@ def purchase_return_dialog(services: dict) -> None:
 
     if st.button("Save return", type="primary"):
         try:
+            if gst_errors:
+                raise ValueError(gst_errors[0])
+            if not line_items:
+                raise ValueError("Add at least one product line")
+            for row in line_items:
+                row["item_type"] = CatalogItemType.PRODUCT.value
+                if not row.get("product_id"):
+                    row["product_id"] = row.get("item_id")
             resolved = purchases.resolve_purchase_lines(line_items, vendor_id)
             lines = [
                 {
-                    "product_id": row.product_id or "",
+                    "product_id": row.product_id or row.item_id,
                     "product_name": row.item_name,
                     "qty": row.qty,
                     "rate": row.rate,
                     "expense_account_id": row.expense_account_id,
                 }
                 for row in resolved
-                if row.qty > 0
+                if row.qty > 0 and row.item_type == CatalogItemType.PRODUCT
             ]
+            if not lines:
+                raise ValueError("Add at least one product line")
             purchases.create_purchase_return(
                 vendor_id=vendor_id,
                 return_date=return_date,

@@ -219,6 +219,9 @@ class FakeBillRegistryRepository:
     def exists(self, bill_number: str) -> bool:
         return bill_number.upper() in self._bills
 
+    def unregister(self, bill_number: str) -> None:
+        self._bills.pop(bill_number.upper(), None)
+
 
 class FakeActivityRepository:
     def __init__(self):
@@ -402,6 +405,10 @@ class FakeCounterRepository:
         self._counters[counter_name] += 1
         prefix = self._prefixes[counter_name]
         return f"{prefix}-{self._counters[counter_name]:04d}"
+
+    def peek(self, counter_name: str) -> str:
+        prefix = self._prefixes[counter_name]
+        return f"{prefix}-{self._counters[counter_name] + 1:04d}"
 
 
 class FakeProductCategoryRepository:

@@ -3,9 +3,15 @@ from datetime import date, timedelta
 import streamlit as st
 
 from vaybooks.bms.application.dtos import CreateOrderRequest
+from vaybooks.bms.domain.invoices.entities import (
+    DEFAULT_CUSTOMIZATION_GST_RATE,
+    DEFAULT_CUSTOMIZATION_SAC,
+)
 from vaybooks.bms.domain.invoices.services import InvoiceDomainService
 from vaybooks.bms.domain.orders.order_refs import compact_order_ref
+from vaybooks.bms.domain.sales.sales_line_resolver import business_is_registered
 from vaybooks.bms.domain.shared.enums import OrderStatus, VoucherType
+from vaybooks.bms.domain.shared.india import state_name_for_code
 from vaybooks.bms.ui.components.delivery_card import DeliveryEditAction, delivery_cards
 from vaybooks.bms.ui.components.invoice_card import InvoiceEditAction, invoice_cards
 from vaybooks.bms.ui.components.item_detail_panel import customization_item_detail_panel
@@ -40,6 +46,10 @@ def _refund_flag(order_id: str) -> str:
     return f"refund_dialog_{order_id}"
 
 
+def _cancel_flag(order_id: str) -> str:
+    return f"cancel_dialog_{order_id}"
+
+
 def _index_of(options: dict, target_id, default: int = 0) -> int:
     ids = list(options.values())
     return ids.index(target_id) if target_id in ids else default
@@ -49,6 +59,8 @@ def _completed_item_options(order, extra_ids=None) -> dict:
     extra = set(extra_ids or [])
     labels: dict[str, str] = {}
     for idx, item in enumerate(order.customization_items):
+        if item.is_cancellation_charge:
+            continue
         if not (order.item_activities_complete(item.item_id) or item.item_id in extra):
             continue
         label = f"{item.bill_number} — {item.description or 'No description'}"
@@ -56,6 +68,17 @@ def _completed_item_options(order, extra_ids=None) -> dict:
             label = f"{label} (#{idx + 1})"
         labels[label] = item.item_id
     return labels
+
+
+def _invoice_item_options(order, extra_ids=None) -> dict:
+    """Items available to invoice."""
+    if order.order_status == OrderStatus.CANCELLED:
+        item = order.get_cancellation_charge_item()
+        if not item:
+            return {}
+        label = f"{item.bill_number} — {item.description or 'Cancellation charge'}"
+        return {label: item.item_id}
+    return _completed_item_options(order, extra_ids)
 
 
 def _default_item_rows():
@@ -118,7 +141,7 @@ def _new_order_dialog(services: dict):
         st.markdown(f"**Item {index + 1}**")
         cols = st.columns(2)
         row["bill_number"] = cols[0].text_input(
-            "Bill Number",
+            "Measurement Bill Number",
             value=row["bill_number"],
             key=f"new_item_bill_{index}",
         )
@@ -185,7 +208,9 @@ def _new_order_dialog(services: dict):
             st.error("Customer name and mobile are required")
             return
         if not item_rows:
-            st.error("Add at least one bill number with item description")
+            st.error(
+                "Add at least one measurement bill number with item description"
+            )
             return
         try:
             request = CreateOrderRequest(
@@ -407,42 +432,91 @@ def _clear_invoice_widget_state(order_id: str) -> None:
         st.session_state.pop(key, None)
 
 
-@st.dialog("Record Invoice", width="large", on_dismiss=dismiss_armed_dialogs)
-def _invoice_dialog(services: dict, order_id: str):
+def _invoice_dialog_content(services: dict, order_id: str, *, generate: bool):
     invoice_service = services["invoices"]
-    order = services["orders"].get_order_detail(order_id)
+    order_service = services["orders"]
+    order = order_service.get_order_detail(order_id)
+    is_cancellation = order.order_status == OrderStatus.CANCELLED
+    if is_cancellation:
+        order = order_service.ensure_cancellation_charge_item(order_id)
     flag_key = _inv_flag(order_id)
     target = st.session_state.get(flag_key)
-    invoice = None if target in (None, "new") else invoice_service.get_invoice(target)
+    invoice = None
+    if target not in (None, "new", "generate"):
+        invoice = invoice_service.get_invoice(target)
+        if invoice:
+            generate = invoice.is_generated
 
-    invoice_number = st.text_input(
-        "Invoice Number", value=invoice.invoice_number if invoice else ""
-    )
+    business = services["business"].get_profile() if services.get("business") else None
+    customer = services["customers"].get_customer_detail(order.customer_id)
+    pos_state, supply_type = invoice_service.resolve_place_of_supply(customer, business)
+    business_registered = business_is_registered(business)
+
+    if generate:
+        st.caption(
+            "System tax invoice — auto-numbered, GST-aware, and printable for the customer."
+            if not is_cancellation
+            else "Tax invoice for the cancellation charge — to set off remaining advance."
+        )
+        next_number = (
+            invoice.invoice_number
+            if invoice
+            else invoice_service.peek_next_invoice_number()
+        )
+        st.text_input("Invoice Number", value=next_number, disabled=True)
+        with st.container(border=True):
+            st.markdown("**Bill to**")
+            st.write(getattr(customer, "customer_name", order.customer_name))
+            if customer and customer.formatted_address:
+                st.caption(customer.formatted_address)
+            st.caption(f"Place of supply: **{state_name_for_code(pos_state) or '—'}**")
+            st.caption(f"Supply type: **{supply_type}**")
+    else:
+        st.caption(
+            "Log a paper cancellation charge for internal tracking and margin."
+            if is_cancellation
+            else "Log a paper bill number for internal tracking and margin."
+        )
+        invoice_number = st.text_input(
+            "Invoice Number", value=invoice.invoice_number if invoice else ""
+        )
+
     override = st.checkbox("Allow already-invoiced items", value=bool(invoice))
-    options = _completed_item_options(order, invoice.bill_ids if invoice else None)
+    options = _invoice_item_options(order, invoice.bill_ids if invoice else None)
+    if is_cancellation:
+        st.caption(
+            "Invoice the cancellation charge to set off remaining advance on this order."
+        )
     if not options:
-        st.info("No completed items available to invoice.")
+        st.info(
+            "No cancellation charge available."
+            if is_cancellation
+            else "No completed items available to invoice."
+        )
         if st.button("Close"):
             st.session_state.pop(flag_key, None)
             st.rerun()
         return
-    default_labels = (
+    default_labels = list(options.keys()) if is_cancellation else (
         [lbl for lbl, iid in options.items() if iid in set(invoice.bill_ids)]
         if invoice
         else []
     )
-    selected = st.multiselect(
-        "Items", list(options.keys()), default=default_labels,
-        key=f"inv_items_{order.id}",
-    )
-    bill_ids = [options[lbl] for lbl in selected]
+    if is_cancellation:
+        cancel_label = default_labels[0] if default_labels else "Cancellation charge"
+        st.markdown(f"**Item:** {cancel_label}")
+        bill_ids = list(options.values())
+    else:
+        selected = st.multiselect(
+            "Items", list(options.keys()), default=default_labels,
+            key=f"inv_items_{order.id}",
+        )
+        bill_ids = [options[lbl] for lbl in selected]
 
     inv_date = st.date_input(
         "Invoice Date", value=invoice.invoice_date if invoice else date.today()
     )
 
-    # Per-item pricing drives item-wise MPH on net revenue after discount.
-    # Order-level discount is distributed proportionally to item gross amounts.
     existing_prices = dict(invoice.item_amounts) if invoice and invoice.item_amounts else {}
     if invoice and not existing_prices and invoice.bill_ids:
         each = round(float(invoice.invoice_amount) / len(invoice.bill_ids), 2)
@@ -526,13 +600,39 @@ def _invoice_dialog(services: dict, order_id: str):
             )
 
     amount = round(sum(item_amounts.values()), 2)
-    # Clamp any item discount that exceeds its amount before totals/saving.
     item_discounts = {
         b: round(min(item_discounts.get(b, 0.0), item_amounts.get(b, 0.0)), 2)
         for b in bill_ids
     }
     discount_amount = round(sum(item_discounts.values()), 2)
     net_amount = round(amount - discount_amount, 2)
+
+    gst_rate = DEFAULT_CUSTOMIZATION_GST_RATE
+    hsn_sac = DEFAULT_CUSTOMIZATION_SAC
+    tax_summary = None
+    if generate and bill_ids:
+        gst_cols = st.columns(2)
+        gst_rate = gst_cols[0].number_input(
+            "GST rate (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=float(invoice.gst_rate if invoice and invoice.gst_rate else DEFAULT_CUSTOMIZATION_GST_RATE),
+            step=0.1,
+            disabled=not business_registered,
+        )
+        hsn_sac = gst_cols[1].text_input(
+            "SAC",
+            value=invoice.hsn_sac if invoice and invoice.hsn_sac else DEFAULT_CUSTOMIZATION_SAC,
+        )
+        if business_registered:
+            tax_summary = invoice_service.preview_invoice_gst(
+                net_amount,
+                gst_rate,
+                business=business,
+                place_of_supply_state=pos_state,
+            )
+        else:
+            st.info("Business is not GST registered — tax will not be charged.")
 
     if bill_ids:
         st.number_input(
@@ -556,7 +656,7 @@ def _invoice_dialog(services: dict, order_id: str):
         t1 = st.columns(4)
         t1[0].metric("Total amount", f"\u20b9{amount:,.0f}")
         t1[1].metric("Total discount", f"\u20b9{discount_amount:,.0f}")
-        t1[2].metric("Net amount", f"\u20b9{net_amount:,.0f}")
+        t1[2].metric("Net (taxable)", f"\u20b9{net_amount:,.0f}")
         t1[3].metric("Total expense", f"\u20b9{total_expense:,.0f}")
         t2 = st.columns(2)
         t2[0].metric("Total hours", f"{total_hours:.2f}")
@@ -565,7 +665,15 @@ def _invoice_dialog(services: dict, order_id: str):
             f"\u20b9{total_mph:,.0f}/h" if total_mph is not None else "\u2014",
         )
 
-    # Accounting posting: Dr Customer / Cr Customization, then apply advance via customer.
+        if generate and tax_summary and business_registered:
+            st.markdown("**GST**")
+            g = st.columns(5)
+            g[0].metric("CGST", f"\u20b9{tax_summary['cgst_amount']:,.0f}")
+            g[1].metric("SGST", f"\u20b9{tax_summary['sgst_amount']:,.0f}")
+            g[2].metric("UTGST", f"\u20b9{tax_summary['utgst_amount']:,.0f}")
+            g[3].metric("IGST", f"\u20b9{tax_summary['igst_amount']:,.0f}")
+            g[4].metric("Grand total", f"\u20b9{tax_summary['grand_total']:,.0f}")
+
     accounting = services["accounting"]
     existing_voucher = (
         accounting.find_sales_voucher_by_invoice(invoice.id) if invoice else None
@@ -575,28 +683,42 @@ def _invoice_dialog(services: dict, order_id: str):
         exclude_invoice_id=invoice.id if invoice else None,
     )
     st.divider()
+    due_preview = (
+        tax_summary["grand_total"]
+        if generate and tax_summary
+        else net_amount
+    )
     post_entry = st.checkbox(
-        "Post accounting entry (Dr Customer, Cr Customization; apply advance on customer)",
+        "Post accounting entry (Dr Customer, Cr revenue; apply advance on customer)",
         value=bool(existing_voucher) if invoice else True,
     )
     if post_entry:
-        net_preview = round(amount - discount_amount, 2)
-        advance_preview = round(min(unapplied_advance, net_preview), 2)
-        balance_preview = round(net_preview - advance_preview, 2)
+        advance_preview = round(min(unapplied_advance, due_preview), 2)
+        balance_preview = round(due_preview - advance_preview, 2)
         if advance_preview > 0:
             st.caption(
                 f"Advance applied: **₹{advance_preview:,.0f}** · "
                 f"Customer balance due: **₹{balance_preview:,.0f}**"
             )
-        customization = accounting.get_customization_account()
-        if customization:
-            st.caption(f"Revenue credited to: **{customization.account_name}**")
+        if is_cancellation:
+            revenue = accounting.get_cancellation_charges_account()
+            if revenue:
+                st.caption(f"Revenue credited to: **{revenue.account_name}**")
+            else:
+                st.warning(
+                    'No "Cancellation Charges" revenue account found. Restart the app '
+                    "to seed defaults or create one in Accounts."
+                )
         else:
-            st.warning(
-                'No "Customization" revenue account found. Restart the app to seed '
-                "defaults or create one in Accounts."
-            )
-        if discount_amount > 0:
+            customization = accounting.get_customization_account()
+            if customization:
+                st.caption(f"Revenue credited to: **{customization.account_name}**")
+            else:
+                st.warning(
+                    'No "Customization" revenue account found. Restart the app to seed '
+                    "defaults or create one in Accounts."
+                )
+        if discount_amount > 0 and not generate:
             discount_account = accounting.get_discount_account()
             if discount_account:
                 st.caption(f"Discount debited to: **{discount_account.account_name}**")
@@ -607,23 +729,58 @@ def _invoice_dialog(services: dict, order_id: str):
                 )
 
     cols = st.columns(2)
-    if cols[0].button("Save", type="primary", use_container_width=True):
+    save_label = (
+        "Generate cancellation charge"
+        if generate and is_cancellation and not invoice
+        else ("Record cancellation charge" if is_cancellation and not invoice else ("Generate & Save" if generate and not invoice else "Save"))
+    )
+    if cols[0].button(save_label, type="primary", use_container_width=True):
         try:
             with st.spinner("Please wait while saving invoice..."):
                 if invoice:
                     invoice_service.update_invoice(
-                        invoice.id, invoice_number, bill_ids, amount, inv_date,
+                        invoice.id,
+                        invoice.invoice_number if generate else invoice_number,
+                        bill_ids,
+                        amount,
+                        inv_date,
                         allow_already_invoiced=override,
                         post_entry=post_entry,
-                        discount_amount=discount_amount, item_amounts=item_amounts,
+                        discount_amount=discount_amount,
+                        item_amounts=item_amounts,
                         item_discounts=item_discounts,
+                        gst_rate=gst_rate if generate else None,
+                        hsn_sac=hsn_sac if generate else None,
+                        business=business if generate else None,
+                        customer=customer if generate else None,
+                    )
+                elif generate:
+                    invoice_service.generate_invoice(
+                        order.id,
+                        bill_ids,
+                        amount,
+                        inv_date,
+                        allow_already_invoiced=override,
+                        post_entry=post_entry,
+                        discount_amount=discount_amount,
+                        item_amounts=item_amounts,
+                        item_discounts=item_discounts,
+                        gst_rate=gst_rate,
+                        hsn_sac=hsn_sac,
+                        business=business,
+                        customer=customer,
                     )
                 else:
                     invoice_service.record_invoice(
-                        order.id, invoice_number, bill_ids, amount, inv_date,
+                        order.id,
+                        invoice_number,
+                        bill_ids,
+                        amount,
+                        inv_date,
                         allow_already_invoiced=override,
                         post_entry=post_entry,
-                        discount_amount=discount_amount, item_amounts=item_amounts,
+                        discount_amount=discount_amount,
+                        item_amounts=item_amounts,
                         item_discounts=item_discounts,
                     )
             _clear_invoice_widget_state(order.id)
@@ -637,30 +794,92 @@ def _invoice_dialog(services: dict, order_id: str):
         st.rerun()
 
 
+@st.dialog("Record Invoice", width="large", on_dismiss=dismiss_armed_dialogs)
+def _record_invoice_dialog(services: dict, order_id: str):
+    _invoice_dialog_content(services, order_id, generate=False)
+
+
+@st.dialog("Generate Invoice", width="large", on_dismiss=dismiss_armed_dialogs)
+def _generate_invoice_dialog(services: dict, order_id: str):
+    _invoice_dialog_content(services, order_id, generate=True)
+
+
+def _open_invoice_dialog(services: dict, order_id: str) -> None:
+    """Reopen an invoice for edit (armed via session flag at page bottom)."""
+    target = st.session_state.get(_inv_flag(order_id))
+    if not target or target in ("new", "generate"):
+        return
+    invoice = services["invoices"].get_invoice(target)
+    if invoice and invoice.is_generated:
+        _generate_invoice_dialog(services, order_id)
+    else:
+        _record_invoice_dialog(services, order_id)
+
+
 def _render_invoices_tab(services: dict, order, invoices: list):
     from vaybooks.bms.ui.keyboard.actions import consume_action
     from vaybooks.bms.ui.keyboard.wired import mark_wired
 
     mark_wired("orders.record_invoice")
-    if st.button("+ Record Invoice", key=f"rec_inv_{order.id}", type="primary") or consume_action(
-        "orders.record_invoice"
-    ):
-        clear_all_dialog_flags()
-        _invoice_dialog(services, order.id)
+    is_cancelled = order.order_status == OrderStatus.CANCELLED
+    can_invoice = is_cancelled or order.has_completed_items()
+
+    if can_invoice:
+        btn_cols = st.columns(2)
+        if is_cancelled:
+            if btn_cols[0].button(
+                "+ Record Cancellation Charge",
+                key=f"rec_canc_{order.id}",
+                type="primary",
+            ):
+                clear_all_dialog_flags()
+                _record_invoice_dialog(services, order.id)
+            if btn_cols[1].button(
+                "+ Generate Cancellation Charge",
+                key=f"gen_canc_{order.id}",
+            ):
+                clear_all_dialog_flags()
+                _generate_invoice_dialog(services, order.id)
+        else:
+            if btn_cols[0].button(
+                "+ Record Invoice", key=f"rec_inv_{order.id}", type="primary"
+            ) or consume_action("orders.record_invoice"):
+                clear_all_dialog_flags()
+                _record_invoice_dialog(services, order.id)
+            if btn_cols[1].button("+ Generate Invoice", key=f"gen_inv_{order.id}"):
+                clear_all_dialog_flags()
+                _generate_invoice_dialog(services, order.id)
+    elif not is_cancelled:
+        st.caption("Complete at least one item before invoicing.")
     if not invoices:
         st.caption("No invoices yet.")
         return
     accounting = services["accounting"]
     inv_flag = _inv_flag(order.id)
+    business = services["business"].get_profile()
+    customer = services["customers"].get_customer_detail(order.customer_id)
 
     def _invoice_builder(invoice):
+        pdf_bytes = None
+        if invoice.is_generated:
+            try:
+                from vaybooks.bms.infrastructure.pdf.customization_invoice_pdf import (
+                    generate_customization_invoice_pdf,
+                )
+
+                pdf_bytes = generate_customization_invoice_pdf(
+                    invoice, order, customer, business
+                )
+            except Exception:
+                pdf_bytes = None
         return {
             "edit": InvoiceEditAction(
                 flag_key=inv_flag,
                 button_key=f"edit_inv_{invoice.id}",
                 clear_dialogs=True,
                 register_dialog=True,
-            )
+            ),
+            "pdf_bytes": pdf_bytes,
         }
 
     invoice_cards(
@@ -1120,6 +1339,143 @@ def _refund_dialog(services: dict, order_id: str):
         st.rerun()
 
 
+@st.dialog("Cancel Order", width="large", on_dismiss=dismiss_armed_dialogs)
+def _cancel_order_dialog(services: dict, order_id: str) -> None:
+    order_service = services["orders"]
+    accounting = services["accounting"]
+    order = order_service.get_order_detail(order_id)
+    flag_key = _cancel_flag(order_id)
+
+    if not order:
+        st.error("Order not found")
+        if st.button("Close", key=f"cancel_close_missing_{order_id}"):
+            st.session_state.pop(flag_key, None)
+            st.rerun()
+        return
+
+    if order.order_status == OrderStatus.CANCELLED:
+        st.info("This order is already cancelled.")
+        if st.button("Close", key=f"cancel_close_done_{order_id}"):
+            st.session_state.pop(flag_key, None)
+            st.rerun()
+        return
+
+    unapplied = round(accounting.get_order_unapplied_advance(order.id), 2)
+
+    if unapplied > 0:
+        st.markdown(f"**Amount with us:** ₹{unapplied:,.0f}")
+        st.write("Do you want to initiate a refund now?")
+        st.caption(
+            "Choose **Yes** to record a cash refund and cancel the order. "
+            "Choose **No** to cancel only — advance stays on this order for "
+            "service invoices or a later refund from the Refunds tab."
+        )
+        customer_account = accounting.get_customer_account(order.customer_id)
+        store_accounts = accounting.get_store_accounts()
+        if not customer_account:
+            st.error("No customer account found for this order.")
+        elif not store_accounts:
+            st.error("No store account found. Create one in Accounts before refunding.")
+        else:
+            store_options = {a.account_name: a.id for a in store_accounts}
+            store_name = st.selectbox(
+                "Refund from (store account)",
+                list(store_options.keys()),
+                key=f"cancel_refund_store_{order_id}",
+            )
+            refund_amount = st.number_input(
+                "Refund amount",
+                min_value=0.0,
+                max_value=float(unapplied),
+                value=float(unapplied),
+                step=100.0,
+                key=f"cancel_refund_amount_{order_id}",
+            )
+            refund_date = st.date_input(
+                "Refund date",
+                value=date.today(),
+                key=f"cancel_refund_date_{order_id}",
+            )
+
+            cols = st.columns(3)
+            if cols[0].button(
+                "Yes, refund & cancel",
+                type="primary",
+                use_container_width=True,
+                key=f"cancel_yes_refund_{order_id}",
+            ):
+                try:
+                    order_service.cancel_order(order.id)
+                    accounting.create_advance_refund(
+                        customer_account.id,
+                        store_options[store_name],
+                        refund_amount,
+                        f"Advance refund - {order.order_number}",
+                        refund_date,
+                        reference_order_id=order.id,
+                    )
+                    st.session_state.pop(flag_key, None)
+                    st.toast("Order cancelled and refund recorded")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
+            if cols[1].button(
+                "No, cancel only",
+                use_container_width=True,
+                key=f"cancel_no_refund_{order_id}",
+            ):
+                try:
+                    order_service.cancel_order(order.id)
+                    st.session_state.pop(flag_key, None)
+                    st.toast(
+                        "Order cancelled — advance kept for invoices or later refund"
+                    )
+                    st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
+            if cols[2].button(
+                "Close",
+                use_container_width=True,
+                key=f"cancel_close_{order_id}",
+            ):
+                st.session_state.pop(flag_key, None)
+                st.rerun()
+            return
+
+        if st.button("Cancel order only", key=f"cancel_fallback_{order_id}"):
+            try:
+                order_service.cancel_order(order.id)
+                st.session_state.pop(flag_key, None)
+                st.toast("Order cancelled")
+                st.rerun()
+            except Exception as exc:
+                st.error(str(exc))
+        return
+
+    st.write("Cancel this customization order?")
+    cols = st.columns(2)
+    if cols[0].button(
+        "Yes, cancel order",
+        type="primary",
+        use_container_width=True,
+        key=f"cancel_confirm_{order_id}",
+    ):
+        try:
+            order_service.cancel_order(order.id)
+            st.session_state.pop(flag_key, None)
+            st.toast("Order cancelled")
+            st.rerun()
+        except Exception as exc:
+            st.error(str(exc))
+    if cols[1].button(
+        "Close",
+        use_container_width=True,
+        key=f"cancel_abort_{order_id}",
+    ):
+        st.session_state.pop(flag_key, None)
+        st.rerun()
+
+
 def _render_refunds_tab(services: dict, order):
     from vaybooks.bms.ui.keyboard.actions import consume_action
     from vaybooks.bms.ui.keyboard.wired import mark_wired
@@ -1363,20 +1719,22 @@ def _render_order_view(services: dict, order_id: str):
                 st.rerun()
             except Exception as exc:
                 st.error(str(exc))
-    if action_cols[1].button(
-        "Cancel Order", type="secondary", key=f"cancel_ord_{order.id}"
-    ) or consume_action("orders.cancel"):
-        try:
-            order_service.cancel_order(order.id)
-            st.warning("Order cancelled")
+    if order.order_status not in (OrderStatus.CANCELLED, OrderStatus.COMPLETED):
+        if action_cols[1].button(
+            "Cancel Order", type="secondary", key=f"cancel_ord_{order.id}"
+        ) or consume_action("orders.cancel"):
+            clear_all_dialog_flags()
+            st.session_state[_cancel_flag(order.id)] = True
+            register_armed_dialog(_cancel_flag(order.id))
             st.rerun()
-        except Exception as exc:
-            st.error(str(exc))
 
     # Popups opened at page top level (order view is a page, not a dialog).
     # Only one dialog may open per run, so this is a strict if/elif chain.
-    if st.session_state.get(_inv_flag(order.id)):
-        _invoice_dialog(services, order.id)
+    if st.session_state.get(_cancel_flag(order.id)):
+        _cancel_order_dialog(services, order.id)
+    elif inv_target := st.session_state.get(_inv_flag(order.id)):
+        if inv_target not in ("new", "generate"):
+            _open_invoice_dialog(services, order.id)
     elif st.session_state.get(_del_flag(order.id)):
         _delivery_dialog(services, order.id)
     elif st.session_state.get(_rcpt_flag(order.id)):

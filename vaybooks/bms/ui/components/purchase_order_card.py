@@ -36,7 +36,7 @@ def _po_card(row: dict, suffix: str) -> None:
         st.markdown(status_badge(row.get("status") or "Draft", compact=True), unsafe_allow_html=True)
         st.caption(f"₹{float(row.get('total_amount') or 0):,.0f}")
         if st.button("View", key=f"po_view_{suffix}_{row.get('id')}", use_container_width=True):
-            navigation.go_to_detail("purchase_order_detail", "purchase_orders_list", row.get("id"))
+            navigation.go_to_detail("purchase_order_detail", row.get("id"))
 
 
 def purchase_order_cards(rows: list[dict], suffix: str = "po") -> None:

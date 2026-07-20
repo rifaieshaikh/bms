@@ -95,9 +95,16 @@ class PurchaseAppService:
     def get_latest_purchase_rate(
         self, item_type: CatalogItemType, item_id: str, vendor_id: str
     ) -> Optional[float]:
-        if not self._price_history_repo:
-            return None
-        return self._price_history_repo.latest_rate(item_type, item_id, vendor_id)
+        """Return vendor's latest ex-GST purchase rate, else product last_purchase_rate."""
+        if self._price_history_repo and vendor_id and item_id:
+            latest = self._price_history_repo.latest_rate(item_type, item_id, vendor_id)
+            if latest is not None and float(latest) > 0:
+                return round(float(latest), 2)
+        if item_type == CatalogItemType.PRODUCT and item_id:
+            product = self._inventory.get_product(item_id)
+            if product and float(getattr(product, "last_purchase_rate", 0) or 0) > 0:
+                return round(float(product.last_purchase_rate), 2)
+        return None
 
     def list_purchase_price_history(
         self,
@@ -124,6 +131,9 @@ class PurchaseAppService:
             return
         rows = []
         for line in lines:
+            rate = round(float(getattr(line, "rate", 0) or 0), 2)
+            if rate <= 0 or not getattr(line, "item_id", None):
+                continue
             rows.append(
                 PurchasePriceHistory(
                     item_type=line.item_type,
@@ -131,7 +141,7 @@ class PurchaseAppService:
                     vendor_id=vendor_id,
                     purchase_date=purchase_date,
                     qty=line.qty,
-                    rate=line.rate,
+                    rate=rate,
                     taxable_amount=line.taxable_amount,
                     line_total=line.line_total,
                     cgst_amount=line.cgst_amount,
@@ -142,7 +152,19 @@ class PurchaseAppService:
                     vendor_bill_number=vendor_bill_number,
                 )
             )
+        if not rows:
+            return
         self._price_history_repo.save_many(rows)
+        # Newest rate becomes the product's active purchase price (ex-GST).
+        for line in rows:
+            if line.item_type != CatalogItemType.PRODUCT:
+                continue
+            try:
+                self._inventory.set_product_cost_fields(
+                    line.item_id, last_purchase_rate=line.rate
+                )
+            except Exception:
+                continue
 
     def create_purchase_bill_from_lines(
         self,
@@ -388,9 +410,9 @@ class PurchaseAppService:
         reference_service_id: Optional[str] = None,
         apply_stock: bool = False,
     ) -> Voucher:
-        old = self._accounting.get_voucher(voucher_id)
-        if old and not old.reference_grn_id:
-            self._inventory.reverse_movements_by_reference(voucher_id)
+        # apply_stock is accepted for API compatibility with create, but bill edit
+        # is metadata + GST only — no stock / landed re-application on update.
+        _ = apply_stock
         voucher = self._accounting.update_purchase_bill(
             voucher_id,
             vendor_account_id,
@@ -401,37 +423,68 @@ class PurchaseAppService:
             voucher_date,
             reference_service_id,
         )
-        if apply_stock and not voucher.reference_grn_id:
-            stock_lines = [
-                {
-                    "product_id": line.get("product_id"),
-                    "qty": line.get("qty"),
-                    "description": "Purchase bill",
-                }
-                for line in expense_lines
-                if line.get("product_id") and float(line.get("qty") or 0) > 0
-            ]
-            if stock_lines:
-                self._inventory.apply_purchase_receive(
-                    stock_lines,
-                    voucher.id,
-                    StockReferenceType.PURCHASE,
-                    voucher_date or date.today(),
+        return voucher
+
+    def update_purchase_bill_from_lines(
+        self,
+        voucher_id: str,
+        vendor_id: str,
+        raw_lines: list[dict],
+        vendor_bill_number: str,
+        amount_paid: float = 0.0,
+        paying_account_id: Optional[str] = None,
+        voucher_date: Optional[date] = None,
+        reference_service_id: Optional[str] = None,
+        prior_landed_by_key: Optional[dict[tuple[str, str], float]] = None,
+    ) -> Voucher:
+        """Re-resolve lines and update bill metadata/GST; preserve landed_cost_alloc."""
+        resolved = self.resolve_purchase_lines(raw_lines, vendor_id)
+        prior = prior_landed_by_key or {}
+        if not prior:
+            old_row = self.get_purchase_bill(voucher_id) or {}
+            for item in old_row.get("line_items") or []:
+                key = (
+                    str(item.get("item_type") or CatalogItemType.PRODUCT.value),
+                    str(item.get("item_id") or item.get("product_id") or ""),
                 )
-                landed = [
-                    {
-                        "product_id": line.get("product_id"),
-                        "qty": float(line.get("qty") or 0),
-                        "unit_cost": round(
-                            float(line.get("amount") or 0)
-                            / max(float(line.get("qty") or 0), 1),
-                            4,
-                        ),
-                    }
-                    for line in expense_lines
-                    if line.get("product_id") and float(line.get("qty") or 0) > 0
-                ]
-                self._inventory.apply_landed_cost(landed)
+                if key[1]:
+                    prior[key] = float(item.get("landed_cost_alloc") or 0)
+        for line in resolved:
+            key = (line.item_type.value, line.item_id)
+            if key in prior:
+                line.landed_cost_alloc = prior[key]
+            else:
+                # Prefer explicit raw seed if present
+                for raw in raw_lines:
+                    raw_key = (
+                        str(raw.get("item_type") or CatalogItemType.PRODUCT.value),
+                        str(raw.get("item_id") or raw.get("product_id") or ""),
+                    )
+                    if raw_key == key and raw.get("landed_cost_alloc") is not None:
+                        line.landed_cost_alloc = float(raw.get("landed_cost_alloc") or 0)
+                        break
+        vendor_account = self._accounting.get_vendor_account(vendor_id)
+        if not vendor_account:
+            raise ValueError("Vendor account not found")
+        expense_lines = [line.to_expense_line_dict() for line in resolved]
+        voucher = self.update_purchase_bill(
+            voucher_id=voucher_id,
+            vendor_account_id=vendor_account.id,
+            expense_lines=expense_lines,
+            vendor_bill_number=vendor_bill_number,
+            amount_paid=amount_paid,
+            paying_account_id=paying_account_id,
+            voucher_date=voucher_date,
+            reference_service_id=reference_service_id,
+            apply_stock=False,
+        )
+        self._record_price_history(
+            resolved,
+            vendor_id=vendor_id,
+            purchase_date=voucher_date or date.today(),
+            voucher_id=voucher.id,
+            vendor_bill_number=vendor_bill_number,
+        )
         return voucher
 
     def delete_purchase_bill(self, voucher_id: str) -> None:

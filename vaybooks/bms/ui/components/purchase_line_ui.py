@@ -37,20 +37,42 @@ def preview_line_gst(
     vendor_state_code: str = "",
 ) -> dict:
     taxable = round(float(qty or 0) * float(rate or 0), 2)
+    gst_rate = float(tax_profile.gst_rate or 0) if vendor_registered else 0.0
     gst = compute_purchase_gst(
         taxable,
-        tax_profile.gst_rate,
+        gst_rate,
         vendor_registered=vendor_registered,
         business_state_code=business_state_code,
         vendor_state_code=vendor_state_code,
     )
     return {
+        "hsn_sac": tax_profile.hsn_sac or "",
+        "gst_rate": gst_rate,
         "taxable_amount": gst.taxable_amount,
         "cgst_amount": gst.cgst_amount,
         "sgst_amount": gst.sgst_amount,
         "igst_amount": gst.igst_amount,
         "utgst_amount": gst.utgst_amount,
         "line_total": gst.line_total,
+    }
+
+
+def tax_summary_from_previews(previews: list[dict]) -> dict:
+    taxable = round(sum(float(p.get("taxable_amount") or 0) for p in previews), 2)
+    cgst = round(sum(float(p.get("cgst_amount") or 0) for p in previews), 2)
+    sgst = round(sum(float(p.get("sgst_amount") or 0) for p in previews), 2)
+    igst = round(sum(float(p.get("igst_amount") or 0) for p in previews), 2)
+    utgst = round(sum(float(p.get("utgst_amount") or 0) for p in previews), 2)
+    total_tax = round(cgst + sgst + igst + utgst, 2)
+    grand_total = round(sum(float(p.get("line_total") or 0) for p in previews), 2)
+    return {
+        "taxable": taxable,
+        "cgst": cgst,
+        "sgst": sgst,
+        "igst": igst,
+        "utgst": utgst,
+        "total_tax": total_tax,
+        "grand_total": grand_total,
     }
 
 

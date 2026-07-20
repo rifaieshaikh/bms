@@ -283,3 +283,9 @@ class MeasurementAppService:
         specs = self.list_specs_for_person(record.person_type, active_only=True)
         self._domain.validate_record(record, specs)
         return self._record_repo.save(record)
+
+    def delete_record(self, record_id: str) -> None:
+        record = self._record_repo.find_by_id(record_id)
+        if not record:
+            raise ValidationError("Measurement record not found")
+        self._record_repo.delete(record_id)
