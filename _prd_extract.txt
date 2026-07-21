@@ -1,0 +1,396 @@
+VayBooks
+Contractor Project Accounting
+Product Requirements Document
+Purpose
+Define an end-to-end contractor workflow—from enquiry, BOQ and quotation through execution, RA billing, collections, retention, handover and financial closure—while maintaining auditable double-entry accounting.
+Document control
+Value
+Product
+VayBooks
+Module
+Contractor Project Accounting
+Version
+1.0
+Date
+20 July 2026
+Status
+Baseline requirements for review
+Primary market
+Indian contractors and project-based service businesses
+1. Executive summary
+The module shall connect commercial estimation, operational execution and statutory accounting within one project record. It must show not only what has been invoiced and paid, but also what was estimated, approved, executed, certified, committed, retained, disputed and forecast.
+Core design principle
+Project, BOQ item, activity, cost category and site must be available at transaction-line level. Project profitability shall be derived from source transactions and journal entries—not stored as a manually editable figure.
+1.1 Business objectives
+Provide one traceable lifecycle from customer enquiry to project closure.
+Control quotation, budget, procurement and scope changes through approvals.
+Connect physical progress and certified measurements to RA billing.
+Track actual, committed and forecast costs before margins are lost.
+Support Indian contractor practices including advances, retention, GST and TDS.
+Produce project, BOQ and activity-level profitability and cash-flow visibility.
+1.2 Success measures
+Measure
+Target / expected outcome
+Traceability
+Every billable or cost transaction can be traced to its project and source document.
+Budget control
+Budget overruns and unapproved commitments are visible before posting or approval.
+Billing accuracy
+RA bill quantities reconcile with certified cumulative measurements.
+Cash visibility
+Project dashboard separates invoiced, certified, collected, retained and overdue amounts.
+Closing discipline
+A project cannot financially close while mandatory open items remain.
+1.3 Scope
+In scope
+Out of scope for initial release
+BOQ, quotation, contract/work order, budgeting, activities, procurement, execution, measurements, RA bills, invoices, collections, expenses, time, subcontractors, variations, retention and closure.
+Full BIM/CAD authoring, advanced CPM scheduling, payroll compliance engine, equipment telematics and customer-facing construction collaboration suite.
+2. Users and permissions
+Role
+Primary responsibilities
+Owner / Administrator
+Configuration, permissions, overrides and portfolio visibility.
+Estimator
+Requirements, BOQ, costing and quotation preparation.
+Approver
+Quotation, budget, procurement, variation, billing and closure approvals.
+Project Manager
+Plan, execute, monitor progress, cost and forecast.
+Site Engineer / Supervisor
+Daily progress, measurement, material and labour recording.
+Procurement User
+Requests, RFQs, comparison, POs and supplier coordination.
+Storekeeper
+Receipts, issues, returns, transfers and site stock.
+Accountant
+Bills, invoices, receipts, payments, taxes, journals and reconciliation.
+Customer / Consultant Approver
+Optional confirmation of quotation, measurement, milestone or bill.
+Auditor / Read-only User
+View documents, approvals, journals and audit history.
+SEC-001  The system shall enforce role-based access by organisation, branch, project and action.
+SEC-002  Sensitive employee cost rates and internal margins shall be permission-controlled independently of billing rates.
+SEC-003  Maker-checker rules shall prevent a user from approving their own transaction when configured.
+3. End-to-end lifecycle
+Stage
+Outcome / gate
+1. Enquiry & site assessment
+Customer requirement, location, documents, risks and assumptions recorded.
+2. Estimate & BOQ
+Cost and selling rates calculated at measurable work-item level.
+3. Quotation
+Versioned commercial offer passes internal approval and customer confirmation.
+4. Contract / work order
+Accepted scope, terms, billing, retention and tax conditions become baseline.
+5. Budget & cash-flow plan
+Approved cost baseline and collection/payment forecast established.
+6. Activities & resources
+Configurable work plan with sequential/parallel dependencies created.
+7. Procurement & mobilisation
+Materials, subcontractors, labour and equipment planned and committed.
+8. Execution & measurement
+Daily progress, consumption, time, quality and measured quantities captured.
+9. Certification & RA billing
+Approved measurements produce RA claim, certification and tax invoice.
+10. Settlement
+Customer collections, supplier/subcontractor payments, refunds and deductions allocated.
+11. Handover & closure
+Final measurement, final bill, retention, DLP and financial close completed.
+3.1 Common document states
+Unless a workflow defines otherwise, controlled documents should use: Draft → Submitted → Under Review → Approved / Rejected → Partially Fulfilled → Completed → Cancelled. Rejected documents return to Draft only through revision; approved documents are amended by a new revision or adjustment document, not overwritten.
+4. Project and contract master
+PRJ-001  Create a project from an accepted quotation or independently with a unique project code.
+PRJ-002  Capture customer, billing customer, owner, consultant, site, branch, project manager, dates, currency, GST place of supply and tax treatment.
+PRJ-003  Support parent projects, subprojects and multiple sites.
+PRJ-004  Maintain project status: Draft, Planned, Active, On Hold, Physically Completed, DLP, Financially Closed and Cancelled.
+PRJ-005  Attach drawings, scope, customer PO/work order, contracts, permits, guarantees and correspondence with version history.
+CON-001  Record original and revised contract values, billing model, payment schedule, advance, retention, warranty/DLP, penalties, escalation, inclusions and exclusions.
+CON-002  Prevent baseline contract fields from being overwritten after approval; changes must flow through an amendment or variation.
+5. Enquiry, estimate, BOQ and quotation
+5.1 Enquiry and site assessment
+ENQ-001  Capture lead/enquiry reference, requirement, expected dates, site visit, drawings, photos, assumptions, exclusions and risks.
+ENQ-002  Allow an enquiry to generate one or more alternative estimates and quotations.
+5.2 Estimate and BOQ
+BOQ-001  Create hierarchical BOQs with section, item code, description/specification, unit and estimated quantity.
+BOQ-002  Build internal cost from material, labour, equipment, subcontract, overhead, contingency and other components.
+BOQ-003  Calculate selling rate from cost, markup/margin, discount and tax; permit authorised manual override with reason.
+BOQ-004  Support reusable BOQ and rate-analysis templates.
+BOQ-005  Maintain quantity and value columns for estimated, contracted, varied, executed, measured, certified, billed and balance.
+BOQ-006  Import and export BOQ lines through validated spreadsheet templates.
+5.3 Quotation and approval
+QTN-001  Generate a customer quotation from selected BOQ items with terms, taxes, exclusions, validity and payment milestones.
+QTN-002  Support configurable internal approval based on value, discount, margin or exception.
+QTN-003  Maintain immutable quotation versions and a comparison of changes between revisions.
+QTN-004  Record customer response: Confirmed, Rejected, Revision Requested or Expired, including evidence and date.
+QTN-005  Convert only an approved and customer-confirmed version into project and contract baseline.
+6. Budgeting, forecasting and change control
+BGT-001  Create original budget by BOQ item, activity, cost category, period and site.
+BGT-002  Separate direct material, labour, subcontractor, equipment, site overhead, head-office overhead, contingency and tax.
+BGT-003  Maintain original, approved revised and current forecast budget without deleting history.
+BGT-004  Show budget, actual, committed, remaining, estimate-to-complete and estimate-at-completion.
+BGT-005  Support budget transfers and revisions with approval, reason and effective date.
+BGT-006  Prepare period-wise cash-in and cash-out plan and compare it with actual cash flow.
+BGT-007  Warn or block commitments exceeding budget according to organisation policy.
+6.1 Variations and change orders
+VAR-001  Record additions, omissions, quantity/rate changes, new items, customer instructions and time extensions.
+VAR-002  Calculate revenue, cost, margin, schedule and tax impact before approval.
+VAR-003  Track Draft, Submitted, Internally Approved, Customer Approved, Rejected and Withdrawn statuses.
+VAR-004  Show executed but unapproved variation work as commercial exposure.
+VAR-005  Update revised contract and budget baselines only after required approval.
+7. Activity planning and execution
+ACT-001  Define configurable project phases, activities, subactivities and milestones from reusable templates.
+ACT-002  Capture owner, planned dates, duration, weightage, budget, resources, required materials, completion criteria and billing milestone.
+ACT-003  Support sequential, parallel and predecessor-based dependencies, including approval gates.
+ACT-004  Record actual start/end, percentage and quantity progress, blocked status, delay reason and revised forecast dates.
+ACT-005  Roll activity progress up to project progress using configured weightage or measurable quantities.
+DPR-001  Capture daily progress report: work done, quantity, labour, equipment, materials, weather/site condition, delays, issues, photos and supervisor confirmation.
+QLT-001  Support inspections, checklists, non-conformance, rework, snag items and closure evidence.
+QLT-002  Tag rework cost separately for project margin analysis.
+8. Procurement and site inventory
+Required procurement flow: Material Request → Purchase Requisition → Supplier RFQ → Comparison → Purchase Order → Receipt/GRN → Inspection → Supplier Bill → Payment.
+PUR-001  Tag every request, order, receipt and bill line with project, activity, BOQ item, site and cost category where applicable.
+PUR-002  Support supplier quotation comparison using landed cost, tax, delivery, credit terms and rating.
+PUR-003  Check approved budget and open commitments before PO approval.
+PUR-004  Support partial delivery, rejection, return, cancellation and PO closure.
+PUR-005  Perform configurable two-way or three-way matching among PO, GRN and supplier bill.
+INV-001  Maintain central and site-wise inventory with receipt, reservation, issue, consumption, return, transfer, wastage and loss.
+INV-002  Distinguish contractor-supplied, customer-supplied and subcontractor-supplied materials.
+INV-003  Report BOQ quantity versus purchased, received, issued, consumed, wasted and billed quantities.
+8.1 Purchase on behalf of customer
+POC-001  Classify each purchase as contract cost, reimbursable expense, customer-owned purchase or agency/facilitation purchase.
+POC-002  Capture invoice owner, supplier, actual cost, recoverable amount, markup/service charge, GST treatment, ownership and supporting document.
+POC-003  Track unbilled and recovered reimbursable purchases separately.
+POC-004  Allow configured principal-versus-agent accounting; do not assume gross revenue and expense treatment for every case.
+9. Labour, time, equipment and expenses
+TIM-001  Record employee timesheets by project, activity and date, with billable/non-billable classification and approval.
+TIM-002  Record daily-wage attendance, overtime, rate and labour allocation by activity.
+TIM-003  Maintain protected internal cost rate separately from customer billing rate.
+EQP-001  Allocate owned or hired equipment by project/activity, time or usage quantity and applicable rate.
+EXP-001  Record direct expenses, employee claims, petty cash, site cash, travel, fuel, rental, permits, utilities and welfare expenses.
+EXP-002  Support expense advances, settlement, attachments, approval, billable/reimbursable status and customer recovery.
+OVH-001  Allocate shared overhead using fixed ratio, labour hours, direct cost, revenue or another configured driver, preserving the allocation calculation.
+10. Subcontractor management
+SUB-001  Create subcontractor work orders with scope, BOQ/rates, quantity, dates, advance, retention, TDS and payment terms.
+SUB-002  Record subcontractor progress measurements independently from customer measurements.
+SUB-003  Generate and certify subcontractor RA bills with advance recovery, retention, TDS, material recovery, back charges and penalties.
+SUB-004  Track materials issued to or returned by each subcontractor.
+SUB-005  Support subcontractor final settlement and retention release.
+11. Measurement, certification and RA billing
+11.1 Measurement Book
+MB-001  Record date, location, BOQ item, dimensions, calculated quantity, previous quantity, current quantity and cumulative quantity.
+MB-002  Maintain submitted, engineer-verified, customer-certified, disputed and rejected quantities separately.
+MB-003  Prevent cumulative certified quantity from exceeding contracted plus approved variation quantity unless explicitly authorised.
+MB-004  Attach photos, drawings, calculation sheets and approval history.
+MB-005  Prevent the same certified measurement from being included in multiple RA bills.
+11.2 RA bill
+RA-001  Prepare RA claims from eligible measured/certified BOQ quantities and approved rates.
+RA-002  Show previous, current and cumulative work value and quantity for every BOQ line.
+RA-003  Support material-at-site, approved variations and price escalation where contractually permitted.
+RA-004  Calculate mobilisation/other advance recovery, retention, TDS, GST, penalties, debit notes, other deductions and net payable.
+RA-005  Maintain contractor-claimed, customer-certified, tax-invoiced and collected values separately.
+RA-006  Support partial certification, disputed amounts, revised certification and reversal through controlled adjustment.
+RA-007  Generate tax invoice only from the certified or otherwise authorised value according to organisation policy.
+RA bill summary field
+Definition
+Gross work value
+Current certified work plus permitted materials/variations.
+Recoveries
+Advance, customer material, equipment or other contractual recoveries.
+Retention
+Amount withheld and tracked as receivable until release.
+TDS
+Customer tax deduction tracked against applicable certificate/credit.
+Net receivable
+Certified/invoiced amount less recoveries, retention, TDS and adjustments.
+12. Sales, invoicing, receipts, payments and refunds
+SAL-001  Support advance, milestone, fixed-price, time-and-material, unit-based, reimbursement, RA and final billing.
+SAL-002  Create tax invoices, debit notes and credit notes linked to project, contract, RA bill and source measurements as relevant.
+REC-001  Record mobilisation advance, invoice receipt, direct customer payment, retention release and security deposit.
+REC-002  Allocate one receipt across multiple invoices/RA bills and permit controlled unallocated receipts.
+REC-003  Track short payment, disputed amount, withheld amount, bank charges and TDS deducted by customer.
+PAY-001  Allocate supplier/subcontractor payments against advances, bills, debit notes and retention payable.
+RFD-001  Process customer or supplier refunds only against an identified source such as excess advance, overpayment, cancellation, return or credit note.
+RFD-002  Require approval, reason, payment reference and accounting reversal/adjustment for refunds.
+13. Accounting requirements
+Accounting invariant
+Every posted document must produce balanced journal entries. Operational documents may be approved before posting, but project reports that claim accounting finality must reconcile to the general ledger.
+ACC-001  Support project, subproject, site, BOQ item, activity, cost category, department and branch dimensions at journal-line level.
+ACC-002  Allow account-level rules that require a project or prohibit posting to closed projects.
+ACC-003  Create journals from approved source documents through configurable posting rules and preserve source-to-ledger traceability.
+ACC-004  Keep customer advances as liabilities until adjusted or recognised; do not automatically treat receipt as revenue.
+ACC-005  Track supplier advances as assets until adjusted against bills or refunded.
+ACC-006  Track retention receivable and retention payable separately from ordinary trade balances.
+ACC-007  Support configurable WIP, unbilled revenue, deferred revenue and revenue recognition with period-end adjustment and reversal.
+ACC-008  Support applicable GST, TDS, reverse charge and place-of-supply rules through VayBooks tax configuration.
+ACC-009  Disallow changes to posted documents in locked periods; corrections shall use reversal, credit/debit note or authorised reopening.
+ACC-010  Provide reconciliation between project subledger, receivables/payables, inventory and general ledger.
+13.1 Illustrative accounting events
+Event
+Indicative treatment (configuration-dependent)
+Customer advance received
+Dr Bank; Cr Customer Advance liability.
+Supplier material bill
+Dr Inventory/Project Cost/Input Tax; Cr Supplier.
+Material consumed
+Dr Project WIP/Cost; Cr Site Inventory.
+RA tax invoice
+Dr Customer/Contract asset adjustments; Cr Revenue/Output tax as applicable.
+Retention withheld
+Separate retention receivable from currently collectible customer balance.
+Customer TDS
+Dr TDS receivable; reduce customer outstanding upon evidence/allocation.
+Customer refund
+Reverse/settle the originating liability, receivable or revenue adjustment; Cr Bank.
+Final posting schemes must be configurable and reviewed by an accountant for the organisation’s accounting policy and applicable Indian tax requirements.
+14. Dashboards and reports
+14.1 Project control dashboard
+Original and revised contract value; approved/unapproved variations.
+Budget, actual cost, committed cost, estimate to complete and forecast final margin.
+Physical, measured, certified, billed and collected progress.
+Customer advances, outstanding, overdue, withheld, disputed, retention and TDS.
+Supplier/subcontractor payables, advances and retention.
+Cash received, cash paid and projected cash requirement.
+Delayed activities, unapproved expenses/timesheets, procurement delays and risk indicators.
+14.2 Required reports
+Category
+Reports
+Commercial
+Quotation conversion, contract/variation register, BOQ margin and unapproved variation exposure.
+Cost
+Budget vs actual vs committed, cost-category/activity variance, cost to complete and rework cost.
+Progress
+Planned vs actual, DPR, measurement register, certified vs billed quantity and milestone status.
+Materials
+Site stock, material reconciliation, BOQ-to-consumption variance, wastage and customer-supplied material.
+Billing
+RA register, claimed vs certified vs invoiced, unbilled certified work and retention register.
+Finance
+Project P&L, cash flow, ledger, receivable/payable ageing, advances, TDS and GST reconciliation.
+Portfolio
+Project margin, cash exposure, delay, budget risk and customer concentration across projects.
+15. Notifications, controls and audit
+CTL-001  Provide configurable approvals by document type, amount, margin, discount, budget exception, project and role.
+CTL-002  Record who created, submitted, approved, rejected, posted, reversed and reopened each controlled document, with timestamp and reason.
+CTL-003  Notify users about approval requests, expiring quotation, delayed activity, low stock, budget overrun, overdue bill, retention due and project closure blockers.
+CTL-004  Maintain immutable audit history for status, financial values, quantities, attachments and configuration changes.
+CTL-005  Support attachments and document versioning without silently replacing historical evidence.
+CTL-006  Require reason and enhanced permission for override, cancellation, backdated posting, reopening or manual certification exception.
+16. Project completion and closure
+Physical completion and financial closure are separate states. A completed project may remain open for final certification, retention, DLP obligations and settlement.
+CLS-001  Record physical completion, snag/punch list, handover documents and customer completion certificate.
+CLS-002  Complete final measurement, final RA/final bill and approved variations before financial closure.
+CLS-003  Identify unused stock for return, transfer, sale, write-off or customer handover.
+CLS-004  Close or cancel open purchase orders, commitments, timesheets, expenses and subcontractor work orders.
+CLS-005  Adjust advances and reconcile receivables, payables, retentions, WIP, unbilled/deferred revenue and taxes.
+CLS-006  Track DLP/warranty dates, defects and retention release even after physical completion.
+CLS-007  Generate a closure statement showing final revenue, cost, profit, cash result, variance and unresolved approved exceptions.
+CLS-008  Block new operational and financial postings after financial closure unless the project is reopened through approval.
+17. Data model requirements
+Core entity
+Important relationships
+Project
+Customer, contract, sites, parties, BOQ, budget, activities and accounting dimensions.
+BOQ item
+Estimate components, contracted quantities/rates, variations, measurements, bills and costs.
+Activity
+Dependencies, budget, resources, progress, materials, time, expenses and milestone.
+Contract / amendment
+Quotation version, agreed BOQ, commercial terms and revised value.
+Measurement
+BOQ item, dimensions, submission, certification and RA bill consumption.
+RA bill
+Measurements, deductions, tax invoice, receipt allocation and certification.
+Commitment
+Approved PR/PO/subcontract order affecting forecast cost before invoice posting.
+Project transaction allocation
+Source line split across project, activity, BOQ, cost category and site.
+DAT-001  Use stable IDs and human-readable codes; codes may be configurable but must remain unique within their defined scope.
+DAT-002  Financial and quantity values shall use fixed-precision decimal types with unit and currency explicitly stored.
+DAT-003  Source document lines may be split across multiple project dimensions; allocation totals must equal the source-line quantity/value as applicable.
+DAT-004  Approved revisions must be additive/versioned and historical reports must be reproducible as of an effective date.
+18. Non-functional requirements
+Area
+Requirement
+Security
+Tenant isolation, least privilege, encrypted transport/storage, protected credentials and sensitive-rate access control.
+Reliability
+Idempotent posting and payment operations; safe retry without duplicate journals, bills or allocations.
+Performance
+Normal list/search actions should respond within 3 seconds at expected tenant scale; heavy reports may run asynchronously with status.
+Auditability
+Every financial total must drill down to source lines, approvals and journal entries.
+Usability
+Consistent statuses, bulk import/edit where safe, saved filters, mobile-friendly site entry and offline-tolerant draft capture as a later option.
+Integration
+Documented APIs/webhooks for customers, suppliers, banks, GST/e-invoice, attendance, document storage and external project tools.
+Export
+Reports and registers exportable to spreadsheet/PDF with filters and generation metadata.
+Observability
+Structured error logs, job status, integration retries and administrator-facing failure resolution.
+19. MVP and phased delivery
+Release
+Included capabilities
+MVP — Accounting foundation
+Project/contract master; BOQ and quotation versions/approval; budget; configurable activities; project tagging on sales, purchases, expenses, receipts, payments and journals; basic measurements and RA billing; project P&L, budget-vs-actual, cash and outstanding dashboard; audit and closure controls.
+Phase 2 — Execution control
+DPR, dependencies, site inventory, material reconciliation, procurement commitments, subcontractor work orders/RA bills, timesheets/daily labour, variation orders, advanced approval rules and customer certification.
+Phase 3 — Advanced accounting & intelligence
+WIP/revenue recognition, overhead allocation, cost-to-complete forecasting, DLP/retention automation, multi-currency, customer portal, mobile/offline capture, anomaly detection and AI project-risk/margin insights.
+20. MVP acceptance criteria
+AC-001  An approved quotation version can create a project, contract baseline and BOQ without losing the quotation history.
+AC-002  A project manager can configure sequential and parallel activities and view planned versus actual progress.
+AC-003  A user can record a purchase, expense, sale, receipt, payment or refund against a project at line level.
+AC-004  The project dashboard reconciles budget, posted actuals, invoice totals, receipts and outstanding balances to source documents.
+AC-005  An RA bill can be prepared using eligible quantities and displays previous, current and cumulative values plus configured deductions.
+AC-006  The same measurement cannot be billed twice and an adjustment remains auditable.
+AC-007  Customer advance, retention and TDS are shown separately from ordinary invoice collections.
+AC-008  Every posted project document creates balanced journal entries and permits drill-down from project report to journal and source.
+AC-009  An approved budget revision does not alter the original baseline and reports show both values.
+AC-010  The system blocks financial closure when configured mandatory open items exist and reports each blocker.
+21. Key business rules
+Rule
+Definition
+BR-01
+Only approved/customer-confirmed commercial scope becomes contractual baseline.
+BR-02
+Approved documents are never silently overwritten; corrections use revision or adjustment.
+BR-03
+Physical progress, measured quantity, certified quantity, billed value and collected cash are distinct.
+BR-04
+Purchase commitment affects forecast cost before the supplier invoice becomes actual cost.
+BR-05
+Customer-supplied or agency purchases must not be treated as ordinary contractor inventory/revenue without configured accounting basis.
+BR-06
+Retention remains separately identifiable until formally released or written off.
+BR-07
+Project closure does not remove records and requires approved reopening for later postings.
+BR-08
+All posted accounting entries balance and remain traceable to their source.
+22. Decisions required before detailed design
+Initial customer segment: civil contractor, interior contractor, MEP contractor, general service contractor or a configurable common model.
+MVP billing basis: customer-confirmed measurement, internal certification or both.
+Whether accounting is accrual-only initially or must include configurable WIP/revenue recognition in MVP.
+Extent of site inventory and subcontractor functionality required in the first release.
+Approval configuration depth and whether external customer/consultant login is required.
+Indian compliance integrations required at launch: GST/e-invoice/e-way bill, TDS certificates and banking.
+Expected tenant scale: active projects, BOQ lines, daily transactions, users and attachments.
+Appendix A — Glossary
+Term
+Meaning
+BOQ
+Bill of Quantities: measurable work items with quantity and rate.
+RA Bill
+Running Account bill: periodic claim/payment for work performed to date.
+Measurement Book
+Detailed record supporting quantities executed and certified.
+Committed cost
+Approved future cost, such as an open PO, not yet posted as an actual supplier bill.
+Retention
+Contract amount withheld until completion, defect-liability milestone or agreed release.
+DLP
+Defect Liability Period after physical completion.
+WIP
+Work in Progress: costs/value of incomplete work treated according to accounting policy.
+Variation
+Approved or pending change to scope, quantity, rate, cost, time or contract value.
