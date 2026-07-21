@@ -17,7 +17,7 @@ LIST_PAGES = [
     ("accounting-invoices", "Accounting Invoices", "h3"),
     ("journal", "Journal Entries", "h3"),
     ("trial-balance", "Trial Balance", "h3"),
-    ("activities", "Activity Configuration", "h3"),
+    ("customization-activities", "Customization Activities", "h3"),
     ("services", "Service Configuration", "h3"),
     ("inventory-categories", "Product Categories", "h3"),
     ("inventory-products", "Inventory Products", "h3"),

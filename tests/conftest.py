@@ -386,6 +386,17 @@ class FakeCounterRepository:
             "sales_return_number": 0,
             "estimate_number": 0,
             "quotation_number": 0,
+            "project_number": 0,
+            "project_quotation_number": 0,
+            "project_work_order_number": 0,
+            "project_ra_number": 0,
+            "project_proforma_number": 0,
+            "project_variation_number": 0,
+            "enquiry_number": 0,
+            "project_mr_number": 0,
+            "project_rfq_number": 0,
+            "project_subcon_number": 0,
+            "project_petty_cash_number": 0,
         }
         self._prefixes = {
             "order_number": "CO",
@@ -399,9 +410,23 @@ class FakeCounterRepository:
             "sales_return_number": "SR",
             "estimate_number": "EST",
             "quotation_number": "QT",
+            "project_number": "PRJ",
+            "project_quotation_number": "PQ",
+            "project_work_order_number": "PWO",
+            "project_ra_number": "PRA",
+            "project_proforma_number": "PPF",
+            "project_variation_number": "PV",
+            "enquiry_number": "ENQ",
+            "project_mr_number": "PMR",
+            "project_rfq_number": "PRFQ",
+            "project_subcon_number": "PSC",
+            "project_petty_cash_number": "PPC",
         }
 
     def next(self, counter_name: str) -> str:
+        if counter_name not in self._counters:
+            self._counters[counter_name] = 0
+            self._prefixes.setdefault(counter_name, counter_name[:3].upper())
         self._counters[counter_name] += 1
         prefix = self._prefixes[counter_name]
         return f"{prefix}-{self._counters[counter_name]:04d}"

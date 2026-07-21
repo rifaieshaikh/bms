@@ -59,6 +59,7 @@ class MongoPurchaseOrderRepository:
             "status": _enum_value(order.status),
             "lines": [self._line_to_doc(line) for line in order.lines],
             "notes": order.notes,
+            "project_id": order.project_id,
             "created_at": order.created_at,
             "updated_at": order.updated_at,
         }
@@ -80,6 +81,7 @@ class MongoPurchaseOrderRepository:
             status=PurchaseOrderStatus(doc.get("status", PurchaseOrderStatus.DRAFT.value)),
             lines=[self._line_from_doc(line) for line in doc.get("lines", [])],
             notes=doc.get("notes", ""),
+            project_id=doc.get("project_id", ""),
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
         )

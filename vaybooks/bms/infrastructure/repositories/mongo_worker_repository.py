@@ -16,6 +16,7 @@ class MongoWorkerRepository:
             "worker_name": worker.worker_name,
             "activity_ids": list(worker.activity_ids or []),
             "is_active": worker.is_active,
+            "default_hourly_rate": float(worker.default_hourly_rate or 0.0),
             "created_at": worker.created_at,
             "updated_at": worker.updated_at,
         }
@@ -26,6 +27,7 @@ class MongoWorkerRepository:
             worker_name=doc.get("worker_name", ""),
             activity_ids=list(doc.get("activity_ids") or []),
             is_active=doc.get("is_active", True),
+            default_hourly_rate=float(doc.get("default_hourly_rate") or 0.0),
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
         )

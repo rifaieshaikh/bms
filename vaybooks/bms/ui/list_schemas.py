@@ -540,7 +540,32 @@ TRIAL_BALANCE = ListSchema(
 
 ACTIVITIES = ListSchema(
     entity_key="activities",
-    title="Activity Configuration",
+    title="Customization Activities",
+    filter_fields=[
+        FilterField("activity_name", "Activity name", F.EXACT),
+        FilterField("categories", "Category", F.MULTISELECT,
+                    record_attr="activity_category",
+                    options=_enum_opts(ActivityCategory)),
+        FilterField("types", "Type", F.MULTISELECT,
+                    record_attr="activity_type", options=_enum_opts(ActivityType)),
+        FilterField("active_only", "Active only", F.CHECKBOX,
+                    match=_match_activity_active),
+        FilterField("time_tracking", "Requires time tracking", F.SELECT,
+                    options=[("yes", "Yes"), ("no", "No")],
+                    match=_match_activity_time_tracking),
+    ],
+    sort_options=[
+        SortOption("created_at", "Created (newest)"),
+        SortOption("activity_name", "Activity name"),
+        SortOption("activity_category", "Category"),
+    ],
+    default_sort="created_at",
+    page_size=CARD_PAGE_SIZE,
+)
+
+PROJECT_ACTIVITIES = ListSchema(
+    entity_key="project_activities",
+    title="Project Activity Configuration",
     filter_fields=[
         FilterField("activity_name", "Activity name", F.EXACT),
         FilterField("categories", "Category", F.MULTISELECT,
@@ -587,7 +612,7 @@ SCHEMAS = {
     for s in [
         ORDERS, ITEMS, MEASUREMENTS, CUSTOMERS, VENDORS, TIME, ACCOUNTS, VOUCHERS, RECEIPTS,
         PAYMENTS, ACCOUNTING_INVOICES, STORE_SALES, JOURNAL, TRIAL_BALANCE, ACTIVITIES,
-        SERVICES, INVENTORY_CATEGORIES, INVENTORY_PRODUCTS, INVENTORY_STOCK,
+        PROJECT_ACTIVITIES, SERVICES, INVENTORY_CATEGORIES, INVENTORY_PRODUCTS, INVENTORY_STOCK,
         INVENTORY_STOCK_LEDGER,
     ]
 }

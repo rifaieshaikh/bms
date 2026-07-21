@@ -46,6 +46,12 @@ def _sales_card(row: dict, suffix: str) -> None:
             unsafe_allow_html=True,
         )
         st.caption(_customer_name(row.get("party_name") or ""))
+        project_id = row.get("reference_project_id") or ""
+        project_name = (row.get("project_name") or "").strip()
+        if project_name:
+            st.caption(f"Project: {project_name}")
+        elif project_id:
+            st.caption(f"Project: {project_id[:8]}…")
         st.caption(_fmt_date(row.get("sale_date")))
         st.markdown(
             f'<p class="z-card-amount" style="color:{_SALES_AMOUNT_COLOR}">'

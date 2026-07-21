@@ -20,6 +20,13 @@ def _resolve_activity_ids(options: dict, selected_names: list[str]) -> list[str]
 @st.dialog("Add Employee")
 def _add_worker_dialog(worker_service, services: dict):
     name = st.text_input("Employee Name", key="add_worker_name")
+    hourly_rate = st.number_input(
+        "Default hourly rate (₹)",
+        min_value=0.0,
+        value=0.0,
+        step=50.0,
+        key="add_worker_rate",
+    )
     act_opts = _activity_options(services)
     selected = st.multiselect(
         "Activities",
@@ -32,7 +39,11 @@ def _add_worker_dialog(worker_service, services: dict):
             st.error("Employee name is required")
             return
         try:
-            worker_service.create_worker(name, _resolve_activity_ids(act_opts, selected))
+            worker_service.create_worker(
+                name,
+                _resolve_activity_ids(act_opts, selected),
+                default_hourly_rate=hourly_rate,
+            )
             st.success(f"Created {name}")
             st.rerun()
         except Exception as exc:
@@ -52,6 +63,13 @@ def _edit_worker_dialog(worker_service, services: dict, worker_id: str):
     current_names = [n for n in current_names if n]
 
     name = st.text_input("Employee Name", value=worker.worker_name, key="edit_worker_name")
+    hourly_rate = st.number_input(
+        "Default hourly rate (₹)",
+        min_value=0.0,
+        value=float(worker.default_hourly_rate or 0.0),
+        step=50.0,
+        key="edit_worker_rate",
+    )
     selected = st.multiselect(
         "Activities",
         list(act_opts.keys()),
@@ -71,6 +89,7 @@ def _edit_worker_dialog(worker_service, services: dict, worker_id: str):
                 name,
                 _resolve_activity_ids(act_opts, selected),
                 is_active,
+                default_hourly_rate=hourly_rate,
             )
             st.success("Employee updated")
             st.rerun()

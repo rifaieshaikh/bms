@@ -268,6 +268,10 @@ def _activities():
     ]
 
 
+def _project_activities():
+    return _activities()
+
+
 def _services():
     return [
         SimpleNamespace(
@@ -373,6 +377,27 @@ FIXTURES = {
     "journal": _journal(),
     "trial_balance": _trial_balance(),
     "activities": _activities(),
+    "project_activities": _project_activities(),
+    "measurements": [
+        SimpleNamespace(
+            measurement_number="M-001",
+            customer_id="c1",
+            customer_name="Alpha Customer",
+            wearer_name="Alex",
+            person_type="Adult",
+            measured_at=_dt(2026, 1, 1),
+            created_at=_dt(2026, 1, 1),
+        ),
+        SimpleNamespace(
+            measurement_number="M-002",
+            customer_id="c2",
+            customer_name="Beta Customer",
+            wearer_name="Blake",
+            person_type="Child",
+            measured_at=_dt(2026, 2, 1),
+            created_at=_dt(2026, 2, 1),
+        ),
+    ],
     "services": _services(),
     "inventory_categories": _inventory_categories(),
     "inventory_products": _inventory_products(),

@@ -106,6 +106,12 @@ COUNTERS = [
     ("sales_return_number", "SR"),
     ("estimate_number", "EST"),
     ("quotation_number", "QT"),
+    ("project_number", "PRJ"),
+    ("project_quotation_number", "PQ"),
+    ("project_work_order_number", "PWO"),
+    ("project_ra_number", "PRA"),
+    ("project_proforma_number", "PPF"),
+    ("project_variation_number", "PV"),
 ]
 
 # (service_name, expense_account_name) — the expense account each vendor

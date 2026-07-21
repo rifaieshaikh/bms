@@ -64,6 +64,22 @@ DIALOG_FLAG_PREFIXES = (
     "ws_add_measurement_dialog",
     "ws_edit_measurement_dialog",
     "ws_remove_measurement_dialog",
+    "prj_template_add_dialog",
+    "prj_template_edit_dialog",
+    "prj_template_remove_dialog",
+    "prj_boq_add_dialog",
+    "prj_boq_edit_dialog",
+    "prj_boq_del_dialog",
+    "prj_boq_import_dialog",
+    "prj_budget_add_dialog",
+    "prj_budget_rev_dialog",
+    "prj_enquiry_create_dialog",
+    "prj_enquiry_assess_dialog",
+    "prj_boq_rate_dialog",
+    "prj_mr_add_dialog",
+    "prj_stock_add_dialog",
+    "prj_qi_add_dialog",
+    "prj_dpr_add_dialog",
 )
 
 _ARMED_FLAGS = "_armed_dialog_flags"

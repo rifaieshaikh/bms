@@ -26,11 +26,20 @@ class WorkerAppService:
     def get_worker(self, worker_id: str) -> Optional[Worker]:
         return self._repo.find_by_id(worker_id)
 
-    def create_worker(self, worker_name: str, activity_ids: List[str]) -> Worker:
+    def create_worker(
+        self,
+        worker_name: str,
+        activity_ids: List[str],
+        default_hourly_rate: Optional[float] = None,
+    ) -> Worker:
         name = (worker_name or "").strip()
         if not name:
             raise ValidationError("Employee name is required")
-        worker = Worker(worker_name=name, activity_ids=list(activity_ids or []))
+        worker = Worker(
+            worker_name=name,
+            activity_ids=list(activity_ids or []),
+            default_hourly_rate=float(default_hourly_rate or 0.0),
+        )
         saved = self._repo.save(worker)
         account_name = WorkerDomainService.build_salary_account_name(saved)
         self._accounting_domain.sync_worker_salary_account(saved.id, account_name)
@@ -42,6 +51,7 @@ class WorkerAppService:
         worker_name: str,
         activity_ids: List[str],
         is_active: bool = True,
+        default_hourly_rate: Optional[float] = None,
     ) -> Worker:
         worker = self._repo.find_by_id(worker_id)
         if not worker:
@@ -49,7 +59,17 @@ class WorkerAppService:
         name = (worker_name or "").strip()
         if not name:
             raise ValidationError("Employee name is required")
-        worker.update(worker_name=name, activity_ids=list(activity_ids or []), is_active=is_active)
+        rate = (
+            worker.default_hourly_rate
+            if default_hourly_rate is None
+            else float(default_hourly_rate or 0.0)
+        )
+        worker.update(
+            worker_name=name,
+            activity_ids=list(activity_ids or []),
+            is_active=is_active,
+            default_hourly_rate=rate,
+        )
         saved = self._repo.save(worker)
         self._accounting_domain.sync_worker_salary_account(
             saved.id,

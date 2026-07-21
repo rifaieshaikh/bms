@@ -216,6 +216,7 @@ class PurchaseAppService:
         expected_date: Optional[date] = None,
         notes: str = "",
         status: PurchaseOrderStatus = PurchaseOrderStatus.DRAFT,
+        project_id: str = "",
     ) -> PurchaseOrder:
         vendor_name = self._vendor_name(vendor_id)
         po_number = self._counter_repo.next("po_number")
@@ -228,6 +229,7 @@ class PurchaseAppService:
             expected_date=expected_date,
             notes=notes,
             status=PurchaseOrderStatus.SENT,
+            project_id=project_id,
         )
 
     def update_purchase_order(

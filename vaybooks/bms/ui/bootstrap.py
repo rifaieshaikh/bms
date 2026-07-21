@@ -35,6 +35,18 @@ from vaybooks.bms.application.sales_app_service import SalesAppService
 from vaybooks.bms.application.worker_app_service import WorkerAppService
 from vaybooks.bms.application.measurement_app_service import MeasurementAppService
 from vaybooks.bms.application.attachment_app_service import AttachmentAppService
+from vaybooks.bms.application.project_activity_config_app_service import ProjectActivityConfigAppService
+from vaybooks.bms.application.project_app_service import ProjectAppService
+from vaybooks.bms.application.project_boq_app_service import ProjectBoqAppService
+from vaybooks.bms.application.project_budget_app_service import ProjectBudgetAppService
+from vaybooks.bms.application.project_billing_app_service import ProjectBillingAppService
+from vaybooks.bms.application.project_document_app_service import ProjectDocumentAppService
+from vaybooks.bms.application.project_expense_app_service import ProjectExpenseAppService
+from vaybooks.bms.application.project_measurement_app_service import ProjectMeasurementAppService
+from vaybooks.bms.application.project_profitability_service import ProjectProfitabilityService
+from vaybooks.bms.application.project_quotation_app_service import ProjectQuotationAppService
+from vaybooks.bms.application.project_time_app_service import ProjectTimeAppService
+from vaybooks.bms.application.reports.project_report_service import ProjectReportService
 from vaybooks.bms.domain.inventory.rate_history_service import ProductRateHistoryService
 from vaybooks.bms.infrastructure.db.connection import get_database
 from vaybooks.bms.infrastructure.db.indexes import ensure_indexes
@@ -109,6 +121,118 @@ from vaybooks.bms.infrastructure.repositories.mongo_measurement_repository impor
 )
 from vaybooks.bms.infrastructure.repositories.mongo_attachment_repository import (
     MongoAttachmentRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_project_document_repository import (
+    MongoProjectDocumentRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_project_expense_repository import (
+    MongoProjectExpenseRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_project_quotation_repository import (
+    MongoProjectQuotationRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_project_repository import (
+    MongoProjectRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_project_template_repository import (
+    MongoProjectTemplateRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_project_time_entry_repository import (
+    MongoProjectTimeEntryRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_project_work_order_repository import (
+    MongoProjectWorkOrderRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_project_ra_repository import (
+    MongoProjectRABillRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_project_proforma_repository import (
+    MongoProjectProformaRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_project_variation_repository import (
+    MongoProjectVariationRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_project_retention_repository import (
+    MongoProjectRetentionRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_project_cost_transfer_repository import (
+    MongoProjectCostTransferRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_project_write_off_repository import (
+    MongoProjectWriteOffRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_project_boq_repository import (
+    MongoProjectBoqRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_project_budget_repository import (
+    MongoProjectBudgetRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_project_cash_flow_repository import (
+    MongoProjectCashFlowRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_project_measurement_repository import (
+    MongoProjectMeasurementRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_project_activity_config_repository import (
+    MongoProjectActivityConfigRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_project_enquiry_repository import (
+    MongoProjectEnquiryRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_project_dpr_repository import (
+    MongoProjectDprRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_project_procurement_repository import (
+    MongoProjectProcurementRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_project_subcontract_repository import (
+    MongoProjectSubcontractRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_project_petty_cash_repository import (
+    MongoProjectPettyCashRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_project_recognition_repository import (
+    MongoProjectRecognitionRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_app_user_repository import (
+    MongoAppUserRepository,
+    MongoProjectMembershipRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_project_audit_repository import (
+    MongoProjectAuditRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_project_quality_config_repository import (
+    MongoProjectQualityConfigRepository,
+)
+from vaybooks.bms.application.project_enquiry_app_service import ProjectEnquiryAppService
+from vaybooks.bms.application.project_dpr_app_service import ProjectDprAppService
+from vaybooks.bms.application.project_procurement_app_service import (
+    ProjectProcurementAppService,
+)
+from vaybooks.bms.application.project_subcontract_app_service import (
+    ProjectSubcontractAppService,
+)
+from vaybooks.bms.application.project_petty_cash_app_service import (
+    ProjectPettyCashAppService,
+)
+from vaybooks.bms.application.project_recognition_app_service import (
+    ProjectRecognitionAppService,
+)
+from vaybooks.bms.application.project_offline_app_service import ProjectOfflineAppService
+from vaybooks.bms.application.project_portal_app_service import ProjectPortalAppService
+from vaybooks.bms.application.project_notification_app_service import (
+    ProjectNotificationAppService,
+)
+from vaybooks.bms.application.project_access_policy import ProjectAccessPolicy
+from vaybooks.bms.application.project_audit_app_service import ProjectAuditAppService
+from vaybooks.bms.application.project_quality_config_app_service import (
+    ProjectQualityConfigAppService,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_project_offline_draft_repository import (
+    MongoProjectOfflineDraftRepository,
+)
+from vaybooks.bms.infrastructure.repositories.mongo_project_portal_token_repository import (
+    MongoProjectPortalTokenRepository,
 )
 
 
@@ -197,6 +321,36 @@ def get_services():
     measurement_record_repo = MongoMeasurementRecordRepository(db)
     measurement_section_repo = MongoMeasurementSectionRepository(db)
     attachment_repo = MongoAttachmentRepository(db)
+    project_template_repo = MongoProjectTemplateRepository(db)
+    project_repo = MongoProjectRepository(db)
+    project_document_repo = MongoProjectDocumentRepository(db)
+    project_time_repo = MongoProjectTimeEntryRepository(db)
+    project_expense_repo = MongoProjectExpenseRepository(db)
+    project_quotation_repo = MongoProjectQuotationRepository(db)
+    project_work_order_repo = MongoProjectWorkOrderRepository(db)
+    project_ra_repo = MongoProjectRABillRepository(db)
+    project_proforma_repo = MongoProjectProformaRepository(db)
+    project_variation_repo = MongoProjectVariationRepository(db)
+    project_retention_repo = MongoProjectRetentionRepository(db)
+    project_transfer_repo = MongoProjectCostTransferRepository(db)
+    project_write_off_repo = MongoProjectWriteOffRepository(db)
+    project_boq_repo = MongoProjectBoqRepository(db)
+    project_budget_repo = MongoProjectBudgetRepository(db)
+    project_cash_flow_repo = MongoProjectCashFlowRepository(db)
+    project_measurement_repo = MongoProjectMeasurementRepository(db)
+    project_activity_config_repo = MongoProjectActivityConfigRepository(db)
+    project_enquiry_repo = MongoProjectEnquiryRepository(db)
+    project_dpr_repo = MongoProjectDprRepository(db)
+    project_procurement_repo = MongoProjectProcurementRepository(db)
+    project_subcontract_repo = MongoProjectSubcontractRepository(db)
+    project_petty_cash_repo = MongoProjectPettyCashRepository(db)
+    project_recognition_repo = MongoProjectRecognitionRepository(db)
+    project_offline_draft_repo = MongoProjectOfflineDraftRepository(db)
+    project_portal_token_repo = MongoProjectPortalTokenRepository(db)
+    project_quality_config_repo = MongoProjectQualityConfigRepository(db)
+    app_user_repo = MongoAppUserRepository(db)
+    project_membership_repo = MongoProjectMembershipRepository(db)
+    project_audit_repo = MongoProjectAuditRepository(db)
 
     accounting_service = AccountingAppService(account_repo, voucher_repo, counter_repo)
     customer_service = CustomerAppService(customer_repo, account_repo)
@@ -291,6 +445,148 @@ def get_services():
     )
     attachment_service = AttachmentAppService(attachment_repo)
 
+    project_service = ProjectAppService(
+        project_repo,
+        project_template_repo,
+        counter_repo,
+        customer_repo,
+        activity_config_repo=project_activity_config_repo,
+    )
+    project_document_service = ProjectDocumentAppService(
+        project_document_repo,
+        project_repo,
+    )
+    project_time_service = ProjectTimeAppService(
+        project_time_repo,
+        project_repo,
+        worker_repo,
+    )
+    project_expense_service = ProjectExpenseAppService(
+        project_expense_repo,
+        project_repo,
+    )
+    project_boq_service = ProjectBoqAppService(project_boq_repo, project_repo)
+    project_budget_service = ProjectBudgetAppService(
+        project_budget_repo,
+        project_repo,
+        expense_repo=project_expense_repo,
+        time_repo=project_time_repo,
+        purchase_service=purchase_service,
+        cash_flow_repo=project_cash_flow_repo,
+    )
+    project_expense_service._budget_service = project_budget_service
+    project_measurement_service = ProjectMeasurementAppService(
+        project_measurement_repo,
+        project_boq_repo,
+        project_repo,
+        ra_repo=project_ra_repo,
+    )
+    projects_profitability = ProjectProfitabilityService(
+        project_repo,
+        project_time_repo,
+        project_expense_repo,
+    )
+    project_access = ProjectAccessPolicy(
+        maker_checker_enabled=True,
+        user_repo=app_user_repo,
+        membership_repo=project_membership_repo,
+    )
+    project_audit_service = ProjectAuditAppService(project_audit_repo)
+    project_enquiry_service = ProjectEnquiryAppService(
+        project_enquiry_repo,
+        project_repo,
+        counter_repo,
+        customer_repo=customer_repo,
+    )
+    project_quotation_service = ProjectQuotationAppService(
+        project_quotation_repo,
+        project_repo,
+        counter_repo,
+        document_service=project_document_service,
+        business_service=business_service,
+        work_order_repo=project_work_order_repo,
+        boq_repo=project_boq_repo,
+        boq_service=project_boq_service,
+        enquiry_service=project_enquiry_service,
+        access_policy=project_access,
+        audit_service=project_audit_service,
+    )
+    project_dpr_service = ProjectDprAppService(project_dpr_repo, project_repo)
+    project_procurement_service = ProjectProcurementAppService(
+        project_procurement_repo,
+        project_repo,
+        counter_repo,
+        purchase_service=purchase_service,
+    )
+    project_subcontract_service = ProjectSubcontractAppService(
+        project_subcontract_repo, project_repo, counter_repo
+    )
+    project_petty_cash_service = ProjectPettyCashAppService(
+        project_petty_cash_repo, project_repo, counter_repo
+    )
+    project_recognition_service = ProjectRecognitionAppService(
+        project_recognition_repo,
+        project_repo,
+        accounting_service=accounting_service,
+        expense_repo=project_expense_repo,
+    )
+    project_offline_service = ProjectOfflineAppService(
+        project_offline_draft_repo, project_repo
+    )
+    project_portal_service = ProjectPortalAppService(
+        project_portal_token_repo, project_repo
+    )
+    project_notification_service = ProjectNotificationAppService(
+        quotation_repo=project_quotation_repo,
+        ra_repo=project_ra_repo,
+        project_repo=project_repo,
+    )
+    project_quality_config_service = ProjectQualityConfigAppService(
+        project_quality_config_repo, project_repo, project_service=project_service
+    )
+    project_billing_service = ProjectBillingAppService(
+        project_repo,
+        project_work_order_repo,
+        counter_repo,
+        accounting_service=accounting_service,
+        voucher_repo=voucher_repo,
+        sales_service=sales_service,
+        document_service=project_document_service,
+        customer_repo=customer_repo,
+        time_repo=project_time_repo,
+        expense_repo=project_expense_repo,
+        ra_repo=project_ra_repo,
+        proforma_repo=project_proforma_repo,
+        retention_repo=project_retention_repo,
+        variation_repo=project_variation_repo,
+        transfer_repo=project_transfer_repo,
+        write_off_repo=project_write_off_repo,
+        purchase_service=purchase_service,
+        boq_repo=project_boq_repo,
+        measurement_repo=project_measurement_repo,
+        measurement_service=project_measurement_service,
+    )
+    project_budget_service._billing_service = project_billing_service
+    reports_projects = ProjectReportService(
+        project_repo,
+        project_time_repo,
+        project_expense_repo,
+        profitability_service=projects_profitability,
+        quotation_repo=project_quotation_repo,
+        document_repo=project_document_repo,
+        voucher_repo=voucher_repo,
+        ra_repo=project_ra_repo,
+        retention_repo=project_retention_repo,
+        transfer_repo=project_transfer_repo,
+        write_off_repo=project_write_off_repo,
+        variation_repo=project_variation_repo,
+        boq_repo=project_boq_repo,
+        budget_repo=project_budget_repo,
+        measurement_repo=project_measurement_repo,
+        billing_service=project_billing_service,
+        purchase_service=purchase_service,
+    )
+
     return {
         "customers": customer_service,
         "vendors": vendor_service,
@@ -323,6 +619,33 @@ def get_services():
         "accounting": accounting_service,
         "measurements": measurement_service,
         "attachments": attachment_service,
+        "projects": project_service,
+        "project_documents": project_document_service,
+        "project_time": project_time_service,
+        "project_expenses": project_expense_service,
+        "project_boq": project_boq_service,
+        "project_budget": project_budget_service,
+        "project_cash_flow": project_budget_service,
+        "project_measurement": project_measurement_service,
+        "projects_profitability": projects_profitability,
+        "project_quotations": project_quotation_service,
+        "project_billing": project_billing_service,
+        "project_enquiries": project_enquiry_service,
+        "project_dpr": project_dpr_service,
+        "project_procurement": project_procurement_service,
+        "project_subcontract": project_subcontract_service,
+        "project_petty_cash": project_petty_cash_service,
+        "project_recognition": project_recognition_service,
+        "project_offline": project_offline_service,
+        "project_portal": project_portal_service,
+        "project_notifications": project_notification_service,
+        "project_quality_config": project_quality_config_service,
+        "project_activity_configs": ProjectActivityConfigAppService(
+            project_activity_config_repo
+        ),
+        "project_access": project_access,
+        "project_audit": project_audit_service,
+        "reports_projects": reports_projects,
         "reports_business": reports_business,
         "reports_profitability": reports_profitability,
         "reports_operations": reports_operations,

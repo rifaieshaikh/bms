@@ -137,6 +137,8 @@ class MongoVoucherRepository:
             "reference_grn_id": voucher.reference_grn_id,
             "reference_so_id": voucher.reference_so_id,
             "reference_dn_id": voucher.reference_dn_id,
+            "reference_project_id": voucher.reference_project_id,
+            "reference_activity_id": voucher.reference_activity_id,
             "lines": [self._line_to_doc(l) for l in voucher.lines],
             "created_at": voucher.created_at,
             "updated_at": voucher.updated_at,
@@ -156,6 +158,8 @@ class MongoVoucherRepository:
             reference_grn_id=doc.get("reference_grn_id"),
             reference_so_id=doc.get("reference_so_id"),
             reference_dn_id=doc.get("reference_dn_id"),
+            reference_project_id=doc.get("reference_project_id"),
+            reference_activity_id=doc.get("reference_activity_id"),
             lines=[self._line_from_doc(l) for l in doc.get("lines", [])],
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
@@ -188,6 +192,10 @@ class MongoVoucherRepository:
 
     def list_by_order(self, order_id: str) -> List[Voucher]:
         docs = self._collection.find({"reference_order_id": order_id})
+        return [self._from_doc(d) for d in docs]
+
+    def list_by_project(self, project_id: str) -> List[Voucher]:
+        docs = self._collection.find({"reference_project_id": project_id})
         return [self._from_doc(d) for d in docs]
 
     def list_all(self) -> List[Voucher]:

@@ -1,0 +1,1 @@
+"""Projects module UI pages."""

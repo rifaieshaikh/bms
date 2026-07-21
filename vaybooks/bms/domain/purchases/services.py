@@ -68,6 +68,7 @@ class PurchaseDomainService:
         expected_date: Optional[date] = None,
         notes: str = "",
         status: PurchaseOrderStatus = PurchaseOrderStatus.DRAFT,
+        project_id: str = "",
     ) -> PurchaseOrder:
         if not vendor_id:
             raise ValidationError("Vendor is required")
@@ -96,6 +97,7 @@ class PurchaseDomainService:
             lines=po_lines,
             notes=notes.strip(),
             status=status,
+            project_id=(project_id or "").strip(),
         )
         return self._po_repo.save(order)
 

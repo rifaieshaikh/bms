@@ -533,6 +533,9 @@ class AccountingAppService:
     def list_vouchers_by_order(self, order_id: str) -> List[Voucher]:
         return self._voucher_repo.list_by_order(order_id)
 
+    def list_vouchers_by_project(self, project_id: str) -> List[Voucher]:
+        return self._voucher_repo.list_by_project(project_id)
+
     def get_customer_account(self, customer_id: str) -> Optional[Account]:
         return self._account_repo.find_customer_account(customer_id)
 

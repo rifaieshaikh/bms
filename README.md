@@ -84,7 +84,7 @@ streamlit run app.py
 
 - **Customer Management** — search, create, customer accounts
 - **Customization Orders** — multiple bill numbers, measurements, activity checklist
-- **Activity Configuration** — in-house/outsourced, time tracking, default prices
+- **Customization Activities** — in-house/outsourced, time tracking, default prices
 - **Time Tracking** — record time per bill number and activity
 - **Expenses** — auto-calculated from time on activity completion
 - **Invoicing** — invoice generation with Margin Per Hour (MPH)

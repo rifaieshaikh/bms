@@ -52,7 +52,7 @@ _PARENTS = [
     ParentShortcut("migration_customers", "Migration Customers", "Migration", "ctrl+alt+3"),
     ParentShortcut("migration_vendors", "Migration Vendors", "Migration", "ctrl+alt+4"),
     ParentShortcut("business_settings", "Business", "Settings", "ctrl+,"),
-    ParentShortcut("activities_list", "Activity Configuration", "Settings", "ctrl+shift+y"),
+    ParentShortcut("customization_activities_list", "Customization Activities", "Settings", "ctrl+shift+y"),
     ParentShortcut("services_list", "Service Configuration", "Settings", "ctrl+shift+f"),
     ParentShortcut("keyboard_shortcuts", "Keyboard Shortcuts", "Settings", "ctrl+/"),
     ParentShortcut("system_settings", "System", "System", "ctrl+alt+s"),

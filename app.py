@@ -15,7 +15,12 @@ from vaybooks.bms.ui.pages import (
     export_backup,
     reports,
 )
-from vaybooks.bms.ui.pages import activities, customization_items, customization_orders
+from vaybooks.bms.ui.pages import (
+    activities,
+    customization_items,
+    customization_orders,
+    project_activities as project_activities_mod,
+)
 from vaybooks.bms.ui.pages import customization_orders_list, customization_order_detail
 from vaybooks.bms.ui.pages import customization_item_detail, customer_detail, vendor_detail
 from vaybooks.bms.ui.pages import account_detail
@@ -82,6 +87,20 @@ from vaybooks.bms.ui.pages.finance import (
     receipts as finance_receipts,
     trial_balance,
     vouchers as finance_vouchers,
+)
+from vaybooks.bms.ui.pages.projects import (
+    dashboard as projects_dashboard_mod,
+    enquiries_list as project_enquiries_list_mod,
+    enquiry_workspace as project_enquiry_workspace_mod,
+    measurements_list as project_measurements_list_mod,
+    portal as project_portal_mod,
+    project_detail as project_detail_mod,
+    project_workspace as project_workspace_mod,
+    projects_list as projects_list_mod,
+    ra_bills_list as project_ra_bills_list_mod,
+    reports as projects_reports_mod,
+    settings as projects_settings_mod,
+    site_mobile as project_site_mobile_mod,
 )
 
 setup_logging()
@@ -231,8 +250,12 @@ migration_vendors_page = st.Page(
     url_path="migration-vendors",
 )
 activities_page = st.Page(
-    _page(activities), title="Activity Configuration", icon=":material/checklist:",
-    url_path="activities",
+    _page(activities), title="Customization Activities", icon=":material/checklist:",
+    url_path="customization-activities",
+)
+project_activities_page = st.Page(
+    _page(project_activities_mod), title="Project Activities", icon=":material/checklist:",
+    url_path="project-activities",
 )
 measurement_specs_page = st.Page(
     _page(measurement_specs), title="Measurement Specs", icon=":material/straighten:",
@@ -248,6 +271,53 @@ services_page = st.Page(
 )
 workers_page = st.Page(
     _page(workers), title="Employees", icon=":material/badge:", url_path="employees",
+)
+projects_dashboard_page = st.Page(
+    _page(projects_dashboard_mod), title="Dashboard", icon=":material/dashboard:",
+    url_path="projects-dashboard",
+)
+projects_list_page = st.Page(
+    _page(projects_list_mod), title="Projects", icon=":material/apartment:",
+    url_path="projects",
+)
+project_enquiries_list_page = st.Page(
+    _page(project_enquiries_list_mod), title="Enquiries",
+    icon=":material/contact_mail:", url_path="project-enquiries",
+)
+project_measurements_list_page = st.Page(
+    _page(project_measurements_list_mod), title="Measurements",
+    icon=":material/straighten:", url_path="project-measurements",
+)
+project_ra_bills_list_page = st.Page(
+    _page(project_ra_bills_list_mod), title="RA Bills",
+    icon=":material/receipt_long:", url_path="project-ra-bills",
+)
+project_enquiry_workspace_page = st.Page(
+    _page(project_enquiry_workspace_mod), title="Enquiry Workspace",
+    icon=":material/edit_note:", url_path="project-enquiry-workspace",
+)
+projects_reports_page = st.Page(
+    _page(projects_reports_mod), title="Reports", icon=":material/analytics:",
+    url_path="projects-reports",
+)
+projects_settings_page = st.Page(
+    _page(projects_settings_mod), title="Settings", icon=":material/settings:",
+    url_path="projects-settings",
+)
+project_workspace_page = st.Page(
+    _page(project_workspace_mod), title="Project Workspace", icon=":material/edit_note:",
+    url_path="project-workspace",
+)
+project_detail_page = st.Page(
+    _page(project_detail_mod), title="Project Detail", url_path="project-detail",
+)
+project_site_mobile_page = st.Page(
+    _page(project_site_mobile_mod),
+    title="Site Mobile",
+    url_path="project-site-mobile",
+)
+project_portal_page = st.Page(
+    _page(project_portal_mod), title="Project Portal", url_path="project-portal",
 )
 inventory_categories_page = st.Page(
     _page(inventory_categories), title="Categories", icon=":material/category:",
@@ -402,11 +472,25 @@ navigation.register("purchase_detail", purchase_detail_page)
 navigation.register("purchase_returns_list", purchase_returns_page)
 navigation.register("purchase_return_detail", purchase_return_detail_page)
 navigation.register("reports", reports_page)
-navigation.register("activities_list", activities_page)
+navigation.register("customization_activities_list", activities_page)
+navigation.register("activities_list", activities_page)  # legacy alias
+navigation.register("project_activities_list", project_activities_page)
 navigation.register("measurement_specs", measurement_specs_page)
 navigation.register("order_workspace", order_workspace_page)
 navigation.register("services_list", services_page)
 navigation.register("workers_list", workers_page)
+navigation.register("projects_dashboard", projects_dashboard_page)
+navigation.register("projects_list", projects_list_page)
+navigation.register("project_enquiries_list", project_enquiries_list_page)
+navigation.register("project_measurements_list", project_measurements_list_page)
+navigation.register("project_ra_bills_list", project_ra_bills_list_page)
+navigation.register("project_enquiry_workspace", project_enquiry_workspace_page)
+navigation.register("projects_reports", projects_reports_page)
+navigation.register("projects_settings", projects_settings_page)
+navigation.register("project_workspace", project_workspace_page)
+navigation.register("project_detail", project_detail_page)
+navigation.register("project_site_mobile", project_site_mobile_page)
+navigation.register("project_portal", project_portal_page)
 navigation.register("inventory_categories_list", inventory_categories_page)
 navigation.register("inventory_products_list", inventory_products_page)
 navigation.register("inventory_stock_list", inventory_stock_page)
@@ -438,6 +522,15 @@ page_groups = {
         measurements_page,
         items_page,
         time_page,
+    ],
+    "Projects": [
+        projects_dashboard_page,
+        project_enquiries_list_page,
+        projects_list_page,
+        project_measurements_list_page,
+        project_ra_bills_list_page,
+        projects_reports_page,
+        projects_settings_page,
     ],
     "Sales": [
         sales_estimates_page,
@@ -483,6 +576,7 @@ page_groups = {
         print_settings_page,
         keyboard_shortcuts_page,
         activities_page,
+        project_activities_page,
         measurement_specs_page,
         services_page,
     ],
@@ -498,6 +592,11 @@ if is_desktop():
 hidden_pages = [
     order_detail_page,
     order_workspace_page,
+    project_detail_page,
+    project_workspace_page,
+    project_enquiry_workspace_page,
+    project_site_mobile_page,
+    project_portal_page,
     item_detail_page,
     measurement_detail_page,
     customer_detail_page,

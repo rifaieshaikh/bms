@@ -1202,6 +1202,7 @@ class SalesAppService:
             row = sales_row_from_voucher(voucher, discount_id)
             row["reference_so_id"] = getattr(voucher, "reference_so_id", None)
             row["reference_dn_id"] = getattr(voucher, "reference_dn_id", None)
+            row["reference_project_id"] = getattr(voucher, "reference_project_id", None)
             rows.append(row)
         rows.sort(
             key=lambda r: (r.get("sale_date") or date.min, r.get("voucher_number") or ""),
@@ -1218,6 +1219,7 @@ class SalesAppService:
         row = sales_row_from_voucher(voucher, discount_id)
         row["reference_so_id"] = getattr(voucher, "reference_so_id", None)
         row["reference_dn_id"] = getattr(voucher, "reference_dn_id", None)
+        row["reference_project_id"] = getattr(voucher, "reference_project_id", None)
         return row
 
     def update_sales_invoice(

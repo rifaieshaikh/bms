@@ -37,6 +37,7 @@ class PurchaseOrder:
     expected_date: Optional[date] = None
     status: PurchaseOrderStatus = PurchaseOrderStatus.DRAFT
     notes: str = ""
+    project_id: str = ""
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
 

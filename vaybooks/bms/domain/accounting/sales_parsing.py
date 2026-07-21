@@ -94,5 +94,6 @@ def sales_row_from_voucher(voucher, discount_account_id: Optional[str] = None) -
         "net": amounts["net"],
         "collected": amounts["collected"],
         "outstanding": amounts["outstanding"],
-        "voucher_number": voucher.voucher_number,
+        "reference_project_id": getattr(voucher, "reference_project_id", None),
+        "project_name": getattr(voucher, "project_name", None) or "",
     }
