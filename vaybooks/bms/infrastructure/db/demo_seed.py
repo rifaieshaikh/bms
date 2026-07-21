@@ -1,9 +1,9 @@
-"""Idempotent demo/test fixtures for customers, vendors, categories, products, business."""
+"""Idempotent multi-vertical demo seed (customers, vendors, categories, products, business)."""
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from vaybooks.bms.application.business_app_service import BusinessAppService
 from vaybooks.bms.application.customer_app_service import CustomerAppService
@@ -18,6 +18,17 @@ from vaybooks.bms.domain.shared.exceptions import (
     ValidationError,
 )
 from vaybooks.bms.domain.vendors.entities import VendorInput
+from vaybooks.bms.infrastructure.db.demo_seed_profiles import (
+    DEMO_UNITS,
+    KERALA_STATE,
+    PROFILES,
+    build_customer_rows,
+    build_vendor_rows,
+    expand_category_tree,
+    expand_products,
+    profiles_to_run,
+    resolve_business_settings,
+)
 from vaybooks.bms.infrastructure.repositories.mongo_accounting_repository import (
     MongoAccountRepository,
 )
@@ -47,126 +58,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("vaybooks.bms.demo_seed")
 
-# Stable demo phones / SKUs so re-runs stay idempotent.
-DEMO_CUSTOMERS = (
-    {
-        "customer_name": "Seed Unreg Local",
-        "phone_number": "9000001001",
-        "city": "Mumbai",
-        "state_code": "27",
-        "pincode": "400001",
-        "registration_type": PartyRegistrationType.UNREGISTERED,
-    },
-    {
-        "customer_name": "Seed Reg Local",
-        "phone_number": "9000001002",
-        "city": "Pune",
-        "state_code": "27",
-        "pincode": "411001",
-        "registration_type": PartyRegistrationType.REGISTERED,
-        "gstin": "27CCCCC0000C1Z5",
-        "pan": "CCCCC0000C",
-    },
-    {
-        "customer_name": "Seed Reg Interstate",
-        "phone_number": "9000001003",
-        "city": "Bengaluru",
-        "state_code": "29",
-        "pincode": "560001",
-        "registration_type": PartyRegistrationType.REGISTERED,
-        "gstin": "29DDDDD0000D1Z5",
-        "pan": "DDDDD0000D",
-    },
-)
-
-DEMO_VENDORS = (
-    {
-        "vendor_name": "Seed Unreg Vendor",
-        "phone_number": "9100001001",
-        "city": "Mumbai",
-        "state_code": "27",
-        "pincode": "400002",
-        "registration_type": PartyRegistrationType.UNREGISTERED,
-    },
-    {
-        "vendor_name": "Seed Reg Vendor",
-        "phone_number": "9100001002",
-        "city": "Thane",
-        "state_code": "27",
-        "pincode": "400601",
-        "registration_type": PartyRegistrationType.REGISTERED,
-        "gstin": "27EEEEE0000E1Z5",
-        "pan": "EEEEE0000E",
-    },
-)
-
-# (parent_name_or_None, name, description)
-DEMO_CATEGORY_TREE = (
-    (None, "Fabric", "Fabrics and materials"),
-    (None, "Ready-made", "Finished ready-to-sell items"),
-    (None, "Accessories", "Accessories and add-ons"),
-    ("Fabric", "Cotton", "Cotton fabrics"),
-    ("Fabric", "Silk", "Silk fabrics"),
-    ("Accessories", "Buttons", "Buttons and fasteners"),
-    ("Accessories", "Zippers", "Zippers and closures"),
-)
-
-DEMO_UNITS = (
-    ("pcs", "Pieces"),
-    ("m", "Metres"),
-    ("kg", "Kilograms"),
-    ("roll", "Roll"),
-    ("set", "Set"),
-)
-
-# category name preferred first, then fallbacks
-DEMO_PRODUCTS = (
-    {
-        "sku": "DEMO-FAB-001",
-        "name": "Seed Cotton Cloth",
-        "category_names": ("Cotton", "Fabric"),
-        "unit_code": "m",
-        "hsn_sac": "5208",
-        "selling_rate": 250.0,
-        "mrp": 299.0,
-        "gst_rate": 5.0,
-        "opening_qty": 50.0,
-    },
-    {
-        "sku": "DEMO-RM-001",
-        "name": "Seed Kurta Set",
-        "category_names": ("Ready-made",),
-        "unit_code": "set",
-        "hsn_sac": "6204",
-        "selling_rate": 1200.0,
-        "mrp": 1499.0,
-        "gst_rate": 12.0,
-        "opening_qty": 10.0,
-    },
-    {
-        "sku": "DEMO-ACC-001",
-        "name": "Seed Button Pack",
-        "category_names": ("Buttons", "Accessories"),
-        "unit_code": "pcs",
-        "hsn_sac": "9606",
-        "selling_rate": 45.0,
-        "mrp": 60.0,
-        "gst_rate": 18.0,
-        "opening_qty": 100.0,
-    },
-    {
-        "sku": "DEMO-NOHSN-001",
-        "name": "Seed Sample No HSN",
-        "category_names": ("Accessories",),
-        "unit_code": "pcs",
-        "hsn_sac": "",
-        "selling_rate": 20.0,
-        "mrp": 25.0,
-        "gst_rate": 0.0,
-        "opening_qty": 5.0,
-    },
-)
-
 
 def _parse_registration(value: str) -> PartyRegistrationType:
     raw = (value or "").strip()
@@ -174,7 +65,7 @@ def _parse_registration(value: str) -> PartyRegistrationType:
         if member.value.lower() == raw.lower() or member.name.lower() == raw.lower():
             return member
     logger.warning(
-        "Unknown SEED_BUSINESS_REGISTRATION=%r; defaulting to Unregistered", value
+        "Unknown registration=%r; defaulting to Unregistered", value
     )
     return PartyRegistrationType.UNREGISTERED
 
@@ -215,7 +106,6 @@ def _ensure_category(
         )
         return category.id
     except ValidationError:
-        # Race or SEED_CONFIG already inserted the same name under parent
         for category in inventory.list_categories(active_only=False):
             cat_parent = category.parent_id or None
             if category.name == name and cat_parent == parent_id:
@@ -223,47 +113,71 @@ def _ensure_category(
         raise
 
 
+def _kerala_city(state: str) -> tuple[str, str]:
+    if state == "32":
+        return "Kochi", "682001"
+    if state == "27":
+        return "Mumbai", "400001"
+    if state == "29":
+        return "Bengaluru", "560001"
+    return "Kochi", "682001"
+
+
 def seed_business(db: Database, settings: AppSettings) -> None:
-    registration = _parse_registration(settings.seed_business_registration)
-    state = (settings.seed_business_state or "").strip() or "27"
-    gstin = (settings.seed_business_gstin or "").strip()
-    pan = (settings.seed_business_pan or "").strip()
+    selected = profiles_to_run(getattr(settings, "seed_profile", "boutique"))
+    biz = resolve_business_settings(
+        selected,
+        blocks=getattr(settings, "seed_business_blocks", None) or {},
+        flat_overlay=getattr(settings, "seed_business_flat_overrides", None) or {},
+    )
+    registration = _parse_registration(str(biz.get("registration", "Unregistered")))
+    state = str(biz.get("state") or KERALA_STATE).strip() or KERALA_STATE
+    gstin = str(biz.get("gstin") or "").strip()
+    pan = str(biz.get("pan") or "").strip()
     if registration in {
         PartyRegistrationType.REGISTERED,
         PartyRegistrationType.COMPOSITION,
     }:
         if not gstin:
-            # Build a format-valid GSTIN from state + default PAN
             pan = pan or "AAAAA0000A"
             gstin = f"{state}{pan}1Z5"
         elif not pan and len(gstin) >= 12:
             pan = gstin[2:12]
 
+    city, pincode = _kerala_city(state)
     service = BusinessAppService(MongoBusinessProfileRepository(db))
     service.update_profile(
-        legal_name=settings.seed_business_legal_name or "Seed Demo Business",
-        trade_name=settings.seed_business_trade_name or "Seed Demo",
+        legal_name=str(biz.get("legal_name") or "Seed Demo Business"),
+        trade_name=str(biz.get("trade_name") or "Seed Demo"),
         address_line1="1 Seed Street",
-        city="Mumbai" if state == "27" else "Bengaluru" if state == "29" else "City",
+        city=city,
         state_code=state,
-        pincode="400001" if state == "27" else "560001",
+        pincode=pincode,
         phone="9000000000",
         email="seed@example.com",
         gstin=gstin,
         pan=pan,
         registration_type=registration,
-        composition_tax_rate=float(settings.seed_composition_rate or 1.0),
+        composition_tax_rate=float(biz.get("composition_rate") or 1.0),
     )
-    logger.info("Seeded business profile as %s (state=%s)", registration.value, state)
+    logger.info(
+        "Seeded business profile as %s (state=%s, profiles=%s)",
+        registration.value,
+        state,
+        ",".join(selected),
+    )
 
 
-def seed_customers(db: Database) -> None:
+def seed_customers_for_profile(
+    db: Database, profile_key: str, count: int
+) -> None:
+    profile = PROFILES[profile_key]
     customers = CustomerAppService(
         MongoCustomerRepository(db),
         MongoAccountRepository(db),
     )
     repo = MongoCustomerRepository(db)
-    for row in DEMO_CUSTOMERS:
+    for row in build_customer_rows(profile, count):
         if repo.find_by_phone(row["phone_number"]):
             continue
         try:
@@ -272,16 +186,17 @@ def seed_customers(db: Database) -> None:
             continue
         except ValidationError as exc:
             logger.warning("Skip seed customer %s: %s", row["customer_name"], exc)
-    logger.info("Seed customers ensured")
+    logger.info("Seed customers ensured for %s (count=%s)", profile_key, count)
 
 
-def seed_vendors(db: Database) -> None:
+def seed_vendors_for_profile(db: Database, profile_key: str, count: int) -> None:
+    profile = PROFILES[profile_key]
     vendors = VendorAppService(
         MongoVendorRepository(db),
         MongoAccountRepository(db),
     )
     repo = MongoVendorRepository(db)
-    for row in DEMO_VENDORS:
+    for row in build_vendor_rows(profile, count):
         if repo.find_by_phone(row["phone_number"]):
             continue
         try:
@@ -290,55 +205,83 @@ def seed_vendors(db: Database) -> None:
             continue
         except ValidationError as exc:
             logger.warning("Skip seed vendor %s: %s", row["vendor_name"], exc)
-    logger.info("Seed vendors ensured")
+    logger.info("Seed vendors ensured for %s (count=%s)", profile_key, count)
 
 
-def seed_categories(db: Database) -> None:
+def seed_categories_for_profile(
+    db: Database, profile_key: str, count: int
+) -> None:
+    profile = PROFILES[profile_key]
     inventory = _inventory_service(db)
+    # Prefix root names with profile label to avoid collisions across verticals
+    prefix = profile.label
     by_name: dict[str, str] = {}
-    for parent_name, name, description in DEMO_CATEGORY_TREE:
-        parent_id = by_name.get(parent_name) if parent_name else None
-        if parent_name and parent_id is None:
-            # Parent may already exist from SEED_CONFIG
-            for category in inventory.list_categories(active_only=False):
-                if category.name == parent_name and not category.parent_id:
-                    parent_id = category.id
-                    by_name[parent_name] = parent_id
-                    break
-        cat_id = _ensure_category(inventory, name, description, parent_id)
-        by_name[name] = cat_id
-    logger.info("Seed categories ensured")
+    for parent_name, name, description in expand_category_tree(profile, count):
+        if parent_name is None:
+            full_name = f"{prefix} · {name}"
+            parent_id = None
+        else:
+            root_key = f"{prefix} · {parent_name}"
+            parent_id = by_name.get(root_key)
+            if parent_id is None:
+                parent_id = _ensure_category(
+                    inventory, root_key, f"{parent_name} ({prefix})"
+                )
+                by_name[root_key] = parent_id
+            full_name = f"{prefix} · {parent_name} · {name}"
+        cat_id = _ensure_category(inventory, full_name, description, parent_id)
+        by_name[full_name] = cat_id
+        if parent_name is None:
+            by_name[f"{prefix} · {name}"] = cat_id
+    logger.info("Seed categories ensured for %s (count=%s)", profile_key, count)
 
 
-def seed_products(db: Database) -> None:
+def seed_products_for_profile(db: Database, profile_key: str, count: int) -> None:
+    profile = PROFILES[profile_key]
     inventory = _inventory_service(db)
+    prefix = profile.label
 
-    # Units required for products
     unit_ids: dict[str, str] = {}
     for code, label in DEMO_UNITS:
         unit_ids[code] = _ensure_unit(inventory, code, label)
 
-    # Ensure at least root categories exist for product assignment
-    categories_by_name: dict[str, str] = {}
-    for category in inventory.list_categories(active_only=False):
-        categories_by_name[category.name] = category.id
-    for parent_name, name, description in DEMO_CATEGORY_TREE:
-        if name in categories_by_name:
-            continue
-        parent_id = categories_by_name.get(parent_name) if parent_name else None
-        categories_by_name[name] = _ensure_category(
-            inventory, name, description, parent_id
-        )
+    # Ensure category tree exists for product assignment
+    seed_categories_for_profile(db, profile_key, max(count, 20))
+
+    categories_by_name: dict[str, str] = {
+        c.name: c.id for c in inventory.list_categories(active_only=False)
+    }
 
     product_repo = MongoInventoryProductRepository(db)
-    for row in DEMO_PRODUCTS:
+    for row in expand_products(profile, count):
         if product_repo.find_by_sku(row["sku"]):
             continue
         category_id = None
         for cat_name in row["category_names"]:
-            if cat_name in categories_by_name:
-                category_id = categories_by_name[cat_name]
+            # Match prefixed leaf or root
+            candidates = [
+                f"{prefix} · {cat_name}",
+                f"{prefix} · {cat_name} · {cat_name}",
+            ]
+            # Also search any category ending with · cat_name
+            for full, cid in categories_by_name.items():
+                if full == f"{prefix} · {cat_name}" or full.endswith(f" · {cat_name}"):
+                    category_id = cid
+                    break
+            if category_id:
                 break
+            for cand in candidates:
+                if cand in categories_by_name:
+                    category_id = categories_by_name[cand]
+                    break
+            if category_id:
+                break
+        if not category_id:
+            # Fallback: any category for this profile prefix
+            for full, cid in categories_by_name.items():
+                if full.startswith(f"{prefix} ·"):
+                    category_id = cid
+                    break
         if not category_id:
             logger.warning("Skip product %s: no category found", row["sku"])
             continue
@@ -359,18 +302,37 @@ def seed_products(db: Database) -> None:
             )
         except ValidationError as exc:
             logger.warning("Skip seed product %s: %s", row["sku"], exc)
-    logger.info("Seed products ensured")
+    logger.info("Seed products ensured for %s (count=%s)", profile_key, count)
 
 
 def run_demo_seed(db: Database, settings: AppSettings) -> None:
-    """Run enabled demo entity seeds. Order: business → categories → products → parties."""
-    if settings.seed_business:
-        seed_business(db, settings)
-    if settings.seed_categories:
-        seed_categories(db)
-    if settings.seed_products:
-        seed_products(db)
-    if settings.seed_customers:
-        seed_customers(db)
-    if settings.seed_vendors:
-        seed_vendors(db)
+    """Seed selected verticals from SEED_PROFILE (single control).
+
+    Set ``SEED_PROFILE`` to a profile key, comma-list, or ``all``.
+    Use ``none`` / empty to disable. When enabled, seeds business +
+    categories + products + customers + vendors for each selected profile.
+    """
+    selected = profiles_to_run(getattr(settings, "seed_profile", "none"))
+    if not selected:
+        logger.info("Demo profile seed skipped (SEED_PROFILE=%r)", settings.seed_profile)
+        return
+
+    logger.info("Demo seed profiles: %s", ",".join(selected))
+    seed_business(db, settings)
+
+    for profile_key in selected:
+        if profile_key not in PROFILES:
+            logger.warning("Unknown seed profile %r; skipping", profile_key)
+            continue
+        seed_categories_for_profile(
+            db, profile_key, int(settings.seed_category_count)
+        )
+        seed_products_for_profile(
+            db, profile_key, int(settings.seed_product_count)
+        )
+        seed_customers_for_profile(
+            db, profile_key, int(settings.seed_customer_count)
+        )
+        seed_vendors_for_profile(
+            db, profile_key, int(settings.seed_vendor_count)
+        )

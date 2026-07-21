@@ -250,19 +250,19 @@ def _bootstrap_db():
     setup_logging()
     reload_settings()
     settings = get_settings()
+    from vaybooks.bms.infrastructure.db.demo_seed_profiles import profiles_to_run
+
     logger.info(
         "Bootstrap seed settings: seed_config=%s seed_qa_fixtures=%s purge_business_data=%s "
-        "seed_business=%s seed_customers=%s seed_vendors=%s seed_categories=%s seed_products=%s "
-        "business_registration=%s db=%s",
+        "seed_profile=%s counts=(c=%s,v=%s,cat=%s,p=%s) db=%s",
         settings.seed_config,
         settings.seed_qa_fixtures,
         settings.purge_business_data,
-        settings.seed_business,
-        settings.seed_customers,
-        settings.seed_vendors,
-        settings.seed_categories,
-        settings.seed_products,
-        settings.seed_business_registration,
+        settings.seed_profile,
+        settings.seed_customer_count,
+        settings.seed_vendor_count,
+        settings.seed_category_count,
+        settings.seed_product_count,
         settings.db_name,
     )
     db = get_database()
@@ -272,15 +272,7 @@ def _bootstrap_db():
         purge_business_data(db)
     if settings.seed_config:
         run_seed(db)
-    if any(
-        (
-            settings.seed_business,
-            settings.seed_customers,
-            settings.seed_vendors,
-            settings.seed_categories,
-            settings.seed_products,
-        )
-    ):
+    if profiles_to_run(settings.seed_profile):
         from vaybooks.bms.infrastructure.db.demo_seed import run_demo_seed
 
         run_demo_seed(db, settings)

@@ -1,4 +1,5 @@
 .streamlit/secrets.toml
+seed.toml
 qa-output/
 dev-orchestrator-output/
 tasks/

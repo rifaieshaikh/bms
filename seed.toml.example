@@ -1,0 +1,127 @@
+# Demo / vertical seeding (copy to seed.toml and edit).
+# Precedence for each SEED_* key: Streamlit secrets → env → this file → default.
+# Mongo URI stays in .streamlit/secrets.toml.
+
+SEED_CONFIG = true
+SEED_QA_FIXTURES = false
+PURGE_BUSINESS_DATA = false
+
+# Single control for profile demo seeding:
+#   "none" (or empty)  → disabled
+#   "boutique"         → one vertical (business + catalog + parties)
+#   "pharma,hardware"  → those verticals; uses [business.multi]
+#   "all"              → every vertical; uses [business.multi]
+# Profiles: boutique, pos, pharma, groceries, footwear, fancy, paint,
+#           tiles_granites, hardware, electricals
+SEED_PROFILE = "none"
+
+# Counts apply per selected profile (ignored when SEED_PROFILE = none)
+SEED_CUSTOMER_COUNT = 100
+SEED_VENDOR_COUNT = 100
+SEED_CATEGORY_COUNT = 100
+SEED_PRODUCT_COUNT = 100
+
+# Optional flat business overrides (applied on top of the chosen [business.*] block)
+# SEED_BUSINESS_REGISTRATION = "Registered"
+# SEED_BUSINESS_STATE = "32"
+
+# Used when SEED_PROFILE is exactly one profile (e.g. "boutique")
+[business.boutique]
+legal_name = "Kochi Silk Boutique"
+trade_name = "Kochi Silk"
+registration = "Registered"
+state = "32"
+gstin = "32AAAAA0000A1Z5"
+pan = "AAAAA0000A"
+composition_rate = 1.0
+
+[business.pos]
+legal_name = "Alappuzha Home Interiors"
+trade_name = "Home Interiors"
+registration = "Registered"
+state = "32"
+gstin = "32CCCCC0000C1Z5"
+pan = "CCCCC0000C"
+composition_rate = 1.0
+
+[business.pharma]
+legal_name = "Thrissur Care Pharmacy"
+trade_name = "Care Pharmacy"
+registration = "Registered"
+state = "32"
+gstin = "32DDDDD0000D1Z5"
+pan = "DDDDD0000D"
+composition_rate = 1.0
+
+[business.groceries]
+legal_name = "Kozhikode Fresh Mart"
+trade_name = "Fresh Mart"
+registration = "Unregistered"
+state = "32"
+gstin = ""
+pan = ""
+composition_rate = 1.0
+
+[business.footwear]
+legal_name = "Kollam Step Style"
+trade_name = "Step Style"
+registration = "Registered"
+state = "32"
+gstin = "32EEEEE0000E1Z5"
+pan = "EEEEE0000E"
+composition_rate = 1.0
+
+[business.fancy]
+legal_name = "Kannur Fancy World"
+trade_name = "Fancy World"
+registration = "Unregistered"
+state = "32"
+gstin = ""
+pan = ""
+composition_rate = 1.0
+
+[business.paint]
+legal_name = "Palakkad Colour Hub"
+trade_name = "Colour Hub"
+registration = "Registered"
+state = "32"
+gstin = "32FFFFF0000F1Z5"
+pan = "FFFFF0000F"
+composition_rate = 1.0
+
+[business.tiles_granites]
+legal_name = "Kottayam Stone & Tile"
+trade_name = "Stone & Tile"
+registration = "Registered"
+state = "32"
+gstin = "32GGGGG0000G1Z5"
+pan = "GGGGG0000G"
+composition_rate = 1.0
+
+[business.hardware]
+legal_name = "Malappuram Hardware Depot"
+trade_name = "Hardware Depot"
+registration = "Registered"
+state = "32"
+gstin = "32HHHHH0000H1Z5"
+pan = "HHHHH0000H"
+composition_rate = 1.0
+
+[business.electricals]
+legal_name = "Ernakulam Power & Lights"
+trade_name = "Power & Lights"
+registration = "Registered"
+state = "32"
+gstin = "32JJJJJ0000J1Z5"
+pan = "JJJJJ0000J"
+composition_rate = 1.0
+
+# Used when 2+ profiles are selected, including SEED_PROFILE = "all"
+[business.multi]
+legal_name = "Seed Multi Vertical Demo"
+trade_name = "Seed Multi Demo"
+registration = "Registered"
+state = "32"
+gstin = "32BBBBB0000B1Z5"
+pan = "BBBBB0000B"
+composition_rate = 1.0

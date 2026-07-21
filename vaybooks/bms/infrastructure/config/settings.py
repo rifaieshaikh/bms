@@ -30,6 +30,11 @@ _SEED_FLAG_KEYS = (
     "SEED_VENDORS",
     "SEED_CATEGORIES",
     "SEED_PRODUCTS",
+    "SEED_PROFILE",
+    "SEED_CUSTOMER_COUNT",
+    "SEED_VENDOR_COUNT",
+    "SEED_CATEGORY_COUNT",
+    "SEED_PRODUCT_COUNT",
 )
 _SEED_BUSINESS_KEYS = (
     "SEED_BUSINESS_REGISTRATION",
@@ -41,6 +46,48 @@ _SEED_BUSINESS_KEYS = (
     "SEED_BUSINESS_TRADE_NAME",
 )
 _SEED_SETTING_KEYS = _SEED_FLAG_KEYS + _SEED_BUSINESS_KEYS
+_SEED_COUNT_KEYS = {
+    "SEED_CUSTOMER_COUNT",
+    "SEED_VENDOR_COUNT",
+    "SEED_CATEGORY_COUNT",
+    "SEED_PRODUCT_COUNT",
+}
+_SEED_COUNT_MIN = 1
+_SEED_COUNT_MAX = 500
+
+_SEED_FIELD_DEFAULTS: dict[str, Any] = {
+    "SEED_CONFIG": True,
+    "SEED_QA_FIXTURES": False,
+    "PURGE_BUSINESS_DATA": False,
+    "SEED_BUSINESS": False,
+    "SEED_CUSTOMERS": False,
+    "SEED_VENDORS": False,
+    "SEED_CATEGORIES": False,
+    "SEED_PRODUCTS": False,
+    "SEED_PROFILE": "none",
+    "SEED_CUSTOMER_COUNT": 100,
+    "SEED_VENDOR_COUNT": 100,
+    "SEED_CATEGORY_COUNT": 100,
+    "SEED_PRODUCT_COUNT": 100,
+    "SEED_BUSINESS_REGISTRATION": "Unregistered",
+    "SEED_BUSINESS_STATE": "27",
+    "SEED_BUSINESS_GSTIN": "",
+    "SEED_BUSINESS_PAN": "",
+    "SEED_COMPOSITION_RATE": 1.0,
+    "SEED_BUSINESS_LEGAL_NAME": "Seed Demo Business",
+    "SEED_BUSINESS_TRADE_NAME": "Seed Demo",
+}
+
+_BUSINESS_BLOCK_FIELDS = (
+    "legal_name",
+    "trade_name",
+    "registration",
+    "state",
+    "gstin",
+    "pan",
+    "composition_rate",
+)
+
 logger = logging.getLogger("vaybooks.bms.config")
 
 
@@ -71,7 +118,20 @@ def _coerce_str(value: Any, default: str) -> str:
     return str(value).strip() or default
 
 
+def _coerce_int_clamped(
+    value: Any, default: int, *, min_v: int = _SEED_COUNT_MIN, max_v: int = _SEED_COUNT_MAX
+) -> int:
+    if value is None:
+        return default
+    try:
+        n = int(float(value))
+    except (TypeError, ValueError):
+        return default
+    return max(min_v, min(max_v, n))
+
+
 def _seed_flags_from_mapping(raw: dict[str, Any]) -> dict[str, Any]:
+    """Map a flat raw dict onto AppSettings seed field names (missing → defaults)."""
     return {
         "seed_config": _coerce_bool(raw.get("SEED_CONFIG"), True),
         "seed_qa_fixtures": _coerce_bool(raw.get("SEED_QA_FIXTURES"), False),
@@ -81,6 +141,11 @@ def _seed_flags_from_mapping(raw: dict[str, Any]) -> dict[str, Any]:
         "seed_vendors": _coerce_bool(raw.get("SEED_VENDORS"), False),
         "seed_categories": _coerce_bool(raw.get("SEED_CATEGORIES"), False),
         "seed_products": _coerce_bool(raw.get("SEED_PRODUCTS"), False),
+        "seed_profile": _coerce_str(raw.get("SEED_PROFILE"), "none"),
+        "seed_customer_count": _coerce_int_clamped(raw.get("SEED_CUSTOMER_COUNT"), 100),
+        "seed_vendor_count": _coerce_int_clamped(raw.get("SEED_VENDOR_COUNT"), 100),
+        "seed_category_count": _coerce_int_clamped(raw.get("SEED_CATEGORY_COUNT"), 100),
+        "seed_product_count": _coerce_int_clamped(raw.get("SEED_PRODUCT_COUNT"), 100),
         "seed_business_registration": _coerce_str(
             raw.get("SEED_BUSINESS_REGISTRATION"), "Unregistered"
         ),
@@ -110,28 +175,160 @@ def _find_streamlit_secrets_path() -> Path | None:
     return path if path.exists() else None
 
 
-def _load_streamlit_secrets_file() -> dict[str, Any]:
-    path = _find_streamlit_secrets_path()
+def _find_seed_toml_path() -> Path | None:
+    path = Path.cwd() / "seed.toml"
+    return path if path.exists() else None
+
+
+def _parse_toml(text: str) -> dict[str, Any]:
+    try:
+        import tomllib
+
+        return tomllib.loads(text)
+    except ImportError:
+        import tomli
+
+        return tomli.loads(text)
+
+
+def _load_toml_file(path: Path | None) -> dict[str, Any]:
     if not path:
         return {}
-    return _parse_toml(path.read_text(encoding="utf-8"))
+    try:
+        return _parse_toml(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.warning("Failed to parse %s: %s", path, exc)
+        return {}
 
 
-def _resolve_seed_flags() -> dict[str, Any]:
-    """Resolve seed flags for cloud/local Streamlit deployments."""
-    file_raw = _load_streamlit_secrets_file()
-    if any(key in file_raw for key in _SEED_SETTING_KEYS):
-        return _seed_flags_from_mapping(file_raw)
+def _load_streamlit_secrets_file() -> dict[str, Any]:
+    return _load_toml_file(_find_streamlit_secrets_path())
 
+
+def _load_seed_toml_file() -> dict[str, Any]:
+    return _load_toml_file(_find_seed_toml_path())
+
+
+def _st_secrets_as_dict() -> dict[str, Any]:
     try:
         import streamlit as st
 
-        if any(key in st.secrets for key in _SEED_SETTING_KEYS):
-            return _seed_flags_from_mapping({key: st.secrets[key] for key in st.secrets})
+        return {key: st.secrets[key] for key in st.secrets}
     except Exception:
-        pass
+        return {}
 
-    return _seed_flags_from_env()
+
+def _extract_business_blocks(raw: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Parse [business.<name>] tables (or business = { name = {...} })."""
+    blocks: dict[str, dict[str, Any]] = {}
+    business = raw.get("business")
+    if isinstance(business, dict):
+        for name, values in business.items():
+            if isinstance(values, dict):
+                blocks[str(name)] = {
+                    k: values[k]
+                    for k in _BUSINESS_BLOCK_FIELDS
+                    if k in values
+                }
+    return blocks
+
+
+def _merge_business_blocks(
+    *sources: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Merge business blocks; earlier sources win per field (secrets first)."""
+    out: dict[str, dict[str, Any]] = {}
+    for source in sources:
+        for name, fields in source.items():
+            bucket = out.setdefault(name, {})
+            for key, value in fields.items():
+                if key not in bucket:
+                    bucket[key] = value
+    return out
+
+
+def _raw_has_key(raw: dict[str, Any], key: str) -> bool:
+    return key in raw and raw[key] is not None
+
+
+def _pick_seed_value(
+    key: str,
+    *,
+    secrets: dict[str, Any],
+    env: dict[str, Any],
+    seed_file: dict[str, Any],
+    default: Any,
+) -> Any:
+    """Precedence: secrets → env → seed.toml → default."""
+    if _raw_has_key(secrets, key):
+        return secrets[key]
+    if _raw_has_key(env, key):
+        return env[key]
+    if _raw_has_key(seed_file, key):
+        return seed_file[key]
+    return default
+
+
+def _resolve_seed_flags() -> dict[str, Any]:
+    """Resolve seed flags: secrets → env → seed.toml → default (per key)."""
+    secrets_file = _load_streamlit_secrets_file()
+    st_live = _st_secrets_as_dict()
+    # File secrets win over st.secrets for the same key when both exist
+    secrets: dict[str, Any] = {}
+    secrets.update(st_live)
+    secrets.update(secrets_file)
+
+    env_raw: dict[str, Any] = {
+        key: os.environ[key] for key in _SEED_SETTING_KEYS if key in os.environ
+    }
+    seed_file = _load_seed_toml_file()
+
+    merged_raw: dict[str, Any] = {}
+    explicit_business_flat: dict[str, Any] = {}
+    for key, default in _SEED_FIELD_DEFAULTS.items():
+        value = _pick_seed_value(
+            key,
+            secrets=secrets,
+            env=env_raw,
+            seed_file=seed_file,
+            default=default,
+        )
+        merged_raw[key] = value
+        if key in _SEED_BUSINESS_KEYS and (
+            _raw_has_key(secrets, key)
+            or _raw_has_key(env_raw, key)
+            or _raw_has_key(seed_file, key)
+        ):
+            explicit_business_flat[key] = value
+
+    flags = _seed_flags_from_mapping(merged_raw)
+    # Nested [business.*] tables: secrets beat seed.toml (env has no nested tables).
+    flags["seed_business_blocks"] = _merge_business_blocks(
+        _extract_business_blocks(secrets),
+        _extract_business_blocks(seed_file),
+    )
+    flags["seed_business_flat_overrides"] = {
+        "seed_business_registration": explicit_business_flat.get(
+            "SEED_BUSINESS_REGISTRATION"
+        ),
+        "seed_business_state": explicit_business_flat.get("SEED_BUSINESS_STATE"),
+        "seed_business_gstin": explicit_business_flat.get("SEED_BUSINESS_GSTIN"),
+        "seed_business_pan": explicit_business_flat.get("SEED_BUSINESS_PAN"),
+        "seed_composition_rate": explicit_business_flat.get("SEED_COMPOSITION_RATE"),
+        "seed_business_legal_name": explicit_business_flat.get(
+            "SEED_BUSINESS_LEGAL_NAME"
+        ),
+        "seed_business_trade_name": explicit_business_flat.get(
+            "SEED_BUSINESS_TRADE_NAME"
+        ),
+    }
+    # Drop unset override keys
+    flags["seed_business_flat_overrides"] = {
+        k: v
+        for k, v in flags["seed_business_flat_overrides"].items()
+        if v is not None
+    }
+    return flags
 
 
 def _apply_seed_flags(settings: AppSettings) -> AppSettings:
@@ -160,6 +357,11 @@ class AppSettings:
     seed_vendors: bool = False
     seed_categories: bool = False
     seed_products: bool = False
+    seed_profile: str = "none"
+    seed_customer_count: int = 100
+    seed_vendor_count: int = 100
+    seed_category_count: int = 100
+    seed_product_count: int = 100
     seed_business_registration: str = "Unregistered"
     seed_business_state: str = "27"
     seed_business_gstin: str = ""
@@ -167,6 +369,8 @@ class AppSettings:
     seed_composition_rate: float = 1.0
     seed_business_legal_name: str = "Seed Demo Business"
     seed_business_trade_name: str = "Seed Demo"
+    seed_business_blocks: dict[str, dict[str, Any]] = field(default_factory=dict)
+    seed_business_flat_overrides: dict[str, Any] = field(default_factory=dict)
     extra: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -179,17 +383,6 @@ class AppSettings:
 
 
 _settings: AppSettings | None = None
-
-
-def _parse_toml(text: str) -> dict[str, Any]:
-    try:
-        import tomllib
-
-        return tomllib.loads(text)
-    except ImportError:
-        import tomli
-
-        return tomli.loads(text)
 
 
 def _serialize_toml(data: dict[str, Any]) -> str:
@@ -223,6 +416,8 @@ def _load_toml_settings() -> AppSettings:
         secrets_path,
     )
     seed_flags = _seed_flags_from_mapping(raw)
+    seed_flags["seed_business_blocks"] = _extract_business_blocks(raw)
+    seed_flags["seed_business_flat_overrides"] = {}
     return AppSettings(
         app_version=str(raw.get("APP_VERSION", __version__)),
         app_port=int(raw.get("APP_PORT", 8501)),
@@ -248,6 +443,7 @@ _KNOWN_KEYS = {
     "BACKUP_SCHEDULE",
     "BACKUP_RETENTION_DAYS",
     "AUTO_UPDATE_ENABLED",
+    "business",
     *_SEED_SETTING_KEYS,
 }
 
@@ -257,6 +453,21 @@ def _load_env_settings() -> AppSettings | None:
     if not uri:
         return None
     seed_flags = _seed_flags_from_env()
+    seed_flags["seed_business_blocks"] = {}
+    env_to_field = {
+        "SEED_BUSINESS_REGISTRATION": "seed_business_registration",
+        "SEED_BUSINESS_STATE": "seed_business_state",
+        "SEED_BUSINESS_GSTIN": "seed_business_gstin",
+        "SEED_BUSINESS_PAN": "seed_business_pan",
+        "SEED_COMPOSITION_RATE": "seed_composition_rate",
+        "SEED_BUSINESS_LEGAL_NAME": "seed_business_legal_name",
+        "SEED_BUSINESS_TRADE_NAME": "seed_business_trade_name",
+    }
+    overrides: dict[str, Any] = {}
+    for env_key, field_name in env_to_field.items():
+        if env_key in os.environ:
+            overrides[field_name] = seed_flags[field_name]
+    seed_flags["seed_business_flat_overrides"] = overrides
     return AppSettings(
         mongo_uri=uri,
         db_name=os.environ.get(
@@ -276,6 +487,8 @@ def _load_streamlit_secrets() -> AppSettings | None:
             return None
         secrets = {key: st.secrets[key] for key in st.secrets}
         seed_flags = _seed_flags_from_mapping(secrets)
+        seed_flags["seed_business_blocks"] = _extract_business_blocks(secrets)
+        seed_flags["seed_business_flat_overrides"] = {}
         return AppSettings(
             mongo_uri=str(st.secrets["MONGODB_URI"]),
             db_name=str(st.secrets.get("MONGODB_DATABASE", "zahcci_customization")),
@@ -347,6 +560,11 @@ def save_settings(settings: AppSettings, encrypt_uri: bool = True) -> None:
         "SEED_VENDORS": settings.seed_vendors,
         "SEED_CATEGORIES": settings.seed_categories,
         "SEED_PRODUCTS": settings.seed_products,
+        "SEED_PROFILE": settings.seed_profile,
+        "SEED_CUSTOMER_COUNT": settings.seed_customer_count,
+        "SEED_VENDOR_COUNT": settings.seed_vendor_count,
+        "SEED_CATEGORY_COUNT": settings.seed_category_count,
+        "SEED_PRODUCT_COUNT": settings.seed_product_count,
         "SEED_BUSINESS_REGISTRATION": settings.seed_business_registration,
         "SEED_BUSINESS_STATE": settings.seed_business_state,
         "SEED_BUSINESS_GSTIN": settings.seed_business_gstin,
