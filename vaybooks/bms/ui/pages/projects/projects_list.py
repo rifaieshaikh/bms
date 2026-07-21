@@ -27,7 +27,7 @@ PROJECTS = ListSchema(
         FilterField("site_state_code", "Site state", F.EXACT),
     ],
     sort_options=[
-        SortOption("created_at", "Created (newest)"),
+        SortOption("created_at", "Created"),
         SortOption("project_number", "Project number"),
         SortOption("name", "Project name"),
         SortOption("customer_name", "Customer name"),

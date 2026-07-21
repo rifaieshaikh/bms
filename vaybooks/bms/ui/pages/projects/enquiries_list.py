@@ -29,7 +29,7 @@ ENQUIRIES = ListSchema(
         ),
     ],
     sort_options=[
-        SortOption("created_at", "Created (newest)"),
+        SortOption("created_at", "Created"),
         SortOption("enquiry_number", "Enquiry number"),
         SortOption("customer_name", "Customer name"),
     ],

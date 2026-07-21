@@ -324,7 +324,7 @@ def filter_active_only(page: Page, enabled: bool = True) -> None:
     wait_for_list_ready(page)
 
 
-def sort_by_name(page: Page, direction: str = "Oldest first") -> None:
+def sort_by_name(page: Page, direction: str = "Ascending") -> None:
     apply_sort(page, "Category name", direction)
     wait_for_list_ready(page)
 

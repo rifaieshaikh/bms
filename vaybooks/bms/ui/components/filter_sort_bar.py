@@ -269,18 +269,25 @@ def render_filter_sort_bar(
             field_wkey = f"{entity}_sort_field"
             dir_wkey = f"{entity}_sort_dir"
             _seed(field_wkey, cur_key)
-            _seed(dir_wkey, "Newest first" if sort_state.get("desc", True)
-                  else "Oldest first")
+            _seed(dir_wkey, "Descending" if sort_state.get("desc", True)
+                  else "Ascending")
+            # Migrate legacy direction labels from older sessions.
+            legacy_dir = {
+                "Newest first": "Descending",
+                "Oldest first": "Ascending",
+            }
+            if st.session_state.get(dir_wkey) in legacy_dir:
+                st.session_state[dir_wkey] = legacy_dir[st.session_state[dir_wkey]]
             st.selectbox(
                 "Field", sort_keys, key=field_wkey,
                 format_func=lambda k, m=labels: m.get(k, k),
             )
-            st.radio("Direction", ["Newest first", "Oldest first"], key=dir_wkey)
+            st.radio("Direction", ["Ascending", "Descending"], key=dir_wkey)
             if st.button("Apply sort", type="primary", use_container_width=True,
                          key=f"{entity}_apply_sort"):
                 st.session_state[sort_key(entity)] = {
                     "key": st.session_state[field_wkey],
-                    "desc": st.session_state[dir_wkey] == "Newest first",
+                    "desc": st.session_state[dir_wkey] == "Descending",
                 }
                 st.rerun()
 

@@ -81,7 +81,7 @@ INVENTORY_CATEGORIES = ListSchema(
                     match=_match_inv_category_active),
     ],
     sort_options=[
-        SortOption("created_at", "Created (newest)"),
+        SortOption("created_at", "Created"),
         SortOption("name", "Category name"),
     ],
     default_sort="created_at",
@@ -108,7 +108,7 @@ INVENTORY_PRODUCTS = ListSchema(
                     match=_match_inv_product_active),
     ],
     sort_options=[
-        SortOption("created_at", "Created (newest)"),
+        SortOption("created_at", "Created"),
         SortOption("name", "Product name"),
         SortOption("sku", "SKU"),
         SortOption("current_qty", "Stock qty"),
@@ -157,7 +157,7 @@ INVENTORY_STOCK_LEDGER = ListSchema(
                     match=_match_stock_ledger_reference),
     ],
     sort_options=[
-        SortOption("movement_date", "Date (newest)"),
+        SortOption("movement_date", "Date"),
         SortOption("product_name", "Product name"),
         SortOption("movement_type", "Movement type"),
     ],
@@ -185,7 +185,7 @@ INVENTORY_CUSTOMER_PRICES = ListSchema(
         FilterField("effective_date", "Effective date", F.DATE_RANGE),
     ],
     sort_options=[
-        SortOption("effective_date", "Effective date (newest)"),
+        SortOption("effective_date", "Effective date"),
         SortOption("customer_name", "Customer"),
         SortOption("sku", "SKU"),
         SortOption("product_name", "Product"),

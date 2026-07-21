@@ -46,7 +46,7 @@ class TestVendorListFilterSort:
         before = vp.vendor_card_names(page)
         if len(before) < 2:
             return
-        vp.sort_by_name(page, "Oldest first")
+        vp.sort_by_name(page, "Ascending")
         after = vp.vendor_card_names(page)
         assert before != after
 

@@ -21,7 +21,26 @@ DEFAULT_UPDATE_URL = (
     "https://github.com/rifaieshaikh/bms/releases/latest/download/version.json"
 )
 
-_SEED_FLAG_KEYS = ("SEED_CONFIG", "SEED_QA_FIXTURES", "PURGE_BUSINESS_DATA")
+_SEED_FLAG_KEYS = (
+    "SEED_CONFIG",
+    "SEED_QA_FIXTURES",
+    "PURGE_BUSINESS_DATA",
+    "SEED_BUSINESS",
+    "SEED_CUSTOMERS",
+    "SEED_VENDORS",
+    "SEED_CATEGORIES",
+    "SEED_PRODUCTS",
+)
+_SEED_BUSINESS_KEYS = (
+    "SEED_BUSINESS_REGISTRATION",
+    "SEED_BUSINESS_STATE",
+    "SEED_BUSINESS_GSTIN",
+    "SEED_BUSINESS_PAN",
+    "SEED_COMPOSITION_RATE",
+    "SEED_BUSINESS_LEGAL_NAME",
+    "SEED_BUSINESS_TRADE_NAME",
+)
+_SEED_SETTING_KEYS = _SEED_FLAG_KEYS + _SEED_BUSINESS_KEYS
 logger = logging.getLogger("vaybooks.bms.config")
 
 
@@ -37,28 +56,53 @@ def _coerce_bool(value: Any, default: bool) -> bool:
     return default
 
 
-def _seed_flags_from_mapping(raw: dict[str, Any]) -> dict[str, bool]:
+def _coerce_float(value: Any, default: float) -> float:
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _coerce_str(value: Any, default: str) -> str:
+    if value is None:
+        return default
+    return str(value).strip() or default
+
+
+def _seed_flags_from_mapping(raw: dict[str, Any]) -> dict[str, Any]:
     return {
         "seed_config": _coerce_bool(raw.get("SEED_CONFIG"), True),
         "seed_qa_fixtures": _coerce_bool(raw.get("SEED_QA_FIXTURES"), False),
         "purge_business_data": _coerce_bool(raw.get("PURGE_BUSINESS_DATA"), False),
+        "seed_business": _coerce_bool(raw.get("SEED_BUSINESS"), False),
+        "seed_customers": _coerce_bool(raw.get("SEED_CUSTOMERS"), False),
+        "seed_vendors": _coerce_bool(raw.get("SEED_VENDORS"), False),
+        "seed_categories": _coerce_bool(raw.get("SEED_CATEGORIES"), False),
+        "seed_products": _coerce_bool(raw.get("SEED_PRODUCTS"), False),
+        "seed_business_registration": _coerce_str(
+            raw.get("SEED_BUSINESS_REGISTRATION"), "Unregistered"
+        ),
+        "seed_business_state": _coerce_str(raw.get("SEED_BUSINESS_STATE"), "27"),
+        "seed_business_gstin": _coerce_str(raw.get("SEED_BUSINESS_GSTIN"), ""),
+        "seed_business_pan": _coerce_str(raw.get("SEED_BUSINESS_PAN"), ""),
+        "seed_composition_rate": _coerce_float(raw.get("SEED_COMPOSITION_RATE"), 1.0),
+        "seed_business_legal_name": _coerce_str(
+            raw.get("SEED_BUSINESS_LEGAL_NAME"), "Seed Demo Business"
+        ),
+        "seed_business_trade_name": _coerce_str(
+            raw.get("SEED_BUSINESS_TRADE_NAME"), "Seed Demo"
+        ),
     }
 
 
-def _seed_flags_from_env() -> dict[str, bool]:
-    flags: dict[str, bool] = {}
-    for key, default in (
-        ("SEED_CONFIG", True),
-        ("SEED_QA_FIXTURES", False),
-        ("PURGE_BUSINESS_DATA", False),
-    ):
-        env_value = os.environ.get(key)
-        flags[key.lower()] = _coerce_bool(env_value, default) if env_value is not None else default
-    return {
-        "seed_config": flags["seed_config"],
-        "seed_qa_fixtures": flags["seed_qa_fixtures"],
-        "purge_business_data": flags["purge_business_data"],
-    }
+def _seed_flags_from_env() -> dict[str, Any]:
+    env_raw: dict[str, Any] = {}
+    for key in _SEED_SETTING_KEYS:
+        if key in os.environ:
+            env_raw[key] = os.environ[key]
+    return _seed_flags_from_mapping(env_raw)
 
 
 def _find_streamlit_secrets_path() -> Path | None:
@@ -73,16 +117,16 @@ def _load_streamlit_secrets_file() -> dict[str, Any]:
     return _parse_toml(path.read_text(encoding="utf-8"))
 
 
-def _resolve_seed_flags() -> dict[str, bool]:
+def _resolve_seed_flags() -> dict[str, Any]:
     """Resolve seed flags for cloud/local Streamlit deployments."""
     file_raw = _load_streamlit_secrets_file()
-    if any(key in file_raw for key in _SEED_FLAG_KEYS):
+    if any(key in file_raw for key in _SEED_SETTING_KEYS):
         return _seed_flags_from_mapping(file_raw)
 
     try:
         import streamlit as st
 
-        if any(key in st.secrets for key in _SEED_FLAG_KEYS):
+        if any(key in st.secrets for key in _SEED_SETTING_KEYS):
             return _seed_flags_from_mapping({key: st.secrets[key] for key in st.secrets})
     except Exception:
         pass
@@ -94,12 +138,7 @@ def _apply_seed_flags(settings: AppSettings) -> AppSettings:
     if is_desktop():
         return settings
     seed_flags = _resolve_seed_flags()
-    return replace(
-        settings,
-        seed_config=seed_flags["seed_config"],
-        seed_qa_fixtures=seed_flags["seed_qa_fixtures"],
-        purge_business_data=seed_flags["purge_business_data"],
-    )
+    return replace(settings, **seed_flags)
 
 
 @dataclass
@@ -116,6 +155,18 @@ class AppSettings:
     seed_config: bool = True
     seed_qa_fixtures: bool = False
     purge_business_data: bool = False
+    seed_business: bool = False
+    seed_customers: bool = False
+    seed_vendors: bool = False
+    seed_categories: bool = False
+    seed_products: bool = False
+    seed_business_registration: str = "Unregistered"
+    seed_business_state: str = "27"
+    seed_business_gstin: str = ""
+    seed_business_pan: str = ""
+    seed_composition_rate: float = 1.0
+    seed_business_legal_name: str = "Seed Demo Business"
+    seed_business_trade_name: str = "Seed Demo"
     extra: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -151,6 +202,8 @@ def _serialize_toml(data: dict[str, Any]) -> str:
         for key, value in data.items():
             if isinstance(value, bool):
                 lines.append(f"{key} = {'true' if value else 'false'}")
+            elif isinstance(value, float):
+                lines.append(f"{key} = {value}")
             elif isinstance(value, int):
                 lines.append(f"{key} = {value}")
             else:
@@ -180,9 +233,7 @@ def _load_toml_settings() -> AppSettings:
         backup_schedule=str(raw.get("BACKUP_SCHEDULE", "off")),
         backup_retention_days=int(raw.get("BACKUP_RETENTION_DAYS", 30)),
         auto_update_enabled=bool(raw.get("AUTO_UPDATE_ENABLED", False)),
-        seed_config=seed_flags["seed_config"],
-        seed_qa_fixtures=seed_flags["seed_qa_fixtures"],
-        purge_business_data=seed_flags["purge_business_data"],
+        **seed_flags,
         extra={k: v for k, v in raw.items() if k not in _KNOWN_KEYS},
     )
 
@@ -197,9 +248,7 @@ _KNOWN_KEYS = {
     "BACKUP_SCHEDULE",
     "BACKUP_RETENTION_DAYS",
     "AUTO_UPDATE_ENABLED",
-    "SEED_CONFIG",
-    "SEED_QA_FIXTURES",
-    "PURGE_BUSINESS_DATA",
+    *_SEED_SETTING_KEYS,
 }
 
 
@@ -215,9 +264,7 @@ def _load_env_settings() -> AppSettings | None:
             os.environ.get("DB_NAME", "zahcci_customization"),
         ),
         app_port=int(os.environ.get("APP_PORT", "8501")),
-        seed_config=seed_flags["seed_config"],
-        seed_qa_fixtures=seed_flags["seed_qa_fixtures"],
-        purge_business_data=seed_flags["purge_business_data"],
+        **seed_flags,
     )
 
 
@@ -232,9 +279,7 @@ def _load_streamlit_secrets() -> AppSettings | None:
         return AppSettings(
             mongo_uri=str(st.secrets["MONGODB_URI"]),
             db_name=str(st.secrets.get("MONGODB_DATABASE", "zahcci_customization")),
-            seed_config=seed_flags["seed_config"],
-            seed_qa_fixtures=seed_flags["seed_qa_fixtures"],
-            purge_business_data=seed_flags["purge_business_data"],
+            **seed_flags,
         )
     except Exception:
         return None
@@ -297,6 +342,18 @@ def save_settings(settings: AppSettings, encrypt_uri: bool = True) -> None:
         "SEED_CONFIG": settings.seed_config,
         "SEED_QA_FIXTURES": settings.seed_qa_fixtures,
         "PURGE_BUSINESS_DATA": settings.purge_business_data,
+        "SEED_BUSINESS": settings.seed_business,
+        "SEED_CUSTOMERS": settings.seed_customers,
+        "SEED_VENDORS": settings.seed_vendors,
+        "SEED_CATEGORIES": settings.seed_categories,
+        "SEED_PRODUCTS": settings.seed_products,
+        "SEED_BUSINESS_REGISTRATION": settings.seed_business_registration,
+        "SEED_BUSINESS_STATE": settings.seed_business_state,
+        "SEED_BUSINESS_GSTIN": settings.seed_business_gstin,
+        "SEED_BUSINESS_PAN": settings.seed_business_pan,
+        "SEED_COMPOSITION_RATE": settings.seed_composition_rate,
+        "SEED_BUSINESS_LEGAL_NAME": settings.seed_business_legal_name,
+        "SEED_BUSINESS_TRADE_NAME": settings.seed_business_trade_name,
     }
     data.update(settings.extra)
     config_path.write_text(_serialize_toml(data), encoding="utf-8")

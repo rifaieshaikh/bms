@@ -137,7 +137,7 @@ def render(services: dict):
         title="Employees",
         filter_fields=[],
         sort_options=[
-            SortOption("created_at", "Created (newest)"),
+            SortOption("created_at", "Created"),
             SortOption("worker_name", "Employee name"),
         ],
         default_sort="created_at",

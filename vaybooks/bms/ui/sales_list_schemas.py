@@ -39,7 +39,7 @@ ESTIMATES = ListSchema(
         ),
     ],
     sort_options=[
-        SortOption("estimate_date", "Date (newest)"),
+        SortOption("estimate_date", "Date"),
         SortOption("estimate_number", "Estimate number"),
         SortOption("status", "Status"),
     ],
@@ -64,7 +64,7 @@ QUOTATIONS = ListSchema(
         ),
     ],
     sort_options=[
-        SortOption("quotation_date", "Date (newest)"),
+        SortOption("quotation_date", "Date"),
         SortOption("quotation_number", "Quotation number"),
         SortOption("status", "Status"),
     ],
@@ -84,7 +84,7 @@ SALES_ORDERS = ListSchema(
                     options_loader="customers", match=_match_customer),
     ],
     sort_options=[
-        SortOption("order_date", "Date (newest)"),
+        SortOption("order_date", "Date"),
         SortOption("so_number", "SO number"),
         SortOption("status", "Status"),
     ],
@@ -103,7 +103,7 @@ DELIVERY_NOTES = ListSchema(
         FilterField("status", "Status", F.EXACT),
     ],
     sort_options=[
-        SortOption("delivery_date", "Date (newest)"),
+        SortOption("delivery_date", "Date"),
         SortOption("dn_number", "DN number"),
     ],
     default_sort="delivery_date",
@@ -124,7 +124,7 @@ STORE_SALES = ListSchema(
                     record_attr="gross"),
     ],
     sort_options=[
-        SortOption("sale_date", "Date (newest)"),
+        SortOption("sale_date", "Date"),
         SortOption("gross", "Gross amount"),
         SortOption("collected", "Collected"),
         SortOption("store_invoice_number", "Store invoice #"),
@@ -152,7 +152,7 @@ SALES_RETURNS = ListSchema(
         ),
     ],
     sort_options=[
-        SortOption("return_date", "Date (newest)"),
+        SortOption("return_date", "Date"),
         SortOption("return_number", "Return number"),
         SortOption("status", "Status"),
     ],

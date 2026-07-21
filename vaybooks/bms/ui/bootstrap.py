@@ -251,10 +251,18 @@ def _bootstrap_db():
     reload_settings()
     settings = get_settings()
     logger.info(
-        "Bootstrap seed settings: seed_config=%s seed_qa_fixtures=%s purge_business_data=%s db=%s",
+        "Bootstrap seed settings: seed_config=%s seed_qa_fixtures=%s purge_business_data=%s "
+        "seed_business=%s seed_customers=%s seed_vendors=%s seed_categories=%s seed_products=%s "
+        "business_registration=%s db=%s",
         settings.seed_config,
         settings.seed_qa_fixtures,
         settings.purge_business_data,
+        settings.seed_business,
+        settings.seed_customers,
+        settings.seed_vendors,
+        settings.seed_categories,
+        settings.seed_products,
+        settings.seed_business_registration,
         settings.db_name,
     )
     db = get_database()
@@ -264,6 +272,18 @@ def _bootstrap_db():
         purge_business_data(db)
     if settings.seed_config:
         run_seed(db)
+    if any(
+        (
+            settings.seed_business,
+            settings.seed_customers,
+            settings.seed_vendors,
+            settings.seed_categories,
+            settings.seed_products,
+        )
+    ):
+        from vaybooks.bms.infrastructure.db.demo_seed import run_demo_seed
+
+        run_demo_seed(db, settings)
     if settings.seed_qa_fixtures:
         from vaybooks.bms.infrastructure.db.qa_fixtures import run_qa_fixtures
 

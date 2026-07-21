@@ -27,7 +27,7 @@ PURCHASE_ORDERS = ListSchema(
                     options_loader="vendors", match=_match_vendor),
     ],
     sort_options=[
-        SortOption("order_date", "Date (newest)"),
+        SortOption("order_date", "Date"),
         SortOption("po_number", "PO number"),
         SortOption("status", "Status"),
     ],
@@ -46,7 +46,7 @@ GOODS_RECEIPTS = ListSchema(
         FilterField("status", "Status", F.EXACT),
     ],
     sort_options=[
-        SortOption("receipt_date", "Date (newest)"),
+        SortOption("receipt_date", "Date"),
         SortOption("grn_number", "GRN number"),
     ],
     default_sort="receipt_date",
@@ -65,7 +65,7 @@ STORE_PURCHASES = ListSchema(
         FilterField("min_total", "Min total (₹)", F.NUMBER_MIN, record_attr="total"),
     ],
     sort_options=[
-        SortOption("bill_date", "Date (newest)"),
+        SortOption("bill_date", "Date"),
         SortOption("total", "Total amount"),
         SortOption("vendor_bill_number", "Bill number"),
     ],
@@ -82,7 +82,7 @@ PURCHASE_RETURNS = ListSchema(
         FilterField("return_date", "Return date", F.DATE_RANGE),
     ],
     sort_options=[
-        SortOption("return_date", "Date (newest)"),
+        SortOption("return_date", "Date"),
         SortOption("return_number", "Return number"),
     ],
     default_sort="return_date",

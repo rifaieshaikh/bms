@@ -40,7 +40,7 @@ def test_sort_popover_apply_does_not_crash(
         open_sort_popover(page)
         page.get_by_role("button", name="Apply sort").click()
     else:
-        apply_sort(page, field, "Oldest first")
+        apply_sort(page, field, "Ascending")
     page.wait_for_timeout(1000)
     assert title in page.content()
 

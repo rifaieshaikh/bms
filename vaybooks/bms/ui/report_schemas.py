@@ -652,7 +652,7 @@ STOCK_MOVEMENTS = ListSchema(
         ),
     ],
     sort_options=[
-        SortOption("movement_date", "Date (newest)"),
+        SortOption("movement_date", "Date"),
         SortOption("product_name", "Product name"),
         SortOption("movement_type", "Movement type"),
         SortOption("qty_out", "Qty out"),

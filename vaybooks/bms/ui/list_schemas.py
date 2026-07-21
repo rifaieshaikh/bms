@@ -218,7 +218,7 @@ ORDERS = ListSchema(
                     match=_match_has_advance),
     ],
     sort_options=[
-        SortOption("created_at", "Created (newest)"),
+        SortOption("created_at", "Created"),
         SortOption("order_date", "Order date"),
         SortOption("expected_delivery_date", "Expected delivery"),
         SortOption("order_number", "Order number"),
@@ -281,8 +281,8 @@ MEASUREMENTS = ListSchema(
         FilterField("measured_at", "Measured on", F.DATE_RANGE),
     ],
     sort_options=[
-        SortOption("measured_at", "Measured (newest)"),
-        SortOption("created_at", "Created (newest)"),
+        SortOption("measured_at", "Measured"),
+        SortOption("created_at", "Created"),
         SortOption("measurement_number", "Measurement number"),
         SortOption("customer_name", "Customer name"),
         SortOption("wearer_name", "Wearer name"),
@@ -306,7 +306,7 @@ CUSTOMERS = ListSchema(
                     match=_match_customer_has_orders),
     ],
     sort_options=[
-        SortOption("created_at", "Created (newest)"),
+        SortOption("created_at", "Created"),
         SortOption("customer_name", "Customer name"),
         SortOption("order_count", "Order count"),
     ],
@@ -326,7 +326,7 @@ VENDORS = ListSchema(
                     match=_match_vendor_balance),
     ],
     sort_options=[
-        SortOption("created_at", "Created (newest)"),
+        SortOption("created_at", "Created"),
         SortOption("vendor_name", "Vendor name"),
         SortOption("current_balance", "Payable balance"),
     ],
@@ -346,8 +346,8 @@ TIME = ListSchema(
                     options_loader="activity_names"),
     ],
     sort_options=[
-        SortOption("work_date", "Work date (newest)"),
-        SortOption("created_at", "Created (newest)"),
+        SortOption("work_date", "Work date"),
+        SortOption("created_at", "Created"),
         SortOption("duration_minutes", "Duration"),
         SortOption("bill_number", "Measurement bill number"),
     ],
@@ -373,7 +373,7 @@ ACCOUNTS = ListSchema(
                     match=_match_account_linked),
     ],
     sort_options=[
-        SortOption("created_at", "Created (newest)"),
+        SortOption("created_at", "Created"),
         SortOption("account_name", "Account name"),
         SortOption("account_type", "Account type"),
         SortOption("current_balance", "Balance"),
@@ -395,7 +395,7 @@ VOUCHERS = ListSchema(
                     record_attr="total_debit"),
     ],
     sort_options=[
-        SortOption("voucher_date", "Voucher date (newest)"),
+        SortOption("voucher_date", "Voucher date"),
         SortOption("voucher_number", "Voucher number"),
         SortOption("total_debit", "Amount"),
     ],
@@ -420,7 +420,7 @@ RECEIPTS = ListSchema(
                     record_attr="total_debit"),
     ],
     sort_options=[
-        SortOption("voucher_date", "Date (newest)"),
+        SortOption("voucher_date", "Date"),
         SortOption("total_debit", "Amount"),
     ],
     default_sort="voucher_date",
@@ -444,7 +444,7 @@ PAYMENTS = ListSchema(
                     record_attr="total_debit"),
     ],
     sort_options=[
-        SortOption("voucher_date", "Date (newest)"),
+        SortOption("voucher_date", "Date"),
         SortOption("total_debit", "Amount"),
     ],
     default_sort="voucher_date",
@@ -465,7 +465,7 @@ ACCOUNTING_INVOICES = ListSchema(
                     record_attr="total_debit"),
     ],
     sort_options=[
-        SortOption("voucher_date", "Date (newest)"),
+        SortOption("voucher_date", "Date"),
         SortOption("total_debit", "Amount"),
     ],
     default_sort="voucher_date",
@@ -492,7 +492,7 @@ STORE_SALES = ListSchema(
                     record_attr="gross"),
     ],
     sort_options=[
-        SortOption("sale_date", "Date (newest)"),
+        SortOption("sale_date", "Date"),
         SortOption("gross", "Gross amount"),
         SortOption("collected", "Collected"),
         SortOption("store_invoice_number", "Store invoice #"),
@@ -514,7 +514,7 @@ JOURNAL = ListSchema(
                     record_attr="total_debit"),
     ],
     sort_options=[
-        SortOption("voucher_date", "Date (newest)"),
+        SortOption("voucher_date", "Date"),
         SortOption("voucher_number", "Voucher number"),
     ],
     default_sort="voucher_date",
@@ -555,7 +555,7 @@ ACTIVITIES = ListSchema(
                     match=_match_activity_time_tracking),
     ],
     sort_options=[
-        SortOption("created_at", "Created (newest)"),
+        SortOption("created_at", "Created"),
         SortOption("activity_name", "Activity name"),
         SortOption("activity_category", "Category"),
     ],
@@ -580,7 +580,7 @@ PROJECT_ACTIVITIES = ListSchema(
                     match=_match_activity_time_tracking),
     ],
     sort_options=[
-        SortOption("created_at", "Created (newest)"),
+        SortOption("created_at", "Created"),
         SortOption("activity_name", "Activity name"),
         SortOption("activity_category", "Category"),
     ],
@@ -599,7 +599,7 @@ SERVICES = ListSchema(
                     match=_match_service_active),
     ],
     sort_options=[
-        SortOption("created_at", "Created (newest)"),
+        SortOption("created_at", "Created"),
         SortOption("service_name", "Service name"),
     ],
     default_sort="created_at",

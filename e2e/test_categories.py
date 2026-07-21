@@ -54,7 +54,7 @@ class TestCategoryListFilterSort:
         create_category(second)
         cp.reload_categories(page, streamlit_server)
         before = cp.category_card_paths(page)
-        cp.sort_by_name(page, "Oldest first")
+        cp.sort_by_name(page, "Ascending")
         after = cp.category_card_paths(page)
         assert before != after or len(before) < 2
 

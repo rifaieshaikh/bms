@@ -46,7 +46,7 @@ class TestCustomerListFilterSort:
         before = cp.customer_card_names(page)
         if len(before) < 2:
             return
-        cp.sort_by_name(page, "Oldest first")
+        cp.sort_by_name(page, "Ascending")
         after = cp.customer_card_names(page)
         assert before != after
 

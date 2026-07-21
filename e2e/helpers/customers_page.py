@@ -94,7 +94,7 @@ def assert_empty_or_zero(page: Page) -> None:
     expect(page.get_by_text("No customers found.")).to_be_visible()
 
 
-def sort_by_name(page: Page, direction: str = "Oldest first") -> None:
+def sort_by_name(page: Page, direction: str = "Ascending") -> None:
     apply_sort(page, "Customer name", direction)
 
 
