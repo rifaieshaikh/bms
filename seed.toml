@@ -13,7 +13,7 @@ PURGE_BUSINESS_DATA = false
 #   "all"              → every vertical; uses [business.multi]
 # Profiles: boutique, pos, pharma, groceries, footwear, fancy, paint,
 #           tiles_granites, hardware, electricals
-SEED_PROFILE = "boutique"
+SEED_PROFILE = "none"
 
 # Counts apply per selected profile (ignored when SEED_PROFILE = none)
 SEED_CUSTOMER_COUNT = 100
