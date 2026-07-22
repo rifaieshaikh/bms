@@ -1,8 +1,8 @@
 import streamlit as st
 
 from vaybooks.bms.domain.inventory.category_tree import build_category_path
-from vaybooks.bms.ui.components.list_view import render_list
-from vaybooks.bms.ui.components.inventory_product_card import inventory_category_card
+from vaybooks.bms.ui.components.common.list_view import render_list
+from vaybooks.bms.ui.components.inventory.inventory_product_card import inventory_category_card
 from vaybooks.bms.ui.dialog_utils import (
     clear_all_dialog_flags,
     make_dismiss_handler,

@@ -3,8 +3,8 @@
 import streamlit as st
 
 from vaybooks.bms.domain.shared.enums import VoucherType
-from vaybooks.bms.ui.components.list_view import render_list
-from vaybooks.bms.ui.components.voucher_card import VoucherEditAction, voucher_cards
+from vaybooks.bms.ui.components.common.list_view import render_list
+from vaybooks.bms.ui.components.common.voucher_card import VoucherEditAction, voucher_cards
 from vaybooks.bms.ui.keyboard.actions import consume_action
 from vaybooks.bms.ui.keyboard.wired import mark_wired
 from vaybooks.bms.ui.list_schemas import PAYMENTS

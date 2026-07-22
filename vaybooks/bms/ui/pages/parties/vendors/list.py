@@ -8,8 +8,8 @@ from vaybooks.bms.domain.shared.exceptions import (
 )
 from vaybooks.bms.domain.shared.india import mask_bank_account
 from vaybooks.bms.ui import navigation
-from vaybooks.bms.ui.components.list_view import render_list
-from vaybooks.bms.ui.components.vendor_form import render_vendor_form
+from vaybooks.bms.ui.components.common.list_view import render_list
+from vaybooks.bms.ui.components.parties.vendor_form import render_vendor_form
 from vaybooks.bms.ui.dialog_utils import (
     clear_all_dialog_flags,
     make_dismiss_handler,
@@ -17,7 +17,7 @@ from vaybooks.bms.ui.dialog_utils import (
 )
 from vaybooks.bms.ui.keyboard.dialog_actions import consume_submit, open_dialog
 from vaybooks.bms.ui.keyboard.wired import mark_wired
-from vaybooks.bms.ui.components.voucher_card import VoucherEditAction, voucher_cards
+from vaybooks.bms.ui.components.common.voucher_card import VoucherEditAction, voucher_cards
 from vaybooks.bms.ui.styles import render_card_grid
 from vaybooks.bms.ui.list_schemas import VENDORS
 

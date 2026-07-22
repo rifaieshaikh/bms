@@ -10,8 +10,8 @@ from vaybooks.bms.infrastructure.pdf.measurement_pdf import (
     generate_measurement_sheet_pdf,
 )
 from vaybooks.bms.ui import navigation
-from vaybooks.bms.ui.components.list_view import render_list
-from vaybooks.bms.ui.components.measurement_form import measurement_form
+from vaybooks.bms.ui.components.common.list_view import render_list
+from vaybooks.bms.ui.components.boutique.measurement_form import measurement_form
 from vaybooks.bms.ui.dialog_utils import make_dismiss_handler
 from vaybooks.bms.ui.list_schemas import MEASUREMENTS
 from vaybooks.bms.ui.session_keys import filters_key

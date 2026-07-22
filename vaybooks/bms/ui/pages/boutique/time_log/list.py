@@ -1,9 +1,9 @@
 import streamlit as st
 
 from vaybooks.bms.ui import filtering as F
-from vaybooks.bms.ui.components.filter_sort_bar import render_filter_sort_bar
-from vaybooks.bms.ui.components.time_entry_card import time_entry_card
-from vaybooks.bms.ui.components.time_entry_dialogs import (
+from vaybooks.bms.ui.components.common.filter_sort_bar import render_filter_sort_bar
+from vaybooks.bms.ui.components.boutique.time_entry_card import time_entry_card
+from vaybooks.bms.ui.components.boutique.time_entry_dialogs import (
     PENDING_EDIT_TIME_ENTRY,
     TIME_PAGE_RECORD_OPEN,
     edit_time_dialog,

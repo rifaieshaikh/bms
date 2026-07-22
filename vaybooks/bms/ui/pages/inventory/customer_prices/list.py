@@ -7,7 +7,7 @@ from datetime import date, datetime
 import pandas as pd
 import streamlit as st
 
-from vaybooks.bms.ui.components.list_view import render_list
+from vaybooks.bms.ui.components.common.list_view import render_list
 from vaybooks.bms.ui.inventory_list_schemas import INVENTORY_CUSTOMER_PRICES
 
 _HISTORY_DIALOG = "customer_price_history_dialog"

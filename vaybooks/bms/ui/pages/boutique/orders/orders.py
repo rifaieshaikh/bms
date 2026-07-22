@@ -12,10 +12,10 @@ from vaybooks.bms.domain.boutique.orders.order_refs import compact_order_ref
 from vaybooks.bms.domain.sales.sales_line_resolver import business_is_registered
 from vaybooks.bms.domain.shared.enums import OrderStatus, VoucherType
 from vaybooks.bms.domain.shared.india import state_name_for_code
-from vaybooks.bms.ui.components.delivery_card import DeliveryEditAction, delivery_cards
-from vaybooks.bms.ui.components.invoice_card import InvoiceEditAction, invoice_cards
-from vaybooks.bms.ui.components.item_detail_panel import customization_item_detail_panel
-from vaybooks.bms.ui.components.voucher_card import VoucherEditAction, voucher_cards
+from vaybooks.bms.ui.components.boutique.delivery_card import DeliveryEditAction, delivery_cards
+from vaybooks.bms.ui.components.boutique.invoice_card import InvoiceEditAction, invoice_cards
+from vaybooks.bms.ui.components.boutique.item_detail_panel import customization_item_detail_panel
+from vaybooks.bms.ui.components.common.voucher_card import VoucherEditAction, voucher_cards
 from vaybooks.bms.ui.dialog_utils import (
     clear_all_dialog_flags,
     dismiss_armed_dialogs,
@@ -264,7 +264,7 @@ def _render_items_tab(services: dict, order, invoices: list, deliveries: list):
 
 
 def _render_order_measurements_tab(services: dict, order) -> None:
-    from vaybooks.bms.ui.components.measurement_form import measurement_form
+    from vaybooks.bms.ui.components.boutique.measurement_form import measurement_form
 
     measurement_service = services["measurements"]
     records = measurement_service.list_by_customer(order.customer_id)

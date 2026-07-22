@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from vaybooks.bms.ui import navigation
-from vaybooks.bms.ui.components.project_card import WORKSPACE_ID
+from vaybooks.bms.ui.components.projects.project_card import WORKSPACE_ID
 from vaybooks.bms.ui.styles import metric_grid
 
 

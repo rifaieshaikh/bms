@@ -30,6 +30,6 @@ def test_vendors_list_route_renders():
 
 
 def test_vendor_form_module_exports_render():
-    from vaybooks.bms.ui.components.vendor_form import render_vendor_form
+    from vaybooks.bms.ui.components.parties.vendor_form import render_vendor_form
 
     assert callable(render_vendor_form)

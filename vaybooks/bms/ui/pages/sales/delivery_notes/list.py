@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import streamlit as st
 
-from vaybooks.bms.ui.components.delivery_note_card import _dn_row, delivery_note_cards
-from vaybooks.bms.ui.components.delivery_note_dialog import arm_dn_dialog, open_dn_dialog_if_armed
-from vaybooks.bms.ui.components.list_view import render_list
+from vaybooks.bms.ui.components.sales.delivery_note_card import _dn_row, delivery_note_cards
+from vaybooks.bms.ui.components.sales.delivery_note_dialog import arm_dn_dialog, open_dn_dialog_if_armed
+from vaybooks.bms.ui.components.common.list_view import render_list
 from vaybooks.bms.ui.sales_list_schemas import DELIVERY_NOTES
 
 

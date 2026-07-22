@@ -3,8 +3,8 @@
 import streamlit as st
 
 from vaybooks.bms.ui import navigation
-from vaybooks.bms.ui.components.list_view import render_list
-from vaybooks.bms.ui.components.order_card import order_cards
+from vaybooks.bms.ui.components.common.list_view import render_list
+from vaybooks.bms.ui.components.boutique.order_card import order_cards
 from vaybooks.bms.ui.list_schemas import ORDERS
 from vaybooks.bms.ui.session_keys import filters_key
 

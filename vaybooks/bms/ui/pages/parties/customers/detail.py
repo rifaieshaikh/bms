@@ -5,7 +5,7 @@ from datetime import date, datetime
 import streamlit as st
 
 from vaybooks.bms.ui import navigation
-from vaybooks.bms.ui.components.order_card import order_cards
+from vaybooks.bms.ui.components.boutique.order_card import order_cards
 from vaybooks.bms.ui.styles import metric_grid, panel, status_badge
 
 RECENT_ORDER_LIMIT = 5

@@ -3,8 +3,8 @@ from dataclasses import asdict
 import streamlit as st
 
 from vaybooks.bms.ui import navigation
-from vaybooks.bms.ui.components.dashboard_cards import order_action_cards
-from vaybooks.bms.ui.components.inventory_product_card import inventory_low_stock_cards
+from vaybooks.bms.ui.components.home.dashboard_cards import order_action_cards
+from vaybooks.bms.ui.components.inventory.inventory_product_card import inventory_low_stock_cards
 from vaybooks.bms.ui.styles import metric_grid
 
 

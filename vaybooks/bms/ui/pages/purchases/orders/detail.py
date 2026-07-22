@@ -6,7 +6,7 @@ import streamlit as st
 
 from vaybooks.bms.domain.shared.enums import PurchaseOrderStatus
 from vaybooks.bms.ui import navigation
-from vaybooks.bms.ui.components.document_detail import (
+from vaybooks.bms.ui.components.common.document_detail import (
     document_actions,
     document_header,
     format_document_date,
@@ -14,8 +14,8 @@ from vaybooks.bms.ui.components.document_detail import (
     line_items_table,
     totals_ladder,
 )
-from vaybooks.bms.ui.components.grn_dialog import arm_grn_dialog, open_grn_dialog_if_armed
-from vaybooks.bms.ui.components.purchase_order_edit_dialog import (
+from vaybooks.bms.ui.components.purchases.grn_dialog import arm_grn_dialog, open_grn_dialog_if_armed
+from vaybooks.bms.ui.components.purchases.purchase_order_edit_dialog import (
     arm_po_edit_dialog,
     open_po_edit_dialog_if_armed,
 )

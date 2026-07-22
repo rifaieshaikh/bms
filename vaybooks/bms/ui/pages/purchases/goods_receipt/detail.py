@@ -5,7 +5,7 @@ from __future__ import annotations
 import streamlit as st
 
 from vaybooks.bms.ui import navigation
-from vaybooks.bms.ui.components.document_detail import (
+from vaybooks.bms.ui.components.common.document_detail import (
     document_header,
     format_document_date,
     format_money,

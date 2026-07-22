@@ -15,7 +15,7 @@ from vaybooks.bms.domain.shared.document_customization import (
     DocumentTemplateSettings,
     PolicySection,
 )
-from vaybooks.bms.ui.components.print_settings import render_print_settings
+from vaybooks.bms.ui.components.settings.print_settings import render_print_settings
 
 _LABELS = {
     "estimate": "Estimate",

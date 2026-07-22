@@ -7,7 +7,7 @@ from datetime import date
 import streamlit as st
 
 from vaybooks.bms.ui import navigation
-from vaybooks.bms.ui.components.project_card import WORKSPACE_ID as PROJECT_WS_ID
+from vaybooks.bms.ui.components.projects.project_card import WORKSPACE_ID as PROJECT_WS_ID
 from vaybooks.bms.ui.dialog_utils import make_dismiss_handler
 from vaybooks.bms.ui.pages.projects.enquiries_list import WORKSPACE_ID
 from vaybooks.bms.ui.styles import panel, status_badge

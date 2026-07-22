@@ -4,7 +4,7 @@ import pandas as pd
 import streamlit as st
 
 from vaybooks.bms.ui import filtering as F
-from vaybooks.bms.ui.components.filter_sort_bar import render_filter_sort_bar
+from vaybooks.bms.ui.components.common.filter_sort_bar import render_filter_sort_bar
 from vaybooks.bms.ui.list_schemas import TRIAL_BALANCE
 from vaybooks.bms.ui.pagination import TRIAL_BALANCE_PAGE_SIZE, paginate_list, \
     render_page_controls

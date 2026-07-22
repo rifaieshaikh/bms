@@ -1,9 +1,9 @@
 import streamlit as st
 
 from vaybooks.bms.ui import navigation
-from vaybooks.bms.ui.components.inventory_product_card import inventory_product_card
-from vaybooks.bms.ui.components.list_view import render_list
-from vaybooks.bms.ui.components.product_form import clear_product_form_state, render_product_form
+from vaybooks.bms.ui.components.inventory.inventory_product_card import inventory_product_card
+from vaybooks.bms.ui.components.common.list_view import render_list
+from vaybooks.bms.ui.components.inventory.product_form import clear_product_form_state, render_product_form
 from vaybooks.bms.ui.dialog_utils import (
     clear_all_dialog_flags,
     make_dismiss_handler,

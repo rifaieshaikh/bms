@@ -4,8 +4,8 @@ import pandas as pd
 import streamlit as st
 
 from vaybooks.bms.ui import filtering as F
-from vaybooks.bms.ui.components.filter_sort_bar import render_filter_sort_bar
-from vaybooks.bms.ui.components.report_filters import (
+from vaybooks.bms.ui.components.common.filter_sort_bar import render_filter_sort_bar
+from vaybooks.bms.ui.components.common.report_filters import (
     build_report_filter,
     report_filter_token,
 )

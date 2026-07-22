@@ -1,6 +1,6 @@
 import streamlit as st
 
-from vaybooks.bms.ui.components.record_movement_dialog import (
+from vaybooks.bms.ui.components.inventory.record_movement_dialog import (
     arm_record_movement_dialog,
     open_record_movement_dialog_if_armed,
 )

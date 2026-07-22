@@ -6,7 +6,7 @@ from vaybooks.bms.domain.projects.activity_catalog import (
     category_metadata,
 )
 from vaybooks.bms.domain.shared.enums import ActivityCategory
-from vaybooks.bms.ui.components.list_view import render_list
+from vaybooks.bms.ui.components.common.list_view import render_list
 from vaybooks.bms.ui.styles import render_card_grid
 from vaybooks.bms.ui.list_schemas import PROJECT_ACTIVITIES
 

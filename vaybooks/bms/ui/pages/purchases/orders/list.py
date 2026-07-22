@@ -6,12 +6,12 @@ import logging
 
 import streamlit as st
 
-from vaybooks.bms.ui.components.list_view import render_list
-from vaybooks.bms.ui.components.purchase_order_card import (
+from vaybooks.bms.ui.components.common.list_view import render_list
+from vaybooks.bms.ui.components.purchases.purchase_order_card import (
     _po_row,
     purchase_order_cards,
 )
-from vaybooks.bms.ui.components.purchase_order_dialog import (
+from vaybooks.bms.ui.components.purchases.purchase_order_dialog import (
     arm_po_dialog,
     consume_po_create_success,
     open_po_dialog_if_armed,

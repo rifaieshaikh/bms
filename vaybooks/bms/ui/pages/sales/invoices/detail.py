@@ -11,7 +11,7 @@ from vaybooks.bms.domain.finance.accounting.sales_parsing import sales_row_from_
 from vaybooks.bms.domain.sales.line_items import parse_sales_document_content
 from vaybooks.bms.domain.sales.invoice_lock import can_edit_invoice
 from vaybooks.bms.infrastructure.pdf.sales_doc_pdf import generate_sales_document_pdf
-from vaybooks.bms.ui.components.document_detail import (
+from vaybooks.bms.ui.components.common.document_detail import (
     document_actions,
     document_header,
     format_document_date,
@@ -19,17 +19,17 @@ from vaybooks.bms.ui.components.document_detail import (
     secondary_sections,
     totals_ladder,
 )
-from vaybooks.bms.ui.components.sales_invoice_edit_dialog import (
+from vaybooks.bms.ui.components.sales.sales_invoice_edit_dialog import (
     arm_invoice_edit_dialog,
     open_invoice_edit_dialog_if_armed,
 )
-from vaybooks.bms.ui.components.sales_invoice_form import (
+from vaybooks.bms.ui.components.sales.sales_invoice_form import (
     line_items_grand_total,
     line_items_tax_total,
     line_items_taxable,
     parse_cash_sales_voucher,
 )
-from vaybooks.bms.ui.components.voucher_card import voucher_receiving_account
+from vaybooks.bms.ui.components.common.voucher_card import voucher_receiving_account
 
 
 def render(services: dict) -> None:

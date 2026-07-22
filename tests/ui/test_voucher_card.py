@@ -2,7 +2,7 @@ from datetime import datetime
 
 from vaybooks.bms.domain.finance.accounting.entities import Voucher, VoucherLine
 from vaybooks.bms.domain.shared.enums import VoucherType
-from vaybooks.bms.ui.components.voucher_card import (
+from vaybooks.bms.ui.components.common.voucher_card import (
     invoice_gross_amount,
     voucher_amount_color,
     voucher_display_amount,

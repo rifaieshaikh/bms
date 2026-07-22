@@ -6,13 +6,13 @@ import streamlit as st
 
 from vaybooks.bms.domain.shared.enums import SalesReturnStatus
 from vaybooks.bms.ui import navigation
-from vaybooks.bms.ui.components.list_view import render_list
-from vaybooks.bms.ui.components.sales_return_card import _return_row, sales_return_cards
-from vaybooks.bms.ui.components.sales_return_dialog import (
+from vaybooks.bms.ui.components.common.list_view import render_list
+from vaybooks.bms.ui.components.sales.sales_return_card import _return_row, sales_return_cards
+from vaybooks.bms.ui.components.sales.sales_return_dialog import (
     arm_sales_return_dialog,
     open_sales_return_dialog_if_armed,
 )
-from vaybooks.bms.ui.components.sales_return_edit_dialog import (
+from vaybooks.bms.ui.components.sales.sales_return_edit_dialog import (
     arm_sales_return_edit_dialog,
     open_sales_return_edit_dialog_if_armed,
 )

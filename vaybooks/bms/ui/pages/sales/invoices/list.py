@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import streamlit as st
 
-from vaybooks.bms.ui.components.list_view import render_list
-from vaybooks.bms.ui.components.sales_card import sales_cards
-from vaybooks.bms.ui.components.sales_invoice_dialog import (
+from vaybooks.bms.ui.components.common.list_view import render_list
+from vaybooks.bms.ui.components.sales.sales_card import sales_cards
+from vaybooks.bms.ui.components.sales.sales_invoice_dialog import (
     arm_sales_record_dialog,
     open_sales_record_dialog_if_armed,
 )

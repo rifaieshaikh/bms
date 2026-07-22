@@ -10,7 +10,7 @@ from vaybooks.bms.domain.shared.enums import (
     ProjectScaleProfile,
 )
 from vaybooks.bms.domain.shared.india import INDIAN_STATES
-from vaybooks.bms.ui.components.project_card import WORKSPACE_ID
+from vaybooks.bms.ui.components.projects.project_card import WORKSPACE_ID
 from vaybooks.bms.ui.dialog_utils import make_dismiss_handler
 from vaybooks.bms.ui import navigation
 

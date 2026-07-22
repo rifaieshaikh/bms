@@ -6,7 +6,7 @@ import streamlit as st
 
 from vaybooks.bms.domain.shared.enums import VoucherType
 from vaybooks.bms.ui import navigation
-from vaybooks.bms.ui.components.document_detail import (
+from vaybooks.bms.ui.components.common.document_detail import (
     document_actions,
     document_header,
     format_document_date,
@@ -14,11 +14,11 @@ from vaybooks.bms.ui.components.document_detail import (
     line_items_table,
     totals_ladder,
 )
-from vaybooks.bms.ui.components.purchase_bill_edit_dialog import (
+from vaybooks.bms.ui.components.purchases.purchase_bill_edit_dialog import (
     arm_purchase_bill_edit_dialog,
     open_purchase_bill_edit_dialog_if_armed,
 )
-from vaybooks.bms.ui.components.purchase_return_dialog import (
+from vaybooks.bms.ui.components.purchases.purchase_return_dialog import (
     arm_return_dialog,
     open_return_dialog_if_armed,
 )

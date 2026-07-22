@@ -261,7 +261,7 @@ def test_product_lines_from_bill_row_skips_services():
 def test_purchase_editor_resolves_sku_name_and_service_aliases():
     from types import SimpleNamespace
 
-    from vaybooks.bms.ui.components.purchase_lines_editor import _item_lookup_maps
+    from vaybooks.bms.ui.components.purchases.purchase_lines_editor import _item_lookup_maps
 
     product = SimpleNamespace(id="p1", sku="SKU-1", name="Cotton")
     service = SimpleNamespace(id="s1", service_name="Stitching")
@@ -274,7 +274,7 @@ def test_purchase_editor_resolves_sku_name_and_service_aliases():
 
 
 def test_new_product_text_prefills_catalog_form():
-    from vaybooks.bms.ui.components.catalog_item_dialog import _product_prefill
+    from vaybooks.bms.ui.components.inventory.catalog_item_dialog import _product_prefill
 
     assert _product_prefill("FAB-10 — Blue Fabric") == ("FAB-10", "Blue Fabric")
     assert _product_prefill("Blue Fabric") == ("BLUE-FABRIC", "Blue Fabric")

@@ -3,7 +3,7 @@ def test_dashboard_open_sets_detail_id():
     def _page():
         from datetime import date
 
-        from vaybooks.bms.ui.components.dashboard_cards import order_action_cards
+        from vaybooks.bms.ui.components.home.dashboard_cards import order_action_cards
 
         order_action_cards(
             "In Progress",

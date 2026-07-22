@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import streamlit as st
 
-from vaybooks.bms.ui.components.list_view import render_list
-from vaybooks.bms.ui.components.purchase_bill_dialog import (
+from vaybooks.bms.ui.components.common.list_view import render_list
+from vaybooks.bms.ui.components.purchases.purchase_bill_dialog import (
     arm_purchase_bill_dialog,
     open_purchase_bill_dialog_if_armed,
 )
-from vaybooks.bms.ui.components.purchase_card import purchase_cards
+from vaybooks.bms.ui.components.purchases.purchase_card import purchase_cards
 from vaybooks.bms.ui.purchase_list_schemas import STORE_PURCHASES
 
 

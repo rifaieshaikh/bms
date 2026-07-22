@@ -8,12 +8,12 @@ from vaybooks.bms.domain.sales.sales_line_resolver import business_is_registered
 from vaybooks.bms.domain.shared.enums import DeliveryNoteStatus
 from vaybooks.bms.infrastructure.pdf.sales_doc_pdf import generate_sales_document_pdf
 from vaybooks.bms.ui import navigation
-from vaybooks.bms.ui.components.delivery_note_edit_dialog import (
+from vaybooks.bms.ui.components.sales.delivery_note_edit_dialog import (
     arm_dn_edit_dialog,
     arm_dn_invoice_dialog,
     open_dn_detail_dialogs_if_armed,
 )
-from vaybooks.bms.ui.components.document_detail import (
+from vaybooks.bms.ui.components.common.document_detail import (
     document_actions,
     document_header,
     format_document_date,
@@ -21,7 +21,7 @@ from vaybooks.bms.ui.components.document_detail import (
     secondary_sections,
     totals_ladder,
 )
-from vaybooks.bms.ui.components.sales_line_ui import (
+from vaybooks.bms.ui.components.sales.sales_line_ui import (
     line_tax_profile,
     preview_sales_line_gst,
     tax_summary_from_previews,

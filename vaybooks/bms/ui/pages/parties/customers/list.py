@@ -6,9 +6,9 @@ from vaybooks.bms.domain.shared.exceptions import (
     ValidationError,
 )
 from vaybooks.bms.ui import navigation
-from vaybooks.bms.ui.components.customer_card import customer_card
-from vaybooks.bms.ui.components.customer_form import render_customer_form
-from vaybooks.bms.ui.components.list_view import render_list
+from vaybooks.bms.ui.components.parties.customer_card import customer_card
+from vaybooks.bms.ui.components.parties.customer_form import render_customer_form
+from vaybooks.bms.ui.components.common.list_view import render_list
 from vaybooks.bms.ui.dialog_utils import (
     clear_all_dialog_flags,
     make_dismiss_handler,

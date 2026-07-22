@@ -1,8 +1,8 @@
 import streamlit as st
 
 from vaybooks.bms.ui import navigation
-from vaybooks.bms.ui.components.inventory_product_card import inventory_product_card
-from vaybooks.bms.ui.components.list_view import render_list
+from vaybooks.bms.ui.components.inventory.inventory_product_card import inventory_product_card
+from vaybooks.bms.ui.components.common.list_view import render_list
 from vaybooks.bms.ui.styles import render_card_grid
 from vaybooks.bms.ui.inventory_list_schemas import INVENTORY_STOCK
 

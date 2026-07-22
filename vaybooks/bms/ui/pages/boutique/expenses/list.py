@@ -3,7 +3,7 @@ from datetime import date
 import streamlit as st
 
 from vaybooks.bms.domain.shared.enums import ExpenseSource
-from vaybooks.bms.ui.components.order_selector import order_selector
+from vaybooks.bms.ui.components.boutique.order_selector import order_selector
 
 
 def render(services: dict):

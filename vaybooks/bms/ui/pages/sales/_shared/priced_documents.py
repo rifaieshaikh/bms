@@ -6,12 +6,12 @@ from vaybooks.bms.domain.sales.sales_line_resolver import business_is_registered
 from vaybooks.bms.domain.shared.enums import QuotationStatus
 from vaybooks.bms.infrastructure.pdf.sales_doc_pdf import generate_sales_document_pdf
 from vaybooks.bms.ui import navigation
-from vaybooks.bms.ui.components.list_view import render_list as render_standard_list
-from vaybooks.bms.ui.components.priced_document_card import (
+from vaybooks.bms.ui.components.common.list_view import render_list as render_standard_list
+from vaybooks.bms.ui.components.sales.priced_document_card import (
     priced_document_cards,
     priced_document_row,
 )
-from vaybooks.bms.ui.components.priced_document_dialog import (
+from vaybooks.bms.ui.components.sales.priced_document_dialog import (
     arm_priced_document_dialog,
     open_priced_document_dialog_if_armed,
 )
@@ -75,7 +75,7 @@ def render_detail(services: dict, document_type: str) -> None:
     from vaybooks.bms.ui.keyboard.context import set_current_page
     from vaybooks.bms.ui.keyboard.wired import mark_wired
 
-    from vaybooks.bms.ui.components.document_detail import (
+    from vaybooks.bms.ui.components.common.document_detail import (
         document_actions,
         document_header,
         format_document_date,

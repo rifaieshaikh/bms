@@ -5,9 +5,9 @@ import streamlit as st
 
 from vaybooks.bms.domain.shared.enums import AccountType, VoucherType
 from vaybooks.bms.ui import navigation
-from vaybooks.bms.ui.components.list_view import render_list
-from vaybooks.bms.ui.components.voucher_card import invoice_gross_amount
-from vaybooks.bms.ui.components.voucher_form import voucher_form
+from vaybooks.bms.ui.components.common.list_view import render_list
+from vaybooks.bms.ui.components.common.voucher_card import invoice_gross_amount
+from vaybooks.bms.ui.components.finance.voucher_form import voucher_form
 from vaybooks.bms.ui.dialog_utils import (
     clear_all_dialog_flags,
     clear_dialog_flags,

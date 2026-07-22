@@ -2,8 +2,8 @@ import streamlit as st
 
 from vaybooks.bms.domain.boutique.orders.order_refs import compact_order_ref
 from vaybooks.bms.ui import navigation
-from vaybooks.bms.ui.components.item_detail_panel import customization_item_detail_panel
-from vaybooks.bms.ui.components.list_view import render_list
+from vaybooks.bms.ui.components.boutique.item_detail_panel import customization_item_detail_panel
+from vaybooks.bms.ui.components.common.list_view import render_list
 from vaybooks.bms.ui.styles import render_card_grid, status_badge
 from vaybooks.bms.ui.list_schemas import ITEMS
 

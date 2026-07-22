@@ -1,7 +1,7 @@
 from datetime import date
 
 from vaybooks.bms.application.report_filters import DateRange, ItemProfitabilityFilter
-from vaybooks.bms.ui.components.report_filters import build_item_profitability_filter
+from vaybooks.bms.ui.components.common.report_filters import build_item_profitability_filter
 from vaybooks.bms.ui import filtering as F
 from vaybooks.bms.ui.report_schemas import (
     ITEM_PROFITABILITY,

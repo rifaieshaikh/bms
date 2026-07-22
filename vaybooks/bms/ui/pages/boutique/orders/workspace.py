@@ -13,10 +13,10 @@ import streamlit as st
 
 from vaybooks.bms.domain.shared.enums import AttachmentCategory, OrderStatus
 from vaybooks.bms.ui import navigation
-from vaybooks.bms.ui.components.customer_identity_selector import (
+from vaybooks.bms.ui.components.common.customer_identity_selector import (
     render_customer_identity_selector,
 )
-from vaybooks.bms.ui.components.measurement_form import measurement_form
+from vaybooks.bms.ui.components.boutique.measurement_form import measurement_form
 from vaybooks.bms.ui.dialog_utils import (
     clear_all_dialog_flags,
     make_dismiss_handler,

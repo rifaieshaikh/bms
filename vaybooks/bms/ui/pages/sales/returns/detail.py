@@ -6,7 +6,7 @@ import streamlit as st
 
 from vaybooks.bms.domain.shared.enums import SalesReturnStatus
 from vaybooks.bms.ui import navigation
-from vaybooks.bms.ui.components.document_detail import (
+from vaybooks.bms.ui.components.common.document_detail import (
     document_actions,
     format_document_date,
     line_items_table,
@@ -14,7 +14,7 @@ from vaybooks.bms.ui.components.document_detail import (
     secondary_sections,
     totals_ladder,
 )
-from vaybooks.bms.ui.components.sales_return_edit_dialog import (
+from vaybooks.bms.ui.components.sales.sales_return_edit_dialog import (
     arm_sales_return_edit_dialog,
     open_sales_return_edit_dialog_if_armed,
 )

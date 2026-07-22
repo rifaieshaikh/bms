@@ -8,7 +8,7 @@ from vaybooks.bms.domain.shared.enums import ProjectEnquiryStatus
 from vaybooks.bms.domain.shared.india import INDIAN_STATES
 from vaybooks.bms.ui import filtering as F
 from vaybooks.bms.ui import navigation
-from vaybooks.bms.ui.components.list_view import render_list
+from vaybooks.bms.ui.components.common.list_view import render_list
 from vaybooks.bms.ui.dialog_utils import make_dismiss_handler
 from vaybooks.bms.ui.filtering import FilterField, ListSchema, SortOption
 from vaybooks.bms.ui.pagination import CARD_PAGE_SIZE

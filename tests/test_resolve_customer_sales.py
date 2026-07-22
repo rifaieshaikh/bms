@@ -2,7 +2,7 @@
 
 from vaybooks.bms.application.parties.customers.service import CustomerAppService
 from vaybooks.bms.domain.parties.customers.entities import Customer
-from vaybooks.bms.ui.components.customer_identity_selector import (
+from vaybooks.bms.ui.components.common.customer_identity_selector import (
     CustomerIdentitySelection,
     resolve_customer_identity,
 )
