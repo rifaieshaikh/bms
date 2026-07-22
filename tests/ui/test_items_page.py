@@ -11,7 +11,7 @@ def test_items_list_route_renders():
     def _page():
         from unittest.mock import MagicMock
 
-        from vaybooks.bms.ui.pages import customization_items
+        from vaybooks.bms.ui.pages.boutique.items import list as customization_items
 
         services = {
             "orders": MagicMock(

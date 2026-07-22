@@ -84,7 +84,7 @@ def _services_dict():
 
 def test_reports_page_renders_category_tabs():
     def _page(services=None):
-        from vaybooks.bms.ui.pages import reports
+        from vaybooks.bms.ui.pages.finance.reports import list as reports
 
         reports.render(services or _services_dict())
 
@@ -101,7 +101,7 @@ def test_reports_page_renders_category_tabs():
 
 def test_reports_page_shows_aggregated_mph_marker():
     def _page(services=None):
-        from vaybooks.bms.ui.pages import reports
+        from vaybooks.bms.ui.pages.finance.reports import list as reports
 
         reports.render(services or _services_dict())
 
@@ -121,7 +121,7 @@ def test_reports_page_shows_aggregated_mph_marker():
 
 def test_reports_page_shows_aggregated_period_summary_for_mtd():
     def _page(services=None):
-        from vaybooks.bms.ui.pages import reports
+        from vaybooks.bms.ui.pages.finance.reports import list as reports
 
         reports.render(services or _services_dict())
 

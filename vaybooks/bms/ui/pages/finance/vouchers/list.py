@@ -6,7 +6,7 @@ from vaybooks.bms.ui.components.list_view import render_list
 from vaybooks.bms.ui.components.voucher_card import voucher_cards
 from vaybooks.bms.ui.dialog_utils import clear_all_dialog_flags
 from vaybooks.bms.ui.list_schemas import VOUCHERS
-from vaybooks.bms.ui.pages import accounts as acc
+from vaybooks.bms.ui.pages.finance.accounts import list as acc
 
 
 def _load(services, filters, sort):

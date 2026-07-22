@@ -3,7 +3,7 @@ def test_customization_orders_list_page_renders():
     def _page():
         from unittest.mock import MagicMock
 
-        from vaybooks.bms.ui.pages import customization_orders_list
+        from vaybooks.bms.ui.pages.boutique.orders import list as customization_orders_list
 
         services = {
             "orders": MagicMock(
@@ -36,7 +36,7 @@ def test_order_detail_route_renders_from_query_id():
 
         from vaybooks.bms.domain.boutique.orders.entities import CustomizationItem, CustomizationOrder
         from vaybooks.bms.domain.shared.enums import OrderStatus
-        from vaybooks.bms.ui.pages import customization_order_detail
+        from vaybooks.bms.ui.pages.boutique.orders import detail as customization_order_detail
 
         order = CustomizationOrder(
             id="ord-test-1",

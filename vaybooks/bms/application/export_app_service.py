@@ -1,2 +1,0 @@
-"""Deprecated import path; use vaybooks.bms.application.finance.export.service."""
-from vaybooks.bms.application.finance.export.service import ExportAppService, default_serializer, _serialize_bson, _serialize_cell  # noqa: F401

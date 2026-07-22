@@ -11,7 +11,7 @@ def test_vendors_list_route_renders():
     def _page():
         from unittest.mock import MagicMock
 
-        from vaybooks.bms.ui.pages import vendors
+        from vaybooks.bms.ui.pages.parties.vendors import list as vendors
 
         services = {
             "vendors": MagicMock(list_all_vendors=MagicMock(return_value=[])),

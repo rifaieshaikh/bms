@@ -8,7 +8,7 @@ from vaybooks.bms.ui.components.voucher_card import VoucherEditAction, voucher_c
 from vaybooks.bms.ui.keyboard.actions import consume_action
 from vaybooks.bms.ui.keyboard.wired import mark_wired
 from vaybooks.bms.ui.list_schemas import PAYMENTS
-from vaybooks.bms.ui.pages import accounts as acc
+from vaybooks.bms.ui.pages.finance.accounts import list as acc
 
 
 def _load_salaries(services, filters, sort):

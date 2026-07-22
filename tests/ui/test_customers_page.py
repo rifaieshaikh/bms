@@ -11,7 +11,7 @@ def test_customers_list_route_renders():
     def _page():
         from unittest.mock import MagicMock
 
-        from vaybooks.bms.ui.pages import customers
+        from vaybooks.bms.ui.pages.parties.customers import list as customers
 
         services = {
             "customers": MagicMock(list_all_customers=MagicMock(return_value=[])),
@@ -38,7 +38,7 @@ def test_customer_detail_route_renders_from_query_id():
         import streamlit as st
 
         from vaybooks.bms.domain.parties.customers.entities import Customer
-        from vaybooks.bms.ui.pages import customer_detail
+        from vaybooks.bms.ui.pages.parties.customers import detail as customer_detail
 
         customer = Customer(
             id="cust-1",

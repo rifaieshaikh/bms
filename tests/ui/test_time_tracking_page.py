@@ -12,7 +12,7 @@ def test_time_tracking_page_renders_with_zero_entries():
             OrderActivity,
         )
         from vaybooks.bms.domain.shared.enums import ActivityType
-        from vaybooks.bms.ui.pages import time_tracking
+        from vaybooks.bms.ui.pages.boutique.time_log import list as time_tracking
         from tests.conftest import FakeOrderRepository, FakeTimeTrackingRepository
 
         order = CustomizationOrder(
@@ -90,7 +90,7 @@ def test_time_tracking_page_renders_with_multiple_entries():
         )
         from vaybooks.bms.domain.shared.enums import ActivityType
         from vaybooks.bms.domain.boutique.time_tracking.entities import TimeEntry
-        from vaybooks.bms.ui.pages import time_tracking
+        from vaybooks.bms.ui.pages.boutique.time_log import list as time_tracking
         from tests.conftest import FakeOrderRepository, FakeTimeTrackingRepository
 
         order = CustomizationOrder(

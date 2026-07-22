@@ -6,7 +6,7 @@ def test_accounts_page_lists_all_accounts():
         from vaybooks.bms.application.finance.accounting.service import AccountingAppService
         from vaybooks.bms.domain.finance.accounting.entities import Account
         from vaybooks.bms.domain.shared.enums import AccountType
-        from vaybooks.bms.ui.pages import accounts
+        from vaybooks.bms.ui.pages.finance.accounts import list as accounts
         from tests.conftest import (
             FakeAccountRepository,
             FakeCounterRepository,
@@ -64,7 +64,7 @@ def test_vouchers_route_shows_voucher():
         from vaybooks.bms.application.finance.accounting.service import AccountingAppService
         from vaybooks.bms.domain.finance.accounting.entities import Voucher, VoucherLine
         from vaybooks.bms.domain.shared.enums import VoucherType
-        from vaybooks.bms.ui.pages.finance import vouchers
+        from vaybooks.bms.ui.pages.finance.vouchers import list as vouchers
         from tests.conftest import (
             FakeAccountRepository,
             FakeCounterRepository,
@@ -116,7 +116,7 @@ def test_trial_balance_route_shows_balance_status():
         from vaybooks.bms.application.finance.accounting.service import AccountingAppService
         from vaybooks.bms.domain.finance.accounting.entities import Account, Voucher, VoucherLine
         from vaybooks.bms.domain.shared.enums import AccountType, VoucherType
-        from vaybooks.bms.ui.pages.finance import trial_balance
+        from vaybooks.bms.ui.pages.finance.trial_balance import list as trial_balance
         from tests.conftest import (
             FakeAccountRepository,
             FakeCounterRepository,
@@ -172,7 +172,7 @@ def test_accounts_page_shows_delete_and_deactivate_for_non_protected_account():
         from vaybooks.bms.application.finance.accounting.service import AccountingAppService
         from vaybooks.bms.domain.finance.accounting.entities import Account
         from vaybooks.bms.domain.shared.enums import AccountType
-        from vaybooks.bms.ui.pages import accounts
+        from vaybooks.bms.ui.pages.finance.accounts import list as accounts
         from tests.conftest import (
             FakeAccountRepository,
             FakeCounterRepository,
@@ -214,7 +214,7 @@ def test_accounts_page_hides_delete_for_protected_store_account():
         from vaybooks.bms.application.finance.accounting.service import AccountingAppService
         from vaybooks.bms.domain.finance.accounting.entities import Account
         from vaybooks.bms.domain.shared.enums import AccountType
-        from vaybooks.bms.ui.pages import accounts
+        from vaybooks.bms.ui.pages.finance.accounts import list as accounts
         from tests.conftest import (
             FakeAccountRepository,
             FakeCounterRepository,
@@ -261,7 +261,7 @@ def test_account_detail_route_renders_ledger_for_account():
         from vaybooks.bms.application.finance.accounting.service import AccountingAppService
         from vaybooks.bms.domain.finance.accounting.entities import Account, Voucher, VoucherLine
         from vaybooks.bms.domain.shared.enums import AccountType, VoucherType
-        from vaybooks.bms.ui.pages import account_detail
+        from vaybooks.bms.ui.pages.finance.accounts import detail as account_detail
         from tests.conftest import (
             FakeAccountRepository,
             FakeCounterRepository,
