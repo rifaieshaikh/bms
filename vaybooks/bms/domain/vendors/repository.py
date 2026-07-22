@@ -1,17 +1,2 @@
-from typing import List, Optional, Protocol
-
-from vaybooks.bms.domain.vendors.entities import Vendor
-
-
-class VendorRepository(Protocol):
-    def save(self, vendor: Vendor) -> Vendor: ...
-
-    def find_by_id(self, vendor_id: str) -> Optional[Vendor]: ...
-
-    def find_by_phone(self, phone: str) -> Optional[Vendor]: ...
-
-    def find_by_gstin(self, gstin: str) -> Optional[Vendor]: ...
-
-    def search(self, query: str) -> List[Vendor]: ...
-
-    def list_all(self) -> List[Vendor]: ...
+"""Deprecated import path; use vaybooks.bms.domain.parties.vendors.repository."""
+from vaybooks.bms.domain.parties.vendors.repository import *  # noqa: F401,F403

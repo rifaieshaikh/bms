@@ -7,13 +7,13 @@ from typing import Dict, List
 
 import pytest
 
-from vaybooks.bms.application.project_app_service import ProjectAppService
-from vaybooks.bms.application.project_offline_app_service import ProjectOfflineAppService
-from vaybooks.bms.application.project_portal_app_service import ProjectPortalAppService
-from vaybooks.bms.application.project_recognition_app_service import (
+from vaybooks.bms.application.projects.core.service import ProjectAppService
+from vaybooks.bms.application.projects.offline.service import ProjectOfflineAppService
+from vaybooks.bms.application.projects.portal.service import ProjectPortalAppService
+from vaybooks.bms.application.projects.recognition.service import (
     ProjectRecognitionAppService,
 )
-from vaybooks.bms.domain.customers.entities import Customer
+from vaybooks.bms.domain.parties.customers.entities import Customer
 from vaybooks.bms.domain.projects.entities import ProjectExpense
 from vaybooks.bms.domain.shared.enums import (
     ProjectExpenseSource,

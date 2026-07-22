@@ -1,17 +1,2 @@
-from typing import List, Optional, Protocol
-
-from vaybooks.bms.domain.customers.entities import Customer
-
-
-class CustomerRepository(Protocol):
-    def save(self, customer: Customer) -> Customer: ...
-
-    def find_by_id(self, customer_id: str) -> Optional[Customer]: ...
-
-    def find_by_phone(self, phone: str) -> Optional[Customer]: ...
-
-    def find_by_gstin(self, gstin: str) -> Optional[Customer]: ...
-
-    def search(self, query: str) -> List[Customer]: ...
-
-    def list_all(self) -> List[Customer]: ...
+"""Deprecated import path; use vaybooks.bms.domain.parties.customers.repository."""
+from vaybooks.bms.domain.parties.customers.repository import *  # noqa: F401,F403

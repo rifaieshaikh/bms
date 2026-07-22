@@ -1,7 +1,2 @@
-"""Customization Item detail route (`?id=<item_id>&order_id=<order_id>`)."""
-
-from vaybooks.bms.ui.pages.customization_items import render_item_detail
-
-
-def render(services: dict):
-    render_item_detail(services)
+"""Deprecated import path; use vaybooks.bms.ui.pages.boutique.items.detail."""
+from vaybooks.bms.ui.pages.boutique.items.detail import *  # noqa: F401,F403

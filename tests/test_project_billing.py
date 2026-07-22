@@ -8,10 +8,10 @@ from uuid import uuid4
 
 import pytest
 
-from vaybooks.bms.application.project_app_service import ProjectAppService
-from vaybooks.bms.application.project_billing_app_service import ProjectBillingAppService
-from vaybooks.bms.application.project_expense_app_service import ProjectExpenseAppService
-from vaybooks.bms.domain.customers.entities import Customer
+from vaybooks.bms.application.projects.core.service import ProjectAppService
+from vaybooks.bms.application.projects.billing.service import ProjectBillingAppService
+from vaybooks.bms.application.projects.expenses.service import ProjectExpenseAppService
+from vaybooks.bms.domain.parties.customers.entities import Customer
 from vaybooks.bms.domain.projects.entities import (
     ProjectActivity,
     ProjectExpense,

@@ -1,7 +1,7 @@
 import streamlit as st
 
-from vaybooks.bms.domain.orders.bill_status import bill_is_delivered
-from vaybooks.bms.domain.orders.entities import CustomizationOrder
+from vaybooks.bms.domain.boutique.orders.bill_status import bill_is_delivered
+from vaybooks.bms.domain.boutique.orders.entities import CustomizationOrder
 
 
 def delivery_form(services: dict, order: CustomizationOrder, deliveries: list):

@@ -1,7 +1,7 @@
 import streamlit as st
 
-from vaybooks.bms.domain.orders.bill_status import bill_is_delivered, bill_is_invoiced
-from vaybooks.bms.domain.orders.entities import BillNumber, CustomizationOrder
+from vaybooks.bms.domain.boutique.orders.bill_status import bill_is_delivered, bill_is_invoiced
+from vaybooks.bms.domain.boutique.orders.entities import BillNumber, CustomizationOrder
 from vaybooks.bms.domain.shared.enums import ExpenseSource
 from vaybooks.bms.ui.components.activity_checklist import activity_checklist
 from vaybooks.bms.ui.components.time_entry_form import time_entry_form

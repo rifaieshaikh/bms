@@ -7,20 +7,20 @@ from datetime import date, datetime, timedelta
 from bson import ObjectId
 from pymongo.database import Database
 
-from vaybooks.bms.application.delivery_app_service import DeliveryAppService
-from vaybooks.bms.application.invoice_app_service import InvoiceAppService
-from vaybooks.bms.application.time_tracking_app_service import TimeTrackingAppService
-from vaybooks.bms.domain.expenses.entities import Expense
-from vaybooks.bms.domain.orders.entities import CustomizationItem, CustomizationOrder, OrderActivity
+from vaybooks.bms.application.boutique.deliveries.service import DeliveryAppService
+from vaybooks.bms.application.boutique.invoices.service import InvoiceAppService
+from vaybooks.bms.application.boutique.time_tracking.service import TimeTrackingAppService
+from vaybooks.bms.domain.boutique.expenses.entities import Expense
+from vaybooks.bms.domain.boutique.orders.entities import CustomizationItem, CustomizationOrder, OrderActivity
 from vaybooks.bms.domain.shared.enums import ActivityStatus, ExpenseSource, OrderStatus
 from vaybooks.bms.domain.shared.exceptions import ValidationError
-from vaybooks.bms.domain.time_tracking.entities import TimeEntry
-from vaybooks.bms.infrastructure.repositories.mongo_counter_repository import MongoCounterRepository
-from vaybooks.bms.infrastructure.repositories.mongo_delivery_repository import MongoDeliveryRepository
-from vaybooks.bms.infrastructure.repositories.mongo_expense_repository import MongoExpenseRepository
-from vaybooks.bms.infrastructure.repositories.mongo_invoice_repository import MongoInvoiceRepository
-from vaybooks.bms.infrastructure.repositories.mongo_order_repository import MongoOrderRepository
-from vaybooks.bms.infrastructure.repositories.mongo_time_tracking_repository import MongoTimeTrackingRepository
+from vaybooks.bms.domain.boutique.time_tracking.entities import TimeEntry
+from vaybooks.bms.infrastructure.repositories.finance.mongo_counter_repository import MongoCounterRepository
+from vaybooks.bms.infrastructure.repositories.boutique.mongo_delivery_repository import MongoDeliveryRepository
+from vaybooks.bms.infrastructure.repositories.boutique.mongo_expense_repository import MongoExpenseRepository
+from vaybooks.bms.infrastructure.repositories.boutique.mongo_invoice_repository import MongoInvoiceRepository
+from vaybooks.bms.infrastructure.repositories.boutique.mongo_order_repository import MongoOrderRepository
+from vaybooks.bms.infrastructure.repositories.boutique.mongo_time_tracking_repository import MongoTimeTrackingRepository
 
 ORDER_ID = "O-1001"
 ORDER_NUMBER = "O-1001"
@@ -63,7 +63,7 @@ QA_PINNED_ORDER_NUMBERS = (
 
 def sort_orders_for_list_view(orders: list[CustomizationOrder]) -> list[CustomizationOrder]:
     """Keep seeded QA fixture orders on the first page of the orders list."""
-    from vaybooks.bms.domain.orders.order_refs import normalize_order_ref
+    from vaybooks.bms.domain.boutique.orders.order_refs import normalize_order_ref
 
     pinned = {normalize_order_ref(number) for number in QA_PINNED_ORDER_NUMBERS}
     pinned_orders: list[CustomizationOrder] = []

@@ -2,7 +2,7 @@ from datetime import date
 
 import pytest
 
-from vaybooks.bms.domain.expenses.services import ExpenseDomainService
+from vaybooks.bms.domain.boutique.expenses.services import ExpenseDomainService
 from vaybooks.bms.domain.shared.enums import ExpenseSource
 from vaybooks.bms.domain.shared.exceptions import ValidationError
 from tests.conftest import FakeExpenseRepository

@@ -2,9 +2,9 @@ from datetime import date
 
 import pytest
 
-from vaybooks.bms.domain.expenses.entities import Expense
-from vaybooks.bms.domain.invoices.services import InvoiceDomainService
-from vaybooks.bms.domain.orders.entities import CustomizationItem, CustomizationOrder
+from vaybooks.bms.domain.boutique.expenses.entities import Expense
+from vaybooks.bms.domain.boutique.invoices.services import InvoiceDomainService
+from vaybooks.bms.domain.boutique.orders.entities import CustomizationItem, CustomizationOrder
 from vaybooks.bms.domain.shared.enums import ExpenseSource
 from vaybooks.bms.domain.shared.exceptions import ValidationError
 from tests.conftest import FakeInvoiceRepository

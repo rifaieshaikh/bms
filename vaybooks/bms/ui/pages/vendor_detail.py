@@ -1,7 +1,2 @@
-"""Vendor detail route (`?id=<vendor_id>`)."""
-
-from vaybooks.bms.ui.pages.vendors import render_vendor_detail
-
-
-def render(services: dict):
-    render_vendor_detail(services)
+"""Deprecated import path; use vaybooks.bms.ui.pages.parties.vendors.detail."""
+from vaybooks.bms.ui.pages.parties.vendors.detail import *  # noqa: F401,F403

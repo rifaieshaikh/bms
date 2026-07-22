@@ -1,7 +1,2 @@
-"""Measurement detail route."""
-
-from vaybooks.bms.ui.pages.measurements import render_measurement_detail
-
-
-def render(services: dict) -> None:
-    render_measurement_detail(services)
+"""Deprecated import path; use vaybooks.bms.ui.pages.boutique.measurements.detail."""
+from vaybooks.bms.ui.pages.boutique.measurements.detail import *  # noqa: F401,F403

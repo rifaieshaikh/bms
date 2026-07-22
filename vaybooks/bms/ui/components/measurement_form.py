@@ -7,7 +7,7 @@ from typing import Optional
 
 import streamlit as st
 
-from vaybooks.bms.domain.measurements.entities import MeasurementRecord
+from vaybooks.bms.domain.boutique.measurements.entities import MeasurementRecord
 from vaybooks.bms.domain.shared.enums import (
     FitPreference,
     MeasurementFieldType,

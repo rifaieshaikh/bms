@@ -1,7 +1,7 @@
 from datetime import date
 from unittest.mock import MagicMock
 
-from vaybooks.bms.application.report_app_service import ReportAppService
+from vaybooks.bms.application.finance.reports.service import ReportAppService
 from vaybooks.bms.application.report_filters import (
     DateRange,
     ItemProfitabilityFilter,
@@ -10,11 +10,11 @@ from vaybooks.bms.application.report_filters import (
     TopCustomersFilter,
     WorkerProductivityFilter,
 )
-from vaybooks.bms.application.reports.business_insights_report_service import (
+from vaybooks.bms.application.finance.reports.services.business_insights_report_service import (
     BusinessInsightsReportService,
 )
-from vaybooks.bms.application.reports.labor_report_service import LaborReportService
-from vaybooks.bms.application.reports.operations_report_service import (
+from vaybooks.bms.application.finance.reports.services.labor_report_service import LaborReportService
+from vaybooks.bms.application.finance.reports.services.operations_report_service import (
     OperationsReportService,
 )
 

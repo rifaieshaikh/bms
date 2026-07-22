@@ -2,10 +2,10 @@ from datetime import date
 
 import pytest
 
-from vaybooks.bms.application.expense_app_service import ExpenseAppService
-from vaybooks.bms.application.invoice_app_service import InvoiceAppService
-from vaybooks.bms.domain.deliveries.entities import Delivery
-from vaybooks.bms.domain.orders.entities import CustomizationItem, CustomizationOrder, OrderActivity
+from vaybooks.bms.application.boutique.expenses.service import ExpenseAppService
+from vaybooks.bms.application.boutique.invoices.service import InvoiceAppService
+from vaybooks.bms.domain.boutique.deliveries.entities import Delivery
+from vaybooks.bms.domain.boutique.orders.entities import CustomizationItem, CustomizationOrder, OrderActivity
 from vaybooks.bms.domain.shared.enums import ActivityStatus, ExpenseSource, OrderStatus
 from vaybooks.bms.domain.shared.exceptions import ValidationError
 from tests.conftest import (

@@ -1,7 +1,7 @@
 import streamlit as st
 
-from vaybooks.bms.application.customer_app_service import CustomerAppService
-from vaybooks.bms.domain.customers.entities import CustomerInput
+from vaybooks.bms.application.parties.customers.service import CustomerAppService
+from vaybooks.bms.domain.parties.customers.entities import CustomerInput
 
 
 def customer_selector(services: dict, key_prefix: str = "cust"):

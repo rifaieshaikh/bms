@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import os
 
-from vaybooks.bms.domain.customers.entities import CustomerInput
+from vaybooks.bms.domain.parties.customers.entities import CustomerInput
 from vaybooks.bms.domain.shared.enums import PartyRegistrationType
-from vaybooks.bms.domain.vendors.entities import VendorInput
+from vaybooks.bms.domain.parties.vendors.entities import VendorInput
 from vaybooks.bms.infrastructure.db.connection import get_database_from_uri
 from vaybooks.bms.infrastructure.db.indexes import ensure_indexes
 
@@ -27,15 +27,15 @@ def _db():
 
 
 def seed_database() -> None:
-    from vaybooks.bms.application.customer_app_service import CustomerAppService
-    from vaybooks.bms.application.vendor_app_service import VendorAppService
-    from vaybooks.bms.infrastructure.repositories.mongo_accounting_repository import (
+    from vaybooks.bms.application.parties.customers.service import CustomerAppService
+    from vaybooks.bms.application.parties.vendors.service import VendorAppService
+    from vaybooks.bms.infrastructure.repositories.finance.mongo_accounting_repository import (
         MongoAccountRepository,
     )
-    from vaybooks.bms.infrastructure.repositories.mongo_customer_repository import (
+    from vaybooks.bms.infrastructure.repositories.parties.mongo_customer_repository import (
         MongoCustomerRepository,
     )
-    from vaybooks.bms.infrastructure.repositories.mongo_vendor_repository import (
+    from vaybooks.bms.infrastructure.repositories.parties.mongo_vendor_repository import (
         MongoVendorRepository,
     )
 

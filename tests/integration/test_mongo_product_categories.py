@@ -10,7 +10,7 @@ import pytest
 
 from vaybooks.bms.domain.inventory.entities import ProductCategory
 from vaybooks.bms.infrastructure.db.connection import get_database_from_uri
-from vaybooks.bms.infrastructure.repositories.mongo_inventory_repository import (
+from vaybooks.bms.infrastructure.repositories.inventory.mongo_inventory_repository import (
     MongoProductCategoryRepository,
 )
 

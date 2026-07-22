@@ -15,7 +15,7 @@ from typing import Callable, Dict, Optional, Tuple
 
 from pymongo.database import Database
 
-from vaybooks.bms.application.export_app_service import ExportAppService
+from vaybooks.bms.application.finance.export.service import ExportAppService
 from vaybooks.bms.domain.shared.enums import OrderStatus
 from vaybooks.bms.infrastructure.db.connection import get_database_from_uri
 from vaybooks.bms.infrastructure.db.qa_fixtures import (
@@ -37,7 +37,7 @@ from vaybooks.bms.infrastructure.db.qa_fixtures import (
     ensure_o1004_failed_invoice_attempt,
     ensure_zb010_frozen_mph,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_report_repository import MongoReportRepository
+from vaybooks.bms.infrastructure.repositories.finance.mongo_report_repository import MongoReportRepository
 
 RunnerResult = Tuple[bool, str]
 RunnerFn = Callable[[Database, Optional[str]], RunnerResult]

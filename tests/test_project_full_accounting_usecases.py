@@ -9,30 +9,30 @@ import pytest
 
 from tests.conftest import FakeCounterRepository, FakeCustomerRepository
 from tests.test_projects_module import FakeProjectRepository
-from vaybooks.bms.application.project_boq_app_service import ProjectBoqAppService
-from vaybooks.bms.application.project_budget_app_service import ProjectBudgetAppService
-from vaybooks.bms.application.project_dpr_app_service import ProjectDprAppService
-from vaybooks.bms.application.project_enquiry_app_service import ProjectEnquiryAppService
-from vaybooks.bms.application.project_app_service import ProjectAppService
-from vaybooks.bms.application.project_petty_cash_app_service import (
+from vaybooks.bms.application.projects.boq.service import ProjectBoqAppService
+from vaybooks.bms.application.projects.budget.service import ProjectBudgetAppService
+from vaybooks.bms.application.projects.dpr.service import ProjectDprAppService
+from vaybooks.bms.application.projects.enquiries.service import ProjectEnquiryAppService
+from vaybooks.bms.application.projects.core.service import ProjectAppService
+from vaybooks.bms.application.projects.petty_cash.service import (
     ProjectPettyCashAppService,
 )
-from vaybooks.bms.application.project_procurement_app_service import (
+from vaybooks.bms.application.projects.procurement.service import (
     ProjectProcurementAppService,
 )
-from vaybooks.bms.application.project_quality_config_app_service import (
+from vaybooks.bms.application.projects.quality.service import (
     ProjectQualityConfigAppService,
 )
-from vaybooks.bms.application.project_quotation_app_service import (
+from vaybooks.bms.application.projects.quotations.service import (
     ProjectQuotationAppService,
 )
-from vaybooks.bms.application.project_recognition_app_service import (
+from vaybooks.bms.application.projects.recognition.service import (
     ProjectRecognitionAppService,
 )
-from vaybooks.bms.application.project_subcontract_app_service import (
+from vaybooks.bms.application.projects.subcontract.service import (
     ProjectSubcontractAppService,
 )
-from vaybooks.bms.domain.customers.entities import Customer
+from vaybooks.bms.domain.parties.customers.entities import Customer
 from vaybooks.bms.domain.projects.boq import ProjectBoqItem
 from vaybooks.bms.domain.projects.budget import (
     ProjectBudgetHeader,

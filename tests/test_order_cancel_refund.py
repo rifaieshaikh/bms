@@ -4,9 +4,9 @@ from datetime import date
 
 import pytest
 
-from vaybooks.bms.application.accounting_app_service import AccountingAppService
-from vaybooks.bms.application.order_app_service import OrderAppService
-from vaybooks.bms.domain.orders.entities import CustomizationOrder
+from vaybooks.bms.application.finance.accounting.service import AccountingAppService
+from vaybooks.bms.application.boutique.orders.service import OrderAppService
+from vaybooks.bms.domain.boutique.orders.entities import CustomizationOrder
 from vaybooks.bms.domain.shared.enums import OrderStatus, VoucherType
 from vaybooks.bms.domain.shared.exceptions import ValidationError
 from tests.conftest import (

@@ -2,13 +2,13 @@
 
 from datetime import date
 
-from vaybooks.bms.application.inventory_app_service import InventoryAppService
+from vaybooks.bms.application.inventory.service import InventoryAppService
 from vaybooks.bms.application.report_filters import (
     DateRange,
     LowStockFilter,
     StockOnHandFilter,
 )
-from vaybooks.bms.application.reports.inventory_report_service import (
+from vaybooks.bms.application.finance.reports.services.inventory_report_service import (
     InventoryReportService,
 )
 from vaybooks.bms.domain.shared.enums import StockMovementType

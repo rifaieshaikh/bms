@@ -8,11 +8,11 @@ from uuid import uuid4
 
 import pytest
 
-from vaybooks.bms.application.project_app_service import ProjectAppService
-from vaybooks.bms.application.project_procurement_app_service import (
+from vaybooks.bms.application.projects.core.service import ProjectAppService
+from vaybooks.bms.application.projects.procurement.service import (
     ProjectProcurementAppService,
 )
-from vaybooks.bms.domain.customers.entities import Customer
+from vaybooks.bms.domain.parties.customers.entities import Customer
 from vaybooks.bms.domain.purchases.entities import PurchaseOrder, PurchaseOrderLine
 from vaybooks.bms.domain.shared.enums import (
     ProjectMaterialOwnership,

@@ -13,7 +13,7 @@ from vaybooks.bms.domain.projects.entities import (
     ProjectTemplatePhase,
 )
 from vaybooks.bms.domain.shared.enums import PlaceOfSupplyMode, ProjectBillingMode
-from vaybooks.bms.infrastructure.repositories.mongo_project_template_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_project_template_repository import (
     MongoProjectTemplateRepository,
 )
 

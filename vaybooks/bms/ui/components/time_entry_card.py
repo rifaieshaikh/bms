@@ -1,7 +1,7 @@
 import streamlit as st
 
 from vaybooks.bms.domain.shared.date_utils import minutes_to_hours
-from vaybooks.bms.domain.time_tracking.entities import TimeEntry
+from vaybooks.bms.domain.boutique.time_tracking.entities import TimeEntry
 from vaybooks.bms.ui.styles import status_badge
 
 

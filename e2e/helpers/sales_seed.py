@@ -8,38 +8,38 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-from vaybooks.bms.application.accounting_app_service import AccountingAppService
-from vaybooks.bms.application.customer_app_service import CustomerAppService
-from vaybooks.bms.application.inventory_app_service import InventoryAppService
-from vaybooks.bms.application.sales_app_service import SalesAppService
-from vaybooks.bms.domain.customers.entities import CustomerInput
+from vaybooks.bms.application.finance.accounting.service import AccountingAppService
+from vaybooks.bms.application.parties.customers.service import CustomerAppService
+from vaybooks.bms.application.inventory.service import InventoryAppService
+from vaybooks.bms.application.sales.service import SalesAppService
+from vaybooks.bms.domain.parties.customers.entities import CustomerInput
 from vaybooks.bms.domain.shared.enums import AccountType, VoucherType
 from vaybooks.bms.domain.inventory.rate_history_service import ProductRateHistoryService
 from vaybooks.bms.infrastructure.db.connection import get_database_from_uri
-from vaybooks.bms.infrastructure.repositories.mongo_accounting_repository import (
+from vaybooks.bms.infrastructure.repositories.finance.mongo_accounting_repository import (
     MongoAccountRepository,
     MongoVoucherRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_counter_repository import (
+from vaybooks.bms.infrastructure.repositories.finance.mongo_counter_repository import (
     MongoCounterRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_customer_price_repository import (
+from vaybooks.bms.infrastructure.repositories.sales.mongo_customer_price_repository import (
     MongoCustomerPriceRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_customer_repository import (
+from vaybooks.bms.infrastructure.repositories.parties.mongo_customer_repository import (
     MongoCustomerRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_inventory_repository import (
+from vaybooks.bms.infrastructure.repositories.inventory.mongo_inventory_repository import (
     MongoInventoryProductRepository,
     MongoProductCategoryRepository,
     MongoProductFieldDefinitionRepository,
     MongoProductUnitRepository,
     MongoStockMovementRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_product_rate_history_repository import (
+from vaybooks.bms.infrastructure.repositories.inventory.mongo_product_rate_history_repository import (
     MongoProductRateHistoryRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_sales_repository import (
+from vaybooks.bms.infrastructure.repositories.sales.mongo_sales_repository import (
     MongoDeliveryNoteRepository,
     MongoEstimateRepository,
     MongoQuotationRepository,

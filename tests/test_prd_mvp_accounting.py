@@ -12,16 +12,16 @@ from tests.conftest import FakeCounterRepository, FakeCustomerRepository
 from tests.test_project_billing import FakeRARepository, FakeWorkOrderRepository
 from tests.test_project_quotations import FakeProjectQuotationRepository
 from tests.test_projects_module import FakeProjectRepository, FakeProjectTemplateRepository
-from vaybooks.bms.application.project_app_service import ProjectAppService
-from vaybooks.bms.application.project_billing_app_service import ProjectBillingAppService
-from vaybooks.bms.application.project_boq_app_service import ProjectBoqAppService
-from vaybooks.bms.application.project_budget_app_service import ProjectBudgetAppService
-from vaybooks.bms.application.project_measurement_app_service import (
+from vaybooks.bms.application.projects.core.service import ProjectAppService
+from vaybooks.bms.application.projects.billing.service import ProjectBillingAppService
+from vaybooks.bms.application.projects.boq.service import ProjectBoqAppService
+from vaybooks.bms.application.projects.budget.service import ProjectBudgetAppService
+from vaybooks.bms.application.projects.measurements.service import (
     ProjectMeasurementAppService,
 )
-from vaybooks.bms.application.project_quotation_app_service import ProjectQuotationAppService
-from vaybooks.bms.domain.accounting.entities import Voucher, VoucherLine
-from vaybooks.bms.domain.customers.entities import Customer
+from vaybooks.bms.application.projects.quotations.service import ProjectQuotationAppService
+from vaybooks.bms.domain.finance.accounting.entities import Voucher, VoucherLine
+from vaybooks.bms.domain.parties.customers.entities import Customer
 from vaybooks.bms.domain.projects.boq import ProjectBoqItem
 from vaybooks.bms.domain.projects.budget import ProjectBudgetLine, ProjectBudgetRevision
 from vaybooks.bms.domain.projects.entities import (

@@ -4,9 +4,9 @@ def test_time_tracking_page_renders_with_zero_entries():
         from datetime import date
         from unittest.mock import MagicMock
 
-        from vaybooks.bms.application.time_tracking_app_service import TimeTrackingAppService
-        from vaybooks.bms.domain.activities.entities import ActivityConfig
-        from vaybooks.bms.domain.orders.entities import (
+        from vaybooks.bms.application.boutique.time_tracking.service import TimeTrackingAppService
+        from vaybooks.bms.domain.boutique.activities.entities import ActivityConfig
+        from vaybooks.bms.domain.boutique.orders.entities import (
             CustomizationItem,
             CustomizationOrder,
             OrderActivity,
@@ -81,15 +81,15 @@ def test_time_tracking_page_renders_with_multiple_entries():
         from datetime import date
         from unittest.mock import MagicMock
 
-        from vaybooks.bms.application.time_tracking_app_service import TimeTrackingAppService
-        from vaybooks.bms.domain.activities.entities import ActivityConfig
-        from vaybooks.bms.domain.orders.entities import (
+        from vaybooks.bms.application.boutique.time_tracking.service import TimeTrackingAppService
+        from vaybooks.bms.domain.boutique.activities.entities import ActivityConfig
+        from vaybooks.bms.domain.boutique.orders.entities import (
             CustomizationItem,
             CustomizationOrder,
             OrderActivity,
         )
         from vaybooks.bms.domain.shared.enums import ActivityType
-        from vaybooks.bms.domain.time_tracking.entities import TimeEntry
+        from vaybooks.bms.domain.boutique.time_tracking.entities import TimeEntry
         from vaybooks.bms.ui.pages import time_tracking
         from tests.conftest import FakeOrderRepository, FakeTimeTrackingRepository
 

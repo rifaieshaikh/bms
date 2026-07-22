@@ -1,12 +1,12 @@
 from typing import List, Optional
 
-from vaybooks.bms.domain.deliveries.entities import Delivery
-from vaybooks.bms.domain.invoices.entities import Invoice
-from vaybooks.bms.domain.orders.bill_status import (
+from vaybooks.bms.domain.boutique.deliveries.entities import Delivery
+from vaybooks.bms.domain.boutique.invoices.entities import Invoice
+from vaybooks.bms.domain.boutique.orders.bill_status import (
     delivered_bill_ids,
     invoiced_bill_ids,
 )
-from vaybooks.bms.domain.orders.entities import CustomizationOrder
+from vaybooks.bms.domain.boutique.orders.entities import CustomizationOrder
 from vaybooks.bms.domain.shared.enums import OrderStatus
 
 

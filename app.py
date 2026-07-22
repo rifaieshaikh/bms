@@ -6,72 +6,63 @@ from vaybooks.bms.infrastructure.logging.setup import setup_logging
 from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.bootstrap import get_services
 from vaybooks.bms.ui.styles import inject_global_css
-from vaybooks.bms.ui.pages import (
-    accounts,
-    customers,
-    vendors,
-    vendor_services,
-    dashboard,
-    export_backup,
-    reports,
-)
-from vaybooks.bms.ui.pages import (
-    activities,
-    customization_items,
-    customization_orders,
-    project_activities as project_activities_mod,
-)
-from vaybooks.bms.ui.pages import customization_orders_list, customization_order_detail
-from vaybooks.bms.ui.pages import customization_item_detail, customer_detail, vendor_detail
-from vaybooks.bms.ui.pages import account_detail
-from vaybooks.bms.ui.pages import mtd_dashboard, sales_detail, time_tracking
-from vaybooks.bms.ui.pages import (
-    measurement_detail,
-    measurement_specs,
-    measurements,
-    order_workspace,
-)
-from vaybooks.bms.ui.pages.sales import (
-    delivery_note_detail as sales_delivery_note_detail_mod,
-    delivery_notes as sales_delivery_notes_mod,
-    estimate_detail as sales_estimate_detail_mod,
-    estimates as sales_estimates_mod,
-    invoices as sales_invoices_mod,
-    quotation_detail as sales_quotation_detail_mod,
-    quotations as sales_quotations_mod,
-    return_detail as sales_return_detail_mod,
-    returns as sales_returns_mod,
-    sales_order_detail as sales_order_detail_mod,
-    sales_orders as sales_orders_mod,
-)
-from vaybooks.bms.ui.pages.inventory import (
-    categories as inventory_categories,
-    customer_prices as inventory_customer_prices,
-    movements as inventory_movements,
-    product_detail as inventory_product_detail,
-    products as inventory_products,
-    stock_ledger as inventory_stock_ledger,
-    stock_on_hand as inventory_stock_on_hand,
-)
-from vaybooks.bms.ui.pages.purchases import (
-    bills as purchase_bills_mod,
-    goods_receipt as purchase_goods_receipt_mod,
-    grn_detail as purchase_grn_detail_mod,
-    purchase_detail as purchase_bill_detail_mod,
-    purchase_order_detail as purchase_order_detail_mod,
-    purchase_orders as purchase_orders_mod,
-    return_detail as purchase_return_detail_mod,
-    returns as purchase_returns_mod,
-)
-from vaybooks.bms.ui.pages import workers
-from vaybooks.bms.ui.pages import (
-    system_settings,
-    system_logs,
-    system_updates,
-    business_settings,
-    print_settings,
-    keyboard_shortcuts,
-)
+from vaybooks.bms.ui.pages.finance.accounts import list as accounts
+from vaybooks.bms.ui.pages.settings.services import list as vendor_services
+from vaybooks.bms.ui.pages.home.dashboard import list as dashboard
+from vaybooks.bms.ui.pages.finance.export_backup import list as export_backup
+from vaybooks.bms.ui.pages.finance.reports import list as reports
+from vaybooks.bms.ui.pages.parties.customers import list as customers
+from vaybooks.bms.ui.pages.parties.customers import detail as customer_detail
+from vaybooks.bms.ui.pages.parties.vendors import list as vendors
+from vaybooks.bms.ui.pages.parties.vendors import detail as vendor_detail
+from vaybooks.bms.ui.pages.parties.workers import list as workers
+from vaybooks.bms.ui.pages.settings.customization_activities import list as activities
+from vaybooks.bms.ui.pages.settings.project_activities import list as project_activities_mod
+from vaybooks.bms.ui.pages.boutique.orders import list as customization_orders_list
+from vaybooks.bms.ui.pages.boutique.orders import detail as customization_order_detail
+from vaybooks.bms.ui.pages.boutique.orders import orders as customization_orders
+from vaybooks.bms.ui.pages.boutique.orders import workspace as order_workspace
+from vaybooks.bms.ui.pages.boutique.items import list as customization_items
+from vaybooks.bms.ui.pages.boutique.items import detail as customization_item_detail
+from vaybooks.bms.ui.pages.boutique.measurements import list as measurements
+from vaybooks.bms.ui.pages.boutique.measurements import detail as measurement_detail
+from vaybooks.bms.ui.pages.boutique.time_log import list as time_tracking
+from vaybooks.bms.ui.pages.finance.accounts import detail as account_detail
+from vaybooks.bms.ui.pages.home.period_dashboard import list as mtd_dashboard
+from vaybooks.bms.ui.pages.sales.invoices import detail as sales_detail
+from vaybooks.bms.ui.pages.settings.measurement_specs import list as measurement_specs
+from vaybooks.bms.ui.pages.sales.delivery_notes import detail as sales_delivery_note_detail_mod
+from vaybooks.bms.ui.pages.sales.delivery_notes import list as sales_delivery_notes_mod
+from vaybooks.bms.ui.pages.sales.estimates import detail as sales_estimate_detail_mod
+from vaybooks.bms.ui.pages.sales.estimates import list as sales_estimates_mod
+from vaybooks.bms.ui.pages.sales.invoices import list as sales_invoices_mod
+from vaybooks.bms.ui.pages.sales.quotations import detail as sales_quotation_detail_mod
+from vaybooks.bms.ui.pages.sales.quotations import list as sales_quotations_mod
+from vaybooks.bms.ui.pages.sales.returns import detail as sales_return_detail_mod
+from vaybooks.bms.ui.pages.sales.returns import list as sales_returns_mod
+from vaybooks.bms.ui.pages.sales.orders import detail as sales_order_detail_mod
+from vaybooks.bms.ui.pages.sales.orders import list as sales_orders_mod
+from vaybooks.bms.ui.pages.inventory.categories import list as inventory_categories
+from vaybooks.bms.ui.pages.inventory.customer_prices import list as inventory_customer_prices
+from vaybooks.bms.ui.pages.inventory.movements import list as inventory_movements
+from vaybooks.bms.ui.pages.inventory.products import detail as inventory_product_detail
+from vaybooks.bms.ui.pages.inventory.products import list as inventory_products
+from vaybooks.bms.ui.pages.inventory.stock_ledger import list as inventory_stock_ledger
+from vaybooks.bms.ui.pages.inventory.stock_on_hand import list as inventory_stock_on_hand
+from vaybooks.bms.ui.pages.purchases.bills import list as purchase_bills_mod
+from vaybooks.bms.ui.pages.purchases.goods_receipt import list as purchase_goods_receipt_mod
+from vaybooks.bms.ui.pages.purchases.goods_receipt import detail as purchase_grn_detail_mod
+from vaybooks.bms.ui.pages.purchases.bills import detail as purchase_bill_detail_mod
+from vaybooks.bms.ui.pages.purchases.orders import detail as purchase_order_detail_mod
+from vaybooks.bms.ui.pages.purchases.orders import list as purchase_orders_mod
+from vaybooks.bms.ui.pages.purchases.returns import detail as purchase_return_detail_mod
+from vaybooks.bms.ui.pages.purchases.returns import list as purchase_returns_mod
+from vaybooks.bms.ui.pages.system.settings import list as system_settings
+from vaybooks.bms.ui.pages.system.logs import list as system_logs
+from vaybooks.bms.ui.pages.system.updates import list as system_updates
+from vaybooks.bms.ui.pages.settings.business import list as business_settings
+from vaybooks.bms.ui.pages.settings.print import list as print_settings
+from vaybooks.bms.ui.pages.settings.keyboard import list as keyboard_shortcuts
 from vaybooks.bms.ui.pages.migration import (
     categories as migration_categories,
     customers as migration_customers,
@@ -80,14 +71,12 @@ from vaybooks.bms.ui.pages.migration import (
 )
 from vaybooks.bms.ui.keyboard.resolve import resolve_pressed_shortcuts
 from vaybooks.bms.ui.keyboard.defaults import ensure_defaults_loaded
-from vaybooks.bms.ui.pages.finance import (
-    accounting_invoices,
-    journal as finance_journal,
-    payments as finance_payments,
-    receipts as finance_receipts,
-    trial_balance,
-    vouchers as finance_vouchers,
-)
+from vaybooks.bms.ui.pages.finance.accounting_invoices import list as accounting_invoices
+from vaybooks.bms.ui.pages.finance.journal import list as finance_journal
+from vaybooks.bms.ui.pages.finance.payments import list as finance_payments
+from vaybooks.bms.ui.pages.finance.receipts import list as finance_receipts
+from vaybooks.bms.ui.pages.finance.trial_balance import list as trial_balance
+from vaybooks.bms.ui.pages.finance.vouchers import list as finance_vouchers
 from vaybooks.bms.ui.pages.projects import (
     dashboard as projects_dashboard_mod,
     enquiries_list as project_enquiries_list_mod,

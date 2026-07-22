@@ -1,6 +1,6 @@
 import streamlit as st
 
-from vaybooks.bms.domain.orders.entities import CustomizationOrder
+from vaybooks.bms.domain.boutique.orders.entities import CustomizationOrder
 
 
 def bill_selector(order: CustomizationOrder, key: str = "bill_sel"):

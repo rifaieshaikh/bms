@@ -8,7 +8,7 @@ from pymongo.database import Database
 def up(db: Database) -> None:
     from vaybooks.bms.domain.projects.activity_catalog import ProjectActivityConfig
     from vaybooks.bms.domain.shared.enums import ActivityCategory
-    from vaybooks.bms.infrastructure.repositories.mongo_project_activity_config_repository import (
+    from vaybooks.bms.infrastructure.repositories.projects.mongo_project_activity_config_repository import (
         MongoProjectActivityConfigRepository,
     )
 

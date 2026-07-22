@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 from bson import ObjectId
 from bson.decimal128 import Decimal128
 
-from vaybooks.bms.application.export_app_service import ExportAppService, _serialize_cell
+from vaybooks.bms.application.finance.export.service import ExportAppService, _serialize_cell
 from vaybooks.bms.domain.shared.enums import OrderStatus
 
 
@@ -69,7 +69,7 @@ def test_serialize_cell_primitives():
 
 
 def test_default_serializer_never_raises_on_scalars():
-    from vaybooks.bms.application.export_app_service import default_serializer
+    from vaybooks.bms.application.finance.export.service import default_serializer
 
     assert default_serializer("hello") == "hello"
     assert default_serializer(99) == 99

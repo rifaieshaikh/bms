@@ -6,12 +6,12 @@ from datetime import date
 
 import pytest
 
-from vaybooks.bms.application.project_app_service import ProjectAppService
-from vaybooks.bms.application.project_dpr_app_service import ProjectDprAppService
-from vaybooks.bms.application.project_quality_config_app_service import (
+from vaybooks.bms.application.projects.core.service import ProjectAppService
+from vaybooks.bms.application.projects.dpr.service import ProjectDprAppService
+from vaybooks.bms.application.projects.quality.service import (
     ProjectQualityConfigAppService,
 )
-from vaybooks.bms.domain.customers.entities import Customer
+from vaybooks.bms.domain.parties.customers.entities import Customer
 from vaybooks.bms.domain.projects.entities import ProjectActivity
 from vaybooks.bms.domain.projects.quality_config import ProjectQualityIssue
 from vaybooks.bms.domain.shared.enums import (

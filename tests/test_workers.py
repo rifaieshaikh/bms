@@ -2,9 +2,9 @@ from datetime import datetime
 
 import pytest
 
-from vaybooks.bms.application.worker_app_service import WorkerAppService
+from vaybooks.bms.application.parties.workers.service import WorkerAppService
 from vaybooks.bms.domain.shared.enums import AccountType
-from vaybooks.bms.domain.workers.entities import Worker
+from vaybooks.bms.domain.parties.workers.entities import Worker
 from tests.conftest import FakeAccountRepository
 
 

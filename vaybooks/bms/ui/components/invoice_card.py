@@ -6,8 +6,8 @@ from typing import Callable, Optional, Sequence
 
 import streamlit as st
 
-from vaybooks.bms.domain.invoices.entities import Invoice
-from vaybooks.bms.domain.orders.entities import CustomizationOrder
+from vaybooks.bms.domain.boutique.invoices.entities import Invoice
+from vaybooks.bms.domain.boutique.orders.entities import CustomizationOrder
 from vaybooks.bms.ui.dialog_utils import clear_all_dialog_flags, register_armed_dialog
 from vaybooks.bms.ui.styles import render_card_grid, status_badge
 

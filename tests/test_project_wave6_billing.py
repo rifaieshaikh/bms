@@ -12,13 +12,13 @@ from tests.conftest import FakeCounterRepository, FakeCustomerRepository
 from tests.test_prd_mvp_accounting import FakeBoqRepository, FakeMeasurementRepository
 from tests.test_project_billing import FakeRARepository, FakeVariationRepository, FakeWorkOrderRepository
 from tests.test_projects_module import FakeProjectRepository, FakeProjectTemplateRepository
-from vaybooks.bms.application.project_app_service import ProjectAppService
-from vaybooks.bms.application.project_billing_app_service import ProjectBillingAppService
-from vaybooks.bms.application.project_boq_app_service import ProjectBoqAppService
-from vaybooks.bms.application.project_measurement_app_service import (
+from vaybooks.bms.application.projects.core.service import ProjectAppService
+from vaybooks.bms.application.projects.billing.service import ProjectBillingAppService
+from vaybooks.bms.application.projects.boq.service import ProjectBoqAppService
+from vaybooks.bms.application.projects.measurements.service import (
     ProjectMeasurementAppService,
 )
-from vaybooks.bms.domain.customers.entities import Customer
+from vaybooks.bms.domain.parties.customers.entities import Customer
 from vaybooks.bms.domain.shared.enums import ProjectVariationStatus
 from vaybooks.bms.domain.shared.exceptions import ValidationError
 

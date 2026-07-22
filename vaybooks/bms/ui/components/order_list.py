@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 
-from vaybooks.bms.domain.orders.entities import CustomizationOrder
+from vaybooks.bms.domain.boutique.orders.entities import CustomizationOrder
 
 
 def order_list_table(orders: list[CustomizationOrder], key_prefix: str = "ord"):

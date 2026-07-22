@@ -1,6 +1,2 @@
-"""Cancellation charge line item for cancelled customization orders."""
-
-from __future__ import annotations
-
-CANCELLATION_CHARGE_DESCRIPTION = "Cancellation charge"
-CANCELLATION_CHARGE_BILL_SUFFIX = "CANC"
+"""Deprecated import path; use vaybooks.bms.domain.boutique.orders.cancellation."""
+from vaybooks.bms.domain.boutique.orders.cancellation import *  # noqa: F401,F403

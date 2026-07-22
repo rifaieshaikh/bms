@@ -1,7 +1,2 @@
-"""Account detail route (`?id=<account_id>`): per-account ledger."""
-
-from vaybooks.bms.ui.pages.accounts import render_account_detail
-
-
-def render(services: dict):
-    render_account_detail(services)
+"""Deprecated import path; use vaybooks.bms.ui.pages.finance.accounts.detail."""
+from vaybooks.bms.ui.pages.finance.accounts.detail import *  # noqa: F401,F403

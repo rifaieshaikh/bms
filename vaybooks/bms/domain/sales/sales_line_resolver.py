@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import List, Optional
 
 from vaybooks.bms.domain.business.entities import BusinessProfile
-from vaybooks.bms.domain.customers.entities import Customer
+from vaybooks.bms.domain.parties.customers.entities import Customer
 from vaybooks.bms.domain.sales.line_items import SalesInvoiceLine
 from vaybooks.bms.domain.shared.enums import PartyRegistrationType
 from vaybooks.bms.domain.shared.exceptions import ValidationError

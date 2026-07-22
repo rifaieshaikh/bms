@@ -1,6 +1,6 @@
 import streamlit as st
 
-from vaybooks.bms.application.order_app_service import OrderAppService
+from vaybooks.bms.application.boutique.orders.service import OrderAppService
 
 
 def order_selector(services: dict, key_prefix: str = "order"):

@@ -1,17 +1,2 @@
-from typing import List, Optional, Protocol
-
-from vaybooks.bms.domain.expenses.entities import Expense
-
-
-class ExpenseRepository(Protocol):
-    def save(self, expense: Expense) -> Expense: ...
-
-    def find_by_id(self, expense_id: str) -> Optional[Expense]: ...
-
-    def find_by_order(self, order_id: str) -> List[Expense]: ...
-
-    def find_by_bill(self, bill_id: str) -> List[Expense]: ...
-
-    def list_all(self) -> List[Expense]: ...
-
-    def delete(self, expense_id: str) -> None: ...
+"""Deprecated import path; use vaybooks.bms.domain.boutique.expenses.repository."""
+from vaybooks.bms.domain.boutique.expenses.repository import *  # noqa: F401,F403

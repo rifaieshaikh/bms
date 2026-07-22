@@ -1,52 +1,52 @@
 import logging
 import streamlit as st
 
-from vaybooks.bms.application.business_app_service import BusinessAppService
-from vaybooks.bms.application.customer_app_service import CustomerAppService
-from vaybooks.bms.application.vendor_app_service import VendorAppService
-from vaybooks.bms.application.delivery_app_service import DeliveryAppService
-from vaybooks.bms.application.expense_app_service import ExpenseAppService
-from vaybooks.bms.application.export_app_service import ExportAppService
-from vaybooks.bms.application.migration_app_service import MigrationAppService
-from vaybooks.bms.application.invoice_app_service import InvoiceAppService
-from vaybooks.bms.application.order_app_service import OrderAppService
-from vaybooks.bms.application.report_app_service import ReportAppService
-from vaybooks.bms.application.reports import (
+from vaybooks.bms.application.settings.business.service import BusinessAppService
+from vaybooks.bms.application.parties.customers.service import CustomerAppService
+from vaybooks.bms.application.parties.vendors.service import VendorAppService
+from vaybooks.bms.application.boutique.deliveries.service import DeliveryAppService
+from vaybooks.bms.application.boutique.expenses.service import ExpenseAppService
+from vaybooks.bms.application.finance.export.service import ExportAppService
+from vaybooks.bms.application.migration.service import MigrationAppService
+from vaybooks.bms.application.boutique.invoices.service import InvoiceAppService
+from vaybooks.bms.application.boutique.orders.service import OrderAppService
+from vaybooks.bms.application.finance.reports.service import ReportAppService
+from vaybooks.bms.application.finance.reports.services import (
     BusinessInsightsReportService,
     CustomerReportService,
     LaborReportService,
     OperationsReportService,
     ProfitabilityReportService,
 )
-from vaybooks.bms.application.reports.inventory_report_service import (
+from vaybooks.bms.application.finance.reports.services.inventory_report_service import (
     InventoryReportService,
 )
-from vaybooks.bms.application.reports.purchase_report_service import (
+from vaybooks.bms.application.finance.reports.services.purchase_report_service import (
     PurchaseReportService,
 )
-from vaybooks.bms.application.reports.sales_report_service import SalesReportService
-from vaybooks.bms.application.time_tracking_app_service import TimeTrackingAppService
-from vaybooks.bms.application.accounting_app_service import AccountingAppService
-from vaybooks.bms.application.activity_app_service import ActivityAppService
-from vaybooks.bms.application.vendor_service_app_service import VendorServiceAppService
-from vaybooks.bms.application.inventory_app_service import InventoryAppService
-from vaybooks.bms.application.purchase_app_service import PurchaseAppService
-from vaybooks.bms.application.sales_app_service import SalesAppService
-from vaybooks.bms.application.worker_app_service import WorkerAppService
-from vaybooks.bms.application.measurement_app_service import MeasurementAppService
+from vaybooks.bms.application.finance.reports.services.sales_report_service import SalesReportService
+from vaybooks.bms.application.boutique.time_tracking.service import TimeTrackingAppService
+from vaybooks.bms.application.finance.accounting.service import AccountingAppService
+from vaybooks.bms.application.boutique.activities.service import ActivityAppService
+from vaybooks.bms.application.settings.services.service import VendorServiceAppService
+from vaybooks.bms.application.inventory.service import InventoryAppService
+from vaybooks.bms.application.purchases.service import PurchaseAppService
+from vaybooks.bms.application.sales.service import SalesAppService
+from vaybooks.bms.application.parties.workers.service import WorkerAppService
+from vaybooks.bms.application.boutique.measurements.service import MeasurementAppService
 from vaybooks.bms.application.attachment_app_service import AttachmentAppService
-from vaybooks.bms.application.project_activity_config_app_service import ProjectActivityConfigAppService
-from vaybooks.bms.application.project_app_service import ProjectAppService
-from vaybooks.bms.application.project_boq_app_service import ProjectBoqAppService
-from vaybooks.bms.application.project_budget_app_service import ProjectBudgetAppService
-from vaybooks.bms.application.project_billing_app_service import ProjectBillingAppService
-from vaybooks.bms.application.project_document_app_service import ProjectDocumentAppService
-from vaybooks.bms.application.project_expense_app_service import ProjectExpenseAppService
-from vaybooks.bms.application.project_measurement_app_service import ProjectMeasurementAppService
-from vaybooks.bms.application.project_profitability_service import ProjectProfitabilityService
-from vaybooks.bms.application.project_quotation_app_service import ProjectQuotationAppService
-from vaybooks.bms.application.project_time_app_service import ProjectTimeAppService
-from vaybooks.bms.application.reports.project_report_service import ProjectReportService
+from vaybooks.bms.application.projects.activity_config.service import ProjectActivityConfigAppService
+from vaybooks.bms.application.projects.core.service import ProjectAppService
+from vaybooks.bms.application.projects.boq.service import ProjectBoqAppService
+from vaybooks.bms.application.projects.budget.service import ProjectBudgetAppService
+from vaybooks.bms.application.projects.billing.service import ProjectBillingAppService
+from vaybooks.bms.application.projects.documents.service import ProjectDocumentAppService
+from vaybooks.bms.application.projects.expenses.service import ProjectExpenseAppService
+from vaybooks.bms.application.projects.measurements.service import ProjectMeasurementAppService
+from vaybooks.bms.application.projects.profitability.service import ProjectProfitabilityService
+from vaybooks.bms.application.projects.quotations.service import ProjectQuotationAppService
+from vaybooks.bms.application.projects.time.service import ProjectTimeAppService
+from vaybooks.bms.application.finance.reports.services.project_report_service import ProjectReportService
 from vaybooks.bms.domain.inventory.rate_history_service import ProductRateHistoryService
 from vaybooks.bms.infrastructure.db.connection import get_database
 from vaybooks.bms.infrastructure.db.indexes import ensure_indexes
@@ -55,66 +55,66 @@ from vaybooks.bms.infrastructure.config.settings import get_settings, reload_set
 from vaybooks.bms.infrastructure.db.purge import purge_business_data
 from vaybooks.bms.infrastructure.db.seed import run_seed
 from vaybooks.bms.infrastructure.logging.setup import setup_logging
-from vaybooks.bms.infrastructure.repositories.mongo_business_profile_repository import (
+from vaybooks.bms.infrastructure.repositories.shared.mongo_business_profile_repository import (
     MongoBusinessProfileRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_product_rate_history_repository import (
+from vaybooks.bms.infrastructure.repositories.inventory.mongo_product_rate_history_repository import (
     MongoProductRateHistoryRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_purchase_price_history_repository import (
+from vaybooks.bms.infrastructure.repositories.purchases.mongo_purchase_price_history_repository import (
     MongoPurchasePriceHistoryRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_customer_price_repository import (
+from vaybooks.bms.infrastructure.repositories.sales.mongo_customer_price_repository import (
     MongoCustomerPriceRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_accounting_repository import (
+from vaybooks.bms.infrastructure.repositories.finance.mongo_accounting_repository import (
     MongoAccountRepository,
     MongoVoucherRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_activity_repository import MongoActivityRepository
-from vaybooks.bms.infrastructure.repositories.mongo_counter_repository import MongoCounterRepository
-from vaybooks.bms.infrastructure.repositories.mongo_customer_repository import MongoCustomerRepository
-from vaybooks.bms.infrastructure.repositories.mongo_vendor_repository import MongoVendorRepository
-from vaybooks.bms.infrastructure.repositories.mongo_vendor_service_repository import (
+from vaybooks.bms.infrastructure.repositories.boutique.mongo_activity_repository import MongoActivityRepository
+from vaybooks.bms.infrastructure.repositories.finance.mongo_counter_repository import MongoCounterRepository
+from vaybooks.bms.infrastructure.repositories.parties.mongo_customer_repository import MongoCustomerRepository
+from vaybooks.bms.infrastructure.repositories.parties.mongo_vendor_repository import MongoVendorRepository
+from vaybooks.bms.infrastructure.repositories.shared.mongo_vendor_service_repository import (
     MongoVendorServiceRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_worker_repository import (
+from vaybooks.bms.infrastructure.repositories.parties.mongo_worker_repository import (
     MongoWorkerRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_delivery_repository import MongoDeliveryRepository
-from vaybooks.bms.infrastructure.repositories.mongo_expense_repository import MongoExpenseRepository
-from vaybooks.bms.infrastructure.repositories.mongo_invoice_repository import MongoInvoiceRepository
-from vaybooks.bms.infrastructure.repositories.mongo_order_repository import (
+from vaybooks.bms.infrastructure.repositories.boutique.mongo_delivery_repository import MongoDeliveryRepository
+from vaybooks.bms.infrastructure.repositories.boutique.mongo_expense_repository import MongoExpenseRepository
+from vaybooks.bms.infrastructure.repositories.boutique.mongo_invoice_repository import MongoInvoiceRepository
+from vaybooks.bms.infrastructure.repositories.boutique.mongo_order_repository import (
     MongoBillRegistryRepository,
     MongoOrderRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_report_repository import MongoReportRepository
-from vaybooks.bms.infrastructure.repositories.mongo_inventory_repository import (
+from vaybooks.bms.infrastructure.repositories.finance.mongo_report_repository import MongoReportRepository
+from vaybooks.bms.infrastructure.repositories.inventory.mongo_inventory_repository import (
     MongoInventoryProductRepository,
     MongoProductCategoryRepository,
     MongoProductFieldDefinitionRepository,
     MongoProductUnitRepository,
     MongoStockMovementRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_import_mapping_profile_repository import (
+from vaybooks.bms.infrastructure.repositories.migration.mongo_import_mapping_profile_repository import (
     MongoImportMappingProfileRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_purchase_repository import (
+from vaybooks.bms.infrastructure.repositories.purchases.mongo_purchase_repository import (
     MongoGoodsReceiptRepository,
     MongoPurchaseOrderRepository,
     MongoPurchaseReturnRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_sales_repository import (
+from vaybooks.bms.infrastructure.repositories.sales.mongo_sales_repository import (
     MongoDeliveryNoteRepository,
     MongoEstimateRepository,
     MongoQuotationRepository,
     MongoSalesOrderRepository,
     MongoSalesReturnRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_time_tracking_repository import (
+from vaybooks.bms.infrastructure.repositories.boutique.mongo_time_tracking_repository import (
     MongoTimeTrackingRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_measurement_repository import (
+from vaybooks.bms.infrastructure.repositories.boutique.mongo_measurement_repository import (
     MongoMeasurementRecordRepository,
     MongoMeasurementSectionRepository,
     MongoMeasurementSpecRepository,
@@ -122,116 +122,116 @@ from vaybooks.bms.infrastructure.repositories.mongo_measurement_repository impor
 from vaybooks.bms.infrastructure.repositories.mongo_attachment_repository import (
     MongoAttachmentRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_project_document_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_project_document_repository import (
     MongoProjectDocumentRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_project_expense_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_project_expense_repository import (
     MongoProjectExpenseRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_project_quotation_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_project_quotation_repository import (
     MongoProjectQuotationRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_project_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_project_repository import (
     MongoProjectRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_project_template_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_project_template_repository import (
     MongoProjectTemplateRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_project_time_entry_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_project_time_entry_repository import (
     MongoProjectTimeEntryRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_project_work_order_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_project_work_order_repository import (
     MongoProjectWorkOrderRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_project_ra_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_project_ra_repository import (
     MongoProjectRABillRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_project_proforma_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_project_proforma_repository import (
     MongoProjectProformaRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_project_variation_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_project_variation_repository import (
     MongoProjectVariationRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_project_retention_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_project_retention_repository import (
     MongoProjectRetentionRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_project_cost_transfer_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_project_cost_transfer_repository import (
     MongoProjectCostTransferRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_project_write_off_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_project_write_off_repository import (
     MongoProjectWriteOffRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_project_boq_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_project_boq_repository import (
     MongoProjectBoqRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_project_budget_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_project_budget_repository import (
     MongoProjectBudgetRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_project_cash_flow_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_project_cash_flow_repository import (
     MongoProjectCashFlowRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_project_measurement_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_project_measurement_repository import (
     MongoProjectMeasurementRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_project_activity_config_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_project_activity_config_repository import (
     MongoProjectActivityConfigRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_project_enquiry_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_project_enquiry_repository import (
     MongoProjectEnquiryRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_project_dpr_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_project_dpr_repository import (
     MongoProjectDprRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_project_procurement_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_project_procurement_repository import (
     MongoProjectProcurementRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_project_subcontract_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_project_subcontract_repository import (
     MongoProjectSubcontractRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_project_petty_cash_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_project_petty_cash_repository import (
     MongoProjectPettyCashRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_project_recognition_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_project_recognition_repository import (
     MongoProjectRecognitionRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_app_user_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_app_user_repository import (
     MongoAppUserRepository,
     MongoProjectMembershipRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_project_audit_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_project_audit_repository import (
     MongoProjectAuditRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_project_quality_config_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_project_quality_config_repository import (
     MongoProjectQualityConfigRepository,
 )
-from vaybooks.bms.application.project_enquiry_app_service import ProjectEnquiryAppService
-from vaybooks.bms.application.project_dpr_app_service import ProjectDprAppService
-from vaybooks.bms.application.project_procurement_app_service import (
+from vaybooks.bms.application.projects.enquiries.service import ProjectEnquiryAppService
+from vaybooks.bms.application.projects.dpr.service import ProjectDprAppService
+from vaybooks.bms.application.projects.procurement.service import (
     ProjectProcurementAppService,
 )
-from vaybooks.bms.application.project_subcontract_app_service import (
+from vaybooks.bms.application.projects.subcontract.service import (
     ProjectSubcontractAppService,
 )
-from vaybooks.bms.application.project_petty_cash_app_service import (
+from vaybooks.bms.application.projects.petty_cash.service import (
     ProjectPettyCashAppService,
 )
-from vaybooks.bms.application.project_recognition_app_service import (
+from vaybooks.bms.application.projects.recognition.service import (
     ProjectRecognitionAppService,
 )
-from vaybooks.bms.application.project_offline_app_service import ProjectOfflineAppService
-from vaybooks.bms.application.project_portal_app_service import ProjectPortalAppService
-from vaybooks.bms.application.project_notification_app_service import (
+from vaybooks.bms.application.projects.offline.service import ProjectOfflineAppService
+from vaybooks.bms.application.projects.portal.service import ProjectPortalAppService
+from vaybooks.bms.application.projects.notifications.service import (
     ProjectNotificationAppService,
 )
-from vaybooks.bms.application.project_access_policy import ProjectAccessPolicy
-from vaybooks.bms.application.project_audit_app_service import ProjectAuditAppService
-from vaybooks.bms.application.project_quality_config_app_service import (
+from vaybooks.bms.application.projects.access.service import ProjectAccessPolicy
+from vaybooks.bms.application.projects.audit.service import ProjectAuditAppService
+from vaybooks.bms.application.projects.quality.service import (
     ProjectQualityConfigAppService,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_project_offline_draft_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_project_offline_draft_repository import (
     MongoProjectOfflineDraftRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_project_portal_token_repository import (
+from vaybooks.bms.infrastructure.repositories.projects.mongo_project_portal_token_repository import (
     MongoProjectPortalTokenRepository,
 )
 

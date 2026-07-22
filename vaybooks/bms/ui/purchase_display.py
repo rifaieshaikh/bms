@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from vaybooks.bms.domain.accounting.purchase_parsing import (
+from vaybooks.bms.domain.finance.accounting.purchase_parsing import (
     parse_purchase_lines_from_description,
 )
 from vaybooks.bms.domain.shared.enums import CatalogItemType

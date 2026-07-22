@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from vaybooks.bms.domain.accounting.sales_parsing import (
+from vaybooks.bms.domain.finance.accounting.sales_parsing import (
     STORE_INVOICE_PREFIX,
     parse_store_invoice_number,
     sales_amounts_from_lines,

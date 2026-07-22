@@ -1,8 +1,8 @@
 import pytest
 
-from vaybooks.bms.application.accounting_app_service import AccountingAppService
-from vaybooks.bms.domain.accounting.entities import Account
-from vaybooks.bms.domain.accounting.services import AccountingDomainService
+from vaybooks.bms.application.finance.accounting.service import AccountingAppService
+from vaybooks.bms.domain.finance.accounting.entities import Account
+from vaybooks.bms.domain.finance.accounting.services import AccountingDomainService
 from vaybooks.bms.domain.shared.enums import AccountType
 from vaybooks.bms.domain.shared.exceptions import DuplicateCustomerAccountError
 from tests.conftest import FakeAccountRepository, FakeCounterRepository, FakeVoucherRepository

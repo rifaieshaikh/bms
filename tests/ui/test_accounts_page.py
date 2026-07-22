@@ -3,8 +3,8 @@ def test_accounts_page_lists_all_accounts():
     def _page():
         from unittest.mock import MagicMock
 
-        from vaybooks.bms.application.accounting_app_service import AccountingAppService
-        from vaybooks.bms.domain.accounting.entities import Account
+        from vaybooks.bms.application.finance.accounting.service import AccountingAppService
+        from vaybooks.bms.domain.finance.accounting.entities import Account
         from vaybooks.bms.domain.shared.enums import AccountType
         from vaybooks.bms.ui.pages import accounts
         from tests.conftest import (
@@ -61,8 +61,8 @@ def test_vouchers_route_shows_voucher():
         from datetime import datetime
         from unittest.mock import MagicMock
 
-        from vaybooks.bms.application.accounting_app_service import AccountingAppService
-        from vaybooks.bms.domain.accounting.entities import Voucher, VoucherLine
+        from vaybooks.bms.application.finance.accounting.service import AccountingAppService
+        from vaybooks.bms.domain.finance.accounting.entities import Voucher, VoucherLine
         from vaybooks.bms.domain.shared.enums import VoucherType
         from vaybooks.bms.ui.pages.finance import vouchers
         from tests.conftest import (
@@ -113,8 +113,8 @@ def test_trial_balance_route_shows_balance_status():
         from datetime import datetime
         from unittest.mock import MagicMock
 
-        from vaybooks.bms.application.accounting_app_service import AccountingAppService
-        from vaybooks.bms.domain.accounting.entities import Account, Voucher, VoucherLine
+        from vaybooks.bms.application.finance.accounting.service import AccountingAppService
+        from vaybooks.bms.domain.finance.accounting.entities import Account, Voucher, VoucherLine
         from vaybooks.bms.domain.shared.enums import AccountType, VoucherType
         from vaybooks.bms.ui.pages.finance import trial_balance
         from tests.conftest import (
@@ -169,8 +169,8 @@ def test_accounts_page_shows_delete_and_deactivate_for_non_protected_account():
     def _page():
         from unittest.mock import MagicMock
 
-        from vaybooks.bms.application.accounting_app_service import AccountingAppService
-        from vaybooks.bms.domain.accounting.entities import Account
+        from vaybooks.bms.application.finance.accounting.service import AccountingAppService
+        from vaybooks.bms.domain.finance.accounting.entities import Account
         from vaybooks.bms.domain.shared.enums import AccountType
         from vaybooks.bms.ui.pages import accounts
         from tests.conftest import (
@@ -211,8 +211,8 @@ def test_accounts_page_hides_delete_for_protected_store_account():
     def _page():
         from unittest.mock import MagicMock
 
-        from vaybooks.bms.application.accounting_app_service import AccountingAppService
-        from vaybooks.bms.domain.accounting.entities import Account
+        from vaybooks.bms.application.finance.accounting.service import AccountingAppService
+        from vaybooks.bms.domain.finance.accounting.entities import Account
         from vaybooks.bms.domain.shared.enums import AccountType
         from vaybooks.bms.ui.pages import accounts
         from tests.conftest import (
@@ -258,8 +258,8 @@ def test_account_detail_route_renders_ledger_for_account():
 
         import streamlit as st
 
-        from vaybooks.bms.application.accounting_app_service import AccountingAppService
-        from vaybooks.bms.domain.accounting.entities import Account, Voucher, VoucherLine
+        from vaybooks.bms.application.finance.accounting.service import AccountingAppService
+        from vaybooks.bms.domain.finance.accounting.entities import Account, Voucher, VoucherLine
         from vaybooks.bms.domain.shared.enums import AccountType, VoucherType
         from vaybooks.bms.ui.pages import account_detail
         from tests.conftest import (

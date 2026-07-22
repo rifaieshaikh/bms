@@ -15,7 +15,7 @@ def ensure_measurement_specs(db: Database) -> int:
     Also reactivates inactive Extended rows so the measurement form shows the
     full person-type catalog. Returns the number of documents inserted.
     """
-    from vaybooks.bms.domain.measurements.seed_catalog import dedupe_seed_specs
+    from vaybooks.bms.domain.boutique.measurements.seed_catalog import dedupe_seed_specs
 
     now = datetime.utcnow()
     inserted = 0

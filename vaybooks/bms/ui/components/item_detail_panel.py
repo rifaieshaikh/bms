@@ -2,8 +2,8 @@ from datetime import date
 
 import streamlit as st
 
-from vaybooks.bms.domain.orders.bill_status import bill_is_delivered, bill_is_invoiced
-from vaybooks.bms.domain.orders.entities import (
+from vaybooks.bms.domain.boutique.orders.bill_status import bill_is_delivered, bill_is_invoiced
+from vaybooks.bms.domain.boutique.orders.entities import (
     COMPLETED_ACTIVITY_STATUS,
     CustomizationItem,
     CustomizationOrder,

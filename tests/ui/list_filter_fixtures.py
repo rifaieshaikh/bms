@@ -6,8 +6,8 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from types import SimpleNamespace
 
-from vaybooks.bms.domain.accounting.entities import Account, Voucher, VoucherLine
-from vaybooks.bms.domain.customers.entities import Customer
+from vaybooks.bms.domain.finance.accounting.entities import Account, Voucher, VoucherLine
+from vaybooks.bms.domain.parties.customers.entities import Customer
 from vaybooks.bms.domain.shared.enums import (
     AccountType,
     ActivityCategory,
@@ -19,7 +19,7 @@ from vaybooks.bms.domain.shared.enums import (
     StockReferenceType,
     VoucherType,
 )
-from vaybooks.bms.domain.vendors.entities import Vendor
+from vaybooks.bms.domain.parties.vendors.entities import Vendor
 
 
 def _dt(y, m, d, h=0):

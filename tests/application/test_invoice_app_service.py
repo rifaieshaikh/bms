@@ -2,16 +2,16 @@ from datetime import date, datetime, timezone
 
 import pytest
 
-from vaybooks.bms.application.invoice_app_service import InvoiceAppService
-from vaybooks.bms.application.time_tracking_app_service import TimeTrackingAppService
-from vaybooks.bms.domain.deliveries.entities import Delivery
-from vaybooks.bms.domain.expenses.entities import Expense
-from vaybooks.bms.domain.invoices.entities import Invoice
-from vaybooks.bms.domain.invoices.services import InvoiceDomainService
-from vaybooks.bms.domain.orders.entities import CustomizationItem, CustomizationOrder, OrderActivity
+from vaybooks.bms.application.boutique.invoices.service import InvoiceAppService
+from vaybooks.bms.application.boutique.time_tracking.service import TimeTrackingAppService
+from vaybooks.bms.domain.boutique.deliveries.entities import Delivery
+from vaybooks.bms.domain.boutique.expenses.entities import Expense
+from vaybooks.bms.domain.boutique.invoices.entities import Invoice
+from vaybooks.bms.domain.boutique.invoices.services import InvoiceDomainService
+from vaybooks.bms.domain.boutique.orders.entities import CustomizationItem, CustomizationOrder, OrderActivity
 from vaybooks.bms.domain.shared.enums import ActivityStatus, ExpenseSource, OrderStatus
 from vaybooks.bms.domain.shared.exceptions import ValidationError
-from vaybooks.bms.domain.time_tracking.entities import TimeEntry
+from vaybooks.bms.domain.boutique.time_tracking.entities import TimeEntry
 from tests.conftest import (
     FakeCounterRepository,
     FakeDeliveryRepository,
@@ -131,8 +131,8 @@ def test_generate_invoice_sets_total_amount_and_invoice_generated_status():
 
 def test_generate_invoice_marks_source_and_computes_gst():
     from vaybooks.bms.domain.business.entities import BusinessProfile
-    from vaybooks.bms.domain.customers.entities import Customer
-    from vaybooks.bms.domain.invoices.entities import INVOICE_SOURCE_GENERATED
+    from vaybooks.bms.domain.parties.customers.entities import Customer
+    from vaybooks.bms.domain.boutique.invoices.entities import INVOICE_SOURCE_GENERATED
     from vaybooks.bms.domain.shared.enums import PartyRegistrationType
 
     order_repo = FakeOrderRepository()
@@ -603,8 +603,8 @@ def test_incomplete_item_cannot_be_invoiced_on_active_order():
 
 
 def test_cancelled_order_allows_cancellation_charge_invoice():
-    from vaybooks.bms.domain.invoices.entities import INVOICE_KIND_CANCELLATION
-    from vaybooks.bms.domain.orders.services import OrderDomainService
+    from vaybooks.bms.domain.boutique.invoices.entities import INVOICE_KIND_CANCELLATION
+    from vaybooks.bms.domain.boutique.orders.services import OrderDomainService
 
     invoice_repo = FakeInvoiceRepository()
     order_repo = FakeOrderRepository()

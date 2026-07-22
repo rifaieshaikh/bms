@@ -3,7 +3,7 @@ from uuid import uuid4
 
 from pymongo.errors import DuplicateKeyError
 
-from vaybooks.bms.domain.activities.entities import DEFAULT_ACTIVITY_STATUSES
+from vaybooks.bms.domain.boutique.activities.entities import DEFAULT_ACTIVITY_STATUSES
 from vaybooks.bms.domain.shared.enums import AccountType, ActivityCategory, ActivityType
 
 

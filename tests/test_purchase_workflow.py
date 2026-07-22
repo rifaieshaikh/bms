@@ -2,17 +2,17 @@
 
 from datetime import date
 
-from vaybooks.bms.application.accounting_app_service import AccountingAppService
-from vaybooks.bms.application.inventory_app_service import InventoryAppService
-from vaybooks.bms.application.purchase_app_service import PurchaseAppService
-from vaybooks.bms.domain.accounting.entities import Account
+from vaybooks.bms.application.finance.accounting.service import AccountingAppService
+from vaybooks.bms.application.inventory.service import InventoryAppService
+from vaybooks.bms.application.purchases.service import PurchaseAppService
+from vaybooks.bms.domain.finance.accounting.entities import Account
 from vaybooks.bms.domain.shared.enums import (
     AccountType,
     CatalogItemType,
     PurchaseOrderStatus,
     VendorRegistrationType,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_purchase_price_history_repository import (
+from vaybooks.bms.infrastructure.repositories.purchases.mongo_purchase_price_history_repository import (
     MongoPurchasePriceHistoryRepository,
 )
 from tests.conftest import (

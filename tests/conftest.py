@@ -5,17 +5,17 @@ from datetime import date, datetime
 from typing import Dict, List, Optional
 from uuid import uuid4
 
-from vaybooks.bms.domain.accounting.entities import Account, Voucher
-from vaybooks.bms.domain.activities.entities import ActivityConfig
-from vaybooks.bms.domain.customers.entities import Customer
-from vaybooks.bms.domain.deliveries.entities import Delivery
-from vaybooks.bms.domain.expenses.entities import Expense
-from vaybooks.bms.domain.invoices.entities import Invoice
-from vaybooks.bms.domain.orders.entities import CustomizationOrder
-from vaybooks.bms.domain.orders.order_refs import order_ref_search_variants
-from vaybooks.bms.domain.orders.value_objects import BillRegistryEntry
+from vaybooks.bms.domain.finance.accounting.entities import Account, Voucher
+from vaybooks.bms.domain.boutique.activities.entities import ActivityConfig
+from vaybooks.bms.domain.parties.customers.entities import Customer
+from vaybooks.bms.domain.boutique.deliveries.entities import Delivery
+from vaybooks.bms.domain.boutique.expenses.entities import Expense
+from vaybooks.bms.domain.boutique.invoices.entities import Invoice
+from vaybooks.bms.domain.boutique.orders.entities import CustomizationOrder
+from vaybooks.bms.domain.boutique.orders.order_refs import order_ref_search_variants
+from vaybooks.bms.domain.boutique.orders.value_objects import BillRegistryEntry
 from vaybooks.bms.domain.shared.enums import AccountType, ActivityType, OrderStatus
-from vaybooks.bms.domain.time_tracking.entities import TimeEntry
+from vaybooks.bms.domain.boutique.time_tracking.entities import TimeEntry
 
 
 class FakeCustomerRepository:
@@ -613,7 +613,7 @@ class FakeStockMovementRepository:
 
 
 def make_inventory_app_service():
-    from vaybooks.bms.application.inventory_app_service import InventoryAppService
+    from vaybooks.bms.application.inventory.service import InventoryAppService
     from vaybooks.bms.domain.inventory.rate_history_service import ProductRateHistoryService
 
     selling = FakeProductRateHistoryRepository()

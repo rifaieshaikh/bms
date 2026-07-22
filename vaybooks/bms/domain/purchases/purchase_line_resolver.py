@@ -11,7 +11,7 @@ from vaybooks.bms.domain.shared.india import (
     compute_purchase_gst,
 )
 from vaybooks.bms.domain.shared.item_tax import ItemTaxProfile
-from vaybooks.bms.domain.vendors.entities import Vendor
+from vaybooks.bms.domain.parties.vendors.entities import Vendor
 
 
 class PurchaseLineResolver:

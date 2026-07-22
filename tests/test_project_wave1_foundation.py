@@ -7,10 +7,10 @@ from typing import Dict, List, Optional
 
 import pytest
 
-from vaybooks.bms.application.project_access_policy import ProjectAccessPolicy
-from vaybooks.bms.application.project_audit_app_service import ProjectAuditAppService
-from vaybooks.bms.application.project_expense_app_service import ProjectExpenseAppService
-from vaybooks.bms.application.project_quotation_app_service import ProjectQuotationAppService
+from vaybooks.bms.application.projects.access.service import ProjectAccessPolicy
+from vaybooks.bms.application.projects.audit.service import ProjectAuditAppService
+from vaybooks.bms.application.projects.expenses.service import ProjectExpenseAppService
+from vaybooks.bms.application.projects.quotations.service import ProjectQuotationAppService
 from vaybooks.bms.domain.projects.access import (
     AppUser,
     ProjectAuditEntry,

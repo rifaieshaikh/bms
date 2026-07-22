@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from vaybooks.bms.application.inventory_app_service import InventoryAppService
+from vaybooks.bms.application.inventory.service import InventoryAppService
 from vaybooks.bms.domain.shared.enums import StockMovementType, StockReferenceType
 from tests.conftest import make_inventory_app_service
 

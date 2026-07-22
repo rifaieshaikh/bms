@@ -6,7 +6,7 @@ from typing import Callable, Optional, Sequence
 
 import streamlit as st
 
-from vaybooks.bms.domain.accounting.entities import Voucher, VoucherLine
+from vaybooks.bms.domain.finance.accounting.entities import Voucher, VoucherLine
 from vaybooks.bms.domain.shared.enums import VoucherType
 from vaybooks.bms.ui.dialog_utils import clear_all_dialog_flags, register_armed_dialog
 from vaybooks.bms.ui.styles import render_card_grid, status_badge

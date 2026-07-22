@@ -2,7 +2,7 @@
 # Precedence for each SEED_* key: Streamlit secrets → env → this file → default.
 # Mongo URI stays in .streamlit/secrets.toml.
 
-SEED_CONFIG = true
+SEED_CONFIG = false
 SEED_QA_FIXTURES = false
 PURGE_BUSINESS_DATA = false
 

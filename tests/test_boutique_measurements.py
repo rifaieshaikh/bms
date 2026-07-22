@@ -7,15 +7,15 @@ import pytest
 
 from vaybooks.bms.domain.attachments.entities import Attachment
 from vaybooks.bms.domain.attachments.services import AttachmentDomainService
-from vaybooks.bms.domain.measurements.entities import (
+from vaybooks.bms.domain.boutique.measurements.entities import (
     MeasurementRecord,
     MeasurementSpecField,
     MeasurementValue,
 )
-from vaybooks.bms.domain.measurements.seed_catalog import DEFAULT_MEASUREMENT_SPECS
-from vaybooks.bms.domain.measurements.services import MeasurementDomainService
-from vaybooks.bms.domain.orders.entities import CustomizationItem, CustomizationOrder
-from vaybooks.bms.domain.orders.services import OrderDomainService
+from vaybooks.bms.domain.boutique.measurements.seed_catalog import DEFAULT_MEASUREMENT_SPECS
+from vaybooks.bms.domain.boutique.measurements.services import MeasurementDomainService
+from vaybooks.bms.domain.boutique.orders.entities import CustomizationItem, CustomizationOrder
+from vaybooks.bms.domain.boutique.orders.services import OrderDomainService
 from vaybooks.bms.domain.shared.enums import (
     AttachmentCategory,
     FitPreference,
@@ -34,7 +34,7 @@ from vaybooks.bms.domain.shared.document_customization import (
     SalesPrintSettings,
     print_settings_from_dict,
 )
-from vaybooks.bms.application.measurement_app_service import MeasurementAppService
+from vaybooks.bms.application.boutique.measurements.service import MeasurementAppService
 from tests.conftest import FakeBillRegistryRepository, FakeOrderRepository
 
 
@@ -80,7 +80,7 @@ def test_measurement_bill_suffix_allocation():
     domain = OrderDomainService(FakeOrderRepository(), registry)
     first = domain.next_measurement_bill_number("MS-0025")
     assert first == "MS-0025-01"
-    from vaybooks.bms.domain.orders.value_objects import BillRegistryEntry
+    from vaybooks.bms.domain.boutique.orders.value_objects import BillRegistryEntry
 
     registry.register(
         BillRegistryEntry(

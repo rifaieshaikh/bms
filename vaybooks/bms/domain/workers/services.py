@@ -1,7 +1,2 @@
-from vaybooks.bms.domain.workers.entities import Worker
-
-
-class WorkerDomainService:
-    @staticmethod
-    def build_salary_account_name(worker: Worker) -> str:
-        return f"Salary - {worker.worker_name.strip()}"
+"""Deprecated import path; use vaybooks.bms.domain.parties.workers.services."""
+from vaybooks.bms.domain.parties.workers.services import *  # noqa: F401,F403

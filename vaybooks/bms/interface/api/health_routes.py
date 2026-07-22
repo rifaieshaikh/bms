@@ -6,7 +6,7 @@ from calendar import monthrange
 from datetime import date
 from typing import Any
 
-from vaybooks.bms.application.report_app_service import ReportAppService
+from vaybooks.bms.application.finance.reports.service import ReportAppService
 
 _INSTALLED = False
 _PERIOD_CONTRACT_KEYS = ("order_count", "revenue", "total_revenue", "expenses", "mph")

@@ -8,7 +8,7 @@ from vaybooks.bms.domain.purchases.purchase_line_resolver import PurchaseLineRes
 from vaybooks.bms.domain.shared.enums import CatalogItemType, VendorRegistrationType
 from vaybooks.bms.domain.shared.item_tax import ItemTaxProfile
 from vaybooks.bms.domain.vendor_services.entities import VendorService
-from vaybooks.bms.domain.vendors.entities import Vendor
+from vaybooks.bms.domain.parties.vendors.entities import Vendor
 
 
 def test_product_maps_to_material_expense():

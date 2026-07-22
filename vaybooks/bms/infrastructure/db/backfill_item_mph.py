@@ -10,17 +10,17 @@ Usage:
 
 from pymongo.database import Database
 
-from vaybooks.bms.domain.invoices.services import InvoiceDomainService
-from vaybooks.bms.infrastructure.repositories.mongo_delivery_repository import (
+from vaybooks.bms.domain.boutique.invoices.services import InvoiceDomainService
+from vaybooks.bms.infrastructure.repositories.boutique.mongo_delivery_repository import (
     MongoDeliveryRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_expense_repository import (
+from vaybooks.bms.infrastructure.repositories.boutique.mongo_expense_repository import (
     MongoExpenseRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_invoice_repository import (
+from vaybooks.bms.infrastructure.repositories.boutique.mongo_invoice_repository import (
     MongoInvoiceRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_order_repository import (
+from vaybooks.bms.infrastructure.repositories.boutique.mongo_order_repository import (
     MongoOrderRepository,
 )
 

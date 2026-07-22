@@ -5,8 +5,8 @@ from datetime import date
 import pytest
 
 from vaybooks.bms.domain.order_status import resolve_order_status
-from vaybooks.bms.domain.orders.entities import CustomizationOrder
-from vaybooks.bms.domain.orders.services import OrderDomainService
+from vaybooks.bms.domain.boutique.orders.entities import CustomizationOrder
+from vaybooks.bms.domain.boutique.orders.services import OrderDomainService
 from vaybooks.bms.domain.shared.enums import OrderStatus
 from vaybooks.bms.domain.shared.exceptions import ValidationError
 from tests.conftest import FakeBillRegistryRepository, FakeOrderRepository

@@ -1,15 +1,2 @@
-from typing import List, Optional, Protocol
-
-from vaybooks.bms.domain.invoices.entities import Invoice
-
-
-class InvoiceRepository(Protocol):
-    def save(self, invoice: Invoice) -> Invoice: ...
-
-    def find_by_id(self, invoice_id: str) -> Optional[Invoice]: ...
-
-    def list_by_order(self, order_id: str) -> List[Invoice]: ...
-
-    def find_by_bill(self, bill_id: str) -> List[Invoice]: ...
-
-    def list_all(self) -> List[Invoice]: ...
+"""Deprecated import path; use vaybooks.bms.domain.boutique.invoices.repository."""
+from vaybooks.bms.domain.boutique.invoices.repository import *  # noqa: F401,F403

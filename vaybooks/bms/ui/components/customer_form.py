@@ -6,7 +6,7 @@ from typing import Optional
 
 import streamlit as st
 
-from vaybooks.bms.domain.customers.entities import Customer, CustomerInput
+from vaybooks.bms.domain.parties.customers.entities import Customer, CustomerInput
 from vaybooks.bms.domain.shared.enums import PartyRegistrationType
 from vaybooks.bms.ui.components.party_form_fields import render_party_address_tax_fields
 

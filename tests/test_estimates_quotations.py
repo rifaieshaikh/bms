@@ -15,9 +15,9 @@ from tests.test_sales_workflow import (
     InMemorySalesOrderRepository,
     InMemorySalesReturnRepository,
 )
-from vaybooks.bms.application.accounting_app_service import AccountingAppService
-from vaybooks.bms.application.sales_app_service import SalesAppService
-from vaybooks.bms.domain.accounting.entities import Account
+from vaybooks.bms.application.finance.accounting.service import AccountingAppService
+from vaybooks.bms.application.sales.service import SalesAppService
+from vaybooks.bms.domain.finance.accounting.entities import Account
 from vaybooks.bms.domain.business.entities import BusinessProfile
 from vaybooks.bms.domain.sales.invoice_lock import can_edit_invoice
 from vaybooks.bms.domain.shared.document_customization import SalesPrintSettings

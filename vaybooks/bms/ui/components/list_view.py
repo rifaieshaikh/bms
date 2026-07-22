@@ -60,6 +60,7 @@ def render_list(
 
     st.caption(f"{len(ordered)} {count_label}")
     if not ordered:
+        st.info(empty_text)
         bar["page_items"] = []
         bar["view_nth"] = None
         bar["edit_nth"] = None

@@ -2,12 +2,12 @@ from datetime import date
 
 import pytest
 
-from vaybooks.bms.domain.activities.entities import ActivityConfig
-from vaybooks.bms.domain.activities.services import ActivityDomainService
-from vaybooks.bms.domain.orders.entities import CustomizationOrder, OrderActivity
+from vaybooks.bms.domain.boutique.activities.entities import ActivityConfig
+from vaybooks.bms.domain.boutique.activities.services import ActivityDomainService
+from vaybooks.bms.domain.boutique.orders.entities import CustomizationOrder, OrderActivity
 from vaybooks.bms.domain.shared.enums import ActivityStatus, ActivityType, OrderStatus
 from vaybooks.bms.domain.shared.exceptions import IncompleteTimeEntriesError
-from vaybooks.bms.domain.time_tracking.entities import TimeEntry
+from vaybooks.bms.domain.boutique.time_tracking.entities import TimeEntry
 
 
 def _make_order_with_activity():
@@ -65,7 +65,7 @@ def test_cannot_complete_without_time_entries():
 
 
 def test_ready_for_delivery_when_all_done():
-    from vaybooks.bms.domain.orders.services import OrderDomainService
+    from vaybooks.bms.domain.boutique.orders.services import OrderDomainService
     from tests.conftest import FakeBillRegistryRepository, FakeOrderRepository
 
     order, oa1, _ = _make_order_with_activity()

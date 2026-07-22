@@ -9,12 +9,12 @@ from uuid import uuid4
 
 import pytest
 
-from vaybooks.bms.application.project_app_service import ProjectAppService
-from vaybooks.bms.application.project_document_app_service import ProjectDocumentAppService
-from vaybooks.bms.application.project_expense_app_service import ProjectExpenseAppService
-from vaybooks.bms.application.project_profitability_service import ProjectProfitabilityService
-from vaybooks.bms.application.project_time_app_service import ProjectTimeAppService
-from vaybooks.bms.domain.customers.entities import Customer
+from vaybooks.bms.application.projects.core.service import ProjectAppService
+from vaybooks.bms.application.projects.documents.service import ProjectDocumentAppService
+from vaybooks.bms.application.projects.expenses.service import ProjectExpenseAppService
+from vaybooks.bms.application.projects.profitability.service import ProjectProfitabilityService
+from vaybooks.bms.application.projects.time.service import ProjectTimeAppService
+from vaybooks.bms.domain.parties.customers.entities import Customer
 from vaybooks.bms.domain.projects.entities import (
     Project,
     ProjectActivity,
@@ -28,7 +28,7 @@ from vaybooks.bms.domain.projects.profitability import ProjectProfitabilityCalcu
 from vaybooks.bms.domain.projects.services import ProjectDomainService
 from vaybooks.bms.domain.shared.enums import ProjectDocumentCategory, ProjectExpenseSource
 from vaybooks.bms.domain.shared.exceptions import ValidationError
-from vaybooks.bms.domain.workers.entities import Worker
+from vaybooks.bms.domain.parties.workers.entities import Worker
 from tests.conftest import FakeCounterRepository, FakeCustomerRepository
 
 
@@ -451,7 +451,7 @@ def test_cannot_delete_system_template(project_services, blank_template):
 
 
 def test_boq_sample_csv_importable(project_services):
-    from vaybooks.bms.application.project_boq_app_service import ProjectBoqAppService
+    from vaybooks.bms.application.projects.boq.service import ProjectBoqAppService
 
     class FakeBoqRepo:
         def __init__(self):

@@ -5,6 +5,7 @@ from __future__ import annotations
 import streamlit as st
 
 from vaybooks.bms.domain.shared.enums import CatalogItemType, PurchaseOrderStatus
+from vaybooks.bms.ui.components.purchase_line_ui import vendor_is_registered
 from vaybooks.bms.ui.components.purchase_lines_editor import render_purchase_lines_editor
 from vaybooks.bms.ui.dialog_utils import make_dismiss_handler
 
@@ -72,6 +73,7 @@ def _po_edit_dialog(services: dict) -> None:
     ]
     st.markdown("**Line items**")
     st.caption("Ordered qty cannot fall below already received for each product.")
+    vendor_registered = vendor_is_registered(vendor)
     line_items, gst_errors = render_purchase_lines_editor(
         key_prefix=PO_EDIT_DIALOG,
         products=products,
@@ -82,7 +84,7 @@ def _po_edit_dialog(services: dict) -> None:
         inventory_service=inventory,
         allow_services=False,
         qty_field="qty_ordered",
-        vendor_registered=False,
+        vendor_registered=vendor_registered,
         business=business,
         business_state_code=business.state_code if business else "",
         vendor_state_code=vendor.state_code if vendor else "",

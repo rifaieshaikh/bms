@@ -1,6 +1,6 @@
 import streamlit as st
 
-from vaybooks.bms.domain.customers.entities import Customer
+from vaybooks.bms.domain.parties.customers.entities import Customer
 from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.styles import status_badge
 

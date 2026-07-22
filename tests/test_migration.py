@@ -7,9 +7,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from vaybooks.bms.application.accounting_app_service import AccountingAppService
-from vaybooks.bms.application.customer_app_service import CustomerAppService
-from vaybooks.bms.application.inventory_app_service import InventoryAppService
+from vaybooks.bms.application.finance.accounting.service import AccountingAppService
+from vaybooks.bms.application.parties.customers.service import CustomerAppService
+from vaybooks.bms.application.inventory.service import InventoryAppService
 from vaybooks.bms.application.migration.mapping import (
     apply_saved_profile,
     missing_required,
@@ -20,10 +20,10 @@ from vaybooks.bms.application.migration.schemas import (
     DuplicatePolicy,
     ImportEntityType,
 )
-from vaybooks.bms.application.migration_app_service import MigrationAppService
-from vaybooks.bms.application.vendor_app_service import VendorAppService
+from vaybooks.bms.application.migration.service import MigrationAppService
+from vaybooks.bms.application.parties.vendors.service import VendorAppService
 from vaybooks.bms.domain.migration.entities import ImportMappingProfile
-from vaybooks.bms.domain.vendors.entities import Vendor
+from vaybooks.bms.domain.parties.vendors.entities import Vendor
 from tests.conftest import (
     FakeAccountRepository,
     FakeCounterRepository,
@@ -265,8 +265,8 @@ def test_duplicate_skip_policy():
 
 def test_set_opening_balance_rejects_when_vouchers_exist():
     migration, _, customers, accounting, account_repo, _ = make_migration_service()
-    from vaybooks.bms.domain.customers.entities import CustomerInput
-    from vaybooks.bms.domain.accounting.entities import Voucher, VoucherLine
+    from vaybooks.bms.domain.parties.customers.entities import CustomerInput
+    from vaybooks.bms.domain.finance.accounting.entities import Voucher, VoucherLine
     from vaybooks.bms.domain.shared.enums import VoucherType
     from datetime import date
 

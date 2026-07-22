@@ -7,7 +7,7 @@ from typing import Optional
 import streamlit as st
 
 from vaybooks.bms.domain.shared.enums import PartyRegistrationType
-from vaybooks.bms.domain.vendors.entities import Vendor, VendorInput
+from vaybooks.bms.domain.parties.vendors.entities import Vendor, VendorInput
 from vaybooks.bms.ui.components.party_form_fields import render_party_address_tax_fields
 
 

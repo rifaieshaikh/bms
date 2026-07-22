@@ -2,8 +2,8 @@ from datetime import date, datetime
 
 import streamlit as st
 
-from vaybooks.bms.domain.orders.entities import CustomizationOrder
-from vaybooks.bms.domain.orders.order_refs import compact_order_ref
+from vaybooks.bms.domain.boutique.orders.entities import CustomizationOrder
+from vaybooks.bms.domain.boutique.orders.order_refs import compact_order_ref
 from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.styles import render_card_grid, status_badge
 

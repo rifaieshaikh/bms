@@ -15,12 +15,12 @@ from tests.test_projects_module import (
     FakeProjectTemplateRepository,
 )
 from tests.test_sales_workflow import FakeBusinessService
-from vaybooks.bms.application.project_access_policy import ProjectAccessPolicy
-from vaybooks.bms.application.project_app_service import ProjectAppService
-from vaybooks.bms.application.project_boq_app_service import ProjectBoqAppService
-from vaybooks.bms.application.project_document_app_service import ProjectDocumentAppService
-from vaybooks.bms.application.project_quotation_app_service import ProjectQuotationAppService
-from vaybooks.bms.domain.customers.entities import Customer
+from vaybooks.bms.application.projects.access.service import ProjectAccessPolicy
+from vaybooks.bms.application.projects.core.service import ProjectAppService
+from vaybooks.bms.application.projects.boq.service import ProjectBoqAppService
+from vaybooks.bms.application.projects.documents.service import ProjectDocumentAppService
+from vaybooks.bms.application.projects.quotations.service import ProjectQuotationAppService
+from vaybooks.bms.domain.parties.customers.entities import Customer
 from vaybooks.bms.domain.projects.boq import ProjectBoqItem
 from vaybooks.bms.domain.projects.entities import (
     ProjectQuotation,

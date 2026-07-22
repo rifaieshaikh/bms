@@ -1,7 +1,7 @@
 import streamlit as st
 
-from vaybooks.bms.application.order_app_service import OrderAppService
-from vaybooks.bms.domain.orders.entities import CustomizationOrder
+from vaybooks.bms.application.boutique.orders.service import OrderAppService
+from vaybooks.bms.domain.boutique.orders.entities import CustomizationOrder
 from vaybooks.bms.domain.shared.enums import ActivityStatus
 from vaybooks.bms.ui.session_keys import ACTIVITY_SKIP_NOTICE
 

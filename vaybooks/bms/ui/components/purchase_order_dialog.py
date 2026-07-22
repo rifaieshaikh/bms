@@ -13,10 +13,12 @@ from vaybooks.bms.ui.components.purchase_invoice_form import (
     vendor_option_map,
     vendor_select_index,
 )
+from vaybooks.bms.ui.components.purchase_line_ui import vendor_is_registered
 from vaybooks.bms.ui.components.purchase_lines_editor import render_purchase_lines_editor
 from vaybooks.bms.ui.dialog_utils import make_dismiss_handler
 
 PO_DIALOG = "purchase_order_dialog"
+PO_CREATE_SUCCESS_KEY = "po_create_success"
 
 
 def arm_po_dialog() -> None:
@@ -28,6 +30,16 @@ def _clear() -> None:
     for key in list(st.session_state.keys()):
         if key.startswith(PO_DIALOG):
             st.session_state.pop(key, None)
+
+
+def consume_po_create_success() -> None:
+    """Show a toast when a PO was just created (call from the list page)."""
+    po_number = st.session_state.pop(PO_CREATE_SUCCESS_KEY, None)
+    if po_number:
+        st.toast(
+            f"Purchase order {po_number} created",
+            icon=":material/check_circle:",
+        )
 
 
 @st.dialog("Create Purchase Order", width="large", on_dismiss=make_dismiss_handler(PO_DIALOG))
@@ -68,7 +80,10 @@ def purchase_order_dialog(services: dict) -> None:
     notes = st.text_input("Notes", key=f"{PO_DIALOG}_notes")
 
     st.markdown("**Line items**")
-    st.caption("Purchase orders are product-only. Services belong on purchase bills.")
+    st.caption(
+        "Purchase orders are product-only. Pick a product — HSN, rate, and totals fill from the catalog."
+    )
+    vendor_registered = vendor_is_registered(vendor)
     line_items, gst_errors = render_purchase_lines_editor(
         key_prefix=PO_DIALOG,
         products=products,
@@ -78,7 +93,7 @@ def purchase_order_dialog(services: dict) -> None:
         inventory_service=inventory,
         allow_services=False,
         qty_field="qty_ordered",
-        vendor_registered=False,
+        vendor_registered=vendor_registered,
         business=business,
         business_state_code=business.state_code if business else "",
         vendor_state_code=vendor.state_code if vendor else "",
@@ -112,7 +127,7 @@ def purchase_order_dialog(services: dict) -> None:
                 )
             if not po_lines:
                 raise ValueError("Add at least one product line")
-            purchases.create_purchase_order(
+            created = purchases.create_purchase_order(
                 vendor_id=vendor_id,
                 order_date=order_date,
                 expected_date=expected_date,
@@ -120,6 +135,7 @@ def purchase_order_dialog(services: dict) -> None:
                 notes=notes,
                 status=PurchaseOrderStatus.SENT,
             )
+            st.session_state[PO_CREATE_SUCCESS_KEY] = created.po_number
             _clear()
             st.rerun()
         except Exception as exc:

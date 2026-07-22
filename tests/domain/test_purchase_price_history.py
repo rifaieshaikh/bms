@@ -4,7 +4,7 @@ from datetime import date
 
 from vaybooks.bms.domain.purchases.line_items import PurchaseBillLine, PurchasePriceHistory
 from vaybooks.bms.domain.shared.enums import CatalogItemType
-from vaybooks.bms.infrastructure.repositories.mongo_purchase_price_history_repository import (
+from vaybooks.bms.infrastructure.repositories.purchases.mongo_purchase_price_history_repository import (
     MongoPurchasePriceHistoryRepository,
 )
 

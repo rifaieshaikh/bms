@@ -1,9 +1,9 @@
 from datetime import date
 
-from vaybooks.bms.application.delivery_app_service import DeliveryAppService
-from vaybooks.bms.application.expense_app_service import ExpenseAppService
-from vaybooks.bms.domain.expenses.entities import Expense
-from vaybooks.bms.domain.invoices.entities import Invoice
+from vaybooks.bms.application.boutique.deliveries.service import DeliveryAppService
+from vaybooks.bms.application.boutique.expenses.service import ExpenseAppService
+from vaybooks.bms.domain.boutique.expenses.entities import Expense
+from vaybooks.bms.domain.boutique.invoices.entities import Invoice
 from vaybooks.bms.domain.shared.enums import ExpenseSource, OrderStatus
 from tests.application.test_invoice_app_service import _build_o1001_order
 from tests.conftest import (

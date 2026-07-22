@@ -4,11 +4,11 @@ from datetime import date
 
 import pytest
 
-from vaybooks.bms.application.accounting_app_service import AccountingAppService
-from vaybooks.bms.application.sales_app_service import SalesAppService
-from vaybooks.bms.domain.accounting.entities import Account
+from vaybooks.bms.application.finance.accounting.service import AccountingAppService
+from vaybooks.bms.application.sales.service import SalesAppService
+from vaybooks.bms.domain.finance.accounting.entities import Account
 from vaybooks.bms.domain.business.entities import BusinessProfile
-from vaybooks.bms.domain.customers.entities import Customer
+from vaybooks.bms.domain.parties.customers.entities import Customer
 from vaybooks.bms.domain.shared.enums import (
     AccountType,
     DeliveryNoteStatus,

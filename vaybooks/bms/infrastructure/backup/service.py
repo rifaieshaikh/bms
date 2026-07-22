@@ -14,7 +14,7 @@ from bson import ObjectId
 from pymongo.database import Database
 
 from vaybooks.bms.version import __version__
-from vaybooks.bms.application.export_app_service import _serialize_bson
+from vaybooks.bms.application.finance.export.service import _serialize_bson
 from vaybooks.bms.infrastructure.config.paths import get_backups_dir, get_config_path
 from vaybooks.bms.infrastructure.config.runtime import is_desktop
 from vaybooks.bms.infrastructure.config.settings import get_settings

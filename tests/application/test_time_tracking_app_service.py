@@ -2,11 +2,11 @@ from datetime import date
 
 import pytest
 
-from vaybooks.bms.application.time_tracking_app_service import TimeTrackingAppService
-from vaybooks.bms.domain.orders.entities import CustomizationItem, CustomizationOrder, OrderActivity
+from vaybooks.bms.application.boutique.time_tracking.service import TimeTrackingAppService
+from vaybooks.bms.domain.boutique.orders.entities import CustomizationItem, CustomizationOrder, OrderActivity
 from vaybooks.bms.domain.shared.enums import ActivityStatus, OrderStatus
 from vaybooks.bms.domain.shared.exceptions import ValidationError
-from vaybooks.bms.domain.time_tracking.entities import TimeEntry
+from vaybooks.bms.domain.boutique.time_tracking.entities import TimeEntry
 from tests.conftest import FakeOrderRepository, FakeTimeTrackingRepository
 
 

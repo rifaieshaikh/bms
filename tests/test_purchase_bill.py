@@ -4,9 +4,9 @@ from datetime import date, datetime
 
 import pytest
 
-from vaybooks.bms.application.accounting_app_service import AccountingAppService
-from vaybooks.bms.domain.accounting.entities import Account
-from vaybooks.bms.domain.accounting.purchase_parsing import (
+from vaybooks.bms.application.finance.accounting.service import AccountingAppService
+from vaybooks.bms.domain.finance.accounting.entities import Account
+from vaybooks.bms.domain.finance.accounting.purchase_parsing import (
     build_purchase_description,
     parse_purchase_lines_from_description,
     purchase_row_from_voucher,

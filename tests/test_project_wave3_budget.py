@@ -8,7 +8,7 @@ from typing import Dict, List, Optional
 
 import pytest
 
-from vaybooks.bms.application.project_budget_app_service import ProjectBudgetAppService
+from vaybooks.bms.application.projects.budget.service import ProjectBudgetAppService
 from vaybooks.bms.domain.projects.budget import (
     ProjectBudgetHeader,
     ProjectBudgetLine,

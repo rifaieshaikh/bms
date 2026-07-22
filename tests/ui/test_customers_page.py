@@ -37,7 +37,7 @@ def test_customer_detail_route_renders_from_query_id():
 
         import streamlit as st
 
-        from vaybooks.bms.domain.customers.entities import Customer
+        from vaybooks.bms.domain.parties.customers.entities import Customer
         from vaybooks.bms.ui.pages import customer_detail
 
         customer = Customer(

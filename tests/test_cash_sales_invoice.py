@@ -2,9 +2,9 @@
 
 import pytest
 
-from vaybooks.bms.application.accounting_app_service import AccountingAppService
-from vaybooks.bms.domain.accounting.entities import Account
-from vaybooks.bms.domain.accounting.services import ADVANCE_FROM_CUSTOMERS_ACCOUNT_NAME
+from vaybooks.bms.application.finance.accounting.service import AccountingAppService
+from vaybooks.bms.domain.finance.accounting.entities import Account
+from vaybooks.bms.domain.finance.accounting.services import ADVANCE_FROM_CUSTOMERS_ACCOUNT_NAME
 from vaybooks.bms.domain.shared.enums import AccountType, VoucherType
 from vaybooks.bms.domain.shared.india import (
     CGST_OUTPUT_ACCOUNT_NAME,

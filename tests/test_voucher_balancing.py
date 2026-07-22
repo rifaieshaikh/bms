@@ -2,8 +2,8 @@ from datetime import datetime
 
 import pytest
 
-from vaybooks.bms.domain.accounting.entities import Voucher, VoucherLine
-from vaybooks.bms.domain.accounting.services import AccountingDomainService
+from vaybooks.bms.domain.finance.accounting.entities import Voucher, VoucherLine
+from vaybooks.bms.domain.finance.accounting.services import AccountingDomainService
 from vaybooks.bms.domain.shared.enums import VoucherType
 from vaybooks.bms.domain.shared.exceptions import UnbalancedVoucherError
 from tests.conftest import FakeAccountRepository, FakeVoucherRepository

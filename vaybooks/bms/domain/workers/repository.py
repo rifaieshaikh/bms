@@ -1,13 +1,2 @@
-from typing import List, Optional, Protocol
-
-from vaybooks.bms.domain.workers.entities import Worker
-
-
-class WorkerRepository(Protocol):
-    def save(self, worker: Worker) -> Worker: ...
-
-    def find_by_id(self, worker_id: str) -> Optional[Worker]: ...
-
-    def list_all(self, active_only: bool = True) -> List[Worker]: ...
-
-    def list_by_activity(self, activity_id: str, active_only: bool = True) -> List[Worker]: ...
+"""Deprecated import path; use vaybooks.bms.domain.parties.workers.repository."""
+from vaybooks.bms.domain.parties.workers.repository import *  # noqa: F401,F403

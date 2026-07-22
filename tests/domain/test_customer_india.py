@@ -4,8 +4,8 @@ from typing import Dict, List, Optional
 
 import pytest
 
-from vaybooks.bms.domain.customers.entities import Customer, CustomerInput
-from vaybooks.bms.domain.customers.services import CustomerDomainService
+from vaybooks.bms.domain.parties.customers.entities import Customer, CustomerInput
+from vaybooks.bms.domain.parties.customers.services import CustomerDomainService
 from vaybooks.bms.domain.shared.enums import PartyRegistrationType
 from vaybooks.bms.domain.shared.exceptions import (
     DuplicateCustomerError,

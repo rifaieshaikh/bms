@@ -4,9 +4,9 @@ from datetime import date
 
 import pytest
 
-from vaybooks.bms.application.project_app_service import ProjectAppService
-from vaybooks.bms.application.project_quotation_app_service import ProjectQuotationAppService
-from vaybooks.bms.domain.customers.entities import Customer
+from vaybooks.bms.application.projects.core.service import ProjectAppService
+from vaybooks.bms.application.projects.quotations.service import ProjectQuotationAppService
+from vaybooks.bms.domain.parties.customers.entities import Customer
 from vaybooks.bms.domain.projects.entities import ProjectTemplate, ProjectTemplateActivity
 from vaybooks.bms.domain.shared.enums import ProjectActivityStatus
 from vaybooks.bms.domain.shared.exceptions import ValidationError

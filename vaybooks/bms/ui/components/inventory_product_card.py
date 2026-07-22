@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from vaybooks.bms.application.reports.inventory_report_service import LOW_STOCK_THRESHOLD
+from vaybooks.bms.application.finance.reports.services.inventory_report_service import LOW_STOCK_THRESHOLD
 from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.styles import render_card_grid, status_badge
 

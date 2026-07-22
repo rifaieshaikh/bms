@@ -2,7 +2,7 @@ from tests.conftest import FakeBillRegistryRepository, FakeCounterRepository
 
 
 def test_bill_number_uniqueness():
-    from vaybooks.bms.domain.orders.value_objects import BillRegistryEntry
+    from vaybooks.bms.domain.boutique.orders.value_objects import BillRegistryEntry
     from vaybooks.bms.domain.shared.exceptions import BillNumberExistsError
 
     repo = FakeBillRegistryRepository()

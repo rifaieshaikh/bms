@@ -2,12 +2,12 @@
 
 import pytest
 
-from vaybooks.bms.application.accounting_app_service import (
+from vaybooks.bms.application.finance.accounting.service import (
     ADVANCE_RELEASE_DESCRIPTION_PREFIX,
     AccountingAppService,
 )
-from vaybooks.bms.domain.accounting.entities import Account
-from vaybooks.bms.domain.accounting.services import ADVANCE_FROM_CUSTOMERS_ACCOUNT_NAME
+from vaybooks.bms.domain.finance.accounting.entities import Account
+from vaybooks.bms.domain.finance.accounting.services import ADVANCE_FROM_CUSTOMERS_ACCOUNT_NAME
 from vaybooks.bms.domain.shared.enums import AccountType, VoucherType
 from tests.conftest import FakeAccountRepository, FakeCounterRepository, FakeVoucherRepository
 

@@ -6,9 +6,9 @@ import os
 import uuid
 from pathlib import Path
 
-from vaybooks.bms.application.inventory_app_service import InventoryAppService
+from vaybooks.bms.application.inventory.service import InventoryAppService
 from vaybooks.bms.infrastructure.db.connection import get_database_from_uri
-from vaybooks.bms.infrastructure.repositories.mongo_inventory_repository import (
+from vaybooks.bms.infrastructure.repositories.inventory.mongo_inventory_repository import (
     MongoInventoryProductRepository,
     MongoProductCategoryRepository,
     MongoProductUnitRepository,

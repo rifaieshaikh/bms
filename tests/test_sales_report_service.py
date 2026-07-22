@@ -2,7 +2,7 @@
 
 from datetime import date, datetime
 
-from vaybooks.bms.application.reports.sales_report_service import SalesReportService
+from vaybooks.bms.application.finance.reports.services.sales_report_service import SalesReportService
 from vaybooks.bms.domain.shared.enums import VoucherType
 
 

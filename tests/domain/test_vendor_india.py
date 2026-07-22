@@ -16,8 +16,8 @@ from vaybooks.bms.domain.shared.india import (
     validate_pan,
     validate_pincode,
 )
-from vaybooks.bms.domain.vendors.entities import Vendor, VendorInput
-from vaybooks.bms.domain.vendors.services import VendorDomainService
+from vaybooks.bms.domain.parties.vendors.entities import Vendor, VendorInput
+from vaybooks.bms.domain.parties.vendors.services import VendorDomainService
 
 
 class InMemoryVendorRepository:

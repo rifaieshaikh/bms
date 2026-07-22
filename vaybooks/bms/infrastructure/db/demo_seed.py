@@ -5,11 +5,11 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any, Optional
 
-from vaybooks.bms.application.business_app_service import BusinessAppService
-from vaybooks.bms.application.customer_app_service import CustomerAppService
-from vaybooks.bms.application.inventory_app_service import InventoryAppService
-from vaybooks.bms.application.vendor_app_service import VendorAppService
-from vaybooks.bms.domain.customers.entities import CustomerInput
+from vaybooks.bms.application.settings.business.service import BusinessAppService
+from vaybooks.bms.application.parties.customers.service import CustomerAppService
+from vaybooks.bms.application.inventory.service import InventoryAppService
+from vaybooks.bms.application.parties.vendors.service import VendorAppService
+from vaybooks.bms.domain.parties.customers.entities import CustomerInput
 from vaybooks.bms.domain.inventory.rate_history_service import ProductRateHistoryService
 from vaybooks.bms.domain.shared.enums import PartyRegistrationType
 from vaybooks.bms.domain.shared.exceptions import (
@@ -17,7 +17,7 @@ from vaybooks.bms.domain.shared.exceptions import (
     DuplicateVendorError,
     ValidationError,
 )
-from vaybooks.bms.domain.vendors.entities import VendorInput
+from vaybooks.bms.domain.parties.vendors.entities import VendorInput
 from vaybooks.bms.infrastructure.db.demo_seed_profiles import (
     DEMO_UNITS,
     KERALA_STATE,
@@ -29,25 +29,25 @@ from vaybooks.bms.infrastructure.db.demo_seed_profiles import (
     profiles_to_run,
     resolve_business_settings,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_accounting_repository import (
+from vaybooks.bms.infrastructure.repositories.finance.mongo_accounting_repository import (
     MongoAccountRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_business_profile_repository import (
+from vaybooks.bms.infrastructure.repositories.shared.mongo_business_profile_repository import (
     MongoBusinessProfileRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_customer_repository import (
+from vaybooks.bms.infrastructure.repositories.parties.mongo_customer_repository import (
     MongoCustomerRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_inventory_repository import (
+from vaybooks.bms.infrastructure.repositories.inventory.mongo_inventory_repository import (
     MongoInventoryProductRepository,
     MongoProductCategoryRepository,
     MongoProductUnitRepository,
     MongoStockMovementRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_product_rate_history_repository import (
+from vaybooks.bms.infrastructure.repositories.inventory.mongo_product_rate_history_repository import (
     MongoProductRateHistoryRepository,
 )
-from vaybooks.bms.infrastructure.repositories.mongo_vendor_repository import (
+from vaybooks.bms.infrastructure.repositories.parties.mongo_vendor_repository import (
     MongoVendorRepository,
 )
 

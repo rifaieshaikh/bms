@@ -34,7 +34,7 @@ def test_order_detail_route_renders_from_query_id():
 
         import streamlit as st
 
-        from vaybooks.bms.domain.orders.entities import CustomizationItem, CustomizationOrder
+        from vaybooks.bms.domain.boutique.orders.entities import CustomizationItem, CustomizationOrder
         from vaybooks.bms.domain.shared.enums import OrderStatus
         from vaybooks.bms.ui.pages import customization_order_detail
 
@@ -78,6 +78,10 @@ def test_order_detail_route_renders_from_query_id():
             "customers": MagicMock(),
             "vendors": MagicMock(list_vendors=MagicMock(return_value=[])),
             "vendor_services": MagicMock(list_services=MagicMock(return_value=[])),
+            "measurements": MagicMock(
+                list_by_customer=MagicMock(return_value=[]),
+                get_record=MagicMock(return_value=None),
+            ),
         }
         customization_order_detail.render(services)
 

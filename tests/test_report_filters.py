@@ -6,7 +6,7 @@ from vaybooks.bms.application.report_filters import (
     ItemProfitabilityFilter,
     OrderMphFilter,
 )
-from vaybooks.bms.application.reports.profitability_report_service import (
+from vaybooks.bms.application.finance.reports.services.profitability_report_service import (
     ProfitabilityReportService,
 )
 from vaybooks.bms.infrastructure.db.bson_utils import as_date

@@ -15,13 +15,13 @@ from tests.test_project_billing import (
     FakeWorkOrderRepository,
 )
 from tests.test_projects_module import FakeProjectRepository, FakeProjectTemplateRepository
-from vaybooks.bms.application.project_app_service import ProjectAppService
-from vaybooks.bms.application.project_billing_app_service import ProjectBillingAppService
-from vaybooks.bms.application.project_quality_config_app_service import (
+from vaybooks.bms.application.projects.core.service import ProjectAppService
+from vaybooks.bms.application.projects.billing.service import ProjectBillingAppService
+from vaybooks.bms.application.projects.quality.service import (
     ProjectQualityConfigAppService,
 )
-from vaybooks.bms.domain.accounting.entities import Voucher, VoucherLine
-from vaybooks.bms.domain.customers.entities import Customer
+from vaybooks.bms.domain.finance.accounting.entities import Voucher, VoucherLine
+from vaybooks.bms.domain.parties.customers.entities import Customer
 from vaybooks.bms.domain.projects.entities import ProjectRetentionEntry
 from vaybooks.bms.domain.projects.quality_config import (
     ProjectHandover,

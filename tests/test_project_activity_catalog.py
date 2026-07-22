@@ -9,15 +9,15 @@ import pytest
 
 from tests.conftest import FakeCounterRepository, FakeCustomerRepository
 from tests.test_projects_module import FakeProjectRepository, FakeProjectTemplateRepository
-from vaybooks.bms.application.project_activity_config_app_service import (
+from vaybooks.bms.application.projects.activity_config.service import (
     ProjectActivityConfigAppService,
 )
-from vaybooks.bms.application.project_app_service import ProjectAppService
-from vaybooks.bms.application.project_boq_app_service import ProjectBoqAppService
-from vaybooks.bms.application.project_quotation_app_service import (
+from vaybooks.bms.application.projects.core.service import ProjectAppService
+from vaybooks.bms.application.projects.boq.service import ProjectBoqAppService
+from vaybooks.bms.application.projects.quotations.service import (
     ProjectQuotationAppService,
 )
-from vaybooks.bms.domain.customers.entities import Customer
+from vaybooks.bms.domain.parties.customers.entities import Customer
 from vaybooks.bms.domain.projects.activity_catalog import (
     COMPLETED_STATUS,
     CREATED_STATUS,

@@ -7,6 +7,7 @@ text remains in the row and offers a row-specific catalog creation action.
 
 from __future__ import annotations
 
+import math
 from typing import Any, Optional
 
 import pandas as pd
@@ -30,7 +31,68 @@ def _service_label(service) -> str:
 
 
 def _lookup_key(value: object) -> str:
-    return str(value or "").strip().casefold()
+    return _as_text(value).casefold()
+
+
+def _as_float(value: object, default: float = 0.0) -> float:
+    """Coerce editor/pandas values to float; treat blank/NaN/Inf as default."""
+    try:
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return default
+        if pd.isna(value):
+            return default
+    except (TypeError, ValueError):
+        pass
+    try:
+        number = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+    if math.isnan(number) or math.isinf(number):
+        return default
+    return number
+
+
+def _as_text(value: object) -> str:
+    """Coerce editor/pandas cell values to a clean string."""
+    try:
+        if value is None or pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        if value is None:
+            return ""
+    text = str(value).strip()
+    if text.casefold() in {"nan", "none", "<na>"}:
+        return ""
+    return text
+
+
+def _looks_numeric(value: object) -> bool:
+    """True for ints/floats/blanks/NaN and numeric strings (editor number cells)."""
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, (int, float)):
+        return True
+    try:
+        if value is None or pd.isna(value):
+            return True
+    except (TypeError, ValueError):
+        if value is None:
+            return True
+    text = _as_text(value)
+    if text == "":
+        return True
+    try:
+        float(text)
+        return True
+    except ValueError:
+        return False
+
+
+def _values_equal(left: object, right: object) -> bool:
+    """Equality that treats blank/NaN as empty and compares numerics loosely."""
+    if _looks_numeric(left) and _looks_numeric(right):
+        return abs(_as_float(left) - _as_float(right)) < 1e-9
+    return _as_text(left) == _as_text(right)
 
 
 def _item_lookup_maps(products: list, services: list) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -91,10 +153,11 @@ def _rows_from_initial(
         item_type = str(raw.get("item_type") or CatalogItemType.PRODUCT.value)
         item_id = str(raw.get("item_id") or raw.get("product_id") or "")
         label = label_by_id.get(item_id, "")
-        qty = float(
-            raw.get(qty_field) or raw.get("qty") or raw.get("qty_ordered") or 1
+        qty = _as_float(
+            raw.get(qty_field) or raw.get("qty") or raw.get("qty_ordered"),
+            1.0,
         )
-        rate = float(raw.get("rate") or 0)
+        rate = _as_float(raw.get("rate"))
         row = _blank_row(show_type=show_type, show_gst=show_gst)
         if show_type:
             row["Type"] = item_type
@@ -103,6 +166,34 @@ def _rows_from_initial(
     if not rows:
         rows.append(_blank_row(show_type=show_type, show_gst=show_gst))
     return rows
+
+
+def _default_purchase_rate(
+    item,
+    *,
+    item_type: str,
+    vendor_id: str,
+    purchases_service,
+) -> float:
+    """Resolve default ex-GST rate: vendor history → last purchase → selling."""
+    if (
+        purchases_service is not None
+        and hasattr(purchases_service, "get_latest_purchase_rate")
+    ):
+        latest = purchases_service.get_latest_purchase_rate(
+            CatalogItemType(item_type),
+            item.id,
+            vendor_id or "",
+        )
+        if latest is not None and float(latest) > 0:
+            return round(float(latest), 2)
+
+    if item_type == CatalogItemType.PRODUCT.value:
+        for attr in ("last_purchase_rate", "active_selling_rate", "selling_rate"):
+            value = float(getattr(item, attr, 0) or 0)
+            if value > 0:
+                return round(value, 2)
+    return 0.0
 
 
 def render_purchase_lines_editor(
@@ -124,8 +215,10 @@ def render_purchase_lines_editor(
 ) -> tuple[list[dict], list[str]]:
     """Render editable purchase lines; return normalized dicts + validation errors.
 
-    When ``allow_services`` is False (PO / return), Type is omitted and only
-    products appear in Item options.
+    When ``allow_services`` is False (PO / return), Type is omitted, Item is a
+    selectbox of active products, and only products appear as options.
+    When ``allow_services`` is True (bills), Item stays free-text so unknown
+    catalog names can be created inline.
     """
     services = list(services or [])
     show_type = allow_services
@@ -179,11 +272,11 @@ def render_purchase_lines_editor(
                 rebuilt_row["Type"] = row.get("Type", CatalogItemType.PRODUCT.value)
             rebuilt_row.update(
                 {
-                    "Item": row.get("Item", ""),
-                    "Name": row.get("Name", ""),
-                    "HSN/SAC": row.get("HSN/SAC", "") if show_gst else "",
-                    "Qty": float(row.get("Qty") or 1),
-                    "Rate": float(row.get("Rate") or 0),
+                    "Item": _as_text(row.get("Item")),
+                    "Name": _as_text(row.get("Name")),
+                    "HSN/SAC": _as_text(row.get("HSN/SAC")) if show_gst else "",
+                    "Qty": _as_float(row.get("Qty"), 1.0),
+                    "Rate": _as_float(row.get("Rate")),
                 }
             )
             rebuilt.append(rebuilt_row)
@@ -194,6 +287,32 @@ def render_purchase_lines_editor(
         st.session_state.pop(editor_key, None)
         st.rerun()
 
+    # Product-only editors (PO / return) use a searchable select of active products.
+    # Bill editors keep free-text Item so unknown catalog names can be created inline.
+    use_item_select = not allow_services
+    item_select_options = [""] + [_product_label(item) for item in products]
+
+    if use_item_select:
+        # Drop stale Item values that are no longer in the option list (Streamlit
+        # SelectboxColumn errors or blanks when the cell value is not in options).
+        sanitized_rows = []
+        changed_options = False
+        for row in list(st.session_state.get(df_key) or []):
+            sanitized = dict(row)
+            item_label = _as_text(sanitized.get("Item"))
+            if item_label and item_label not in item_select_options:
+                sanitized["Item"] = ""
+                changed_options = True
+            sanitized_rows.append(sanitized)
+        if changed_options:
+            st.session_state[df_key] = sanitized_rows or [
+                _blank_row(show_type=show_type, show_gst=show_gst)
+            ]
+            st.session_state.pop(editor_key, None)
+        if not products:
+            st.warning("No active products in inventory. Add a product before creating lines.")
+
+
     column_config: dict[str, Any] = {}
     if show_type:
         column_config["Type"] = st.column_config.SelectboxColumn(
@@ -202,14 +321,24 @@ def render_purchase_lines_editor(
             required=True,
             width="small",
         )
+    if use_item_select:
+        item_column = st.column_config.SelectboxColumn(
+            "Item",
+            options=item_select_options,
+            required=False,
+            width="large",
+            help="Select an active product (SKU — name). Use + Add catalog item for a new product.",
+        )
+    else:
+        item_column = st.column_config.TextColumn(
+            "Item",
+            required=False,
+            width="large",
+            help="Type an existing SKU/name, or enter a new item and create it below.",
+        )
     column_config.update(
         {
-            "Item": st.column_config.TextColumn(
-                "Item",
-                required=False,
-                width="large",
-                help="Type an existing SKU/name, or enter a new item and create it below.",
-            ),
+            "Item": item_column,
             "Qty": st.column_config.NumberColumn(
                 "Qty", min_value=0.0, step=1.0, format="%.2f"
             ),
@@ -277,13 +406,13 @@ def render_purchase_lines_editor(
 
     for index, raw in enumerate(edited_rows):
         item_type = (
-            str(raw.get("Type") or CatalogItemType.PRODUCT.value)
+            (_as_text(raw.get("Type")) or CatalogItemType.PRODUCT.value)
             if show_type
             else CatalogItemType.PRODUCT.value
         )
-        label = str(raw.get("Item") or "").strip()
-        qty = float(raw.get("Qty") or 0)
-        rate = float(raw.get("Rate") or 0)
+        label = _as_text(raw.get("Item"))
+        qty = _as_float(raw.get("Qty"))
+        rate = _as_float(raw.get("Rate"))
 
         lookup_key = _lookup_key(label)
         product = product_lookup.get(lookup_key)
@@ -326,27 +455,20 @@ def render_purchase_lines_editor(
         if item is not None and (
             item_changed or is_new_item_row or force_vendor_rate
         ):
-            default_rate = 0.0
-            if (
-                purchases_service is not None
-                and hasattr(purchases_service, "get_latest_purchase_rate")
-            ):
-                latest = purchases_service.get_latest_purchase_rate(
-                    CatalogItemType(item_type),
-                    item.id,
-                    vendor_id or "",
-                )
-                if latest is not None and float(latest) > 0:
-                    default_rate = round(float(latest), 2)
-            if default_rate <= 0 and item_type == CatalogItemType.PRODUCT.value:
-                fallback = float(getattr(item, "last_purchase_rate", 0) or 0)
-                if fallback > 0:
-                    default_rate = round(fallback, 2)
+            if qty <= 0:
+                qty = 1.0
+                force_refresh = True
+            default_rate = _default_purchase_rate(
+                item,
+                item_type=item_type,
+                vendor_id=vendor_id or "",
+                purchases_service=purchases_service,
+            )
             if default_rate > 0 and round(rate, 2) != round(default_rate, 2):
                 rate = default_rate
                 force_refresh = True
             elif default_rate == 0.0 and (item_changed or is_new_item_row):
-                # New item with no history: leave rate as user typed, or 0
+                # No purchase/selling history: leave rate as user typed, or 0
                 pass
 
         tax_profile = line_tax_profile(item)
@@ -369,11 +491,13 @@ def render_purchase_lines_editor(
         display_row = _blank_row(show_type=show_type, show_gst=show_gst)
         if show_type:
             display_row["Type"] = item_type
+        # Always surface HSN/SAC from the catalog item (even when GST columns are hidden).
+        hsn_sac = tax_profile.hsn_sac if item is not None else ""
         display_row.update(
             {
                 "Item": label,
                 "Name": name,
-                "HSN/SAC": preview["hsn_sac"] if item and show_gst else "",
+                "HSN/SAC": hsn_sac,
                 "Qty": qty,
                 "Rate": rate,
                 "Taxable": preview["taxable_amount"],
@@ -394,7 +518,7 @@ def render_purchase_lines_editor(
         if show_gst:
             computed_keys.extend(["GST %", "CGST", "SGST", "UTGST", "IGST"])
         for computed_key in computed_keys:
-            if raw.get(computed_key) != display_row.get(computed_key):
+            if not _values_equal(raw.get(computed_key), display_row.get(computed_key)):
                 force_refresh = True
                 break
         display_rows.append(display_row)
@@ -427,8 +551,8 @@ def render_purchase_lines_editor(
             for seeded in initial_lines:
                 seeded_id = str(seeded.get("item_id") or seeded.get("product_id") or "")
                 if seeded_id == item.id:
-                    line["landed_cost_alloc"] = float(
-                        seeded.get("landed_cost_alloc") or 0
+                    line["landed_cost_alloc"] = _as_float(
+                        seeded.get("landed_cost_alloc")
                     )
                     break
         lines.append(line)

@@ -1,13 +1,2 @@
-from typing import List, Optional, Protocol
-
-from vaybooks.bms.domain.activities.entities import ActivityConfig
-
-
-class ActivityRepository(Protocol):
-    def save(self, activity: ActivityConfig) -> ActivityConfig: ...
-
-    def find_by_id(self, activity_id: str) -> Optional[ActivityConfig]: ...
-
-    def find_by_name(self, name: str) -> Optional[ActivityConfig]: ...
-
-    def list_all(self, active_only: bool = True) -> List[ActivityConfig]: ...
+"""Deprecated import path; use vaybooks.bms.domain.boutique.activities.repository."""
+from vaybooks.bms.domain.boutique.activities.repository import *  # noqa: F401,F403
