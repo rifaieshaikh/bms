@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+import time
+
 import streamlit as st
 
 from vaybooks.bms.domain.shared.enums import CatalogItemType, PurchaseOrderStatus
@@ -9,7 +12,10 @@ from vaybooks.bms.ui.components.purchases.purchase_line_ui import vendor_is_regi
 from vaybooks.bms.ui.components.purchases.purchase_lines_editor import render_purchase_lines_editor
 from vaybooks.bms.ui.dialog_utils import make_dismiss_handler
 
+logger = logging.getLogger(__name__)
+
 PO_EDIT_DIALOG = "purchase_order_edit_dialog"
+PO_EDIT_PRODUCTS_CACHE_KEY = f"{PO_EDIT_DIALOG}_products_cache"
 
 
 def arm_po_edit_dialog(order_id: str) -> None:
@@ -20,6 +26,24 @@ def _clear() -> None:
     for key in list(st.session_state.keys()):
         if key == PO_EDIT_DIALOG or key.startswith(f"{PO_EDIT_DIALOG}_"):
             st.session_state.pop(key, None)
+
+
+def _cached_products(inventory) -> list:
+    cached = st.session_state.get(PO_EDIT_PRODUCTS_CACHE_KEY)
+    if cached is not None:
+        logger.debug("po_edit.list_products cache_hit count=%s", len(cached))
+        return cached
+    if not inventory:
+        return []
+    started = time.perf_counter()
+    products = inventory.list_products(active_only=True)
+    st.session_state[PO_EDIT_PRODUCTS_CACHE_KEY] = products
+    logger.debug(
+        "po_edit.list_products cache_miss count=%s duration_ms=%.1f",
+        len(products),
+        (time.perf_counter() - started) * 1000,
+    )
+    return products
 
 
 @st.dialog(
@@ -46,7 +70,7 @@ def _po_edit_dialog(services: dict) -> None:
         return
 
     vendor = vendors.get_vendor_detail(order.vendor_id)
-    products = inventory.list_products(active_only=True) if inventory else []
+    products = _cached_products(inventory)
 
     st.caption(f"PO {order.po_number} · Vendor: {order.vendor_name}")
     order_date = st.date_input(

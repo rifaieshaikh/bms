@@ -90,11 +90,18 @@ def purchase_bill_dialog(services: dict) -> None:
     )
     bill_date = cols[1].date_input("Date", value=date.today(), key=f"{PURCHASE_BILL_DIALOG}_date")
 
+    ref_grn = st.session_state.get(f"{PURCHASE_BILL_DIALOG}_reference_grn_id")
+    ref_po = st.session_state.get(f"{PURCHASE_BILL_DIALOG}_reference_po_id")
+    ref_order = st.session_state.get(f"{PURCHASE_BILL_DIALOG}_reference_order_id")
+    ref_service = st.session_state.get(f"{PURCHASE_BILL_DIALOG}_reference_service_id")
+
     registered = vendor_is_registered(vendor)
     if registered:
         st.caption("Registered vendor — GST will be calculated from item HSN/SAC and rates (ex-GST).")
     else:
         st.caption("Unregistered/composition vendor — lines recorded without GST.")
+    if ref_grn:
+        st.caption(f"Linked to GRN `{str(ref_grn)[:8]}…` — stock already received; bill will not receive stock again.")
 
     initial_lines = st.session_state.get(f"{PURCHASE_BILL_DIALOG}_lines")
     st.markdown("**Line items**")
@@ -136,20 +143,18 @@ def purchase_bill_dialog(services: dict) -> None:
         )
         paying_id = store_opts[paying_name]
 
-    has_product_lines = any(
-        row.get("item_type") == CatalogItemType.PRODUCT.value and row.get("item_id")
-        for row in line_items
-    )
     apply_stock = False
-    if has_product_lines:
-        apply_stock = st.checkbox(
-            "Receive stock (direct purchase, no GRN)",
-            value=bool(st.session_state.get(f"{PURCHASE_BILL_DIALOG}_apply_stock", True)),
-            key=f"{PURCHASE_BILL_DIALOG}_stock",
+    if not ref_grn:
+        has_product_lines = any(
+            row.get("item_type") == CatalogItemType.PRODUCT.value and row.get("item_id")
+            for row in line_items
         )
-
-    ref_order = st.session_state.get(f"{PURCHASE_BILL_DIALOG}_reference_order_id")
-    ref_service = st.session_state.get(f"{PURCHASE_BILL_DIALOG}_reference_service_id")
+        if has_product_lines:
+            apply_stock = st.checkbox(
+                "Receive stock (direct purchase, no GRN)",
+                value=bool(st.session_state.get(f"{PURCHASE_BILL_DIALOG}_apply_stock", True)),
+                key=f"{PURCHASE_BILL_DIALOG}_stock",
+            )
 
     save_cols = st.columns(2)
     if save_cols[0].button("Save", type="primary", use_container_width=True):
@@ -167,7 +172,9 @@ def purchase_bill_dialog(services: dict) -> None:
                 voucher_date=bill_date,
                 reference_order_id=ref_order,
                 reference_service_id=ref_service,
-                apply_stock=apply_stock,
+                reference_po_id=ref_po,
+                reference_grn_id=ref_grn,
+                apply_stock=False if ref_grn else apply_stock,
             )
             _clear_dialog()
             st.rerun()

@@ -1,7 +1,9 @@
-"""Create purchase order dialog (product-only lines)."""
+"""Create purchase order dialog (product-only lines via data_editor table)."""
 
 from __future__ import annotations
 
+import logging
+import time
 from datetime import date
 
 import streamlit as st
@@ -16,22 +18,54 @@ from vaybooks.bms.ui.components.purchases.purchase_invoice_form import (
     vendor_select_index,
 )
 from vaybooks.bms.ui.components.purchases.purchase_line_ui import vendor_is_registered
-from vaybooks.bms.ui.components.purchases.purchase_lines_editor import render_purchase_lines_editor
-from vaybooks.bms.ui.dialog_utils import make_dismiss_handler
+from vaybooks.bms.ui.components.purchases.purchase_lines_editor import (
+    render_purchase_lines_editor,
+)
+from vaybooks.bms.ui.dialog_utils import make_dismiss_handler, register_armed_dialog
+from vaybooks.bms.ui.keyboard.dialog_actions import consume_submit, open_dialog
+from vaybooks.bms.ui.keyboard.focus_manager import inject_focus_manager
+from vaybooks.bms.ui.keyboard.wired import mark_wired
+
+logger = logging.getLogger(__name__)
 
 PO_DIALOG = "purchase_order_dialog"
 PO_CREATE_SUCCESS_KEY = "po_create_success"
+PO_SUBMIT_KEY = "po_dialog_submit"
+PO_FOCUS_KEY = f"{PO_DIALOG}_focus"
+PO_PRODUCTS_CACHE_KEY = f"{PO_DIALOG}_products_cache"
+
+
+def _cached_products(inventory) -> list:
+    """Load active products once per dialog open (invalidate on catalog return)."""
+    cached = st.session_state.get(PO_PRODUCTS_CACHE_KEY)
+    if cached is not None:
+        logger.debug("po_dialog.list_products cache_hit count=%s", len(cached))
+        return cached
+    if not inventory:
+        return []
+    started = time.perf_counter()
+    products = inventory.list_products(active_only=True)
+    st.session_state[PO_PRODUCTS_CACHE_KEY] = products
+    logger.debug(
+        "po_dialog.list_products cache_miss count=%s duration_ms=%.1f",
+        len(products),
+        (time.perf_counter() - started) * 1000,
+    )
+    return products
 
 
 def arm_po_dialog() -> None:
     reset_dialog_state(PO_DIALOG)
-    st.session_state[PO_DIALOG] = "new"
+    open_dialog(PO_DIALOG, submit_key=PO_SUBMIT_KEY, value="new", clear_others=True)
+    st.session_state[PO_FOCUS_KEY] = f"{PO_DIALOG}_vendor"
+    mark_wired("dialog.save")
 
 
 def _clear() -> None:
     for key in list(st.session_state.keys()):
         if key.startswith(PO_DIALOG):
             st.session_state.pop(key, None)
+    st.session_state.pop(PO_SUBMIT_KEY, None)
 
 
 def consume_po_create_success() -> None:
@@ -48,6 +82,9 @@ def consume_po_create_success() -> None:
 def purchase_order_dialog(services: dict) -> None:
     if st.session_state.get(PO_DIALOG) != "new":
         return
+
+    register_armed_dialog(PO_DIALOG)
+    mark_wired("dialog.save")
 
     purchases = services["purchases"]
     vendors = services["vendors"]
@@ -74,16 +111,19 @@ def purchase_order_dialog(services: dict) -> None:
         return
     vendor = vendors.get_vendor_detail(vendor_id)
 
-    products = inventory.list_products(active_only=True) if inventory else []
+    products = _cached_products(inventory)
 
     c1, c2 = st.columns(2)
     order_date = c1.date_input("Order date", value=date.today(), key=f"{PO_DIALOG}_date")
-    expected_date = c2.date_input("Expected date", value=date.today(), key=f"{PO_DIALOG}_expected")
+    expected_date = c2.date_input(
+        "Expected date", value=date.today(), key=f"{PO_DIALOG}_expected"
+    )
     notes = st.text_input("Notes", key=f"{PO_DIALOG}_notes")
 
     st.markdown("**Line items**")
     st.caption(
-        "Purchase orders are product-only. Pick a product — HSN, rate, and totals fill from the catalog."
+        "Purchase orders are product-only. Pick a product — HSN, rate, and totals fill from the catalog. "
+        "Keyboard: Vendor → Expected → Item table (Enter / Tab). **Ctrl+S** saves."
     )
     vendor_registered = vendor_is_registered(vendor)
     line_items, gst_errors = render_purchase_lines_editor(
@@ -102,13 +142,27 @@ def purchase_order_dialog(services: dict) -> None:
         catalog_return_to=PO_DIALOG,
     )
 
-    if st.button("Save PO", type="primary"):
+    # After the table exists: Enter on Expected focuses Item cell; in-grid Enter→Tab
+    editor_key = f"{PO_DIALOG}_lines_editor"
+    restore = st.session_state.pop(PO_FOCUS_KEY, None)
+    inject_focus_manager(
+        [vendor_key, f"{PO_DIALOG}_expected"],
+        initial_key=vendor_key,
+        restore_key=restore,
+        data_editor_key=editor_key,
+        component_key=f"po_editor_bridge_{vendor_id[:8]}",
+    )
+
+    save_cols = st.columns(2)
+    do_save = save_cols[0].button(
+        "Save PO", type="primary", use_container_width=True
+    ) or consume_submit(PO_SUBMIT_KEY)
+    if do_save:
         try:
             if gst_errors:
                 raise ValueError(gst_errors[0])
             if not line_items:
                 raise ValueError("Add at least one product line")
-            # Ensure product-only before resolve
             for row in line_items:
                 row["item_type"] = CatalogItemType.PRODUCT.value
                 if not row.get("product_id"):
@@ -142,6 +196,9 @@ def purchase_order_dialog(services: dict) -> None:
             st.rerun()
         except Exception as exc:
             st.error(str(exc))
+    if save_cols[1].button("Cancel", use_container_width=True):
+        _clear()
+        st.rerun()
 
 
 def open_po_dialog_if_armed(services: dict) -> None:

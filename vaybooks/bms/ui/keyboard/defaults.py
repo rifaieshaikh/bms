@@ -119,6 +119,9 @@ _ACTIONS = [
         "purchases.orders.receive", "Receive against PO", "Purchases", "ctrl+g"
     ),
     ActionShortcut(
+        "purchases.orders.print", "Print purchase order PDF", "Purchases", "ctrl+p"
+    ),
+    ActionShortcut(
         "purchases.bills.delete",
         "Delete purchase bill",
         "Purchases",

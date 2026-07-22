@@ -65,8 +65,11 @@ def _pick_action(chord: str, action_ids: list[str], page: str | None) -> str | N
         for aid in action_ids:
             if aid.startswith("export."):
                 return aid
-    if page == _PO_DETAIL and "purchases.orders.receive" in action_ids:
-        return "purchases.orders.receive"
+    if page == _PO_DETAIL:
+        if chord == "ctrl+p" and "purchases.orders.print" in action_ids:
+            return "purchases.orders.print"
+        if "purchases.orders.receive" in action_ids:
+            return "purchases.orders.receive"
     if page == _MTD_PAGE:
         for aid in action_ids:
             if aid.startswith("dashboard.period."):

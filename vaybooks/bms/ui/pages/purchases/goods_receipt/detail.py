@@ -4,14 +4,34 @@ from __future__ import annotations
 
 import streamlit as st
 
+from vaybooks.bms.domain.shared.enums import CatalogItemType, GoodsReceiptStatus
 from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.components.common.document_detail import (
+    document_actions,
     document_header,
     format_document_date,
     format_money,
     line_items_table,
     totals_ladder,
 )
+from vaybooks.bms.ui.components.purchases.purchase_bill_dialog import (
+    arm_purchase_bill_dialog,
+    open_purchase_bill_dialog_if_armed,
+)
+
+
+def _bill_lines_from_grn(grn) -> list[dict]:
+    return [
+        {
+            "item_type": CatalogItemType.PRODUCT.value,
+            "item_id": line.product_id,
+            "product_id": line.product_id,
+            "qty": line.qty_received,
+            "rate": line.rate,
+        }
+        for line in grn.lines
+        if line.product_id and float(line.qty_received or 0) > 0
+    ]
 
 
 def render(services: dict) -> None:
@@ -35,22 +55,27 @@ def render(services: dict) -> None:
         navigation.go_back_to_list("goods_receipt_list", "goods-receipt")
         return
 
+    right_facts = [
+        ("Freight", format_money(grn.freight)),
+        ("Duty", format_money(grn.duty)),
+        ("Other", format_money(grn.other)),
+    ]
+    if grn.voucher_id:
+        right_facts.append(("Purchase bill", f"`{grn.voucher_id[:8]}…`"))
+
     document_header(
         number=grn.grn_number,
         status=grn.status.value,
         caption_parts=[
             f"Vendor: {grn.vendor_name}",
             f"PO: {grn.po_number}" if grn.po_number else None,
+            "Billed" if grn.voucher_id else None,
         ],
         left_facts=[
             ("Receipt date", format_document_date(grn.receipt_date)),
             ("Vendor", grn.vendor_name or "—"),
         ],
-        right_facts=[
-            ("Freight", format_money(grn.freight)),
-            ("Duty", format_money(grn.duty)),
-            ("Other", format_money(grn.other)),
-        ],
+        right_facts=right_facts,
         suffix=f"grn_{grn.id}",
     )
 
@@ -96,3 +121,34 @@ def render(services: dict) -> None:
         ],
         suffix=f"grn_{grn.id}",
     )
+
+    actions = []
+    can_bill = (
+        grn.status == GoodsReceiptStatus.RECEIVED
+        and not grn.voucher_id
+        and bool(_bill_lines_from_grn(grn))
+    )
+    if can_bill:
+        actions.append(
+            {"label": "Create Purchase Bill", "key": "grn_create_bill", "type": "primary"}
+        )
+    if grn.voucher_id:
+        actions.append({"label": "View bill", "key": "grn_view_bill"})
+
+    clicked = document_actions(actions, suffix=f"grn_{grn.id}")
+    if clicked.get("grn_create_bill"):
+        prefill = {
+            "vendor_id": grn.vendor_id,
+            "reference_grn_id": grn.id,
+            "lines": _bill_lines_from_grn(grn),
+            "apply_stock": False,
+        }
+        if grn.purchase_order_id:
+            prefill["reference_po_id"] = grn.purchase_order_id
+        arm_purchase_bill_dialog(**prefill)
+        st.rerun()
+    if clicked.get("grn_view_bill") and grn.voucher_id:
+        navigation.go_to_detail("purchase_detail", grn.voucher_id)
+        st.rerun()
+
+    open_purchase_bill_dialog_if_armed(services)

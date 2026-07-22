@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import base64
+
 import streamlit as st
+import streamlit.components.v1 as components
 
 from vaybooks.bms.domain.shared.enums import PurchaseOrderStatus
+from vaybooks.bms.infrastructure.pdf.purchase_order_pdf import generate_purchase_order_pdf
 from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.components.common.document_detail import (
     document_actions,
@@ -21,13 +25,42 @@ from vaybooks.bms.ui.components.purchases.purchase_order_edit_dialog import (
 )
 
 
+def _trigger_pdf_download(file_name: str, pdf_bytes: bytes) -> None:
+    """Browser download via parent-frame JS (used for Ctrl+P)."""
+    b64 = base64.b64encode(pdf_bytes).decode("ascii")
+    safe_name = file_name.replace("\\", "\\\\").replace("'", "\\'")
+    html = f"""
+<!DOCTYPE html><html><body>
+<script>
+(function () {{
+  try {{
+    const a = (window.parent && window.parent.document)
+      ? window.parent.document.createElement('a')
+      : document.createElement('a');
+    a.href = 'data:application/pdf;base64,{b64}';
+    a.download = '{safe_name}';
+    const doc = (window.parent && window.parent.document) ? window.parent.document : document;
+    doc.body.appendChild(a);
+    a.click();
+    a.remove();
+  }} catch (e) {{}}
+}})();
+</script>
+</body></html>
+"""
+    try:
+        components.html(html, height=0, width=0)
+    except Exception:
+        pass
+
+
 def render(services: dict) -> None:
     from vaybooks.bms.ui.keyboard.actions import consume_action
     from vaybooks.bms.ui.keyboard.context import set_current_page
     from vaybooks.bms.ui.keyboard.wired import mark_wired
 
     set_current_page("purchase_order_detail")
-    mark_wired("nav.back")
+    mark_wired("nav.back", "purchases.orders.print")
     order_id = st.query_params.get("id")
     if not order_id:
         st.warning("Purchase order not specified")
@@ -85,7 +118,39 @@ def render(services: dict) -> None:
     if order.notes:
         st.caption(f"Notes: {order.notes}")
 
+    business = services["business"].get_profile()
+    vendor = None
+    if services.get("vendors") and order.vendor_id:
+        vendor = services["vendors"].get_vendor_detail(order.vendor_id)
+    template = None
+    if business and getattr(business, "document_templates", None):
+        template = business.document_templates.get("sales_order")
+    pdf_bytes = None
+    try:
+        pdf_bytes = generate_purchase_order_pdf(
+            order,
+            business,
+            template.print_settings if template else None,
+            vendor=vendor,
+        )
+    except Exception as exc:
+        st.error(f"Could not generate PDF: {exc}")
+
+    if pdf_bytes and consume_action("purchases.orders.print"):
+        _trigger_pdf_download(f"{order.po_number}.pdf", pdf_bytes)
+
     actions = []
+    if pdf_bytes is not None:
+        actions.append(
+            {
+                "label": "Download PDF",
+                "key": "po_pdf",
+                "kind": "download",
+                "data": pdf_bytes,
+                "file_name": f"{order.po_number}.pdf",
+                "mime": "application/pdf",
+            }
+        )
     editable = order.status not in (
         PurchaseOrderStatus.CANCELLED,
         PurchaseOrderStatus.CLOSED,

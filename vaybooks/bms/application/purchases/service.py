@@ -93,22 +93,32 @@ class PurchaseAppService:
         )
 
     def get_latest_purchase_rate(
-        self, item_type: CatalogItemType, item_id: str, vendor_id: str
+        self,
+        item_type: CatalogItemType,
+        item_id: str,
+        vendor_id: str,
+        *,
+        product=None,
     ) -> Optional[float]:
-        """Return vendor's latest ex-GST purchase rate, else product last_purchase_rate."""
+        """Return vendor's latest ex-GST purchase rate, else product last_purchase_rate.
+
+        Pass ``product`` when already hydrated to avoid a second get_product round-trip.
+        """
         if self._price_history_repo and vendor_id and item_id:
             latest = self._price_history_repo.latest_rate(item_type, item_id, vendor_id)
             if latest is not None and float(latest) > 0:
                 return round(float(latest), 2)
         if item_type == CatalogItemType.PRODUCT and item_id:
-            product = self._inventory.get_product(item_id)
-            if product:
-                last = float(getattr(product, "last_purchase_rate", 0) or 0)
+            resolved = product
+            if resolved is None and self._inventory:
+                resolved = self._inventory.get_product(item_id)
+            if resolved:
+                last = float(getattr(resolved, "last_purchase_rate", 0) or 0)
                 if last > 0:
                     return round(last, 2)
                 selling = float(
-                    getattr(product, "active_selling_rate", 0)
-                    or getattr(product, "selling_rate", 0)
+                    getattr(resolved, "active_selling_rate", 0)
+                    or getattr(resolved, "selling_rate", 0)
                     or 0
                 )
                 if selling > 0:

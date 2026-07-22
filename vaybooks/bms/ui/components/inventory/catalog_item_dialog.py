@@ -63,6 +63,8 @@ def _apply_to_bill_line(ctx: dict, saved_item, mode: str) -> None:
             editor_key = ctx.get("editor_key")
             if editor_key:
                 st.session_state.pop(editor_key, None)
+            # Parent dialog may cache list_products for the open session.
+            st.session_state.pop(f"{ctx['return_to']}_products_cache", None)
         return
 
     lines_key = f"{ctx['return_to']}_lines"
@@ -83,6 +85,7 @@ def _apply_to_bill_line(ctx: dict, saved_item, mode: str) -> None:
         if mode == "product":
             lines[idx]["product_id"] = saved_item.id
         st.session_state[lines_key] = lines
+    st.session_state.pop(f"{ctx['return_to']}_products_cache", None)
 
 
 @st.dialog("Catalog Item", width="large", on_dismiss=make_dismiss_handler(CATALOG_ITEM_DIALOG))
