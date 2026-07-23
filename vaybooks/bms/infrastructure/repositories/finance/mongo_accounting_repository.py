@@ -190,6 +190,18 @@ class MongoVoucherRepository:
         docs = self._collection.find({"lines.account_id": account_id})
         return [self._from_doc(d) for d in docs]
 
+    def count_by_type_and_account(
+        self, voucher_type: VoucherType, account_id: str
+    ) -> int:
+        if not account_id:
+            return 0
+        return self._collection.count_documents(
+            {
+                "voucher_type": voucher_type.value,
+                "lines.account_id": account_id,
+            }
+        )
+
     def list_by_order(self, order_id: str) -> List[Voucher]:
         docs = self._collection.find({"reference_order_id": order_id})
         return [self._from_doc(d) for d in docs]

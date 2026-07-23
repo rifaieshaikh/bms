@@ -50,6 +50,25 @@ def test_is_active_value_select_all_is_inactive():
     assert not F.is_active_value(fld, F.ALL_LABEL)
 
 
+def test_vendors_schema_uses_entity_select_and_balance_labels():
+    schema = ls.SCHEMAS["vendors"]
+    name = schema.field("vendor_id")
+    assert name is not None
+    assert name.type == F.ENTITY_SELECT
+    assert name.attr == "id"
+    assert name.options_loader == "vendors"
+
+    balance = schema.field("balance_state")
+    assert balance is not None
+    assert balance.all_label == "All Balances"
+    labels = {v: lbl for v, lbl in balance.options}
+    assert labels == {
+        "zero": "Settled",
+        "dr": "Amount Payable",
+        "cr": "Vendor Advance",
+    }
+
+
 def test_number_min_is_inclusive():
     recs = _rows()[:2]
     f = F.default_filters(MINI_SCHEMA)

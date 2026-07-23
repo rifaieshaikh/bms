@@ -16,19 +16,25 @@ from vaybooks.bms.ui.components.sales.sales_lines_editor import render_sales_lin
 from vaybooks.bms.ui.dialog_utils import make_dismiss_handler
 
 SO_DIALOG = "sales_order_dialog"
+SO_PRESELECT = "sales_order_dialog_preselect_customer_id"
 
 
-def arm_so_dialog() -> None:
+def arm_so_dialog(customer_id: str | None = None) -> None:
     for key in list(st.session_state.keys()):
         if key.startswith(SO_DIALOG):
             st.session_state.pop(key, None)
     st.session_state[SO_DIALOG] = "new"
+    if customer_id:
+        st.session_state[SO_PRESELECT] = customer_id
+    else:
+        st.session_state.pop(SO_PRESELECT, None)
 
 
 def _clear() -> None:
     for key in list(st.session_state.keys()):
         if key.startswith(SO_DIALOG):
             st.session_state.pop(key, None)
+    st.session_state.pop(SO_PRESELECT, None)
 
 
 def _customer_is_registered(customer) -> bool:
@@ -48,9 +54,14 @@ def sales_order_dialog(services: dict) -> None:
     customers = services["customers"]
     inventory = services.get("inventory")
 
+    preselect_id = st.session_state.get(SO_PRESELECT)
+    initial_customer = (
+        customers.get_customer_detail(preselect_id) if preselect_id else None
+    )
     customer_selection = render_customer_identity_selector(
         customers,
         key_prefix=SO_DIALOG,
+        initial_customer=initial_customer,
     )
     selected_customer = customer_selection.customer
     business_service = services.get("business")

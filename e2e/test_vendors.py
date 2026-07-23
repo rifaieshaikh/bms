@@ -26,20 +26,36 @@ class TestVendorListFilterSort:
         vp.goto_vendors(page, streamlit_server)
         assert "Vendors" in page.content()
 
-    def test_filter_partial_name_returns_empty(
+    def test_filter_unknown_phone_returns_empty(
         self, page: Page, streamlit_server: str
     ) -> None:
         vp.goto_vendors(page, streamlit_server)
-        vp.filter_by_name(page, "NoSuchVendorXYZ")
+        vp.filter_by_phone(page, "0000000000")
         vp.assert_empty_or_zero(page)
 
     def test_filter_clear_restores_list(self, page: Page, streamlit_server: str) -> None:
         vp.goto_vendors(page, streamlit_server)
         before = vp.vendor_card_names(page)
-        vp.filter_by_name(page, "NoSuchVendorXYZ")
+        vp.filter_by_phone(page, "0000000000")
         clear_filters(page)
         after = vp.vendor_card_names(page)
         assert len(after) >= len(before) or len(before) == 0
+
+    def test_filter_by_vendor_name_select_narrows_list(
+        self, page: Page, streamlit_server: str
+    ) -> None:
+        vp.goto_vendors(page, streamlit_server)
+        names = vp.vendor_card_names(page)
+        if not names:
+            return
+        target = names[0]
+        vp.filter_by_name(page, target)
+        after = vp.vendor_card_names(page)
+        assert target in after
+        assert len(after) == 1
+        # Selecting from the filter must not navigate away from the list.
+        expect(page.get_by_role("button", name="Add Vendor")).to_be_visible()
+        expect(page.get_by_role("button", name="View").first).to_be_visible()
 
     def test_sort_by_name_changes_order(self, page: Page, streamlit_server: str) -> None:
         vp.goto_vendors(page, streamlit_server)

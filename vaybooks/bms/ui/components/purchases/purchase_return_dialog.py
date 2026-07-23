@@ -15,16 +15,23 @@ from vaybooks.bms.ui.components.purchases.purchase_invoice_form import (
     vendor_option_map,
     vendor_select_index,
 )
-from vaybooks.bms.ui.components.purchases.purchase_lines_editor import render_purchase_lines_editor
+from vaybooks.bms.ui.components.purchases.purchase_lines_entry_table import (
+    entry_table_focus_chain,
+    entry_table_focus_columns,
+    render_purchase_lines_entry_table,
+)
 from vaybooks.bms.ui.dialog_utils import make_dismiss_handler
+from vaybooks.bms.ui.keyboard.focus.registry import get_strategy
 from vaybooks.bms.ui.purchase_display import product_lines_from_bill_row
 
 RETURN_DIALOG = "purchase_return_dialog"
+RETURN_FOCUS_KEY = f"{RETURN_DIALOG}_focus"
 
 
 def arm_return_dialog(source_bill_id: str | None = None) -> None:
     reset_dialog_state(RETURN_DIALOG)
     st.session_state[RETURN_DIALOG] = "new"
+    st.session_state[RETURN_FOCUS_KEY] = f"{RETURN_DIALOG}_vendor"
     if source_bill_id:
         st.session_state[f"{RETURN_DIALOG}_bill_id"] = source_bill_id
 
@@ -104,12 +111,19 @@ def purchase_return_dialog(services: dict) -> None:
     vendor_id = vendor_opts.get(vendor_name)
     if not vendor_id:
         st.warning("Select a vendor.")
+        restore = st.session_state.pop(RETURN_FOCUS_KEY, None)
+        get_strategy(RETURN_DIALOG).inject(
+            chain=[vendor_key],
+            restore_key=restore,
+            component_key="return_vendor_only",
+        )
         return
     vendor = vendors.get_vendor_detail(vendor_id)
 
     products = inventory.list_products(active_only=True) if inventory else []
 
-    return_date = st.date_input("Return date", value=date.today(), key=f"{RETURN_DIALOG}_date")
+    date_key = f"{RETURN_DIALOG}_date"
+    return_date = st.date_input("Return date", value=date.today(), key=date_key)
     if source_bill_id:
         st.caption(f"Linked to purchase bill `{source_bill_id[:8]}…`")
     if skipped_services:
@@ -118,24 +132,28 @@ def purchase_return_dialog(services: dict) -> None:
         )
 
     st.markdown("**Line items**")
-    line_items, gst_errors = render_purchase_lines_editor(
+    line_items, gst_errors = render_purchase_lines_entry_table(
         key_prefix=RETURN_DIALOG,
         products=products,
-        services=[],
         initial_lines=seed_lines,
         vendor_id=vendor_id,
         purchases_service=purchases,
         inventory_service=inventory,
-        allow_services=False,
         qty_field="qty",
         vendor_registered=False,
         business=business,
         business_state_code=business.state_code if business else "",
         vendor_state_code=vendor.state_code if vendor else "",
+        focus_restore_key=RETURN_FOCUS_KEY,
     )
 
-    refund = st.number_input("Cash refund", min_value=0.0, value=0.0, key=f"{RETURN_DIALOG}_refund")
+    refund_key = f"{RETURN_DIALOG}_refund"
+    refund_acct_key = f"{RETURN_DIALOG}_refund_acct"
+    save_key = f"{RETURN_DIALOG}_save"
+
+    refund = st.number_input("Cash refund", min_value=0.0, value=0.0, key=refund_key)
     refund_acct = None
+    chain_tail: list[str] = [refund_key]
     if refund > 0:
         store_accounts = accounting.get_store_accounts()
         if not store_accounts:
@@ -143,12 +161,26 @@ def purchase_return_dialog(services: dict) -> None:
             return
         store_opts = {a.account_name: a.id for a in store_accounts}
         store_names = list(store_opts.keys())
-        refund_key = f"{RETURN_DIALOG}_refund_acct"
-        ensure_selectbox_option(refund_key, store_names)
-        refund_picked = st.selectbox("Refund account", store_names, key=refund_key)
+        ensure_selectbox_option(refund_acct_key, store_names)
+        refund_picked = st.selectbox("Refund account", store_names, key=refund_acct_key)
         refund_acct = store_opts.get(refund_picked)
+        chain_tail.append(refund_acct_key)
 
-    if st.button("Save return", type="primary"):
+    do_save = st.button("Save return", type="primary", key=save_key)
+
+    row_chain = entry_table_focus_chain(RETURN_DIALOG)
+    row_columns = entry_table_focus_columns(RETURN_DIALOG)
+    restore = st.session_state.pop(RETURN_FOCUS_KEY, None)
+    get_strategy(RETURN_DIALOG).inject(
+        chain=[vendor_key, date_key, *row_chain, *chain_tail, save_key],
+        restore_key=restore,
+        columns=row_columns,
+        above_first=date_key,
+        below_last=save_key,
+        component_key=f"return_entry_{vendor_id[:8]}_{len(row_chain)}",
+    )
+
+    if do_save:
         try:
             if gst_errors:
                 raise ValueError(gst_errors[0])

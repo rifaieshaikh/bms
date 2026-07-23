@@ -72,6 +72,8 @@ class FilterField:
     help: str = ""
     default_active: bool = False
     default: Any = None
+    # Label for the leading None option on SELECT / ENTITY_SELECT fields.
+    all_label: str = ALL_LABEL
     # Custom predicate(record, value) -> bool. When set, overrides the
     # type-based default matcher.
     match: Optional[Callable[[Any, Any], bool]] = None

@@ -25,7 +25,7 @@ _PARENTS = [
     ParentShortcut("delivery_notes_list", "Delivery Notes", "Sales", "ctrl+shift+d"),
     ParentShortcut("sales_invoices_list", "Sales Invoices", "Sales", "ctrl+shift+i"),
     ParentShortcut("sales_returns_list", "Sales Returns", "Sales", "ctrl+shift+r"),
-    ParentShortcut("purchase_orders_list", "Purchase Orders", "Purchases", "ctrl+shift+p"),
+    ParentShortcut("purchase_orders_list", "Purchase Orders", "Purchases", "alt+p"),
     ParentShortcut("goods_receipt_list", "Goods Receipt", "Purchases", "ctrl+g"),
     ParentShortcut("purchases_list", "Purchase Bills", "Purchases", "ctrl+b"),
     ParentShortcut("purchase_returns_list", "Purchase Returns", "Purchases", "ctrl+shift+u"),
@@ -64,7 +64,7 @@ _PARENTS = [
 
 _ACTIONS = [
     ActionShortcut("list.primary", "Add / Create (list primary)", "List", "ctrl+shift+n"),
-    ActionShortcut("list.filters.open", "Open Filters", "List", "ctrl+shift+q"),
+    ActionShortcut("list.filters.open", "Open Filters", "List", "ctrl+alt+f"),
     ActionShortcut("list.sort.open", "Open Sort", "List", "ctrl+shift+s"),
     ActionShortcut("list.filters.apply", "Apply Filters", "List", "ctrl+enter"),
     ActionShortcut("list.filters.clear", "Clear Filters", "List", "ctrl+1"),
@@ -118,6 +118,12 @@ _ACTIONS = [
     ActionShortcut("sales.deliveries.create_invoice", "Invoice from DN", "Sales", "ctrl+i"),
     ActionShortcut(
         "purchases.orders.receive", "Receive against PO", "Purchases", "ctrl+g"
+    ),
+    ActionShortcut(
+        "purchases.orders.create",
+        "Create Purchase Order (any screen)",
+        "Purchases",
+        "f1",
     ),
     ActionShortcut(
         "purchases.orders.print", "Print purchase order PDF", "Purchases", "ctrl+p"

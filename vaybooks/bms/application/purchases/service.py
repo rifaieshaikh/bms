@@ -227,6 +227,102 @@ class PurchaseAppService:
     def get_purchase_order(self, order_id: str) -> Optional[PurchaseOrder]:
         return self._po_repo.find_by_id(order_id)
 
+    def list_recent_purchase_orders_by_vendor(
+        self, vendor_id: str, limit: int = 5
+    ) -> List[PurchaseOrder]:
+        fn = getattr(self._po_repo, "list_recent_by_vendor", None)
+        if callable(fn):
+            return list(fn(vendor_id, limit) or [])
+        orders = [
+            po for po in self._po_repo.list_all() if po.vendor_id == vendor_id
+        ]
+        orders.sort(
+            key=lambda po: (po.created_at or datetime.min, po.order_date or date.min),
+            reverse=True,
+        )
+        return orders[:limit]
+
+    def get_vendor_summary(self, vendor_id: str) -> dict:
+        """PO counts and total billed for one vendor."""
+        summary_fn = getattr(self._po_repo, "get_vendor_summary", None)
+        if callable(summary_fn):
+            summary = dict(summary_fn(vendor_id) or {})
+        else:
+            closed = {
+                PurchaseOrderStatus.RECEIVED,
+                PurchaseOrderStatus.CLOSED,
+                PurchaseOrderStatus.CANCELLED,
+            }
+            orders = [
+                po for po in self._po_repo.list_all() if po.vendor_id == vendor_id
+            ]
+            summary = {
+                "po_count": len(orders),
+                "open_count": sum(1 for po in orders if po.status not in closed),
+            }
+
+        total_billed = 0.0
+        vendor_account = None
+        try:
+            vendor_account = self._accounting.get_vendor_account(vendor_id)
+        except Exception:
+            vendor_account = None
+        if vendor_account:
+            try:
+                for voucher in self._accounting.list_vouchers_by_type(
+                    VoucherType.PURCHASE_BILL
+                ):
+                    row = purchase_row_from_voucher(voucher)
+                    if row.get("vendor_account_id") == vendor_account.id:
+                        total_billed += float(row.get("total") or 0)
+            except Exception:
+                pass
+        summary["total_billed"] = round(total_billed, 2)
+        return summary
+
+    def related_document_counts(
+        self, vendor_id: str, *, vendor_account_id: str = ""
+    ) -> dict:
+        """Counts for Related Transactions — one service entry point."""
+        counts: dict = {}
+
+        def _repo_count(repo) -> int | None:
+            if repo is None:
+                return None
+            fn = getattr(repo, "count_by_vendor", None)
+            if not callable(fn):
+                return None
+            try:
+                return int(fn(vendor_id) or 0)
+            except Exception:
+                return None
+
+        for key, repo in (
+            ("purchase_orders", self._po_repo),
+            ("goods_receipts", self._grn_repo),
+            ("purchase_returns", self._return_repo),
+        ):
+            value = _repo_count(repo)
+            if value is not None:
+                counts[key] = value
+            else:
+                try:
+                    items = repo.list_all() if repo else []
+                    counts[key] = sum(
+                        1 for item in items if getattr(item, "vendor_id", None) == vendor_id
+                    )
+                except Exception:
+                    pass
+
+        if vendor_account_id:
+            try:
+                counts["purchase_bills"] = self._accounting.count_vouchers_for_account(
+                    VoucherType.PURCHASE_BILL, vendor_account_id
+                )
+            except Exception:
+                pass
+        return counts
+
     def create_purchase_order(
         self,
         vendor_id: str,
@@ -295,6 +391,7 @@ class PurchaseAppService:
         other: float = 0.0,
         notes: str = "",
         confirm: bool = True,
+        allow_over_receive: bool = False,
     ) -> GoodsReceipt:
         po_number = ""
         if purchase_order_id:
@@ -313,6 +410,7 @@ class PurchaseAppService:
             duty=duty,
             other=other,
             notes=notes,
+            allow_over_receive=allow_over_receive,
         )
         if confirm:
             return self.confirm_goods_receipt(grn.id)
@@ -576,11 +674,32 @@ class PurchaseAppService:
         return purchase_return
 
     def list_purchase_bills(self) -> list[dict]:
+        account_vendor: dict[str, str] = {}
+
+        def _vendor_id_for(account_id: str | None) -> str:
+            if not account_id:
+                return ""
+            if account_id in account_vendor:
+                return account_vendor[account_id]
+            try:
+                account = self._accounting.get_account(account_id)
+            except Exception:
+                account = None
+            vendor_id = (
+                (getattr(account, "linked_vendor_id", None) or "") if account else ""
+            )
+            account_vendor[account_id] = vendor_id
+            return vendor_id
+
         rows = []
         for voucher in self._accounting.list_vouchers_by_type(VoucherType.PURCHASE_BILL):
-            rows.append(purchase_row_from_voucher(voucher))
+            row = purchase_row_from_voucher(voucher)
+            row["vendor_id"] = _vendor_id_for(row.get("vendor_account_id"))
+            rows.append(row)
         for voucher in self._accounting.list_vouchers_by_type(VoucherType.VENDOR_PAYMENT):
-            rows.append(vendor_payment_row_from_voucher(voucher))
+            row = vendor_payment_row_from_voucher(voucher)
+            row["vendor_id"] = _vendor_id_for(row.get("vendor_account_id"))
+            rows.append(row)
         rows.sort(key=lambda r: (r.get("bill_date") or date.min, r.get("voucher_number") or ""), reverse=True)
         return rows
 

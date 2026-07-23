@@ -32,6 +32,7 @@ def render_list(
     empty_text: str = "No records found.",
     count_label: str = "records",
     page_key_nav: str | None = None,
+    primary_action: str | None = None,
 ) -> dict:
     """Render a standard list page. Returns the filter/sort bar result dict.
 
@@ -50,6 +51,7 @@ def render_list(
         primary_label=primary_label,
         primary_key=primary_key,
         title=title,
+        primary_action=primary_action,
     )
     filters = bar["filters"]
     sort = bar["sort"]

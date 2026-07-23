@@ -24,6 +24,7 @@ def _return_row(ret) -> dict:
     return {
         "id": ret.id,
         "return_number": ret.return_number,
+        "customer_id": ret.customer_id,
         "customer_name": ret.customer_name,
         "return_date": ret.return_date,
         "source_invoice_number": ret.source_invoice_number,

@@ -183,6 +183,7 @@ class PurchaseDomainService:
         duty: float = 0.0,
         other: float = 0.0,
         notes: str = "",
+        allow_over_receive: bool = False,
     ) -> GoodsReceipt:
         if not lines:
             raise ValidationError("At least one receipt line is required")
@@ -206,7 +207,7 @@ class PurchaseDomainService:
                 if not po_line:
                     raise ValidationError("Product not on purchase order")
                 pending = po_line.qty_pending
-                if qty > pending + 0.001:
+                if not allow_over_receive and qty > pending + 0.001:
                     raise ValidationError(
                         f"Cannot receive more than pending ({pending:g}) for {po_line.product_name or product_id}"
                     )

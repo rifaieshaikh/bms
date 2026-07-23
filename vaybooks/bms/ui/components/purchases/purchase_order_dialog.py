@@ -13,7 +13,10 @@ from vaybooks.bms.ui.components.common.dialog_state import (
     ensure_selectbox_option,
     reset_dialog_state,
 )
-from vaybooks.bms.ui.components.purchases.purchase_invoice_form import vendor_option_map
+from vaybooks.bms.ui.components.purchases.purchase_invoice_form import (
+    vendor_option_map,
+    vendor_select_index,
+)
 from vaybooks.bms.ui.components.purchases.purchase_line_ui import vendor_is_registered
 from vaybooks.bms.ui.components.purchases.purchase_lines_entry_table import (
     entry_table_focus_chain,
@@ -22,7 +25,7 @@ from vaybooks.bms.ui.components.purchases.purchase_lines_entry_table import (
 )
 from vaybooks.bms.ui.dialog_utils import make_dismiss_handler, register_armed_dialog
 from vaybooks.bms.ui.keyboard.dialog_actions import consume_submit, open_dialog
-from vaybooks.bms.ui.keyboard.focus_manager import inject_focus_manager
+from vaybooks.bms.ui.keyboard.focus.registry import get_strategy
 from vaybooks.bms.ui.keyboard.wired import mark_wired
 
 logger = logging.getLogger(__name__)
@@ -53,10 +56,12 @@ def _cached_products(inventory) -> list:
     return products
 
 
-def arm_po_dialog() -> None:
+def arm_po_dialog(**prefill) -> None:
     reset_dialog_state(PO_DIALOG)
     open_dialog(PO_DIALOG, submit_key=PO_SUBMIT_KEY, value="new", clear_others=True)
     st.session_state[PO_FOCUS_KEY] = f"{PO_DIALOG}_vendor"
+    for key, value in prefill.items():
+        st.session_state[f"{PO_DIALOG}_{key}"] = value
     mark_wired("dialog.save")
 
 
@@ -95,13 +100,14 @@ def purchase_order_dialog(services: dict) -> None:
         st.error("Add a vendor first.")
         return
     vendor_opts = vendor_option_map(vendor_list)
+    pre_vendor = st.session_state.get(f"{PO_DIALOG}_vendor_id")
     vendor_names = list(vendor_opts.keys())
     vendor_key = f"{PO_DIALOG}_vendor"
     ensure_selectbox_option(vendor_key, vendor_names)
     vendor_name = st.selectbox(
         "Vendor",
         options=vendor_names,
-        index=None,
+        index=vendor_select_index(vendor_opts, pre_vendor) if pre_vendor else None,
         key=vendor_key,
         placeholder="Search vendor…",
     )
@@ -109,9 +115,8 @@ def purchase_order_dialog(services: dict) -> None:
     if not vendor_id:
         st.warning("Select a vendor.")
         restore = st.session_state.pop(PO_FOCUS_KEY, None)
-        inject_focus_manager(
-            [vendor_key],
-            initial_key=vendor_key,
+        get_strategy(PO_DIALOG).inject(
+            chain=[vendor_key],
             restore_key=restore,
             component_key="po_vendor_only",
         )
@@ -128,13 +133,6 @@ def purchase_order_dialog(services: dict) -> None:
     notes = st.text_input("Notes", key=f"{PO_DIALOG}_notes")
 
     st.markdown("**Line items**")
-    st.caption(
-        "Search vendor and product. Selecting a product adds the next row. "
-        "Enter: Vendor → Expected → Product → Qty → Rate → next Product. "
-        "←/→ and ↑/↓ move inside the item grid only (↑ first Product → Expected, "
-        "↓ last row → Save). Arrows on Expected change the date; Enter moves to Product. "
-        "**Ctrl+S** saves. Empty product rows are ignored."
-    )
     vendor_registered = vendor_is_registered(vendor)
     line_items, gst_errors = render_purchase_lines_entry_table(
         key_prefix=PO_DIALOG,
@@ -155,6 +153,7 @@ def purchase_order_dialog(services: dict) -> None:
     row_columns = entry_table_focus_columns(PO_DIALOG)
     expected_key = f"{PO_DIALOG}_expected"
     save_key = f"{PO_DIALOG}_save"
+    cancel_key = f"{PO_DIALOG}_cancel"
 
     save_cols = st.columns(2)
     do_save = save_cols[0].button(
@@ -163,14 +162,13 @@ def purchase_order_dialog(services: dict) -> None:
         use_container_width=True,
         key=save_key,
     ) or consume_submit(PO_SUBMIT_KEY)
-    if save_cols[1].button("Cancel", use_container_width=True, key=f"{PO_DIALOG}_cancel"):
+    if save_cols[1].button("Cancel", use_container_width=True, key=cancel_key):
         _clear()
         st.rerun()
 
     restore = st.session_state.pop(PO_FOCUS_KEY, None)
-    inject_focus_manager(
-        [vendor_key, expected_key, *row_chain, save_key],
-        initial_key=vendor_key,
+    get_strategy(PO_DIALOG).inject(
+        chain=[vendor_key, expected_key, *row_chain, save_key, cancel_key],
         restore_key=restore,
         columns=row_columns,
         above_first=expected_key,

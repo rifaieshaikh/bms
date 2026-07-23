@@ -1,6 +1,6 @@
-"""PO line entry: header + repeating searchable product rows (keyboard-friendly).
+"""Product line entry: header + repeating searchable product rows (keyboard-friendly).
 
-Purchase-order only. Bills/returns keep ``purchase_lines_editor``.
+Used by purchase order, bill, and return dialogs (products only).
 """
 
 from __future__ import annotations
@@ -245,15 +245,25 @@ def render_purchase_lines_entry_table(
     # Deferred structural mutations (must run before keyed widgets mount).
     delete_uid = st.session_state.pop(f"{key_prefix}_delete_uid", None)
     if delete_uid is not None:
-        rows = [
-            r
-            for r in list(st.session_state.get(rows_key) or [])
-            if r.get("uid") != delete_uid
-        ]
+        rows_before = list(st.session_state.get(rows_key) or [])
+        del_idx = next(
+            (i for i, r in enumerate(rows_before) if r.get("uid") == delete_uid),
+            None,
+        )
+        rows = [r for r in rows_before if r.get("uid") != delete_uid]
         _clear_row_widget_keys(key_prefix, str(delete_uid))
         if not rows:
             rows = [_blank_row()]
         st.session_state[rows_key] = rows
+        # After delete, land on the next row's Product (or the new last row).
+        if focus_restore_key and rows:
+            if del_idx is not None and del_idx < len(rows):
+                focus_uid = rows[del_idx]["uid"]
+            else:
+                focus_uid = rows[-1]["uid"]
+            st.session_state[focus_restore_key] = _product_key(
+                key_prefix, str(focus_uid)
+            )
 
     append_blank = st.session_state.pop(f"{key_prefix}_append_blank", False)
     if append_blank:
@@ -436,9 +446,11 @@ def render_purchase_lines_entry_table(
             key=f"{key_prefix}_del_{uid}",
             help="Remove row",
             icon=":material/delete:",
+            disabled=product is None,
         ):
-            st.session_state[f"{key_prefix}_delete_uid"] = uid
-            st.rerun()
+            if product is not None:
+                st.session_state[f"{key_prefix}_delete_uid"] = uid
+                st.rerun()
 
         row["item_label"] = selected_label
         row["qty"] = float(qty or 0)

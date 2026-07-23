@@ -6,7 +6,6 @@ from vaybooks.bms.domain.shared.exceptions import (
     DuplicateVendorError,
     ValidationError,
 )
-from vaybooks.bms.domain.shared.india import mask_bank_account
 from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.components.common.list_view import render_list
 from vaybooks.bms.ui.components.parties.vendor_form import render_vendor_form
@@ -17,7 +16,6 @@ from vaybooks.bms.ui.dialog_utils import (
 )
 from vaybooks.bms.ui.keyboard.dialog_actions import consume_submit, open_dialog
 from vaybooks.bms.ui.keyboard.wired import mark_wired
-from vaybooks.bms.ui.components.common.voucher_card import VoucherEditAction, voucher_cards
 from vaybooks.bms.ui.styles import render_card_grid
 from vaybooks.bms.ui.list_schemas import VENDORS
 
@@ -196,115 +194,6 @@ def _pay_vendor_dialog(services, vendor_id: str):
 
 
 # --- views -------------------------------------------------------------------
-def _render_vendor_detail(services, vendor_id: str):
-    from vaybooks.bms.ui.keyboard.actions import consume_action
-
-    vendor_service = services["vendors"]
-    accounting = services["accounting"]
-    vendor = vendor_service.get_vendor_detail(vendor_id)
-    if not vendor:
-        st.warning("Vendor detail not found")
-        return
-
-    if st.button("← Back to vendors", key="vendor_back") or consume_action("nav.back"):
-        navigation.go_back_to_list("vendors", "vendors_list")
-        return
-
-    st.subheader("Vendor Detail")
-    st.title(vendor.vendor_name)
-    with st.container(border=True):
-        info = st.columns(3)
-        info[0].write(f"**Phone:** {vendor.phone_number}")
-        info[1].write(f"**Alt:** {vendor.alternate_phone_number or '—'}")
-        vendor_account = accounting.get_vendor_account(vendor.id)
-        balance = vendor_account.current_balance if vendor_account else 0.0
-        info[2].write(f"**Payable:** ₹{abs(balance):,.0f}")
-        if vendor.contact_person:
-            st.caption(f"Contact: {vendor.contact_person}")
-        if vendor.email:
-            st.caption(f"Email: {vendor.email}")
-        if vendor_account:
-            st.caption(f"System Account: {vendor_account.account_name}")
-        if vendor.formatted_address:
-            st.caption(f"Address: {vendor.formatted_address}")
-        tax_bits = []
-        if vendor.registration_type:
-            tax_bits.append(f"Registration: {vendor.registration_type.value}")
-        if vendor.gstin:
-            tax_bits.append(f"GSTIN: {vendor.gstin}")
-        if vendor.pan:
-            tax_bits.append(f"PAN: {vendor.pan}")
-        if vendor.msme_number:
-            tax_bits.append(f"MSME: {vendor.msme_number}")
-        if tax_bits:
-            st.caption(" · ".join(tax_bits))
-        if vendor.bank_account_number or vendor.bank_ifsc:
-            bank_bits = []
-            if vendor.bank_account_holder:
-                bank_bits.append(vendor.bank_account_holder)
-            if vendor.bank_account_number:
-                bank_bits.append(mask_bank_account(vendor.bank_account_number))
-            if vendor.bank_ifsc:
-                bank_bits.append(vendor.bank_ifsc)
-            if vendor.bank_name:
-                bank_bits.append(vendor.bank_name)
-            st.caption(f"Bank: {' · '.join(bank_bits)}")
-        if vendor.notes:
-            st.caption(f"Notes: {vendor.notes}")
-
-    if st.button("+ Record Payment", type="primary", key="vendor_rec_pay"):
-        clear_all_dialog_flags()
-        _pay_vendor_dialog(services, vendor.id)
-
-    service_names = {
-        s.id: s.service_name
-        for s in services["vendor_services"].list_services(active_only=False)
-    }
-    payments = (
-        accounting.list_vendor_payments(vendor_account.id) if vendor_account else []
-    )
-    associated_services = sorted(
-        {
-            service_names[v.reference_service_id]
-            for v in payments
-            if v.reference_service_id and v.reference_service_id in service_names
-        }
-    )
-    st.markdown("**Outsourced service association**")
-    if associated_services:
-        st.write(", ".join(associated_services))
-    else:
-        st.caption("No outsourced services linked via payments yet.")
-
-    st.markdown("**Payments**")
-    if not payments:
-        st.caption("No payments recorded yet.")
-    else:
-        ordered = sorted(payments, key=lambda x: x.voucher_date, reverse=True)
-
-        def _payment_builder(voucher):
-            return {
-                "service_label": service_names.get(voucher.reference_service_id),
-                "show_order_linked": False,
-                "show_type_badge": False,
-                "edit": VoucherEditAction(
-                    flag_key=V_PAY,
-                    button_key=f"edit_vpay_{voucher.id}",
-                    clear_dialogs=True,
-                    register_dialog=True,
-                ),
-            }
-
-        voucher_cards(
-            ordered,
-            suffix=f"vpay_{vendor.id}",
-            card_builder=_payment_builder,
-        )
-
-    if st.session_state.get(V_PAY):
-        _pay_vendor_dialog(services, vendor.id)
-
-
 def _load_vendors(services, filters, sort):
     vendors = services["vendors"].list_all_vendors()
     accounting = services["accounting"]
@@ -376,17 +265,9 @@ def render(services: dict):
         _edit_vendor_dialog(services["vendors"])
 
 
+# Re-export for callers that still import from list.
 def render_vendor_detail(services: dict):
-    from vaybooks.bms.ui.keyboard.actions import consume_action
-    from vaybooks.bms.ui.keyboard.context import set_current_page
+    from vaybooks.bms.ui.pages.parties.vendors.detail import render as render_detail
 
-    set_current_page("vendor_detail")
-    mark_wired("nav.back")
-    vendor_id = navigation.current_detail_id("vendor_detail")
-    if not vendor_id:
-        st.error("No vendor selected.")
-        if st.button("← Back to vendors") or consume_action("nav.back"):
-            navigation.go_back_to_list("vendors", "vendors_list")
-        return
-    _render_vendor_detail(services, vendor_id)
+    render_detail(services)
 

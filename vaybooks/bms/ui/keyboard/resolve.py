@@ -20,6 +20,7 @@ from vaybooks.bms.ui.keyboard.wired import clear_wired
 # Pages that own export CSV shortcuts (not migration parents).
 _EXPORT_PAGE = "export_backup"
 _PO_DETAIL = "purchase_order_detail"
+_PO_LIST = "purchase_orders_list"
 _MTD_PAGE = "mtd_dashboard"
 _ORDER_DETAIL = "order_detail"
 
@@ -58,6 +59,10 @@ def _pick_action(chord: str, action_ids: list[str], page: str | None) -> str | N
     if is_filters_ui_open():
         if chord == "ctrl+enter" and "list.filters.apply" in action_ids:
             return "list.filters.apply"
+
+    # Create PO (F1) is global — available from any screen.
+    if "purchases.orders.create" in action_ids:
+        return "purchases.orders.create"
 
     # Page-specific context
     if page == _EXPORT_PAGE:
@@ -188,6 +193,16 @@ def resolve_pressed_shortcuts() -> None:
             if submit:
                 request_submit(submit)
             queue_action(chosen)
+            return
+        # F1 Create PO: arm dialog from any screen; jump to PO list if needed.
+        if chosen == "purchases.orders.create":
+            from vaybooks.bms.ui.components.purchases.purchase_order_dialog import (
+                arm_po_dialog,
+            )
+
+            arm_po_dialog()
+            if page != _PO_LIST:
+                _navigate_parent("purchase_orders_list")
             return
         queue_action(chosen)
         # Also queue list.primary aliases when primary fires

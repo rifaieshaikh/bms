@@ -8,6 +8,7 @@ from typing import Optional
 import streamlit as st
 
 from vaybooks.bms.ui import filtering as F
+from vaybooks.bms.ui.components.common.filter_focus_nav import inject_filters_chain_nav
 from vaybooks.bms.ui.dialog_utils import (
     clear_dialog_flags,
     dismiss_armed_dialogs,
@@ -79,20 +80,56 @@ def _count_active(schema: ListSchema, filters: dict) -> int:
     )
 
 
+def _is_compact_select_radio(fld, options: list) -> bool:
+    """Small SELECT lists use radio (not Baseweb combobox) for arrow nav."""
+    return (
+        fld.type == F.SELECT
+        and len(options) <= 4
+        and not fld.options_loader
+    )
+
+
+def _render_radio_select(fld, wkey: str, values: list, labels: dict) -> None:
+    st.radio(
+        fld.label,
+        values,
+        key=wkey,
+        format_func=lambda v, m=labels: m.get(v, str(v)),
+        horizontal=True,
+        help=fld.help or None,
+    )
+
+
+def _fill_deferred_radios(deferred: list) -> None:
+    """Mount radios into form placeholders from *outside* the form.
+
+    Streamlit batches widgets inside ``st.form`` until submit, so Enter/click
+    would not update Payable balance visually. Rendering into an ``st.empty``
+    reserved inside the form, from outside, keeps layout and commits state.
+    """
+    for slot, fld, wkey, values, labels in deferred:
+        with slot:
+            _render_radio_select(fld, wkey, values, labels)
+
+
 def _render_filter_widgets(
     schema: ListSchema,
     committed: dict,
     services,
     *,
     include_date_presets: bool = True,
-) -> list[str]:
-    """Render filter fields; return focus-chain widget keys in order.
+    defer_radios: bool = False,
+) -> tuple[list[str], list]:
+    """Render filter fields; return (focus-chain keys, deferred radio specs).
 
     When ``include_date_presets`` is False (inside ``st.form``), MTD / Last 30d
     buttons are omitted — Streamlit disallows ordinary buttons inside forms.
+    When ``defer_radios`` is True, compact SELECT radios reserve an ``st.empty``
+    slot and are returned for mounting outside the form.
     """
     entity = schema.entity_key
     chain: list[str] = []
+    deferred: list = []
     for fld in schema.filter_fields:
         wkey = _widget_key(entity, fld.key)
         if fld.type in (F.EXACT, F.REGEX):
@@ -110,17 +147,27 @@ def _render_filter_widgets(
         elif fld.type in (F.SELECT, F.ENTITY_SELECT):
             options = _resolve_options(fld, services)
             values = [None] + [v for v, _ in options]
-            labels = {None: F.ALL_LABEL, **{v: lbl for v, lbl in options}}
+            all_label = getattr(fld, "all_label", None) or F.ALL_LABEL
+            labels = {None: all_label, **{v: lbl for v, lbl in options}}
             _seed(wkey, committed.get(fld.key))
             if st.session_state.get(wkey) not in values:
                 st.session_state[wkey] = None
-            st.selectbox(
-                fld.label,
-                values,
-                key=wkey,
-                format_func=lambda v, m=labels: m.get(v, str(v)),
-                help=fld.help or None,
-            )
+            # Small SELECT lists use radio so ArrowDown is not trapped inside a
+            # Baseweb combobox (which steals focus and "goes back" on the last
+            # filter field). ENTITY_SELECT stays a searchable selectbox.
+            if _is_compact_select_radio(fld, options):
+                if defer_radios:
+                    deferred.append((st.empty(), fld, wkey, values, labels))
+                else:
+                    _render_radio_select(fld, wkey, values, labels)
+            else:
+                st.selectbox(
+                    fld.label,
+                    values,
+                    key=wkey,
+                    format_func=lambda v, m=labels: m.get(v, str(v)),
+                    help=fld.help or None,
+                )
             chain.append(wkey)
         elif fld.type == F.MULTISELECT:
             options = _resolve_options(fld, services)
@@ -172,7 +219,7 @@ def _render_filter_widgets(
             _seed(wkey, bool(committed.get(fld.key)))
             st.checkbox(fld.label, key=wkey, help=fld.help or None)
             chain.append(wkey)
-    return chain
+    return chain, deferred
 
 
 def _render_date_range_presets(schema: ListSchema, committed: dict) -> list[str]:
@@ -263,16 +310,28 @@ def _on_sort_dismiss() -> None:
     clear_list_panel_ui()
 
 
-def _inject_linear_focus(chain: list[str], apply_key: str, *, component_key: str) -> None:
-    from vaybooks.bms.ui.keyboard.focus_manager import inject_focus_manager
+def _inject_linear_focus(
+    chain: list[str],
+    apply_key: str,
+    *,
+    component_key: str,
+    manager_id: str,
+    clear_key: str | None = None,
+    last_field_key: str | None = None,
+    restore_key: str | None = None,
+) -> None:
+    from vaybooks.bms.ui.keyboard.focus.registry import get_strategy
 
     if not chain:
         return
-    inject_focus_manager(
-        chain,
-        restore_key=chain[0],
-        mode="linear_apply",
+    get_strategy("linear_apply").inject(
+        manager_id=manager_id,
+        chain=chain,
+        # Do not steal focus back to the first field on every dialog rerun.
+        restore_key=restore_key,
         apply_key=apply_key,
+        clear_key=clear_key,
+        last_field_key=last_field_key,
         component_key=component_key,
     )
 
@@ -295,26 +354,41 @@ def _filters_dialog(schema: ListSchema, services) -> None:
     preset_chain = _render_date_range_presets(schema, committed)
     apply_key = f"{entity}_apply_filters"
     clear_key = f"{entity}_clear_filters"
+    last_field_key = None
     chain: list[str] = []
 
-    # Form so Enter in text fields commits values and submits Apply together.
-    with st.form(f"{entity}_filters_form", border=False):
-        chain = _render_filter_widgets(
-            schema, committed, services, include_date_presets=False
+    # enter_to_submit=False so Enter on Payable balance selects the radio
+    # instead of submitting the filter form. Compact radios are deferred out of
+    # the form (via st.empty slots) so selection commits and displays immediately.
+    with st.form(
+        f"{entity}_filters_form",
+        border=False,
+        enter_to_submit=False,
+    ):
+        field_chain, deferred_radios = _render_filter_widgets(
+            schema,
+            committed,
+            services,
+            include_date_presets=False,
+            defer_radios=True,
         )
-        chain = [*preset_chain, *chain, apply_key, clear_key]
+        last_field_key = field_chain[-1] if field_chain else None
+        # Apply comes immediately after the last field so Down advances to Apply
+        # (not Clear). Clear stays reachable via Left from the last field.
+        chain = [*preset_chain, *field_chain, apply_key, clear_key]
         btns = st.columns(2)
-        apply_clicked = btns[0].form_submit_button(
+        apply_clicked = btns[1].form_submit_button(
             "Apply",
             type="primary",
             use_container_width=True,
             key=apply_key,
         )
-        clear_clicked = btns[1].form_submit_button(
+        clear_clicked = btns[0].form_submit_button(
             "Clear all",
             use_container_width=True,
             key=clear_key,
         )
+    _fill_deferred_radios(deferred_radios)
 
     if consume_action("list.filters.apply"):
         apply_clicked = True
@@ -331,8 +405,21 @@ def _filters_dialog(schema: ListSchema, services) -> None:
         _close_filters_dialog(entity)
         st.rerun()
 
+    # Dedicated arrow nav first (wins capture): Alternate → radio → Apply/Clear.
+    inject_filters_chain_nav(
+        chain=chain,
+        apply_key=apply_key,
+        clear_key=clear_key,
+        radio_key=last_field_key,
+    )
     _inject_linear_focus(
-        chain, apply_key, component_key=f"focus_filters_{entity}"
+        chain,
+        apply_key,
+        clear_key=clear_key,
+        last_field_key=last_field_key,
+        restore_key=None,
+        component_key=f"focus_filters_{entity}",
+        manager_id=f"filters_{entity}",
     )
 
 
@@ -384,7 +471,9 @@ def _sort_dialog(schema: ListSchema) -> None:
     _inject_linear_focus(
         [field_wkey, dir_wkey, apply_key],
         apply_key,
+        restore_key=field_wkey,
         component_key=f"focus_sort_{entity}",
+        manager_id=f"sort_{entity}",
     )
 
 
@@ -433,8 +522,13 @@ def render_filter_sort_bar(
     primary_label: Optional[str] = None,
     primary_key: Optional[str] = None,
     title: Optional[str] = None,
+    primary_action: Optional[str] = None,
 ) -> dict:
-    """Render the header bar; return ``{filters, sort, primary_clicked}``."""
+    """Render the header bar; return ``{filters, sort, primary_clicked}``.
+
+    ``primary_action`` — optional extra action id (e.g. ``purchases.orders.create``)
+    that also triggers the primary button and supplies its help chord.
+    """
     from vaybooks.bms.ui.keyboard.actions import consume_action
     from vaybooks.bms.ui.keyboard.bindings import get_bindings
     from vaybooks.bms.ui.keyboard.context import (
@@ -448,9 +542,12 @@ def render_filter_sort_bar(
     entity = schema.entity_key
 
     bindings = get_bindings()
-    filter_help = bindings["actions"].get("list.filters.open", "ctrl+shift+q")
+    filter_help = bindings["actions"].get("list.filters.open", "ctrl+alt+f")
     sort_help = bindings["actions"].get("list.sort.open", "ctrl+shift+s")
-    primary_help = bindings["actions"].get("list.primary", "ctrl+shift+n")
+    help_action = primary_action or "list.primary"
+    primary_help = bindings["actions"].get(
+        help_action, bindings["actions"].get("list.primary", "ctrl+shift+n")
+    )
     clear_filters_help = bindings["actions"].get("list.filters.clear", "ctrl+1")
     clear_sort_help = bindings["actions"].get("list.sort.clear", "ctrl+2")
 
@@ -459,14 +556,17 @@ def render_filter_sort_bar(
     clear_filters = consume_action("list.filters.clear")
     clear_sort = consume_action("list.sort.clear")
 
-    mark_wired(
+    wired = [
         "list.filters.open",
         "list.sort.open",
         "list.filters.apply",
         "list.filters.clear",
         "list.sort.clear",
         "list.primary",
-    )
+    ]
+    if primary_action:
+        wired.append(primary_action)
+    mark_wired(*wired)
 
     # Clear from list view only (not while a filter/sort dialog is open).
     panel_open = is_filters_ui_open() or is_sort_ui_open()
@@ -520,7 +620,9 @@ def render_filter_sort_bar(
                 help=primary_help,
             )
 
-    if consume_action("list.primary"):
+    if consume_action("list.primary") or (
+        primary_action and consume_action(primary_action)
+    ):
         primary_clicked = True
 
     if open_filters:

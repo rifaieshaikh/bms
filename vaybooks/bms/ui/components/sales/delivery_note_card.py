@@ -21,6 +21,7 @@ def _dn_row(dn) -> dict:
         "id": dn.id,
         "dn_number": dn.dn_number,
         "so_number": dn.so_number,
+        "customer_id": dn.customer_id,
         "customer_name": dn.customer_name,
         "delivery_date": dn.delivery_date,
         "status": dn.status.value if hasattr(dn.status, "value") else str(dn.status),

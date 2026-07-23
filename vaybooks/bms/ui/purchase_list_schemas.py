@@ -44,6 +44,8 @@ GOODS_RECEIPTS = ListSchema(
         FilterField("vendor_name", "Vendor", F.EXACT),
         FilterField("receipt_date", "Receipt date", F.DATE_RANGE),
         FilterField("status", "Status", F.EXACT),
+        FilterField("vendor_id", "Vendor", F.ENTITY_SELECT,
+                    options_loader="vendors", match=_match_vendor),
     ],
     sort_options=[
         SortOption("receipt_date", "Date"),
@@ -60,6 +62,8 @@ STORE_PURCHASES = ListSchema(
         FilterField("vendor_bill_number", "Bill number", F.EXACT),
         FilterField("vendor_name", "Vendor", F.EXACT),
         FilterField("bill_date", "Bill date", F.DATE_RANGE),
+        FilterField("vendor_id", "Vendor", F.ENTITY_SELECT,
+                    options_loader="vendors", match=_match_vendor),
         FilterField("vendor_account_id", "Vendor account", F.ENTITY_SELECT,
                     options_loader="vendor_accounts", match=_match_vendor),
         FilterField("min_total", "Min total (₹)", F.NUMBER_MIN, record_attr="total"),
@@ -80,6 +84,8 @@ PURCHASE_RETURNS = ListSchema(
         FilterField("return_number", "Return number", F.EXACT),
         FilterField("vendor_name", "Vendor", F.EXACT),
         FilterField("return_date", "Return date", F.DATE_RANGE),
+        FilterField("vendor_id", "Vendor", F.ENTITY_SELECT,
+                    options_loader="vendors", match=_match_vendor),
     ],
     sort_options=[
         SortOption("return_date", "Date"),

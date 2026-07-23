@@ -21,6 +21,7 @@ def _return_row(ret) -> dict:
         "id": ret.id,
         "return_number": ret.return_number,
         "vendor_name": ret.vendor_name,
+        "vendor_id": ret.vendor_id,
         "return_date": ret.return_date,
         "total_amount": ret.total_amount,
     }

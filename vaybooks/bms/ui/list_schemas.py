@@ -318,12 +318,27 @@ VENDORS = ListSchema(
     entity_key="vendors",
     title="Vendors",
     filter_fields=[
-        FilterField("vendor_name", "Vendor name", F.REGEX),
+        FilterField(
+            "vendor_id",
+            "Vendor name",
+            F.ENTITY_SELECT,
+            record_attr="id",
+            options_loader="vendors",
+        ),
         FilterField("phone_number", "Phone", F.REGEX),
         FilterField("alternate_phone_number", "Alternate phone", F.REGEX),
-        FilterField("balance_state", "Payable balance", F.SELECT,
-                    options=[("dr", "Dr"), ("cr", "Cr"), ("zero", "Zero")],
-                    match=_match_vendor_balance),
+        FilterField(
+            "balance_state",
+            "Payable balance",
+            F.SELECT,
+            options=[
+                ("zero", "Settled"),
+                ("dr", "Amount Payable"),
+                ("cr", "Vendor Advance"),
+            ],
+            all_label="All Balances",
+            match=_match_vendor_balance,
+        ),
     ],
     sort_options=[
         SortOption("created_at", "Created"),

@@ -21,6 +21,18 @@ _KEY_ALIASES = {
     "/": "/",
     ".": ".",
     "period": ".",
+    "f1": "F1",
+    "f2": "F2",
+    "f3": "F3",
+    "f4": "F4",
+    "f5": "F5",
+    "f6": "F6",
+    "f7": "F7",
+    "f8": "F8",
+    "f9": "F9",
+    "f10": "F10",
+    "f11": "F11",
+    "f12": "F12",
 }
 
 
@@ -94,9 +106,10 @@ def needs_prevent_default(chord: str) -> bool:
         "meta+s",
         "meta+f",
         "meta+n",
+        "f1",
     } or norm.startswith("ctrl+") or norm.startswith("meta+")
 
 
 RESERVED_LIST_CHILDREN = frozenset(
-    {"ctrl+shift+n", "ctrl+shift+q", "ctrl+shift+s", "ctrl+1", "ctrl+2"}
+    {"ctrl+shift+n", "ctrl+alt+f", "ctrl+shift+s", "ctrl+1", "ctrl+2"}
 )

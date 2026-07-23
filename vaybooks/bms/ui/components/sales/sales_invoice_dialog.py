@@ -26,6 +26,7 @@ from vaybooks.bms.ui.components.sales.sales_lines_editor import render_sales_lin
 from vaybooks.bms.ui.dialog_utils import make_dismiss_handler
 
 SALES_RECORD_DIALOG = "sales_record_dialog"
+SALES_RECORD_PRESELECT = "sales_record_dialog_preselect_customer_id"
 
 
 def _index_of(options: dict, target_id, default: int = 0) -> int:
@@ -33,11 +34,15 @@ def _index_of(options: dict, target_id, default: int = 0) -> int:
     return ids.index(target_id) if target_id in ids else default
 
 
-def arm_sales_record_dialog() -> None:
+def arm_sales_record_dialog(customer_id: str | None = None) -> None:
     for key in list(st.session_state.keys()):
         if key.startswith(SALES_RECORD_DIALOG):
             st.session_state.pop(key, None)
     st.session_state[SALES_RECORD_DIALOG] = "new"
+    if customer_id:
+        st.session_state[SALES_RECORD_PRESELECT] = customer_id
+    else:
+        st.session_state.pop(SALES_RECORD_PRESELECT, None)
 
 
 def _clear_dialog_session() -> None:
@@ -45,6 +50,7 @@ def _clear_dialog_session() -> None:
         if key.startswith(SALES_RECORD_DIALOG):
             st.session_state.pop(key, None)
     st.session_state.pop(SALES_RECORD_DIALOG, None)
+    st.session_state.pop(SALES_RECORD_PRESELECT, None)
 
 
 @st.dialog(
@@ -85,6 +91,13 @@ def sales_record_dialog(services: dict) -> None:
     customer_selection = render_customer_identity_selector(
         customer_service,
         key_prefix=SALES_RECORD_DIALOG,
+        initial_customer=(
+            customer_service.get_customer_detail(
+                st.session_state.get(SALES_RECORD_PRESELECT)
+            )
+            if st.session_state.get(SALES_RECORD_PRESELECT)
+            else None
+        ),
     )
     matched_customer = customer_selection.customer
     customer_state = matched_customer.state_code if matched_customer else ""

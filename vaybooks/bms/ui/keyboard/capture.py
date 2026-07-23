@@ -64,7 +64,7 @@ def activate_shortcuts() -> None:
         # Always include common list/dialog chords even if somehow missing
         for required in (
             "ctrl+shift+n",
-            "ctrl+shift+q",
+            "ctrl+alt+f",
             "ctrl+shift+s",
             "ctrl+1",
             "ctrl+2",
@@ -94,7 +94,7 @@ def pressed_chord() -> str | None:
     chords = all_unique_chords(bindings)
     for required in (
         "ctrl+shift+n",
-        "ctrl+shift+q",
+        "ctrl+alt+f",
         "ctrl+shift+s",
         "ctrl+s",
         "ctrl+x",

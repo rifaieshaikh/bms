@@ -130,6 +130,11 @@ class MongoSalesOrderRepository:
     def list_all(self) -> List[SalesOrder]:
         return [self._from_doc(d) for d in self._collection.find()]
 
+    def count_by_customer(self, customer_id: str) -> int:
+        if not customer_id:
+            return 0
+        return self._collection.count_documents({"customer_id": customer_id})
+
     def delete(self, order_id: str) -> None:
         self._collection.delete_one({"_id": order_id})
 
@@ -212,6 +217,11 @@ class MongoDeliveryNoteRepository:
 
     def list_all(self) -> List[DeliveryNote]:
         return [self._from_doc(d) for d in self._collection.find()]
+
+    def count_by_customer(self, customer_id: str) -> int:
+        if not customer_id:
+            return 0
+        return self._collection.count_documents({"customer_id": customer_id})
 
     def list_by_so(self, sales_order_id: str) -> List[DeliveryNote]:
         docs = self._collection.find({"sales_order_id": sales_order_id})
@@ -321,6 +331,11 @@ class MongoSalesReturnRepository:
 
     def list_all(self) -> List[SalesReturn]:
         return [self._from_doc(d) for d in self._collection.find()]
+
+    def count_by_customer(self, customer_id: str) -> int:
+        if not customer_id:
+            return 0
+        return self._collection.count_documents({"customer_id": customer_id})
 
     def delete(self, return_id: str) -> None:
         self._collection.delete_one({"_id": return_id})
@@ -438,6 +453,11 @@ class _MongoPricedDocumentRepository:
 
     def list_all(self):
         return [self._from_doc(doc) for doc in self._collection.find()]
+
+    def count_by_customer(self, customer_id: str) -> int:
+        if not customer_id:
+            return 0
+        return self._collection.count_documents({"customer_id": customer_id})
 
     def delete(self, value_id: str) -> None:
         self._collection.delete_one({"_id": value_id})

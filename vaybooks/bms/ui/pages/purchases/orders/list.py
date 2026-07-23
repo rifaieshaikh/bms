@@ -6,6 +6,8 @@ import logging
 
 import streamlit as st
 
+from vaybooks.bms.ui import filtering as F
+from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.components.common.list_view import render_list
 from vaybooks.bms.ui.components.purchases.purchase_order_card import (
     _po_row,
@@ -17,6 +19,7 @@ from vaybooks.bms.ui.components.purchases.purchase_order_dialog import (
     open_po_dialog_if_armed,
 )
 from vaybooks.bms.ui.purchase_list_schemas import PURCHASE_ORDERS
+from vaybooks.bms.ui.session_keys import filters_key
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +35,19 @@ def _load(services, filters, sort):
         return []
 
 
+def _apply_vendor_deep_link() -> None:
+    vendor_id = navigation.consume_list_param("purchase_orders_list", "vendor")
+    if not vendor_id:
+        return
+    key = filters_key(PURCHASE_ORDERS.entity_key)
+    committed = st.session_state.setdefault(key, F.default_filters(PURCHASE_ORDERS))
+    committed["vendor_id"] = vendor_id
+    st.session_state.pop(f"{PURCHASE_ORDERS.entity_key}_flt_vendor_id", None)
+
+
 def render(services: dict) -> None:
     consume_po_create_success()
+    _apply_vendor_deep_link()
     bar = render_list(
         PURCHASE_ORDERS,
         services=services,
@@ -45,6 +59,7 @@ def render(services: dict) -> None:
         count_label="orders",
         empty_text="No purchase orders yet.",
         page_key_nav="purchase_orders_list",
+        primary_action="purchases.orders.create",
     )
     if bar["primary_clicked"]:
         arm_po_dialog()

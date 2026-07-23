@@ -539,6 +539,15 @@ class AccountingAppService:
     def get_customer_account(self, customer_id: str) -> Optional[Account]:
         return self._account_repo.find_customer_account(customer_id)
 
+    def count_vouchers_for_account(
+        self, voucher_type: VoucherType, account_id: str
+    ) -> int:
+        """Count vouchers of a type that touch the given account."""
+        count_fn = getattr(self._voucher_repo, "count_by_type_and_account", None)
+        if callable(count_fn):
+            return int(count_fn(voucher_type, account_id) or 0)
+        return 0
+
     def customer_balances_by_customer(self) -> dict:
         """Map of customer_id -> current_balance for all customers (one query)."""
         return self._account_repo.customer_balances_by_customer()

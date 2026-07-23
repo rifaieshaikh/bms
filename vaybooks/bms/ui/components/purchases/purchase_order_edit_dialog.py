@@ -15,7 +15,7 @@ from vaybooks.bms.ui.components.purchases.purchase_lines_entry_table import (
     render_purchase_lines_entry_table,
 )
 from vaybooks.bms.ui.dialog_utils import make_dismiss_handler
-from vaybooks.bms.ui.keyboard.focus_manager import inject_focus_manager
+from vaybooks.bms.ui.keyboard.focus.registry import get_strategy
 
 logger = logging.getLogger(__name__)
 
@@ -136,9 +136,8 @@ def _po_edit_dialog(services: dict) -> None:
     )
 
     restore = st.session_state.pop(PO_EDIT_FOCUS_KEY, None)
-    inject_focus_manager(
-        [expected_key, *row_chain, save_key],
-        initial_key=expected_key,
+    get_strategy(PO_EDIT_DIALOG).inject(
+        chain=[expected_key, *row_chain, save_key],
         restore_key=restore,
         columns=row_columns,
         above_first=expected_key,

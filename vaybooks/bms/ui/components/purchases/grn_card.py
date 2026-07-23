@@ -23,6 +23,7 @@ def _grn_row(grn) -> dict:
         "grn_number": grn.grn_number,
         "po_number": grn.po_number,
         "vendor_name": grn.vendor_name,
+        "vendor_id": grn.vendor_id,
         "receipt_date": grn.receipt_date,
         "status": grn.status.value if hasattr(grn.status, "value") else str(grn.status),
         "total_amount": round(total, 2),

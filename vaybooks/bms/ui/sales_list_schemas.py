@@ -101,6 +101,13 @@ DELIVERY_NOTES = ListSchema(
         FilterField("customer_name", "Customer", F.EXACT),
         FilterField("delivery_date", "Delivery date", F.DATE_RANGE),
         FilterField("status", "Status", F.EXACT),
+        FilterField(
+            "customer_id",
+            "Customer",
+            F.ENTITY_SELECT,
+            options_loader="customers",
+            match=_match_customer,
+        ),
     ],
     sort_options=[
         SortOption("delivery_date", "Date"),
@@ -149,6 +156,13 @@ SALES_RETURNS = ListSchema(
                 (status.value, status.value)
                 for status in SalesReturnStatus
             ],
+        ),
+        FilterField(
+            "customer_id",
+            "Customer",
+            F.ENTITY_SELECT,
+            options_loader="customers",
+            match=_match_customer,
         ),
     ],
     sort_options=[

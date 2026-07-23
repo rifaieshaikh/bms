@@ -47,6 +47,20 @@ def test_customer_detail_route_renders_from_query_id():
             created_at=datetime(2026, 6, 1),
         )
         st.query_params["id"] = "cust-1"
+        account = MagicMock(id="acc-1", current_balance=0.0)
+        sales = MagicMock(
+            related_document_counts=MagicMock(
+                return_value={
+                    "estimates": 3,
+                    "quotations": 2,
+                    "sales_orders": 7,
+                    "delivery_notes": 1,
+                    "sales_returns": 0,
+                    "sales_invoices": 12,
+                    "receipts": 8,
+                }
+            )
+        )
         services = {
             "customers": MagicMock(
                 get_customer_detail=MagicMock(return_value=customer)
@@ -62,6 +76,11 @@ def test_customer_detail_route_renders_from_query_id():
                 ),
                 list_recent_by_customer=MagicMock(return_value=[]),
             ),
+            "measurements": MagicMock(list_by_customer=MagicMock(return_value=[])),
+            "accounting": MagicMock(
+                get_customer_account=MagicMock(return_value=account)
+            ),
+            "sales": sales,
         }
         customer_detail.render(services)
 
@@ -73,3 +92,16 @@ def test_customer_detail_route_renders_from_query_id():
     assert "Ananya Rao" in _text(at)
     buttons = " ".join(getattr(el, "label", "") or "" for el in at.button)
     assert "Back to customers" in buttons
+    assert "Edit Customer" in buttons
+    assert "View" in buttons
+    assert "Related Transactions" in _text(at)
+    assert "Quick Actions" in _text(at)
+    assert "Sales Order" in buttons
+    assert "Invoice" in buttons
+    assert "Record Receipt" in buttons
+    assert "Measurements" in _text(at)
+    assert "Customization Orders" in _text(at)
+    assert "Customer Ledger" in _text(at)
+    assert "Recent Customization Orders" in _text(at)
+    assert "No customization orders yet" in _text(at)
+    assert "Settled" in _text(at) or "₹0.00" in _text(at)

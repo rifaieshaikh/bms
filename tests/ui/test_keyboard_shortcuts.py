@@ -38,12 +38,17 @@ def test_parse_chord_modifiers():
     assert p["key"] == "o"
     p2 = parse_chord("alt+left")
     assert p2["alt"] and p2["key"] == "ArrowLeft"
+    p3 = parse_chord("f1")
+    assert p3["key"] == "F1" and not p3["ctrl"] and not p3["alt"]
+    p4 = parse_chord("alt+p")
+    assert p4["alt"] and p4["key"] == "p" and not p4["ctrl"]
 
 
 def test_defaults_customers_locked():
     ensure_defaults_loaded(force=True)
     parents = default_parents()
     assert parents["customers_list"] == "ctrl+x"
+    assert parents["purchase_orders_list"] == "alt+p"
     assert "customers_list" in LOCKED_PARENTS
     assert "ctrl+shift+n" in RESERVED_LIST_CHILDREN
 
@@ -52,11 +57,12 @@ def test_default_actions_include_list_roles():
     ensure_defaults_loaded(force=True)
     actions = default_actions()
     assert actions["list.primary"] == "ctrl+shift+n"
-    assert actions["list.filters.open"] == "ctrl+shift+q"
+    assert actions["list.filters.open"] == "ctrl+alt+f"
     assert actions["list.sort.open"] == "ctrl+shift+s"
     assert actions["list.filters.clear"] == "ctrl+1"
     assert actions["list.sort.clear"] == "ctrl+2"
     assert actions["dialog.save"] == "ctrl+s"
+    assert actions["purchases.orders.create"] == "f1"
 
 
 def test_list_chords_do_not_collide_with_parents():
@@ -89,6 +95,30 @@ def test_pick_action_po_detail_receive():
         "purchase_order_detail",
     )
     assert chosen == "purchases.orders.receive"
+
+
+def test_pick_action_po_list_create():
+    chosen = _pick_action(
+        "f1",
+        ["purchases.orders.create"],
+        "purchase_orders_list",
+    )
+    assert chosen == "purchases.orders.create"
+
+
+def test_pick_action_po_create_from_any_screen():
+    chosen = _pick_action(
+        "f1",
+        ["purchases.orders.create"],
+        "customers_list",
+    )
+    assert chosen == "purchases.orders.create"
+    chosen2 = _pick_action(
+        "f1",
+        ["purchases.orders.create"],
+        "dashboard",
+    )
+    assert chosen2 == "purchases.orders.create"
 
 
 def test_pick_action_list_clear_filters_on_list_page():
@@ -140,6 +170,6 @@ def test_locked_parent_cannot_be_remapped():
 
 
 def test_parent_cannot_use_reserved_list_chord():
-    ok, err = save_parent_binding("vendors_list", "ctrl+shift+q")
+    ok, err = save_parent_binding("vendors_list", "ctrl+alt+f")
     assert not ok
     assert "reserved" in err.lower()

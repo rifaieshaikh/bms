@@ -1210,6 +1210,53 @@ class SalesAppService:
         )
         return rows
 
+    def related_document_counts(
+        self, customer_id: str, *, customer_account_id: str = ""
+    ) -> dict:
+        """Counts for Related Transactions — one service entry point.
+
+        Uses repository ``count_by_customer`` / voucher account counts when
+        available; missing backends return an empty dict for that key.
+        """
+        counts: dict = {}
+
+        def _repo_count(repo) -> int | None:
+            if repo is None:
+                return None
+            fn = getattr(repo, "count_by_customer", None)
+            if not callable(fn):
+                return None
+            try:
+                return int(fn(customer_id) or 0)
+            except Exception:
+                return None
+
+        for key, repo in (
+            ("estimates", self._estimate_repo),
+            ("quotations", self._quotation_repo),
+            ("sales_orders", self._so_repo),
+            ("delivery_notes", self._dn_repo),
+            ("sales_returns", self._return_repo),
+        ):
+            value = _repo_count(repo)
+            if value is not None:
+                counts[key] = value
+
+        if customer_account_id:
+            try:
+                counts["sales_invoices"] = self._accounting.count_vouchers_for_account(
+                    VoucherType.SALES_INVOICE, customer_account_id
+                )
+            except Exception:
+                pass
+            try:
+                counts["receipts"] = self._accounting.count_vouchers_for_account(
+                    VoucherType.RECEIPT, customer_account_id
+                )
+            except Exception:
+                pass
+        return counts
+
     def get_sales_invoice(self, voucher_id: str) -> Optional[dict]:
         voucher = self._accounting.get_voucher(voucher_id)
         if not voucher or voucher.voucher_type != VoucherType.SALES_INVOICE:

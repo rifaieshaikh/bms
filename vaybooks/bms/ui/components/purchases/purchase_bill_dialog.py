@@ -7,7 +7,6 @@ from datetime import date
 import streamlit as st
 
 from vaybooks.bms.domain.shared.enums import CatalogItemType
-from vaybooks.bms.ui.components.inventory.catalog_item_dialog import CATALOG_ITEM_DIALOG
 from vaybooks.bms.ui.components.common.dialog_state import (
     ensure_selectbox_option,
     reset_dialog_state,
@@ -17,15 +16,22 @@ from vaybooks.bms.ui.components.purchases.purchase_invoice_form import (
     vendor_select_index,
 )
 from vaybooks.bms.ui.components.purchases.purchase_line_ui import vendor_is_registered
-from vaybooks.bms.ui.components.purchases.purchase_lines_editor import render_purchase_lines_editor
+from vaybooks.bms.ui.components.purchases.purchase_lines_entry_table import (
+    entry_table_focus_chain,
+    entry_table_focus_columns,
+    render_purchase_lines_entry_table,
+)
 from vaybooks.bms.ui.dialog_utils import make_dismiss_handler
+from vaybooks.bms.ui.keyboard.focus.registry import get_strategy
 
 PURCHASE_BILL_DIALOG = "purchase_bill_dialog"
+BILL_FOCUS_KEY = f"{PURCHASE_BILL_DIALOG}_focus"
 
 
 def arm_purchase_bill_dialog(**prefill) -> None:
     reset_dialog_state(PURCHASE_BILL_DIALOG)
     st.session_state[PURCHASE_BILL_DIALOG] = "new"
+    st.session_state[BILL_FOCUS_KEY] = f"{PURCHASE_BILL_DIALOG}_vendor"
     for key, value in prefill.items():
         st.session_state[f"{PURCHASE_BILL_DIALOG}_{key}"] = value
 
@@ -45,7 +51,6 @@ def purchase_bill_dialog(services: dict) -> None:
     accounting = services["accounting"]
     vendors = services["vendors"]
     inventory = services.get("inventory")
-    vendor_services = services["vendor_services"]
     business = services["business"].get_profile()
 
     vendor_list = vendors.list_all_vendors()
@@ -70,6 +75,12 @@ def purchase_bill_dialog(services: dict) -> None:
     vendor_id = vendor_opts.get(vendor_name)
     if not vendor_id:
         st.warning("Select a vendor.")
+        restore = st.session_state.pop(BILL_FOCUS_KEY, None)
+        get_strategy(PURCHASE_BILL_DIALOG).inject(
+            chain=[vendor_key],
+            restore_key=restore,
+            component_key="bill_vendor_only",
+        )
         return
     vendor = vendors.get_vendor_detail(vendor_id)
     vendor_account = accounting.get_vendor_account(vendor_id)
@@ -80,15 +91,16 @@ def purchase_bill_dialog(services: dict) -> None:
     store_accounts = accounting.get_store_accounts()
     store_opts = {a.account_name: a.id for a in store_accounts}
     products = inventory.list_products(active_only=True) if inventory else []
-    services_list = vendor_services.list_services(active_only=True)
 
     cols = st.columns(2)
+    bill_no_key = f"{PURCHASE_BILL_DIALOG}_bill_no"
+    date_key = f"{PURCHASE_BILL_DIALOG}_date"
     bill_number = cols[0].text_input(
         "Vendor bill number",
         value=st.session_state.get(f"{PURCHASE_BILL_DIALOG}_bill_number", ""),
-        key=f"{PURCHASE_BILL_DIALOG}_bill_no",
+        key=bill_no_key,
     )
-    bill_date = cols[1].date_input("Date", value=date.today(), key=f"{PURCHASE_BILL_DIALOG}_date")
+    bill_date = cols[1].date_input("Date", value=date.today(), key=date_key)
 
     ref_grn = st.session_state.get(f"{PURCHASE_BILL_DIALOG}_reference_grn_id")
     ref_po = st.session_state.get(f"{PURCHASE_BILL_DIALOG}_reference_po_id")
@@ -104,27 +116,39 @@ def purchase_bill_dialog(services: dict) -> None:
         st.caption(f"Linked to GRN `{str(ref_grn)[:8]}…` — stock already received; bill will not receive stock again.")
 
     initial_lines = st.session_state.get(f"{PURCHASE_BILL_DIALOG}_lines")
+    if initial_lines:
+        initial_lines = [
+            row
+            for row in initial_lines
+            if str(row.get("item_type") or CatalogItemType.PRODUCT.value)
+            == CatalogItemType.PRODUCT.value
+        ]
     st.markdown("**Line items**")
-    line_items, gst_errors = render_purchase_lines_editor(
+    line_items, gst_errors = render_purchase_lines_entry_table(
         key_prefix=PURCHASE_BILL_DIALOG,
         products=products,
-        services=services_list,
         initial_lines=initial_lines,
         vendor_id=vendor_id,
         purchases_service=purchases,
         inventory_service=inventory,
-        allow_services=True,
         qty_field="qty",
         vendor_registered=registered,
         business=business,
         business_state_code=business.state_code if business else "",
         vendor_state_code=vendor.state_code if vendor else "",
         catalog_return_to=PURCHASE_BILL_DIALOG,
+        focus_restore_key=BILL_FOCUS_KEY,
     )
 
     pay_total = round(
         sum(float(row.get("line_total") or 0) for row in line_items), 2
     )
+
+    paid_key = f"{PURCHASE_BILL_DIALOG}_paid"
+    pay_acct_key = f"{PURCHASE_BILL_DIALOG}_pay_acct"
+    stock_key = f"{PURCHASE_BILL_DIALOG}_stock"
+    save_key = f"{PURCHASE_BILL_DIALOG}_save"
+    cancel_key = f"{PURCHASE_BILL_DIALOG}_cancel"
 
     pay_cols = st.columns(2)
     amount_paid = pay_cols[0].number_input(
@@ -132,16 +156,18 @@ def purchase_bill_dialog(services: dict) -> None:
         min_value=0.0,
         max_value=float(max(pay_total, 0)),
         value=float(st.session_state.get(f"{PURCHASE_BILL_DIALOG}_amount_paid", pay_total)),
-        key=f"{PURCHASE_BILL_DIALOG}_paid",
+        key=paid_key,
     )
     paying_id = None
+    chain_tail: list[str] = [paid_key]
     if amount_paid > 0 and store_opts:
         paying_name = pay_cols[1].selectbox(
             "Paying account",
             list(store_opts.keys()),
-            key=f"{PURCHASE_BILL_DIALOG}_pay_acct",
+            key=pay_acct_key,
         )
         paying_id = store_opts[paying_name]
+        chain_tail.append(pay_acct_key)
 
     apply_stock = False
     if not ref_grn:
@@ -153,16 +179,40 @@ def purchase_bill_dialog(services: dict) -> None:
             apply_stock = st.checkbox(
                 "Receive stock (direct purchase, no GRN)",
                 value=bool(st.session_state.get(f"{PURCHASE_BILL_DIALOG}_apply_stock", True)),
-                key=f"{PURCHASE_BILL_DIALOG}_stock",
+                key=stock_key,
             )
+            chain_tail.append(stock_key)
 
     save_cols = st.columns(2)
-    if save_cols[0].button("Save", type="primary", use_container_width=True):
+    do_save = save_cols[0].button(
+        "Save", type="primary", use_container_width=True, key=save_key
+    )
+    if save_cols[1].button("Cancel", use_container_width=True, key=cancel_key):
+        _clear_dialog()
+        st.rerun()
+
+    row_chain = entry_table_focus_chain(PURCHASE_BILL_DIALOG)
+    row_columns = entry_table_focus_columns(PURCHASE_BILL_DIALOG)
+    restore = st.session_state.pop(BILL_FOCUS_KEY, None)
+    get_strategy(PURCHASE_BILL_DIALOG).inject(
+        chain=[vendor_key, bill_no_key, date_key, *row_chain, *chain_tail, save_key, cancel_key],
+        restore_key=restore,
+        columns=row_columns,
+        above_first=date_key,
+        below_last=save_key,
+        component_key=f"bill_entry_{vendor_id[:8]}_{len(row_chain)}",
+    )
+
+    if do_save:
         try:
             if gst_errors:
                 raise ValueError(gst_errors[0])
             if not line_items:
                 raise ValueError("Add at least one line with quantity, rate, and item")
+            for row in line_items:
+                row["item_type"] = CatalogItemType.PRODUCT.value
+                if not row.get("product_id"):
+                    row["product_id"] = row.get("item_id")
             purchases.create_purchase_bill_from_lines(
                 vendor_id=vendor_id,
                 raw_lines=line_items,
@@ -180,9 +230,6 @@ def purchase_bill_dialog(services: dict) -> None:
             st.rerun()
         except Exception as exc:
             st.error(str(exc))
-    if save_cols[1].button("Cancel", use_container_width=True):
-        _clear_dialog()
-        st.rerun()
 
 
 def open_purchase_bill_dialog_if_armed(services: dict) -> None:

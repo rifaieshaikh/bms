@@ -28,6 +28,7 @@ LEDGER_ACC = "acc_ledger_dialog"
 
 ACCOUNTS_PAGE_SIZE = CARD_PAGE_SIZE
 RCPT = "acc_receipt_dialog"
+RCPT_PRESELECT_ACCOUNT = "acc_receipt_preselect_customer_account_id"
 PAY = "acc_payment_dialog"
 SAL = "acc_salary_dialog"
 INV_CUST = "acc_cust_inv_dialog"
@@ -197,13 +198,18 @@ def _receipt_dialog(accounting_service):
         st.error("Need at least one store account and one customer account.")
         if st.button("Close"):
             st.session_state.pop(RCPT, None)
+            st.session_state.pop(RCPT_PRESELECT_ACCOUNT, None)
             st.rerun()
         return
 
     recv_opts = {a.account_name: a.id for a in store_accounts}
     cust_opts = {a.account_name: a.id for a in customers}
     existing_recv = voucher.lines[0].account_id if voucher else None
-    existing_cust = voucher.lines[1].account_id if voucher else None
+    existing_cust = (
+        voucher.lines[1].account_id
+        if voucher
+        else st.session_state.get(RCPT_PRESELECT_ACCOUNT)
+    )
     existing_amt = voucher.lines[0].debit_amount if voucher else 0.0
 
     recv = st.selectbox(
@@ -230,11 +236,13 @@ def _receipt_dialog(accounting_service):
                     recv_opts[recv], cust_opts[cust], amount, desc, v_date
                 )
             st.session_state.pop(RCPT, None)
+            st.session_state.pop(RCPT_PRESELECT_ACCOUNT, None)
             st.rerun()
         except Exception as exc:
             st.error(str(exc))
     if cols[1].button("Cancel", use_container_width=True):
         st.session_state.pop(RCPT, None)
+        st.session_state.pop(RCPT_PRESELECT_ACCOUNT, None)
         st.rerun()
 
 

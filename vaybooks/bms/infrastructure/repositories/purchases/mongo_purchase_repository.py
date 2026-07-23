@@ -101,6 +101,54 @@ class MongoPurchaseOrderRepository:
     def list_all(self) -> List[PurchaseOrder]:
         return [self._from_doc(d) for d in self._collection.find()]
 
+    def count_by_vendor(self, vendor_id: str) -> int:
+        if not vendor_id:
+            return 0
+        return int(self._collection.count_documents({"vendor_id": vendor_id}))
+
+    def list_recent_by_vendor(
+        self, vendor_id: str, limit: int = 5
+    ) -> List[PurchaseOrder]:
+        if not vendor_id:
+            return []
+        docs = (
+            self._collection.find({"vendor_id": vendor_id})
+            .sort([("created_at", -1), ("order_date", -1)])
+            .limit(limit)
+        )
+        return [self._from_doc(d) for d in docs]
+
+    def get_vendor_summary(self, vendor_id: str) -> dict:
+        """PO counts for one vendor via a single aggregation."""
+        if not vendor_id:
+            return {"po_count": 0, "open_count": 0}
+        closed = [
+            PurchaseOrderStatus.RECEIVED.value,
+            PurchaseOrderStatus.CLOSED.value,
+            PurchaseOrderStatus.CANCELLED.value,
+        ]
+        pipeline = [
+            {"$match": {"vendor_id": vendor_id}},
+            {
+                "$group": {
+                    "_id": None,
+                    "po_count": {"$sum": 1},
+                    "open_count": {
+                        "$sum": {
+                            "$cond": [{"$in": ["$status", closed]}, 0, 1]
+                        }
+                    },
+                }
+            },
+        ]
+        row = next(iter(self._collection.aggregate(pipeline)), None)
+        if not row:
+            return {"po_count": 0, "open_count": 0}
+        return {
+            "po_count": int(row.get("po_count") or 0),
+            "open_count": int(row.get("open_count") or 0),
+        }
+
     def delete(self, order_id: str) -> None:
         self._collection.delete_one({"_id": order_id})
 
@@ -194,6 +242,11 @@ class MongoGoodsReceiptRepository:
         docs = self._collection.find({"purchase_order_id": purchase_order_id})
         return [self._from_doc(d) for d in docs]
 
+    def count_by_vendor(self, vendor_id: str) -> int:
+        if not vendor_id:
+            return 0
+        return int(self._collection.count_documents({"vendor_id": vendor_id}))
+
     def delete(self, grn_id: str) -> None:
         self._collection.delete_one({"_id": grn_id})
 
@@ -270,6 +323,11 @@ class MongoPurchaseReturnRepository:
 
     def list_all(self) -> List[PurchaseReturn]:
         return [self._from_doc(d) for d in self._collection.find()]
+
+    def count_by_vendor(self, vendor_id: str) -> int:
+        if not vendor_id:
+            return 0
+        return int(self._collection.count_documents({"vendor_id": vendor_id}))
 
     def delete(self, return_id: str) -> None:
         self._collection.delete_one({"_id": return_id})
