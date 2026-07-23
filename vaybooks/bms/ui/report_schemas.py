@@ -945,6 +945,315 @@ INVENTORY_VALUATION = ListSchema(
     page_size=REPORT_PAGE_SIZE,
 )
 
+CATEGORY_STOCK_SUMMARY = ListSchema(
+    entity_key="report_category_stock_summary",
+    title="Category Stock Summary",
+    filter_fields=[
+        FilterField(
+            "category_id",
+            "Category",
+            F.ENTITY_SELECT,
+            options_loader="inventory_categories",
+        ),
+        FilterField("search", "Product / SKU", F.EXACT, placeholder="Contains…"),
+        FilterField(
+            "active_only",
+            "Active only",
+            F.CHECKBOX,
+            default_active=True,
+        ),
+    ],
+    sort_options=[
+        SortOption("category", "Category"),
+        SortOption("qty", "Qty"),
+        SortOption("stock_value", "Stock value"),
+        SortOption("valuation", "Valuation"),
+        SortOption("product_count", "Products"),
+    ],
+    default_sort="category",
+    page_size=REPORT_PAGE_SIZE,
+)
+
+DEAD_STOCK = ListSchema(
+    entity_key="report_dead_stock",
+    title="Dead / Slow-Moving Stock",
+    filter_fields=[
+        FilterField(
+            "date_range",
+            "Period",
+            F.DATE_RANGE,
+            default=_mtd,
+        ),
+        FilterField(
+            "category_id",
+            "Category",
+            F.ENTITY_SELECT,
+            options_loader="inventory_categories",
+        ),
+        FilterField("min_qty", "Min qty on hand", F.NUMBER_MIN, record_attr="qty"),
+        FilterField(
+            "max_qty_out",
+            "Max qty out in period",
+            F.NUMBER_MIN,
+            record_attr="qty_out_in_period",
+        ),
+    ],
+    sort_options=[
+        SortOption("qty_out_in_period", "Qty out in period"),
+        SortOption("qty", "Stock qty"),
+        SortOption("product_name", "Product name"),
+        SortOption("stock_value", "Stock value"),
+    ],
+    default_sort="qty_out_in_period",
+    page_size=REPORT_PAGE_SIZE,
+)
+
+STOCK_MOVEMENT_SUMMARY = ListSchema(
+    entity_key="report_stock_movement_summary",
+    title="Stock Movement Summary",
+    filter_fields=[
+        FilterField(
+            "date_range",
+            "Period",
+            F.DATE_RANGE,
+            default=_mtd,
+        ),
+        FilterField(
+            "category_id",
+            "Category",
+            F.ENTITY_SELECT,
+            options_loader="inventory_categories",
+        ),
+    ],
+    sort_options=[
+        SortOption("movement_type", "Movement type"),
+        SortOption("movement_count", "Count"),
+        SortOption("qty_in", "Qty in"),
+        SortOption("qty_out", "Qty out"),
+    ],
+    default_sort="movement_type",
+    page_size=REPORT_PAGE_SIZE,
+)
+
+STOCK_MARGIN = ListSchema(
+    entity_key="report_stock_margin",
+    title="Cost vs Selling (Stock Margin)",
+    filter_fields=[
+        FilterField(
+            "category_id",
+            "Category",
+            F.ENTITY_SELECT,
+            options_loader="inventory_categories",
+        ),
+        FilterField("search", "Product / SKU", F.EXACT, placeholder="Contains…"),
+        FilterField("min_qty", "Min qty", F.NUMBER_MIN, record_attr="qty"),
+        FilterField(
+            "active_only",
+            "Active only",
+            F.CHECKBOX,
+            default_active=True,
+        ),
+    ],
+    sort_options=[
+        SortOption("stock_margin", "Stock margin"),
+        SortOption("unit_margin", "Unit margin"),
+        SortOption("product_name", "Product name"),
+        SortOption("qty", "Qty"),
+    ],
+    default_sort="stock_margin",
+    page_size=REPORT_PAGE_SIZE,
+)
+
+OPENING_CLOSING_STOCK = ListSchema(
+    entity_key="report_opening_closing_stock",
+    title="Opening → Closing Stock",
+    filter_fields=[
+        FilterField(
+            "date_range",
+            "Period",
+            F.DATE_RANGE,
+            default=_mtd,
+            help=(
+                "Opening is reconstructed from ledger movements before the period start. "
+                "Create-time opening stock is recorded as a dated Receive."
+            ),
+        ),
+        FilterField(
+            "category_id",
+            "Category",
+            F.ENTITY_SELECT,
+            options_loader="inventory_categories",
+        ),
+        FilterField(
+            "product_id",
+            "Product",
+            F.ENTITY_SELECT,
+            options_loader="inventory_products",
+        ),
+        FilterField(
+            "active_only",
+            "Active only",
+            F.CHECKBOX,
+            default_active=True,
+        ),
+    ],
+    sort_options=[
+        SortOption("product_name", "Product name"),
+        SortOption("opening_qty", "Opening"),
+        SortOption("closing_qty", "Closing"),
+        SortOption("variance", "Variance"),
+    ],
+    default_sort="product_name",
+    page_size=REPORT_PAGE_SIZE,
+)
+
+HSN_STOCK_SUMMARY = ListSchema(
+    entity_key="report_hsn_stock_summary",
+    title="HSN Stock Summary",
+    filter_fields=[
+        FilterField(
+            "category_id",
+            "Category",
+            F.ENTITY_SELECT,
+            options_loader="inventory_categories",
+        ),
+        FilterField("search", "HSN / Product / SKU", F.EXACT, placeholder="Contains…"),
+        FilterField("min_qty", "Min qty", F.NUMBER_MIN, record_attr="qty"),
+        FilterField(
+            "active_only",
+            "Active only",
+            F.CHECKBOX,
+            default_active=True,
+        ),
+    ],
+    sort_options=[
+        SortOption("hsn_sac", "HSN/SAC"),
+        SortOption("qty", "Qty"),
+        SortOption("stock_value", "Stock value"),
+        SortOption("valuation", "Valuation"),
+        SortOption("product_count", "Products"),
+    ],
+    default_sort="hsn_sac",
+    page_size=REPORT_PAGE_SIZE,
+)
+
+FAST_MOVING_STOCK = ListSchema(
+    entity_key="report_fast_moving_stock",
+    title="Fast-Moving Stock",
+    filter_fields=[
+        FilterField(
+            "date_range",
+            "Period",
+            F.DATE_RANGE,
+            default=_mtd,
+        ),
+        FilterField(
+            "category_id",
+            "Category",
+            F.ENTITY_SELECT,
+            options_loader="inventory_categories",
+        ),
+        FilterField(
+            "min_qty_out",
+            "Min qty out in period",
+            F.NUMBER_MIN,
+            record_attr="qty_out_in_period",
+        ),
+    ],
+    sort_options=[
+        SortOption("qty_out_in_period", "Qty out in period"),
+        SortOption("qty", "Stock qty"),
+        SortOption("product_name", "Product name"),
+        SortOption("stock_value", "Stock value"),
+    ],
+    default_sort="qty_out_in_period",
+    page_size=REPORT_PAGE_SIZE,
+)
+
+CUSTOMER_LATEST_PRICES = ListSchema(
+    entity_key="report_customer_latest_prices",
+    title="Customer Latest Prices",
+    filter_fields=[
+        FilterField(
+            "customer_id",
+            "Customer",
+            F.ENTITY_SELECT,
+            options_loader="customers",
+        ),
+        FilterField(
+            "search",
+            "SKU / Product / Customer",
+            F.EXACT,
+            placeholder="Contains…",
+        ),
+        FilterField(
+            "date_range",
+            "Effective date",
+            F.DATE_RANGE,
+            help="Optional. When set, keeps latest pairs whose effective date falls in range.",
+        ),
+    ],
+    sort_options=[
+        SortOption("effective_date", "Effective date"),
+        SortOption("customer_name", "Customer"),
+        SortOption("sku", "SKU"),
+        SortOption("difference", "Difference"),
+    ],
+    default_sort="effective_date",
+    page_size=REPORT_PAGE_SIZE,
+)
+
+INACTIVE_PRODUCTS_WITH_STOCK = ListSchema(
+    entity_key="report_inactive_products_with_stock",
+    title="Inactive Products with Stock",
+    filter_fields=[
+        FilterField(
+            "category_id",
+            "Category",
+            F.ENTITY_SELECT,
+            options_loader="inventory_categories",
+        ),
+        FilterField("min_qty", "Min qty", F.NUMBER_MIN, record_attr="qty"),
+        FilterField("search", "Product / SKU", F.EXACT, placeholder="Contains…"),
+    ],
+    sort_options=[
+        SortOption("qty", "Stock qty"),
+        SortOption("product_name", "Product name"),
+        SortOption("stock_value", "Stock value"),
+        SortOption("sku", "SKU"),
+    ],
+    default_sort="qty",
+    page_size=REPORT_PAGE_SIZE,
+)
+
+PRODUCT_RATE_CARD = ListSchema(
+    entity_key="report_product_rate_card",
+    title="Product Rate Card",
+    filter_fields=[
+        FilterField(
+            "category_id",
+            "Category",
+            F.ENTITY_SELECT,
+            options_loader="inventory_categories",
+        ),
+        FilterField("search", "Product / SKU / HSN", F.EXACT, placeholder="Contains…"),
+        FilterField(
+            "active_only",
+            "Active only",
+            F.CHECKBOX,
+            default_active=True,
+        ),
+    ],
+    sort_options=[
+        SortOption("sku", "SKU"),
+        SortOption("product_name", "Product name"),
+        SortOption("selling_rate", "Selling rate"),
+        SortOption("category", "Category"),
+    ],
+    default_sort="sku",
+    page_size=REPORT_PAGE_SIZE,
+)
+
 REPORT_CATEGORIES: dict[str, list[str]] = {
     "Business Insights": [
         "Period Financial Summary",
@@ -978,12 +1287,6 @@ REPORT_CATEGORIES: dict[str, list[str]] = {
     "Customers": [
         "Customer Order History",
     ],
-    "Inventory": [
-        "Stock on Hand",
-        "Low Stock Alert",
-        "Stock Movements",
-        "Inventory Valuation",
-    ],
     "Purchases": [
         "Purchase Orders Pipeline",
         "GRN Pending",
@@ -997,6 +1300,24 @@ REPORT_CATEGORIES: dict[str, list[str]] = {
         "Sales Returns Summary",
     ],
 }
+
+# Inventory reports live only under Inventory → Reports (not Finance).
+INVENTORY_REPORT_TYPES = [
+    "Stock on Hand",
+    "Low Stock Alert",
+    "Stock Movements",
+    "Inventory Valuation",
+    "Category Stock Summary",
+    "Dead / Slow-Moving Stock",
+    "Stock Movement Summary",
+    "Cost vs Selling (Stock Margin)",
+    "Opening → Closing Stock",
+    "HSN Stock Summary",
+    "Fast-Moving Stock",
+    "Customer Latest Prices",
+    "Inactive Products with Stock",
+    "Product Rate Card",
+]
 
 SCHEMA_BY_REPORT_TYPE = {
     "Period Financial Summary": PERIOD_FINANCIAL_SUMMARY,
@@ -1025,6 +1346,16 @@ SCHEMA_BY_REPORT_TYPE = {
     "Low Stock Alert": LOW_STOCK,
     "Stock Movements": STOCK_MOVEMENTS,
     "Inventory Valuation": INVENTORY_VALUATION,
+    "Category Stock Summary": CATEGORY_STOCK_SUMMARY,
+    "Dead / Slow-Moving Stock": DEAD_STOCK,
+    "Stock Movement Summary": STOCK_MOVEMENT_SUMMARY,
+    "Cost vs Selling (Stock Margin)": STOCK_MARGIN,
+    "Opening → Closing Stock": OPENING_CLOSING_STOCK,
+    "HSN Stock Summary": HSN_STOCK_SUMMARY,
+    "Fast-Moving Stock": FAST_MOVING_STOCK,
+    "Customer Latest Prices": CUSTOMER_LATEST_PRICES,
+    "Inactive Products with Stock": INACTIVE_PRODUCTS_WITH_STOCK,
+    "Product Rate Card": PRODUCT_RATE_CARD,
     "Purchase Orders Pipeline": PO_PIPELINE,
     "GRN Pending": GRN_PENDING,
     "Purchases by Vendor": PURCHASES_BY_VENDOR,
@@ -1047,7 +1378,6 @@ CATEGORY_SERVICE_KEYS = {
     "Operations": "reports_operations",
     "Labor": "reports_labor",
     "Customers": "reports_customers",
-    "Inventory": "reports_inventory",
     "Purchases": "reports_purchases",
     "Sales Documents": "reports_sales_module",
 }

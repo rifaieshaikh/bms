@@ -170,5 +170,35 @@ class StockMovementsFilter:
 
 
 @dataclass
+class DeadStockFilter:
+    date_range: DateRange
+    category_id: str = ""
+    min_qty: float = 0.0
+    max_qty_out: float = 0.0
+
+
+@dataclass
+class OpeningClosingStockFilter:
+    date_range: DateRange
+    category_id: str = ""
+    product_id: str = ""
+    active_only: bool = True
+
+
+@dataclass
+class FastMovingStockFilter:
+    date_range: DateRange
+    category_id: str = ""
+    min_qty_out: float = 0.0
+
+
+@dataclass
+class CustomerLatestPricesFilter:
+    customer_id: str = ""
+    search: str = ""
+    date_range: DateRange | None = None
+
+
+@dataclass
 class PurchasesByVendorFilter:
     date_range: DateRange | None = None

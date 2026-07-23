@@ -7,9 +7,12 @@ from datetime import date
 import streamlit as st
 
 from vaybooks.bms.domain.shared.enums import StockMovementType
-from vaybooks.bms.ui.dialog_utils import make_dismiss_handler
+from vaybooks.bms.ui.dialog_utils import make_dismiss_handler, register_armed_dialog
+from vaybooks.bms.ui.keyboard.dialog_actions import consume_submit, open_dialog
+from vaybooks.bms.ui.keyboard.wired import mark_wired
 
 MOVEMENT_DIALOG = "inventory_movement_dialog"
+SUBMIT_MOVEMENT = "submit_inventory_movement"
 
 MANUAL_TYPES = [
     StockMovementType.RECEIVE,
@@ -20,7 +23,8 @@ MANUAL_TYPES = [
 
 
 def arm_record_movement_dialog() -> None:
-    st.session_state[MOVEMENT_DIALOG] = "new"
+    open_dialog(MOVEMENT_DIALOG, submit_key=SUBMIT_MOVEMENT, value="new")
+    mark_wired("inventory.movement.add", "list.primary", "dialog.save")
 
 
 @st.dialog(
@@ -32,6 +36,7 @@ def record_movement_dialog(services: dict) -> None:
     if st.session_state.get(MOVEMENT_DIALOG) != "new":
         return
 
+    mark_wired("dialog.save", "inventory.movement.add")
     inventory = services["inventory"]
     products = inventory.list_products(active_only=True)
     if not products:
@@ -66,7 +71,10 @@ def record_movement_dialog(services: dict) -> None:
     notes = st.text_area("Notes", key=f"{MOVEMENT_DIALOG}_notes")
 
     cols = st.columns(2)
-    if cols[0].button("Save", type="primary", use_container_width=True):
+    do_save = cols[0].button(
+        "Save", type="primary", use_container_width=True
+    ) or consume_submit(SUBMIT_MOVEMENT)
+    if do_save:
         try:
             if qty <= 0:
                 raise ValueError("Quantity must be positive")
@@ -89,4 +97,8 @@ def record_movement_dialog(services: dict) -> None:
 
 def open_record_movement_dialog_if_armed(services: dict) -> None:
     if st.session_state.get(MOVEMENT_DIALOG):
+        from vaybooks.bms.ui.keyboard.context import get_submit_map
+
+        get_submit_map().setdefault(MOVEMENT_DIALOG, SUBMIT_MOVEMENT)
+        register_armed_dialog(MOVEMENT_DIALOG)
         record_movement_dialog(services)

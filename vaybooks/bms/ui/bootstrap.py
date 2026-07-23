@@ -408,8 +408,6 @@ def get_services():
         business_service=business_service,
         price_history_repo=price_history_repo,
     )
-    reports_inventory = InventoryReportService(inventory_service)
-    reports_purchases = PurchaseReportService(purchase_service)
     sales_service = SalesAppService(
         so_repo,
         dn_repo,
@@ -423,6 +421,8 @@ def get_services():
         quotation_repo=quotation_repo,
         customer_price_repo=customer_price_repo,
     )
+    reports_inventory = InventoryReportService(inventory_service, sales=sales_service)
+    reports_purchases = PurchaseReportService(purchase_service)
     reports_sales_module = SalesModuleReportService(sales_service)
     report_facade = ReportAppService(
         report_repo,

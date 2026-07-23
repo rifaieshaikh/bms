@@ -9,9 +9,17 @@ from vaybooks.bms.ui.dialog_utils import (
     register_armed_dialog,
 )
 from vaybooks.bms.ui.inventory_list_schemas import INVENTORY_CATEGORIES
+from vaybooks.bms.ui.keyboard.dialog_actions import (
+    consume_submit,
+    open_dialog,
+)
+from vaybooks.bms.ui.keyboard.wired import mark_wired
+from vaybooks.bms.ui.styles import render_card_grid
 
 C_ADD = "inv_category_add_dialog"
 C_EDIT = "inv_category_edit_dialog"
+SUBMIT_ADD = "submit_inv_category_add"
+SUBMIT_EDIT = "submit_inv_category_edit"
 
 
 def _list_categories_indexed(inventory):
@@ -43,16 +51,35 @@ def _parent_options(inventory, exclude_id: str | None = None) -> tuple[list[str]
     return _parent_options_from(by_id, categories, exclude_id=exclude_id)
 
 
+def _open_add_category() -> None:
+    clear_all_dialog_flags()
+    open_dialog(C_ADD, submit_key=SUBMIT_ADD, clear_others=False)
+    mark_wired("inventory.category.add", "list.primary", "dialog.save")
+
+
+def _open_edit_category(category_id: str) -> None:
+    clear_all_dialog_flags()
+    open_dialog(C_EDIT, submit_key=SUBMIT_EDIT, value=category_id, clear_others=False)
+    mark_wired("inventory.category.save", "dialog.save", "list.edit_nth.1")
+
+
 @st.dialog("Add Category", width="medium", on_dismiss=make_dismiss_handler(C_ADD))
 def _add_category_dialog(inventory):
+    mark_wired("dialog.save", "inventory.category.add")
     parent_labels, parent_map = _parent_options(inventory)
-    # Use a form so Playwright submits name/parent atomically with the button.
-    with st.form("add_inv_cat_form", clear_on_submit=False):
-        name = st.text_input("Category name")
-        description = st.text_area("Description")
-        parent_label = st.selectbox("Parent category", parent_labels)
-        submitted = st.form_submit_button("Create Category", type="primary")
-    if not submitted:
+    name = st.text_input("Category name", key=f"{C_ADD}_name")
+    description = st.text_area("Description", key=f"{C_ADD}_description")
+    parent_label = st.selectbox(
+        "Parent category", parent_labels, key=f"{C_ADD}_parent"
+    )
+    cols = st.columns(2)
+    do_create = cols[0].button(
+        "Create Category", type="primary", use_container_width=True
+    ) or consume_submit(SUBMIT_ADD)
+    if cols[1].button("Cancel", use_container_width=True):
+        st.session_state.pop(C_ADD, None)
+        st.rerun()
+    if not do_create:
         return
     parent_id = parent_map.get(parent_label)
     if not name.strip():
@@ -69,6 +96,7 @@ def _add_category_dialog(inventory):
 
 @st.dialog("Edit Category", width="medium", on_dismiss=make_dismiss_handler(C_EDIT))
 def _edit_category_dialog(inventory, category_id: str):
+    mark_wired("dialog.save", "inventory.category.save")
     by_id, categories = _list_categories_indexed(inventory)
     category = by_id.get(category_id)
     if not category:
@@ -85,24 +113,42 @@ def _edit_category_dialog(inventory, category_id: str):
             break
 
     full_path = build_category_path(category_id, by_id) or category.name
-    with st.form("edit_inv_cat_form", clear_on_submit=False):
-        name = st.text_input("Category name", value=category.name)
-        description = st.text_area(
-            "Description", value=category.description or ""
-        )
-        parent_label = st.selectbox(
-            "Parent category",
-            parent_labels,
-            index=parent_labels.index(current_parent)
-            if current_parent in parent_labels
-            else 0,
-        )
-        st.caption(f"Full path: {full_path}")
-        is_active = st.checkbox("Active", value=category.is_active)
-        saved = st.form_submit_button(
-            "Save Changes", type="primary", use_container_width=True
-        )
-    if saved:
+    name = st.text_input(
+        "Category name", value=category.name, key=f"{C_EDIT}_name_{category_id}"
+    )
+    description = st.text_area(
+        "Description",
+        value=category.description or "",
+        key=f"{C_EDIT}_description_{category_id}",
+    )
+    parent_label = st.selectbox(
+        "Parent category",
+        parent_labels,
+        index=parent_labels.index(current_parent)
+        if current_parent in parent_labels
+        else 0,
+        key=f"{C_EDIT}_parent_{category_id}",
+    )
+    st.caption(f"Full path: {full_path}")
+    is_active = st.checkbox(
+        "Active", value=category.is_active, key=f"{C_EDIT}_active_{category_id}"
+    )
+
+    cols = st.columns(2)
+    do_save = cols[0].button(
+        "Save Changes", type="primary", use_container_width=True
+    ) or consume_submit(SUBMIT_EDIT)
+    if cols[1].button("Delete", use_container_width=True):
+        try:
+            inventory.delete_category(category_id)
+            st.session_state.pop(C_EDIT, None)
+            st.success("Category deleted")
+            st.rerun()
+        except Exception as exc:
+            st.error(str(exc))
+        return
+
+    if do_save:
         parent_id = parent_map.get(parent_label)
         try:
             inventory.update_category(
@@ -110,16 +156,6 @@ def _edit_category_dialog(inventory, category_id: str):
             )
             st.session_state.pop(C_EDIT, None)
             st.success("Category updated")
-            st.rerun()
-        except Exception as exc:
-            st.error(str(exc))
-            return
-
-    if st.button("Delete", use_container_width=True):
-        try:
-            inventory.delete_category(category_id)
-            st.session_state.pop(C_EDIT, None)
-            st.success("Category deleted")
             st.rerun()
         except Exception as exc:
             st.error(str(exc))
@@ -153,12 +189,8 @@ def _render_cards(page_categories, services):
             path=getattr(category, "path", category.name),
         )
         if edit_clicked:
-            clear_all_dialog_flags()
-            st.session_state[C_EDIT] = category.id
-            register_armed_dialog(C_EDIT)
+            _open_edit_category(category.id)
             st.rerun()
-
-    from vaybooks.bms.ui.styles import render_card_grid
 
     render_card_grid(
         page_categories,
@@ -170,6 +202,12 @@ def _render_cards(page_categories, services):
 
 def render(services: dict):
     inventory = services["inventory"]
+    mark_wired(
+        "inventory.category.add",
+        "list.filters.open",
+        "list.sort.open",
+        "list.primary",
+    )
     bar = render_list(
         INVENTORY_CATEGORIES,
         services=services,
@@ -182,10 +220,19 @@ def render(services: dict):
         page_key_nav="inventory_categories_list",
     )
     if bar["primary_clicked"]:
-        clear_all_dialog_flags()
-        st.session_state[C_ADD] = True
-        register_armed_dialog(C_ADD)
+        _open_add_category()
+    if bar.get("edit_nth"):
+        _open_edit_category(bar["edit_nth"])
+        st.rerun()
     if st.session_state.get(C_ADD):
+        from vaybooks.bms.ui.keyboard.context import get_submit_map
+
+        get_submit_map().setdefault(C_ADD, SUBMIT_ADD)
+        register_armed_dialog(C_ADD)
         _add_category_dialog(inventory)
     if st.session_state.get(C_EDIT):
+        from vaybooks.bms.ui.keyboard.context import get_submit_map
+
+        get_submit_map().setdefault(C_EDIT, SUBMIT_EDIT)
+        register_armed_dialog(C_EDIT)
         _edit_category_dialog(inventory, st.session_state[C_EDIT])

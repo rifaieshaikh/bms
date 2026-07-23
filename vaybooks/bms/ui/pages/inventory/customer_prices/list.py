@@ -8,7 +8,9 @@ import pandas as pd
 import streamlit as st
 
 from vaybooks.bms.ui.components.common.list_view import render_list
+from vaybooks.bms.ui.dialog_utils import make_dismiss_handler
 from vaybooks.bms.ui.inventory_list_schemas import INVENTORY_CUSTOMER_PRICES
+from vaybooks.bms.ui.keyboard.wired import mark_wired
 
 _HISTORY_DIALOG = "customer_price_history_dialog"
 
@@ -97,7 +99,11 @@ def _load_customer_prices(services, filters, sort):
         return []
 
 
-@st.dialog("Customer price history", width="large")
+@st.dialog(
+    "Customer price history",
+    width="large",
+    on_dismiss=make_dismiss_handler(_HISTORY_DIALOG),
+)
 def _history_dialog(services: dict) -> None:
     payload = st.session_state.get(_HISTORY_DIALOG)
     if not payload:
@@ -169,6 +175,7 @@ def _render_table(page_rows, services):
 
 
 def render(services: dict):
+    mark_wired("list.filters.open", "list.sort.open")
     if st.session_state.get(_HISTORY_DIALOG):
         _history_dialog(services)
     render_list(

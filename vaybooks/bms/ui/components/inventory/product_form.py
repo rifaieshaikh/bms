@@ -38,6 +38,7 @@ def render_product_form(
     show_opening_qty: bool = False,
     show_active: bool = False,
     submit_label: str = "Save Product",
+    force_submit: bool = False,
 ) -> Optional[dict[str, Any]]:
     """Render product fields. Returns form payload when submit is clicked."""
     _ = categories
@@ -186,7 +187,7 @@ def render_product_form(
     else:
         custom_values = dict(existing.custom_fields) if existing else {}
 
-    if st.button(submit_label, type="primary", key=f"{key_prefix}_submit"):
+    if st.button(submit_label, type="primary", key=f"{key_prefix}_submit") or force_submit:
         specifications = {
             row["name"].strip(): row["value"].strip()
             for row in st.session_state[spec_key]

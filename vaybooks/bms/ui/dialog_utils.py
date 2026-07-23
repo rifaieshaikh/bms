@@ -49,6 +49,8 @@ DIALOG_FLAG_PREFIXES = (
     "inv_category_edit_dialog",
     "inv_product_add_dialog",
     "inv_product_edit_dialog",
+    "inventory_movement_dialog",
+    "customer_price_history_dialog",
     "estimate_document_dialog",
     "quotation_document_dialog",
     "so_edit_dialog",

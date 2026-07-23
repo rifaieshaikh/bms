@@ -3,6 +3,7 @@ import streamlit as st
 from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.components.inventory.inventory_product_card import inventory_product_card
 from vaybooks.bms.ui.components.common.list_view import render_list
+from vaybooks.bms.ui.keyboard.wired import mark_wired
 from vaybooks.bms.ui.styles import render_card_grid
 from vaybooks.bms.ui.inventory_list_schemas import INVENTORY_STOCK
 
@@ -26,7 +27,8 @@ def _render_cards(page_products, services):
 
 
 def render(services: dict):
-    render_list(
+    mark_wired("list.filters.open", "list.sort.open", "list.view_nth.1")
+    bar = render_list(
         INVENTORY_STOCK,
         services=services,
         load_fn=_load_stock,
@@ -35,3 +37,5 @@ def render(services: dict):
         empty_text="No stock records yet.",
         page_key_nav="inventory_stock_list",
     )
+    if bar.get("view_nth"):
+        navigation.go_to_detail("inventory_product_detail", bar["view_nth"])

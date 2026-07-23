@@ -47,8 +47,10 @@ from vaybooks.bms.ui.pages.sales import reports as sales_reports_mod
 from vaybooks.bms.ui.pages.inventory.categories import list as inventory_categories
 from vaybooks.bms.ui.pages.inventory.customer_prices import list as inventory_customer_prices
 from vaybooks.bms.ui.pages.inventory.movements import list as inventory_movements
+from vaybooks.bms.ui.pages.inventory import overview as inventory_overview_mod
 from vaybooks.bms.ui.pages.inventory.products import detail as inventory_product_detail
 from vaybooks.bms.ui.pages.inventory.products import list as inventory_products
+from vaybooks.bms.ui.pages.inventory import reports as inventory_reports_mod
 from vaybooks.bms.ui.pages.inventory.stock_ledger import list as inventory_stock_ledger
 from vaybooks.bms.ui.pages.inventory.stock_on_hand import list as inventory_stock_on_hand
 from vaybooks.bms.ui.pages.purchases.bills import list as purchase_bills_mod
@@ -336,6 +338,12 @@ project_site_mobile_page = st.Page(
 project_portal_page = st.Page(
     _page(project_portal_mod), title="Project Portal", url_path="project-portal",
 )
+inventory_overview_page = st.Page(
+    _page(inventory_overview_mod),
+    title="Overview",
+    icon=":material/analytics:",
+    url_path="inventory-overview",
+)
 inventory_categories_page = st.Page(
     _page(inventory_categories), title="Categories", icon=":material/category:",
     url_path="inventory-categories",
@@ -359,6 +367,12 @@ inventory_movements_page = st.Page(
 inventory_customer_prices_page = st.Page(
     _page(inventory_customer_prices), title="Customer Prices",
     icon=":material/sell:", url_path="inventory-customer-prices",
+)
+inventory_reports_page = st.Page(
+    _page(inventory_reports_mod),
+    title="Reports",
+    icon=":material/assessment:",
+    url_path="inventory-reports",
 )
 purchase_order_detail_page = st.Page(
     _page(purchase_order_detail_mod), title="PO Detail", url_path="purchase-order-detail",
@@ -512,12 +526,14 @@ navigation.register("project_workspace", project_workspace_page)
 navigation.register("project_detail", project_detail_page)
 navigation.register("project_site_mobile", project_site_mobile_page)
 navigation.register("project_portal", project_portal_page)
+navigation.register("inventory_overview", inventory_overview_page)
 navigation.register("inventory_categories_list", inventory_categories_page)
 navigation.register("inventory_products_list", inventory_products_page)
 navigation.register("inventory_stock_list", inventory_stock_page)
 navigation.register("inventory_stock_ledger_list", inventory_stock_ledger_page)
 navigation.register("inventory_movements_list", inventory_movements_page)
 navigation.register("inventory_customer_prices_list", inventory_customer_prices_page)
+navigation.register("inventory_reports", inventory_reports_page)
 navigation.register("inventory_product_detail", inventory_product_detail_page)
 navigation.register("export_backup", export_page)
 navigation.register("business_settings", business_settings_page)
@@ -572,12 +588,14 @@ page_groups = {
         purchases_reports_page,
     ],
     "Inventory": [
+        inventory_overview_page,
         inventory_categories_page,
         inventory_products_page,
         inventory_stock_page,
         inventory_stock_ledger_page,
         inventory_movements_page,
         inventory_customer_prices_page,
+        inventory_reports_page,
     ],
     "Finance": [
         accounts_page,

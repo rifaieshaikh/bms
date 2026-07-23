@@ -11,14 +11,18 @@ from vaybooks.bms.application.report_filters import (
     CashMovementFilter,
     CompletedFilter,
     CustomerHistoryFilter,
+    CustomerLatestPricesFilter,
     CustomerSegmentsFilter,
     DateRange,
+    DeadStockFilter,
     DeliveryPerformanceFilter,
     ExpenseBySourceFilter,
     ExpenseFilter,
+    FastMovingStockFilter,
     ItemProfitabilityFilter,
     LaborMphFilter,
     LowStockFilter,
+    OpeningClosingStockFilter,
     OrderMphFilter,
     OrderPipelineFilter,
     OutstandingFilter,
@@ -235,6 +239,41 @@ def build_stock_movements_filter(filters: dict) -> StockMovementsFilter:
     )
 
 
+def build_dead_stock_filter(filters: dict) -> DeadStockFilter:
+    return DeadStockFilter(
+        date_range=_date_range(filters),
+        category_id=filters.get("category_id") or "",
+        min_qty=_optional_min(filters.get("min_qty")) or 0.0,
+        max_qty_out=_optional_min(filters.get("max_qty_out")) or 0.0,
+    )
+
+
+def build_opening_closing_stock_filter(filters: dict) -> OpeningClosingStockFilter:
+    return OpeningClosingStockFilter(
+        date_range=_date_range(filters),
+        category_id=filters.get("category_id") or "",
+        product_id=filters.get("product_id") or "",
+        active_only=bool(filters.get("active_only")),
+    )
+
+
+def build_fast_moving_stock_filter(filters: dict) -> FastMovingStockFilter:
+    return FastMovingStockFilter(
+        date_range=_date_range(filters),
+        category_id=filters.get("category_id") or "",
+        min_qty_out=_optional_min(filters.get("min_qty_out")) or 0.0,
+    )
+
+
+def build_customer_latest_prices_filter(filters: dict) -> CustomerLatestPricesFilter:
+    dr = filters.get("date_range")
+    return CustomerLatestPricesFilter(
+        customer_id=filters.get("customer_id") or "",
+        search=_text(filters.get("search")),
+        date_range=_date_range(filters) if dr else None,
+    )
+
+
 def build_empty_report_filter(filters: dict):
     return None
 
@@ -272,6 +311,16 @@ _BUILDERS = {
     "report_low_stock": build_low_stock_filter,
     "report_stock_movements": build_stock_movements_filter,
     "report_inventory_valuation": build_stock_on_hand_filter,
+    "report_category_stock_summary": build_stock_on_hand_filter,
+    "report_dead_stock": build_dead_stock_filter,
+    "report_stock_movement_summary": build_stock_movements_filter,
+    "report_stock_margin": build_stock_on_hand_filter,
+    "report_opening_closing_stock": build_opening_closing_stock_filter,
+    "report_hsn_stock_summary": build_stock_on_hand_filter,
+    "report_fast_moving_stock": build_fast_moving_stock_filter,
+    "report_customer_latest_prices": build_customer_latest_prices_filter,
+    "report_inactive_products_with_stock": build_stock_on_hand_filter,
+    "report_product_rate_card": build_stock_on_hand_filter,
     "report_po_pipeline": build_empty_report_filter,
     "report_grn_pending": build_empty_report_filter,
     "report_purchases_by_vendor": build_purchases_by_vendor_filter,

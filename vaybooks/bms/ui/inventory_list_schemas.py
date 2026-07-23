@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import re
+from datetime import date
 
 from vaybooks.bms.domain.shared.enums import StockMovementType, StockReferenceType
 from vaybooks.bms.ui import filtering as F
 from vaybooks.bms.ui.filtering import FilterField, ListSchema, SortOption
 from vaybooks.bms.ui.pagination import CARD_PAGE_SIZE, VOUCHER_PAGE_SIZE
+
+
+def _mtd() -> tuple[date, date]:
+    today = date.today()
+    return today.replace(day=1), today
 
 
 def _enum_opts(enum_cls) -> list[tuple]:
@@ -70,6 +76,24 @@ def _match_product_category_names(product, pattern: str) -> bool:
     except re.error:
         return False
 
+
+INVENTORY_OVERVIEW = ListSchema(
+    entity_key="inventory_overview",
+    title="Inventory Overview",
+    filter_fields=[
+        FilterField(
+            "date_range",
+            "Period",
+            F.DATE_RANGE,
+            default=_mtd,
+        ),
+    ],
+    sort_options=[
+        SortOption("date_range", "Period"),
+    ],
+    default_sort="date_range",
+    page_size=CARD_PAGE_SIZE,
+)
 
 INVENTORY_CATEGORIES = ListSchema(
     entity_key="inventory_categories",
@@ -165,6 +189,30 @@ INVENTORY_STOCK_LEDGER = ListSchema(
     page_size=VOUCHER_PAGE_SIZE,
 )
 
+INVENTORY_MOVEMENTS = ListSchema(
+    entity_key="inventory_movements",
+    title="Stock Movements",
+    filter_fields=[
+        FilterField("movement_date", "Movement date", F.DATE_RANGE),
+        FilterField("product_id", "Product", F.ENTITY_SELECT,
+                    options_loader="inventory_products",
+                    match=_match_stock_ledger_product),
+        FilterField("category_id", "Category", F.ENTITY_SELECT,
+                    options_loader="inventory_categories",
+                    match=_match_stock_ledger_category),
+        FilterField("movement_type", "Movement type", F.SELECT,
+                    options=_enum_opts(StockMovementType),
+                    match=lambda row, v: row.get("movement_type") == v),
+    ],
+    sort_options=[
+        SortOption("movement_date", "Date"),
+        SortOption("product_name", "Product name"),
+        SortOption("movement_type", "Movement type"),
+    ],
+    default_sort="movement_date",
+    page_size=VOUCHER_PAGE_SIZE,
+)
+
 INVENTORY_CUSTOMER_PRICES = ListSchema(
     entity_key="inventory_customer_prices",
     title="Customer Prices",
@@ -197,10 +245,12 @@ INVENTORY_CUSTOMER_PRICES = ListSchema(
 INVENTORY_SCHEMAS = {
     s.entity_key: s
     for s in [
+        INVENTORY_OVERVIEW,
         INVENTORY_CATEGORIES,
         INVENTORY_PRODUCTS,
         INVENTORY_STOCK,
         INVENTORY_STOCK_LEDGER,
+        INVENTORY_MOVEMENTS,
         INVENTORY_CUSTOMER_PRICES,
     ]
 }

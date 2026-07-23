@@ -33,6 +33,7 @@ _PARENTS = [
     ParentShortcut("purchases_list", "Purchase Bills", "Purchases", "ctrl+b"),
     ParentShortcut("purchase_returns_list", "Purchase Returns", "Purchases", "ctrl+shift+u"),
     ParentShortcut("purchases_reports", "Purchases Reports", "Purchases", "alt+shift+r"),
+    ParentShortcut("inventory_overview", "Inventory Overview", "Inventory", "alt+shift+i"),
     ParentShortcut("inventory_categories_list", "Categories", "Inventory", "ctrl+shift+c"),
     ParentShortcut("inventory_products_list", "Products", "Inventory", "ctrl+shift+k"),
     ParentShortcut("inventory_stock_list", "Stock on Hand", "Inventory", "ctrl+shift+w"),
@@ -40,6 +41,13 @@ _PARENTS = [
         "inventory_stock_ledger_list", "Stock Ledger", "Inventory", "ctrl+shift+l"
     ),
     ParentShortcut("inventory_movements_list", "Movements", "Inventory", "ctrl+m"),
+    ParentShortcut(
+        "inventory_customer_prices_list",
+        "Customer Prices",
+        "Inventory",
+        "ctrl+shift+y",
+    ),
+    ParentShortcut("inventory_reports", "Inventory Reports", "Inventory", "alt+shift+v"),
     ParentShortcut("accounts_list", "Accounts", "Finance", "ctrl+a"),
     ParentShortcut("vouchers_list", "Vouchers", "Finance", "ctrl+u"),
     ParentShortcut("receipts_list", "Receipts", "Finance", "ctrl+r"),
