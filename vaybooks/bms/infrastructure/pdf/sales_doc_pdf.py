@@ -20,6 +20,7 @@ DOCUMENT_TITLES = {
     "sales_order": "SALES ORDER",
     "delivery_note": "DELIVERY NOTE",
     "sales_invoice": "TAX INVOICE",
+    "purchase_order": "PURCHASE ORDER",
 }
 
 
@@ -58,6 +59,7 @@ def _document_meta(document_type: str, document: Any) -> tuple[str, Any, str]:
         "sales_order": ("so_number", "order_date"),
         "delivery_note": ("dn_number", "delivery_date"),
         "sales_invoice": ("store_invoice_number", "sale_date"),
+        "purchase_order": ("po_number", "order_date"),
     }
     number_field, date_field = fields[document_type]
     return str(_value(document, number_field, "")), _value(document, date_field), date_field
@@ -329,15 +331,22 @@ def _render_header(
     customer = _value(document, "customer_name", "") or _value(
         document, "party_name", ""
     )
+    party_label = "Vendor" if document_type == "purchase_order" else "Bill to"
     _set_font(pdf, settings, "", 8)
     if narrow:
         pdf.cell(0, 4, f"No: {number}", new_x="LMARGIN", new_y="NEXT")
         pdf.cell(0, 4, f"Date: {document_date}", new_x="LMARGIN", new_y="NEXT")
+        expected = _value(document, "expected_date", "")
+        if expected and document_type == "purchase_order":
+            pdf.cell(0, 4, f"Expected: {expected}", new_x="LMARGIN", new_y="NEXT")
         if customer:
-            pdf.multi_cell(0, 4, f"Customer: {customer}")
+            pdf.multi_cell(0, 4, f"{party_label}: {customer}")
+        party_address = _value(document, "party_address", "")
+        if party_address:
+            pdf.multi_cell(0, 4, str(party_address))
     else:
         top = pdf.get_y()
-        pdf.cell(pdf.epw * 0.55, 5, f"Bill to: {customer or '-'}")
+        pdf.cell(pdf.epw * 0.55, 5, f"{party_label}: {customer or '-'}")
         pdf.set_xy(pdf.l_margin + pdf.epw * 0.58, top)
         pdf.cell(
             pdf.epw * 0.42,
@@ -355,6 +364,19 @@ def _render_header(
             new_x="LMARGIN",
             new_y="NEXT",
         )
+        expected = _value(document, "expected_date", "")
+        if expected and document_type == "purchase_order":
+            pdf.cell(
+                0,
+                5,
+                f"Expected: {expected}",
+                align="R",
+                new_x="LMARGIN",
+                new_y="NEXT",
+            )
+        party_address = _value(document, "party_address", "")
+        if party_address:
+            pdf.multi_cell(pdf.epw * 0.55, 4, str(party_address))
     pdf.ln(2)
 
 
@@ -529,6 +551,7 @@ def _render_content(
     document: Any,
     business: Any,
     settings: SalesPrintSettings,
+    document_type: str = "",
 ) -> None:
     narrow = settings.paper_size.upper() in {"80MM", "58MM"}
     content = _document_content(document)
@@ -595,6 +618,13 @@ def _render_content(
                 pdf.cell(0, 5, policy.title, new_x="LMARGIN", new_y="NEXT")
                 _set_font(pdf, settings, "", 7 if narrow else 7.5)
                 pdf.multi_cell(0, 4, policy.content)
+    notes = str(_value(document, "notes", "") or "").strip()
+    if document_type == "purchase_order" and settings.show_notes and notes:
+        pdf.ln(2)
+        _set_font(pdf, settings, "B", 8)
+        pdf.cell(0, 5, "Notes", new_x="LMARGIN", new_y="NEXT")
+        _set_font(pdf, settings, "", 7 if narrow else 7.5)
+        pdf.multi_cell(0, 4, notes)
     if settings.footer_text:
         pdf.ln(2)
         _set_font(pdf, settings, "", 7)
@@ -623,7 +653,7 @@ def _render(
     )
     rows = _render_lines(pdf, document_type, document, settings)
     _render_totals(pdf, document, rows, settings)
-    _render_content(pdf, document, business, settings)
+    _render_content(pdf, document, business, settings, document_type)
 
 
 def _copy_labels(

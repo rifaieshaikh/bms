@@ -1,14 +1,14 @@
-"""Programmatic focus + Enter trail, including bridge into ``st.data_editor``.
+"""Programmatic focus trail across keyed Streamlit widgets.
 
-Header widgets use ``st-key-*``. After the last chain key (e.g. Expected date),
-focus is moved into the keyed data_editor via canvas/overlay click. Inside the
-editor, Enter commits then Tabs to the next cell (Item → Qty → Rate).
+Enter advances along ``chain`` (e.g. Vendor → Expected → Product → Qty → Rate…).
+ArrowLeft / ArrowRight only move within Product / Qty / Rate grid cells.
+ArrowUp / ArrowDown move within a column, with optional header/footer edges.
 """
 
 from __future__ import annotations
 
 import json
-from typing import Sequence
+from typing import Mapping, Sequence
 
 import streamlit.components.v1 as components
 
@@ -20,24 +20,43 @@ def inject_focus_manager(
     restore_key: str | None = None,
     add_line_key: str | None = None,
     data_editor_key: str | None = None,
+    columns: Mapping[str, Sequence[str]] | None = None,
+    above_first: str | None = None,
+    below_last: str | None = None,
     component_key: str = "focus_mgr",
 ) -> None:
-    """Focus ``initial_key``/``restore_key`` and advance along ``chain`` on Enter.
+    """Focus ``restore_key`` when set; traverse with Enter and arrows.
 
-    When ``data_editor_key`` is set and Enter is pressed on the last chain widget,
-    focus moves into that ``st.data_editor`` (first Item cell). While focus is
-    inside the editor, Enter is translated to Tab so Qty/Rate remain reachable
-    without replacing the table.
+    - Enter → next widget in ``chain`` (Vendor → Expected → Product…)
+    - ArrowLeft / ArrowRight → previous/next **grid** cell only (not Vendor/Expected)
+    - ArrowUp / ArrowDown → same column previous/next row when ``columns`` set
+    - ArrowUp on first Product/Qty/Rate → ``above_first`` (e.g. Expected)
+    - ArrowDown on last row → ``below_last`` (e.g. Save)
+    - Arrows on ``above_first`` (Expected date) are left alone for the date picker;
+      use Enter to move Expected → Product
+    - Auto-focus runs only when ``restore_key`` is provided (avoids stealing focus
+      after line-item remounts)
+    - Open selectbox lists are left alone (arrows move the highlight)
     """
     safe_chain = [str(k) for k in chain if k]
     if not safe_chain and not data_editor_key:
         return
-    focus_to = restore_key or initial_key or (safe_chain[0] if safe_chain else "")
+    # Only restore when explicitly requested — never fall back to initial on remount.
+    focus_to = str(restore_key) if restore_key else ""
+    _ = initial_key  # kept for call-site compatibility / first-open via restore_key
+    col_payload = {
+        "product": [str(k) for k in (columns or {}).get("product", []) if k],
+        "qty": [str(k) for k in (columns or {}).get("qty", []) if k],
+        "rate": [str(k) for k in (columns or {}).get("rate", []) if k],
+    }
     payload = {
         "chain": safe_chain,
         "focusTo": focus_to,
         "addLineKey": add_line_key or "",
         "dataEditorKey": data_editor_key or "",
+        "columns": col_payload,
+        "aboveFirst": above_first or "",
+        "belowLast": below_last or "",
         "nonce": str(component_key),
     }
     data = json.dumps(payload).replace("</", "<\\/")
@@ -79,6 +98,7 @@ def inject_focus_manager(
       'select:not([disabled])',
       '[role="combobox"]',
       '[contenteditable="true"]',
+      'button:not([disabled])',
     ];
     for (const sel of selectors) {{
       const el = root.querySelector(sel);
@@ -175,7 +195,6 @@ def inject_focus_manager(
     const roots = rootsFor(editorKey);
     for (const root of roots) {{
       try {{
-        // Already editing — focus overlay input
         const existing = root.querySelector(
           'input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), [contenteditable="true"]'
         );
@@ -190,12 +209,10 @@ def inject_focus_manager(
         const canvas = root.querySelector('canvas');
         if (canvas) {{
           const rect = canvas.getBoundingClientRect();
-          // First data cell roughly under header, left side (Item column)
           const x = rect.left + Math.min(48, Math.max(24, rect.width * 0.08));
           const y = rect.top + Math.min(52, Math.max(36, rect.height * 0.12));
           const hit = doc.elementFromPoint(x, y) || canvas;
           fireAt(hit, x, y);
-          // Double-click to enter edit mode on Item
           setTimeout(function () {{
             fireAt(hit, x, y);
             fireAt(hit, x, y);
@@ -265,19 +282,105 @@ def inject_focus_manager(
     focusKey(c.chain[idx + 1]);
   }}
 
-  function onKeyDown(ev) {{
-    if (ev.key !== 'Enter' || ev.ctrlKey || ev.metaKey || ev.altKey || ev.shiftKey) {{
-      return;
+  function retreatFrom(key) {{
+    const c = win.__vayFocusMgrCfg || cfg;
+    const idx = c.chain.indexOf(key);
+    if (idx <= 0) return;
+    focusKey(c.chain[idx - 1]);
+  }}
+
+  function findColumn(key) {{
+    const c = win.__vayFocusMgrCfg || cfg;
+    const cols = c.columns || {{}};
+    const names = ['product', 'qty', 'rate'];
+    for (let i = 0; i < names.length; i++) {{
+      const name = names[i];
+      const list = cols[name] || [];
+      const idx = list.indexOf(key);
+      if (idx >= 0) return {{ name: name, list: list, index: idx }};
     }}
+    return null;
+  }}
+
+  function gridChain() {{
+    const c = win.__vayFocusMgrCfg || cfg;
+    const cols = c.columns || {{}};
+    const products = cols.product || [];
+    const qtys = cols.qty || [];
+    const rates = cols.rate || [];
+    const out = [];
+    const n = Math.max(products.length, qtys.length, rates.length);
+    for (let i = 0; i < n; i++) {{
+      if (products[i]) out.push(products[i]);
+      if (qtys[i]) out.push(qtys[i]);
+      if (rates[i]) out.push(rates[i]);
+    }}
+    return out;
+  }}
+
+  function advanceInGrid(key) {{
+    const g = gridChain();
+    const idx = g.indexOf(key);
+    if (idx < 0 || idx >= g.length - 1) return;
+    focusKey(g[idx + 1]);
+  }}
+
+  function retreatInGrid(key) {{
+    const g = gridChain();
+    const idx = g.indexOf(key);
+    if (idx <= 0) return;
+    focusKey(g[idx - 1]);
+  }}
+
+  function moveVertical(key, direction) {{
+    const c = win.__vayFocusMgrCfg || cfg;
+    // Do not intercept arrows on aboveFirst (Expected date) — native date picker uses them.
+    if (c.aboveFirst && key === c.aboveFirst) return false;
+
+    if (c.belowLast && key === c.belowLast && direction < 0) {{
+      const products = (c.columns && c.columns.product) || [];
+      if (products.length) focusKey(products[products.length - 1]);
+      return true;
+    }}
+
+    const hit = findColumn(key);
+    if (!hit) return false;
+    const next = hit.index + direction;
+    if (next < 0) {{
+      if (c.aboveFirst) {{
+        focusKey(c.aboveFirst);
+        return true;
+      }}
+      return true;
+    }}
+    if (next >= hit.list.length) {{
+      if (c.belowLast) {{
+        focusKey(c.belowLast);
+        return true;
+      }}
+      return true;
+    }}
+    focusKey(hit.list[next]);
+    return true;
+  }}
+
+  function onKeyDown(ev) {{
+    const isEnter = ev.key === 'Enter';
+    const isRight = ev.key === 'ArrowRight';
+    const isLeft = ev.key === 'ArrowLeft';
+    const isUp = ev.key === 'ArrowUp';
+    const isDown = ev.key === 'ArrowDown';
+    if (!isEnter && !isRight && !isLeft && !isUp && !isDown) return;
+    if (ev.ctrlKey || ev.metaKey || ev.altKey || ev.shiftKey) return;
+
     const tag = (ev.target && ev.target.tagName) ? ev.target.tagName.toLowerCase() : '';
     if (tag === 'textarea') return;
     if (listOpen(ev.target)) return;
 
     const c = win.__vayFocusMgrCfg || cfg;
 
-    // Inside data_editor: Enter → let commit happen, then Tab to next cell
     if (nodeInsideDataEditor(ev.target) || nodeInsideDataEditor(doc.activeElement)) {{
-      // Don't steal Enter from open dropdowns (already handled by listOpen)
+      if (!isEnter) return;
       setTimeout(function () {{
         if (listOpen(doc.activeElement)) return;
         sendTab(doc.activeElement);
@@ -286,10 +389,43 @@ def inject_focus_manager(
     }}
 
     const key = activeKey();
-    if (!key || c.chain.indexOf(key) < 0) return;
-    ev.preventDefault();
-    ev.stopPropagation();
-    setTimeout(function () {{ advanceFrom(key); }}, 0);
+    if (!key) return;
+
+    const inChain = c.chain.indexOf(key) >= 0;
+    const onBelowLast = !!(c.belowLast && key === c.belowLast);
+    const inGrid = !!findColumn(key);
+
+    // Vertical: grid columns, or Up from Save. Never steal arrows from Expected date.
+    if (isUp || isDown) {{
+      if (!inGrid && !onBelowLast) return;
+      const handled = moveVertical(key, isDown ? 1 : -1);
+      if (handled) {{
+        ev.preventDefault();
+        ev.stopPropagation();
+      }}
+      return;
+    }}
+
+    // Horizontal arrows: Product / Qty / Rate only — never Vendor ↔ Expected.
+    if (isLeft || isRight) {{
+      if (!inGrid) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (isLeft) {{
+        setTimeout(function () {{ retreatInGrid(key); }}, 0);
+      }} else {{
+        setTimeout(function () {{ advanceInGrid(key); }}, 0);
+      }}
+      return;
+    }}
+
+    // Enter: full chain (Vendor → Expected → Product → … → Save).
+    if (isEnter) {{
+      if (!inChain) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      setTimeout(function () {{ advanceFrom(key); }}, 0);
+    }}
   }}
 
   if (!win.__vayFocusMgrListener) {{
@@ -312,11 +448,13 @@ def inject_focus_manager(
     }}
     focusKey(c.focusTo);
   }}
-  tryFocus();
-  setTimeout(tryFocus, 40);
-  setTimeout(tryFocus, 120);
-  setTimeout(tryFocus, 280);
-  setTimeout(tryFocus, 500);
+  if (cfg.focusTo) {{
+    tryFocus();
+    setTimeout(tryFocus, 40);
+    setTimeout(tryFocus, 120);
+    setTimeout(tryFocus, 280);
+    setTimeout(tryFocus, 500);
+  }}
 }})();
 </script>
 </body></html>
@@ -335,7 +473,7 @@ def inject_focus_manager(
                   const key = {focus_js};
                   const roots = Array.from(doc.querySelectorAll('[class*="st-key-' + key + '"]'));
                   for (const root of roots) {{
-                    const el = root.querySelector('input, [role="combobox"], textarea, select, canvas');
+                    const el = root.querySelector('input, [role="combobox"], textarea, select, canvas, button');
                     if (el) {{ el.focus?.(); return true; }}
                   }}
                   return false;

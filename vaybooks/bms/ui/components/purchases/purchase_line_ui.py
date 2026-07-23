@@ -2,9 +2,89 @@
 
 from __future__ import annotations
 
+import logging
+import time
+from typing import Any
+
 from vaybooks.bms.domain.shared.enums import CatalogItemType, VendorRegistrationType
 from vaybooks.bms.domain.shared.india import compute_purchase_gst
 from vaybooks.bms.domain.shared.item_tax import ItemTaxProfile
+
+logger = logging.getLogger(__name__)
+
+
+def product_label(product) -> str:
+    return f"{product.sku} — {product.name}"
+
+
+def product_lookup_map(products: list) -> dict[str, Any]:
+    """Case-insensitive aliases for SKU / name / canonical label → product."""
+    lookup: dict[str, Any] = {}
+    for product in products:
+        for alias in (product_label(product), product.sku, product.name):
+            key = str(alias or "").strip().casefold()
+            if key:
+                lookup[key] = product
+    return lookup
+
+
+def default_purchase_rate(
+    item,
+    *,
+    item_type: str,
+    vendor_id: str,
+    purchases_service,
+    rate_cache: dict[str, float],
+) -> float:
+    """Resolve default ex-GST rate: vendor history → last purchase → selling."""
+    cache_key = f"{vendor_id or ''}|{item_type}|{getattr(item, 'id', '')}"
+    if cache_key in rate_cache:
+        return rate_cache[cache_key]
+
+    started = time.perf_counter()
+    rate = 0.0
+    if purchases_service is not None and hasattr(
+        purchases_service, "get_latest_purchase_rate"
+    ):
+        product_arg = item if item_type == CatalogItemType.PRODUCT.value else None
+        latest = purchases_service.get_latest_purchase_rate(
+            CatalogItemType(item_type),
+            item.id,
+            vendor_id or "",
+            product=product_arg,
+        )
+        if latest is not None and float(latest) > 0:
+            rate = round(float(latest), 2)
+
+    if rate <= 0 and item_type == CatalogItemType.PRODUCT.value:
+        for attr in ("last_purchase_rate", "active_selling_rate", "selling_rate"):
+            value = float(getattr(item, attr, 0) or 0)
+            if value > 0:
+                rate = round(value, 2)
+                break
+
+    rate_cache[cache_key] = rate
+    logger.debug(
+        "purchase_rate cache_miss key=%s rate=%.2f duration_ms=%.1f",
+        cache_key,
+        rate,
+        (time.perf_counter() - started) * 1000,
+    )
+    return rate
+
+
+def has_gst_rate_history(
+    product_id: str,
+    *,
+    inventory_service,
+    gst_history_cache: dict[str, bool],
+) -> bool:
+    """True when the product has GST rate history (cached per dialog)."""
+    if product_id in gst_history_cache:
+        return gst_history_cache[product_id]
+    has_history = bool(inventory_service.list_gst_rate_history(product_id))
+    gst_history_cache[product_id] = has_history
+    return has_history
 
 
 def default_purchase_line() -> dict:

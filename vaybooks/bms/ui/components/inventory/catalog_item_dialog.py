@@ -39,6 +39,17 @@ def _product_prefill(text: str) -> tuple[str, str]:
 
 
 def _apply_to_bill_line(ctx: dict, saved_item, mode: str) -> None:
+    draft_product_key = ctx.get("draft_product_key")
+    if draft_product_key:
+        label = (
+            f"{saved_item.sku} — {saved_item.name}"
+            if mode == "product"
+            else saved_item.service_name
+        )
+        st.session_state[draft_product_key] = label
+        st.session_state.pop(f"{ctx['return_to']}_products_cache", None)
+        return
+
     editor_df_key = ctx.get("editor_df_key")
     if editor_df_key and editor_df_key in st.session_state:
         idx = int(ctx["line_index"])

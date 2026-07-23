@@ -18,16 +18,16 @@ import streamlit as st
 from vaybooks.bms.domain.shared.enums import CatalogItemType, PartyRegistrationType
 from vaybooks.bms.ui.components.inventory.catalog_item_dialog import CATALOG_ITEM_DIALOG
 from vaybooks.bms.ui.components.purchases.purchase_line_ui import (
+    default_purchase_rate,
+    has_gst_rate_history,
     line_tax_profile,
     preview_line_gst,
+    product_label as _product_label,
+    product_lookup_map,
     tax_summary_from_previews,
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _product_label(product) -> str:
-    return f"{product.sku} — {product.name}"
 
 
 def _service_label(service) -> str:
@@ -101,13 +101,7 @@ def _values_equal(left: object, right: object) -> bool:
 
 def _item_lookup_maps(products: list, services: list) -> tuple[dict[str, Any], dict[str, Any]]:
     """Build case-insensitive aliases for SKU/name/canonical item labels."""
-    product_lookup: dict[str, Any] = {}
-    for product in products:
-        for alias in (_product_label(product), product.sku, product.name):
-            key = _lookup_key(alias)
-            if key:
-                product_lookup[key] = product
-
+    product_lookup = product_lookup_map(products)
     service_lookup: dict[str, Any] = {}
     for service in services:
         key = _lookup_key(_service_label(service))
@@ -180,48 +174,13 @@ def _default_purchase_rate(
     purchases_service,
     rate_cache: dict[str, float],
 ) -> float:
-    """Resolve default ex-GST rate: vendor history → last purchase → selling.
-
-    Results are cached per (vendor, type, item) for the dialog lifetime.
-    """
-    cache_key = f"{vendor_id or ''}|{item_type}|{getattr(item, 'id', '')}"
-    if cache_key in rate_cache:
-        logger.debug("po_lines.rate cache_hit key=%s", cache_key)
-        return rate_cache[cache_key]
-
-    started = time.perf_counter()
-    rate = 0.0
-    if (
-        purchases_service is not None
-        and hasattr(purchases_service, "get_latest_purchase_rate")
-    ):
-        product_arg = (
-            item if item_type == CatalogItemType.PRODUCT.value else None
-        )
-        latest = purchases_service.get_latest_purchase_rate(
-            CatalogItemType(item_type),
-            item.id,
-            vendor_id or "",
-            product=product_arg,
-        )
-        if latest is not None and float(latest) > 0:
-            rate = round(float(latest), 2)
-
-    if rate <= 0 and item_type == CatalogItemType.PRODUCT.value:
-        for attr in ("last_purchase_rate", "active_selling_rate", "selling_rate"):
-            value = float(getattr(item, attr, 0) or 0)
-            if value > 0:
-                rate = round(value, 2)
-                break
-
-    rate_cache[cache_key] = rate
-    logger.debug(
-        "po_lines.rate cache_miss key=%s rate=%.2f duration_ms=%.1f",
-        cache_key,
-        rate,
-        (time.perf_counter() - started) * 1000,
+    return default_purchase_rate(
+        item,
+        item_type=item_type,
+        vendor_id=vendor_id,
+        purchases_service=purchases_service,
+        rate_cache=rate_cache,
     )
-    return rate
 
 
 def _has_gst_rate_history(
@@ -230,20 +189,11 @@ def _has_gst_rate_history(
     inventory_service,
     gst_history_cache: dict[str, bool],
 ) -> bool:
-    """True when the product has GST rate history (cached per dialog)."""
-    if product_id in gst_history_cache:
-        logger.debug("po_lines.gst_history cache_hit product_id=%s", product_id)
-        return gst_history_cache[product_id]
-    started = time.perf_counter()
-    has_history = bool(inventory_service.list_gst_rate_history(product_id))
-    gst_history_cache[product_id] = has_history
-    logger.debug(
-        "po_lines.gst_history cache_miss product_id=%s has=%s duration_ms=%.1f",
+    return has_gst_rate_history(
         product_id,
-        has_history,
-        (time.perf_counter() - started) * 1000,
+        inventory_service=inventory_service,
+        gst_history_cache=gst_history_cache,
     )
-    return has_history
 
 
 def _computed_cols_changed(edited: dict, display: dict, *, show_gst: bool) -> bool:

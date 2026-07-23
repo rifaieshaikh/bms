@@ -1,4 +1,4 @@
-"""Create purchase order dialog (product-only lines via data_editor table)."""
+"""Create purchase order dialog (product-only lines via entry table)."""
 
 from __future__ import annotations
 
@@ -13,13 +13,12 @@ from vaybooks.bms.ui.components.common.dialog_state import (
     ensure_selectbox_option,
     reset_dialog_state,
 )
-from vaybooks.bms.ui.components.purchases.purchase_invoice_form import (
-    vendor_option_map,
-    vendor_select_index,
-)
+from vaybooks.bms.ui.components.purchases.purchase_invoice_form import vendor_option_map
 from vaybooks.bms.ui.components.purchases.purchase_line_ui import vendor_is_registered
-from vaybooks.bms.ui.components.purchases.purchase_lines_editor import (
-    render_purchase_lines_editor,
+from vaybooks.bms.ui.components.purchases.purchase_lines_entry_table import (
+    entry_table_focus_chain,
+    entry_table_focus_columns,
+    render_purchase_lines_entry_table,
 )
 from vaybooks.bms.ui.dialog_utils import make_dismiss_handler, register_armed_dialog
 from vaybooks.bms.ui.keyboard.dialog_actions import consume_submit, open_dialog
@@ -101,13 +100,21 @@ def purchase_order_dialog(services: dict) -> None:
     ensure_selectbox_option(vendor_key, vendor_names)
     vendor_name = st.selectbox(
         "Vendor",
-        vendor_names,
-        index=vendor_select_index(vendor_opts, None),
+        options=vendor_names,
+        index=None,
         key=vendor_key,
+        placeholder="Search vendor…",
     )
-    vendor_id = vendor_opts.get(vendor_name)
+    vendor_id = vendor_opts.get(vendor_name) if vendor_name else None
     if not vendor_id:
         st.warning("Select a vendor.")
+        restore = st.session_state.pop(PO_FOCUS_KEY, None)
+        inject_focus_manager(
+            [vendor_key],
+            initial_key=vendor_key,
+            restore_key=restore,
+            component_key="po_vendor_only",
+        )
         return
     vendor = vendors.get_vendor_detail(vendor_id)
 
@@ -122,41 +129,55 @@ def purchase_order_dialog(services: dict) -> None:
 
     st.markdown("**Line items**")
     st.caption(
-        "Purchase orders are product-only. Pick a product — HSN, rate, and totals fill from the catalog. "
-        "Keyboard: Vendor → Expected → Item table (Enter / Tab). **Ctrl+S** saves."
+        "Search vendor and product. Selecting a product adds the next row. "
+        "Enter: Vendor → Expected → Product → Qty → Rate → next Product. "
+        "←/→ and ↑/↓ move inside the item grid only (↑ first Product → Expected, "
+        "↓ last row → Save). Arrows on Expected change the date; Enter moves to Product. "
+        "**Ctrl+S** saves. Empty product rows are ignored."
     )
     vendor_registered = vendor_is_registered(vendor)
-    line_items, gst_errors = render_purchase_lines_editor(
+    line_items, gst_errors = render_purchase_lines_entry_table(
         key_prefix=PO_DIALOG,
         products=products,
-        services=[],
         vendor_id=vendor_id,
         purchases_service=purchases,
         inventory_service=inventory,
-        allow_services=False,
         qty_field="qty_ordered",
         vendor_registered=vendor_registered,
         business=business,
         business_state_code=business.state_code if business else "",
         vendor_state_code=vendor.state_code if vendor else "",
         catalog_return_to=PO_DIALOG,
+        focus_restore_key=PO_FOCUS_KEY,
     )
 
-    # After the table exists: Enter on Expected focuses Item cell; in-grid Enter→Tab
-    editor_key = f"{PO_DIALOG}_lines_editor"
-    restore = st.session_state.pop(PO_FOCUS_KEY, None)
-    inject_focus_manager(
-        [vendor_key, f"{PO_DIALOG}_expected"],
-        initial_key=vendor_key,
-        restore_key=restore,
-        data_editor_key=editor_key,
-        component_key=f"po_editor_bridge_{vendor_id[:8]}",
-    )
+    row_chain = entry_table_focus_chain(PO_DIALOG)
+    row_columns = entry_table_focus_columns(PO_DIALOG)
+    expected_key = f"{PO_DIALOG}_expected"
+    save_key = f"{PO_DIALOG}_save"
 
     save_cols = st.columns(2)
     do_save = save_cols[0].button(
-        "Save PO", type="primary", use_container_width=True
+        "Save PO",
+        type="primary",
+        use_container_width=True,
+        key=save_key,
     ) or consume_submit(PO_SUBMIT_KEY)
+    if save_cols[1].button("Cancel", use_container_width=True, key=f"{PO_DIALOG}_cancel"):
+        _clear()
+        st.rerun()
+
+    restore = st.session_state.pop(PO_FOCUS_KEY, None)
+    inject_focus_manager(
+        [vendor_key, expected_key, *row_chain, save_key],
+        initial_key=vendor_key,
+        restore_key=restore,
+        columns=row_columns,
+        above_first=expected_key,
+        below_last=save_key,
+        component_key=f"po_entry_bridge_{vendor_id[:8]}_{len(row_chain)}",
+    )
+
     if do_save:
         try:
             if gst_errors:
@@ -196,9 +217,6 @@ def purchase_order_dialog(services: dict) -> None:
             st.rerun()
         except Exception as exc:
             st.error(str(exc))
-    if save_cols[1].button("Cancel", use_container_width=True):
-        _clear()
-        st.rerun()
 
 
 def open_po_dialog_if_armed(services: dict) -> None:

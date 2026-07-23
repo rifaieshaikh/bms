@@ -1,23 +1,18 @@
-"""Purchase order PDF (A4) — mirrors sales doc layout lightly."""
+"""Purchase order PDF — same visual system as sales documents."""
 
 from __future__ import annotations
 
 from datetime import date, datetime
-from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
-from fpdf import FPDF
-
-from vaybooks.bms.domain.shared.document_customization import SalesPrintSettings
-
-
-def _font_path() -> Path | None:
-    candidates = (
-        Path(__file__).parent / "fonts" / "DejaVuSans.ttf",
-        Path(r"C:\Windows\Fonts\arial.ttf"),
-        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
-    )
-    return next((path for path in candidates if path.exists()), None)
+from vaybooks.bms.domain.shared.document_customization import (
+    DocumentContentSnapshot,
+    SalesPrintSettings,
+)
+from vaybooks.bms.domain.shared.enums import VendorRegistrationType
+from vaybooks.bms.domain.shared.india import compute_purchase_gst
+from vaybooks.bms.domain.shared.item_tax import ItemTaxProfile
+from vaybooks.bms.infrastructure.pdf.sales_doc_pdf import generate_sales_document_pdf
 
 
 def _val(source: Any, name: str, default: Any = ""):
@@ -31,11 +26,151 @@ def _fmt_date(value: Any) -> str:
         value = value.date()
     if isinstance(value, date):
         return value.strftime("%d %b %Y")
-    return str(value or "—")
+    return str(value or "")
 
 
-def _money(value: float) -> str:
-    return f"{float(value or 0):,.2f}"
+def _tax_profile(item: Any) -> ItemTaxProfile:
+    if item is None:
+        return ItemTaxProfile()
+    if hasattr(item, "active_tax_profile"):
+        return item.active_tax_profile()
+    return getattr(item, "tax_profile", None) or ItemTaxProfile()
+
+
+def _vendor_registered(vendor: Any) -> bool:
+    if not vendor:
+        return False
+    return _val(vendor, "registration_type", None) == VendorRegistrationType.REGISTERED
+
+
+def _party_address(vendor: Any) -> str:
+    if not vendor:
+        return ""
+    if getattr(vendor, "formatted_address", ""):
+        return str(vendor.formatted_address)
+    return ", ".join(
+        str(part)
+        for part in (
+            _val(vendor, "address_line1", ""),
+            _val(vendor, "address_line2", ""),
+            _val(vendor, "city", ""),
+            _val(vendor, "state_code", ""),
+            _val(vendor, "pincode", ""),
+        )
+        if part
+    )
+
+
+def _line_payload(
+    line: Any,
+    *,
+    catalog_by_id: dict[str, Any],
+    vendor_registered: bool,
+    business_state_code: str,
+    vendor_state_code: str,
+    include_gst: bool,
+) -> dict:
+    qty = float(_val(line, "qty_ordered", 0) or 0)
+    rate = float(_val(line, "rate", 0) or 0)
+    taxable = round(qty * rate, 2)
+    name = str(
+        _val(line, "product_name", "")
+        or _val(line, "item_name", "")
+        or _val(line, "product_id", "")
+        or "—"
+    )
+    row = {
+        "product_name": name,
+        "item_name": name,
+        "qty": qty,
+        "qty_ordered": qty,
+        "rate": rate,
+        "discount": 0.0,
+        "taxable_amount": taxable,
+        "gst_rate": 0.0,
+        "cgst_amount": 0.0,
+        "sgst_amount": 0.0,
+        "utgst_amount": 0.0,
+        "igst_amount": 0.0,
+        "line_total": taxable,
+    }
+    if not include_gst or not vendor_registered:
+        return row
+
+    product = catalog_by_id.get(str(_val(line, "product_id", "") or ""))
+    profile = _tax_profile(product)
+    gst_rate = float(profile.gst_rate or 0)
+    gst = compute_purchase_gst(
+        taxable,
+        gst_rate,
+        vendor_registered=True,
+        business_state_code=business_state_code,
+        vendor_state_code=vendor_state_code,
+    )
+    row.update(
+        {
+            "hsn_sac": profile.hsn_sac or "",
+            "gst_rate": gst_rate,
+            "taxable_amount": gst.taxable_amount,
+            "cgst_amount": gst.cgst_amount,
+            "sgst_amount": gst.sgst_amount,
+            "utgst_amount": gst.utgst_amount,
+            "igst_amount": gst.igst_amount,
+            "line_total": gst.line_total,
+        }
+    )
+    return row
+
+
+def purchase_order_document(
+    order: Any,
+    *,
+    vendor: Any = None,
+    business: Any = None,
+    settings: SalesPrintSettings | None = None,
+    catalog_items: Iterable[Any] | None = None,
+    document_content: DocumentContentSnapshot | None = None,
+) -> dict:
+    """Build a sales-doc-compatible payload for a purchase order."""
+    settings = settings or SalesPrintSettings()
+    catalog_by_id = {
+        str(_val(item, "id", "") or ""): item
+        for item in (catalog_items or [])
+        if _val(item, "id", "")
+    }
+    vendor_registered = _vendor_registered(vendor)
+    include_gst = bool(settings.show_gst_columns and vendor_registered)
+    lines = [
+        _line_payload(
+            line,
+            catalog_by_id=catalog_by_id,
+            vendor_registered=vendor_registered,
+            business_state_code=str(_val(business, "state_code", "") or ""),
+            vendor_state_code=str(_val(vendor, "state_code", "") or ""),
+            include_gst=include_gst,
+        )
+        for line in list(_val(order, "lines", []) or [])
+    ]
+    total = round(sum(float(line["line_total"] or 0) for line in lines), 2)
+    if not lines:
+        total = float(_val(order, "total_amount", 0) or 0)
+    vendor_name = (
+        _val(order, "vendor_name", "")
+        or _val(vendor, "vendor_name", "")
+        or _val(vendor, "name", "")
+    )
+    return {
+        "po_number": _val(order, "po_number", ""),
+        "order_date": _fmt_date(_val(order, "order_date")),
+        "expected_date": _fmt_date(_val(order, "expected_date")),
+        "customer_name": vendor_name,
+        "party_name": vendor_name,
+        "party_address": _party_address(vendor),
+        "notes": _val(order, "notes", ""),
+        "items": lines,
+        "total_amount": total,
+        "document_content": document_content or DocumentContentSnapshot(),
+    }
 
 
 def generate_purchase_order_pdf(
@@ -44,124 +179,22 @@ def generate_purchase_order_pdf(
     settings: SalesPrintSettings | None = None,
     *,
     vendor: Any = None,
+    catalog_items: Iterable[Any] | None = None,
+    document_content: DocumentContentSnapshot | None = None,
 ) -> bytes:
-    """Render a purchase order PDF. Uses SalesPrintSettings for paper/margins/logo toggles."""
+    """Render a purchase order with the same layout engine as sales documents."""
     settings = settings or SalesPrintSettings()
-    paper = settings.paper_size.upper()
-    fmt = "Letter" if paper == "LETTER" else ("A5" if paper == "A5" else "A4")
-    orientation = "L" if settings.orientation.lower() == "landscape" else "P"
-    pdf = FPDF(orientation=orientation, unit="mm", format=fmt)
-    pdf.set_margins(settings.margin_mm, settings.margin_mm, settings.margin_mm)
-    pdf.set_auto_page_break(True, settings.margin_mm)
-    font = _font_path()
-    if font:
-        pdf.add_font("POUnicode", "", str(font))
-        pdf.add_font("POUnicode", "B", str(font))
-        face = "POUnicode"
-    else:
-        face = "Helvetica"
-
-    pdf.add_page()
-    pdf.set_font(face, "B", 16)
-    biz_name = (
-        str(_val(business, "trade_name", "") or _val(business, "legal_name", "") or "Purchase Order")
-        if business
-        else "Purchase Order"
+    document = purchase_order_document(
+        order,
+        vendor=vendor,
+        business=business,
+        settings=settings,
+        catalog_items=catalog_items,
+        document_content=document_content,
     )
-    if settings.show_logo:
-        pdf.cell(0, 8, biz_name, ln=1)
-        pdf.set_font(face, "", 9)
-        addr_parts = [
-            _val(business, "address_line1", ""),
-            _val(business, "address_line2", ""),
-            _val(business, "city", ""),
-            _val(business, "state_code", ""),
-            _val(business, "pincode", ""),
-        ]
-        addr = ", ".join(str(p) for p in addr_parts if p)
-        if addr:
-            pdf.multi_cell(0, 5, addr)
-        gstin = _val(business, "gstin", "")
-        if gstin:
-            pdf.cell(0, 5, f"GSTIN: {gstin}", ln=1)
-        pdf.ln(2)
-
-    pdf.set_font(face, "B", 14)
-    pdf.cell(0, 8, "PURCHASE ORDER", ln=1)
-    pdf.set_font(face, "", 10)
-    pdf.cell(95, 6, f"PO No: {_val(order, 'po_number', '')}", ln=0)
-    pdf.cell(0, 6, f"Date: {_fmt_date(_val(order, 'order_date'))}", ln=1)
-    expected = _val(order, "expected_date")
-    if expected:
-        pdf.cell(0, 6, f"Expected: {_fmt_date(expected)}", ln=1)
-    pdf.cell(0, 6, f"Status: {getattr(order.status, 'value', order.status) or ''}", ln=1)
-    pdf.ln(2)
-
-    pdf.set_font(face, "B", 11)
-    pdf.cell(0, 6, "Vendor", ln=1)
-    pdf.set_font(face, "", 10)
-    vendor_name = _val(order, "vendor_name", "") or _val(vendor, "vendor_name", "")
-    pdf.cell(0, 5, str(vendor_name or "—"), ln=1)
-    if vendor:
-        v_addr = ", ".join(
-            str(p)
-            for p in (
-                _val(vendor, "address_line1", ""),
-                _val(vendor, "city", ""),
-                _val(vendor, "state_code", ""),
-                _val(vendor, "pincode", ""),
-            )
-            if p
-        )
-        if v_addr:
-            pdf.multi_cell(0, 5, v_addr)
-        v_gst = _val(vendor, "gstin", "")
-        if v_gst:
-            pdf.cell(0, 5, f"GSTIN: {v_gst}", ln=1)
-    pdf.ln(3)
-
-    # Table header
-    col_w = (10, 78, 22, 30, 30)  # #, item, qty, rate, amount — ~170
-    pdf.set_font(face, "B", 9)
-    headers = ("#", "Item", "Qty", "Rate", "Amount")
-    for width, label in zip(col_w, headers):
-        pdf.cell(width, 7, label, border=1, align="C" if label != "Item" else "L")
-    pdf.ln()
-
-    pdf.set_font(face, "", 9)
-    lines = list(_val(order, "lines", []) or [])
-    total = 0.0
-    for idx, line in enumerate(lines, start=1):
-        name = str(_val(line, "product_name", "") or _val(line, "product_id", "") or "—")
-        qty = float(_val(line, "qty_ordered", 0) or 0)
-        rate = float(_val(line, "rate", 0) or 0)
-        amount = float(_val(line, "line_total", qty * rate) or 0)
-        total += amount
-        # Truncate long names for single-line cells
-        if len(name) > 48:
-            name = name[:45] + "…"
-        pdf.cell(col_w[0], 6, str(idx), border=1, align="C")
-        pdf.cell(col_w[1], 6, name, border=1)
-        pdf.cell(col_w[2], 6, f"{qty:g}", border=1, align="R")
-        pdf.cell(col_w[3], 6, _money(rate), border=1, align="R")
-        pdf.cell(col_w[4], 6, _money(amount), border=1, align="R")
-        pdf.ln()
-
-    pdf.set_font(face, "B", 10)
-    pdf.cell(sum(col_w[:4]), 7, "Total", border=1, align="R")
-    pdf.cell(col_w[4], 7, _money(total or float(_val(order, "total_amount", 0) or 0)), border=1, align="R")
-    pdf.ln(10)
-
-    notes = str(_val(order, "notes", "") or "")
-    if notes and settings.show_notes:
-        pdf.set_font(face, "B", 10)
-        pdf.cell(0, 6, "Notes", ln=1)
-        pdf.set_font(face, "", 9)
-        pdf.multi_cell(0, 5, notes)
-
-    if settings.footer_text:
-        pdf.ln(6)
-        pdf.set_font(face, "", 8)
-        pdf.multi_cell(0, 4, settings.footer_text)
-
-    return bytes(pdf.output())
+    return generate_sales_document_pdf(
+        "purchase_order",
+        document,
+        business,
+        settings,
+    )

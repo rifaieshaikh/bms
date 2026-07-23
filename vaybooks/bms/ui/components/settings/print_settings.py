@@ -26,6 +26,7 @@ _LABELS = {
     "delivery_note": "Delivery Note",
     "sales_invoice": "Sales Invoice",
     "customization_invoice": "Customization Tax Invoice",
+    "purchase_order": "Purchase Order",
     "measurement_sheet": "Measurement Sheet",
     "customization_item": "Customization Item with Notes",
     "advance_receipt": "Advance Receipt",
@@ -300,6 +301,8 @@ def _content_controls(document_type: str, current: SalesPrintSettings) -> dict:
                 ("show_custom_fields", "Custom fields", current.show_custom_fields),
             ]
         )
+        if document_type == "purchase_order":
+            toggles.append(("show_notes", "Notes", current.show_notes))
     values: dict = {
         "show_gst_columns": current.show_gst_columns,
         "show_hsn_column": current.show_hsn_column,
@@ -414,9 +417,9 @@ def render_print_settings(services: dict, business) -> None:
             if document_type in (
                 "measurement_sheet",
                 "customization_item",
+                "customization_invoice",
                 "advance_receipt",
             ):
-                from datetime import date
                 from types import SimpleNamespace
 
                 from vaybooks.bms.domain.shared.enums import (
@@ -425,12 +428,16 @@ def render_print_settings(services: dict, business) -> None:
                 )
                 from vaybooks.bms.infrastructure.pdf.boutique_pdf import (
                     generate_advance_receipt_pdf,
+                    generate_customization_invoice_pdf,
                     generate_customization_item_pdf,
                     generate_measurement_sheet_pdf,
                 )
 
                 customer = SimpleNamespace(
-                    customer_name="Sample Customer", phone_number="9876543210"
+                    customer_name="Sample Customer",
+                    phone_number="9876543210",
+                    gstin="",
+                    formatted_address="12 Sample Street, Sample City, 400001",
                 )
                 if document_type == "measurement_sheet":
                     record = SimpleNamespace(
@@ -494,6 +501,38 @@ def render_print_settings(services: dict, business) -> None:
                         [],
                         settings,
                     )
+                elif document_type == "customization_invoice":
+                    item = SimpleNamespace(
+                        bill_number="MS-0001-01",
+                        description="Blouse stitching",
+                    )
+                    order = SimpleNamespace(
+                        order_number="CO-0001",
+                        customer_name=customer.customer_name,
+                        phone_number=customer.phone_number,
+                        get_item_by_id=lambda _bill_id: item,
+                    )
+                    invoice = SimpleNamespace(
+                        invoice_number="CI-0001",
+                        invoice_date=date.today(),
+                        place_of_supply_state=getattr(business, "state_code", "") or "27",
+                        supply_type="B2C",
+                        bill_ids=["item1"],
+                        item_amounts={"item1": 2500.0},
+                        item_discounts={"item1": 0.0},
+                        hsn_sac="9988",
+                        gst_rate=18.0,
+                        net_amount=2500.0,
+                        taxable_amount=2500.0,
+                        cgst_amount=225.0,
+                        sgst_amount=225.0,
+                        utgst_amount=0.0,
+                        igst_amount=0.0,
+                        grand_total=2950.0,
+                    )
+                    pdf_bytes = generate_customization_invoice_pdf(
+                        invoice, order, customer, business, settings
+                    )
                 else:
                     order = SimpleNamespace(
                         order_number="CO-0001",
@@ -510,6 +549,73 @@ def render_print_settings(services: dict, business) -> None:
                     pdf_bytes = generate_advance_receipt_pdf(
                         voucher, order, customer, business, settings
                     )
+            elif document_type == "purchase_order":
+                from types import SimpleNamespace
+
+                from vaybooks.bms.domain.shared.document_customization import (
+                    DocumentContentSnapshot,
+                )
+                from vaybooks.bms.domain.shared.enums import VendorRegistrationType
+                from vaybooks.bms.domain.shared.item_tax import ItemTaxProfile
+                from vaybooks.bms.infrastructure.pdf.purchase_order_pdf import (
+                    generate_purchase_order_pdf,
+                )
+
+                catalog_item = SimpleNamespace(
+                    id="sample-po-item",
+                    tax_profile=ItemTaxProfile(hsn_sac="5208", gst_rate=5.0),
+                )
+                vendor = SimpleNamespace(
+                    vendor_name="Sample Vendor",
+                    address_line1="12 Market Road",
+                    address_line2="",
+                    city="Sample City",
+                    state_code=getattr(business, "state_code", None) or "27",
+                    pincode="400001",
+                    gstin="27AAAAA0000A1Z5",
+                    registration_type=VendorRegistrationType.REGISTERED,
+                    formatted_address="12 Market Road, Sample City, 400001",
+                )
+                purchase_order = SimpleNamespace(
+                    po_number="PO-0001",
+                    order_date=date.today(),
+                    expected_date=date.today(),
+                    status="DRAFT",
+                    vendor_name=vendor.vendor_name,
+                    notes="Sample purchase order for print preview.",
+                    total_amount=2200.0,
+                    lines=[
+                        SimpleNamespace(
+                            product_name="Cotton Fabric",
+                            product_id=catalog_item.id,
+                            qty_ordered=10.0,
+                            rate=220.0,
+                            line_total=2200.0,
+                        ),
+                        SimpleNamespace(
+                            product_name="Silk Thread",
+                            product_id="sample-po-item-2",
+                            qty_ordered=5.0,
+                            rate=80.0,
+                            line_total=400.0,
+                        ),
+                    ],
+                )
+                template = (business.document_templates or {}).get("purchase_order")
+                content = DocumentContentSnapshot(
+                    terms_and_conditions=(
+                        template.terms_and_conditions if template else ""
+                    ),
+                    policies=list(template.policies) if template else [],
+                )
+                pdf_bytes = generate_purchase_order_pdf(
+                    purchase_order,
+                    business,
+                    settings,
+                    vendor=vendor,
+                    catalog_items=[catalog_item],
+                    document_content=content,
+                )
             else:
                 pdf_bytes = generate_sales_document_pdf(
                     document_type,

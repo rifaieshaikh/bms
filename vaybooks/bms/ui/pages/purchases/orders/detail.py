@@ -19,6 +19,12 @@ from vaybooks.bms.ui.components.common.document_detail import (
     totals_ladder,
 )
 from vaybooks.bms.ui.components.purchases.grn_dialog import arm_grn_dialog, open_grn_dialog_if_armed
+from vaybooks.bms.ui.components.purchases.purchase_line_ui import (
+    line_tax_profile,
+    preview_line_gst,
+    tax_summary_from_previews,
+    vendor_is_registered,
+)
 from vaybooks.bms.ui.components.purchases.purchase_order_edit_dialog import (
     arm_po_edit_dialog,
     open_po_edit_dialog_if_armed,
@@ -76,6 +82,67 @@ def render(services: dict) -> None:
         navigation.go_back_to_list("purchase_orders_list", "purchase-orders")
         return
 
+    business = services["business"].get_profile()
+    vendor = None
+    if services.get("vendors") and order.vendor_id:
+        vendor = services["vendors"].get_vendor_detail(order.vendor_id)
+    vendor_registered = vendor_is_registered(vendor)
+    inventory = services.get("inventory")
+    product_by_id = {}
+    if inventory:
+        product_by_id = {p.id: p for p in inventory.list_products(active_only=False)}
+
+    business_state = business.state_code if business else ""
+    vendor_state = vendor.state_code if vendor else ""
+
+    table_rows = []
+    gst_previews = []
+    for line in order.lines:
+        product = product_by_id.get(line.product_id)
+        row = {
+            "item_name": line.product_name or line.product_id or "—",
+            "product": line.product_name or line.product_id or "—",
+            "qty": line.qty_ordered,
+            "qty_ordered": line.qty_ordered,
+            "qty_received": line.qty_received,
+            "rate": line.rate,
+            "total": line.line_total,
+            "line_total": line.line_total,
+        }
+        if vendor_registered:
+            preview = preview_line_gst(
+                line.qty_ordered,
+                line.rate,
+                line_tax_profile(product),
+                vendor_registered=True,
+                business_state_code=business_state,
+                vendor_state_code=vendor_state,
+            )
+            row.update(
+                {
+                    "hsn_sac": preview["hsn_sac"],
+                    "taxable_amount": preview["taxable_amount"],
+                    "gst_rate": preview["gst_rate"],
+                    "cgst_amount": preview["cgst_amount"],
+                    "sgst_amount": preview["sgst_amount"],
+                    "utgst_amount": preview["utgst_amount"],
+                    "igst_amount": preview["igst_amount"],
+                    "total": preview["line_total"],
+                    "line_total": preview["line_total"],
+                }
+            )
+            gst_previews.append(preview)
+        table_rows.append(row)
+
+    tax_summary = (
+        tax_summary_from_previews(gst_previews) if gst_previews else {}
+    )
+    display_total = (
+        float(tax_summary.get("grand_total") or 0)
+        if vendor_registered and gst_previews
+        else order.total_amount
+    )
+
     document_header(
         number=order.po_number,
         status=order.status.value,
@@ -86,52 +153,48 @@ def render(services: dict) -> None:
         ],
         right_facts=[
             ("Status", order.status.value),
-            ("Total", format_money(order.total_amount)),
+            ("Total", format_money(display_total)),
         ],
         suffix=f"po_{order.id}",
     )
 
-    table_rows = [
-        {
-            "item_name": line.product_name or line.product_id or "—",
-            "product": line.product_name or line.product_id or "—",
-            "qty": line.qty_ordered,
-            "qty_ordered": line.qty_ordered,
-            "qty_received": line.qty_received,
-            "rate": line.rate,
-            "total": line.line_total,
-            "line_total": line.line_total,
-        }
-        for line in order.lines
-    ]
     line_items_table(
         table_rows,
-        show_gst=False,
+        show_gst=vendor_registered,
         suffix=f"po_{order.id}",
         item_column_label="Item",
     )
     totals_ladder(
-        show_gst=False,
-        grand_total=order.total_amount,
+        tax_summary if vendor_registered else None,
+        show_gst=vendor_registered,
+        grand_total=display_total,
         suffix=f"po_{order.id}",
     )
     if order.notes:
         st.caption(f"Notes: {order.notes}")
 
-    business = services["business"].get_profile()
-    vendor = None
-    if services.get("vendors") and order.vendor_id:
-        vendor = services["vendors"].get_vendor_detail(order.vendor_id)
     template = None
     if business and getattr(business, "document_templates", None):
-        template = business.document_templates.get("sales_order")
+        template = business.document_templates.get("purchase_order")
     pdf_bytes = None
     try:
+        from vaybooks.bms.domain.shared.document_customization import (
+            DocumentContentSnapshot,
+        )
+
+        document_content = None
+        if template:
+            document_content = DocumentContentSnapshot(
+                terms_and_conditions=template.terms_and_conditions,
+                policies=list(template.policies),
+            )
         pdf_bytes = generate_purchase_order_pdf(
             order,
             business,
             template.print_settings if template else None,
             vendor=vendor,
+            catalog_items=list(product_by_id.values()),
+            document_content=document_content,
         )
     except Exception as exc:
         st.error(f"Could not generate PDF: {exc}")

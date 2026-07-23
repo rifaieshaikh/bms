@@ -1,4 +1,4 @@
-"""Edit dialog for purchase orders (product-only)."""
+"""Edit dialog for purchase orders (product-only entry table)."""
 
 from __future__ import annotations
 
@@ -9,13 +9,19 @@ import streamlit as st
 
 from vaybooks.bms.domain.shared.enums import CatalogItemType, PurchaseOrderStatus
 from vaybooks.bms.ui.components.purchases.purchase_line_ui import vendor_is_registered
-from vaybooks.bms.ui.components.purchases.purchase_lines_editor import render_purchase_lines_editor
+from vaybooks.bms.ui.components.purchases.purchase_lines_entry_table import (
+    entry_table_focus_chain,
+    entry_table_focus_columns,
+    render_purchase_lines_entry_table,
+)
 from vaybooks.bms.ui.dialog_utils import make_dismiss_handler
+from vaybooks.bms.ui.keyboard.focus_manager import inject_focus_manager
 
 logger = logging.getLogger(__name__)
 
 PO_EDIT_DIALOG = "purchase_order_edit_dialog"
 PO_EDIT_PRODUCTS_CACHE_KEY = f"{PO_EDIT_DIALOG}_products_cache"
+PO_EDIT_FOCUS_KEY = f"{PO_EDIT_DIALOG}_focus"
 
 
 def arm_po_edit_dialog(order_id: str) -> None:
@@ -96,25 +102,51 @@ def _po_edit_dialog(services: dict) -> None:
         for line in order.lines
     ]
     st.markdown("**Line items**")
-    st.caption("Ordered qty cannot fall below already received for each product.")
+    st.caption(
+        "Search product by SKU or name. Selecting a product adds the next row. "
+        "Enter advances Expected → Product → Qty → Rate; ←/→ and ↑/↓ stay in the grid "
+        "(↑ first Product → Expected, ↓ last row → Update). "
+        "Arrows on Expected change the date; Enter moves to Product. "
+        "Empty product rows are ignored. "
+        "Ordered qty cannot fall below already received for each product."
+    )
     vendor_registered = vendor_is_registered(vendor)
-    line_items, gst_errors = render_purchase_lines_editor(
+    line_items, gst_errors = render_purchase_lines_entry_table(
         key_prefix=PO_EDIT_DIALOG,
         products=products,
-        services=[],
         initial_lines=initial_lines,
         vendor_id=order.vendor_id,
         purchases_service=purchases,
         inventory_service=inventory,
-        allow_services=False,
         qty_field="qty_ordered",
         vendor_registered=vendor_registered,
         business=business,
         business_state_code=business.state_code if business else "",
         vendor_state_code=vendor.state_code if vendor else "",
+        focus_restore_key=PO_EDIT_FOCUS_KEY,
     )
 
-    if st.button("Update Purchase Order", type="primary", key=f"{PO_EDIT_DIALOG}_save"):
+    row_chain = entry_table_focus_chain(PO_EDIT_DIALOG)
+    row_columns = entry_table_focus_columns(PO_EDIT_DIALOG)
+    expected_key = f"{PO_EDIT_DIALOG}_expected"
+    save_key = f"{PO_EDIT_DIALOG}_save"
+
+    do_save = st.button(
+        "Update Purchase Order", type="primary", key=save_key
+    )
+
+    restore = st.session_state.pop(PO_EDIT_FOCUS_KEY, None)
+    inject_focus_manager(
+        [expected_key, *row_chain, save_key],
+        initial_key=expected_key,
+        restore_key=restore,
+        columns=row_columns,
+        above_first=expected_key,
+        below_last=save_key,
+        component_key=f"po_edit_entry_{order.id[:8]}_{len(row_chain)}",
+    )
+
+    if do_save:
         try:
             if gst_errors:
                 raise ValueError(gst_errors[0])
@@ -134,7 +166,6 @@ def _po_edit_dialog(services: dict) -> None:
                         "expense_account_id": row.get("expense_account_id") or "",
                     }
                 )
-            # Fill expense accounts via resolve when missing
             resolve_raw = [
                 {
                     "item_type": CatalogItemType.PRODUCT.value,

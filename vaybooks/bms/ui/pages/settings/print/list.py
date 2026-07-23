@@ -23,6 +23,8 @@ _LABELS = {
     "sales_order": "Sales Order",
     "delivery_note": "Delivery Note",
     "sales_invoice": "Sales Invoice",
+    "customization_invoice": "Customization Tax Invoice",
+    "purchase_order": "Purchase Order",
     "measurement_sheet": "Measurement Sheet",
     "customization_item": "Customization Item with Notes",
     "advance_receipt": "Advance Receipt",
