@@ -2,20 +2,29 @@
 
 from __future__ import annotations
 
-import pandas as pd
 import streamlit as st
 
 from vaybooks.bms.ui.components.common.document_custom_fields import (
     render_document_custom_fields,
 )
-from vaybooks.bms.ui.dialog_utils import make_dismiss_handler
+from vaybooks.bms.ui.dialog_utils import make_dismiss_handler, register_armed_dialog
+from vaybooks.bms.ui.keyboard.dialog_actions import consume_submit, open_dialog
+from vaybooks.bms.ui.keyboard.focus.registry import get_strategy
+from vaybooks.bms.ui.keyboard.wired import mark_wired
 
 DN_EDIT_DIALOG = "dn_edit_dialog"
+DN_EDIT_FOCUS_STRATEGY = "delivery_note_edit_dialog"
 DN_INVOICE_DIALOG = "dn_invoice_dialog"
+DN_EDIT_SUBMIT_KEY = "dn_edit_dialog_submit"
+DN_EDIT_FOCUS_KEY = f"{DN_EDIT_DIALOG}_focus"
 
 
 def arm_dn_edit_dialog(dn_id: str) -> None:
-    st.session_state[DN_EDIT_DIALOG] = dn_id
+    open_dialog(
+        DN_EDIT_DIALOG, submit_key=DN_EDIT_SUBMIT_KEY, value=dn_id, clear_others=True
+    )
+    st.session_state[DN_EDIT_FOCUS_KEY] = f"{DN_EDIT_DIALOG}_date"
+    mark_wired("dialog.save")
 
 
 def arm_dn_invoice_dialog(dn_id: str) -> None:
@@ -42,6 +51,9 @@ def _dn_edit_dialog(services: dict) -> None:
     dn_id = st.session_state.get(DN_EDIT_DIALOG)
     if not dn_id:
         return
+    register_armed_dialog(DN_EDIT_DIALOG)
+    mark_wired("dialog.save")
+
     sales = services["sales"]
     dn = sales.get_delivery_note(dn_id)
     if not dn:
@@ -50,32 +62,40 @@ def _dn_edit_dialog(services: dict) -> None:
     business = services["business"].get_profile()
     template = business.document_templates.get("delivery_note")
 
+    date_key = f"{DN_EDIT_DIALOG}_date"
+    save_key = f"{DN_EDIT_DIALOG}_save"
     edit_date = st.date_input(
         "Delivery date",
         value=dn.delivery_date,
-        key=f"{DN_EDIT_DIALOG}_date",
+        key=date_key,
     )
     edit_notes = st.text_area(
         "Notes", value=dn.notes, key=f"{DN_EDIT_DIALOG}_notes"
     )
-    edited_df = st.data_editor(
-        pd.DataFrame(
-            [
-                {
-                    "product_id": line.product_id,
-                    "product_name": line.product_name,
-                    "qty_delivered": line.qty_delivered,
-                    "rate": line.rate,
-                    "sales_order_line_id": line.sales_order_line_id,
-                }
-                for line in dn.lines
-            ]
-        ),
-        num_rows="dynamic",
-        use_container_width=True,
-        disabled=["product_id", "product_name", "sales_order_line_id"],
-        key=f"{DN_EDIT_DIALOG}_lines",
-    )
+
+    st.markdown("**Delivered quantities**")
+    qty_keys: list[str] = []
+    updated_lines: list[dict] = []
+    for i, line in enumerate(dn.lines):
+        uid = line.product_id or str(i)
+        qkey = f"{DN_EDIT_DIALOG}_r{uid}_qty_recv"
+        qty_keys.append(qkey)
+        qty = st.number_input(
+            f"{line.product_name or line.product_id}",
+            min_value=0.0,
+            value=float(line.qty_delivered or 0),
+            key=qkey,
+        )
+        updated_lines.append(
+            {
+                "product_id": line.product_id,
+                "product_name": line.product_name,
+                "qty_delivered": qty,
+                "rate": line.rate,
+                "sales_order_line_id": line.sales_order_line_id,
+            }
+        )
+
     initial_custom = {
         item.key: item.value for item in dn.document_content.custom_fields
     }
@@ -89,19 +109,33 @@ def _dn_edit_dialog(services: dict) -> None:
         value=dn.document_content.terms_and_conditions,
         key=f"{DN_EDIT_DIALOG}_terms",
     )
-    if st.button(
-        "Update Delivery Note", type="primary", key=f"{DN_EDIT_DIALOG}_save"
-    ):
+
+    do_save = st.button(
+        "Update Delivery Note", type="primary", key=save_key
+    ) or consume_submit(DN_EDIT_SUBMIT_KEY)
+
+    restore = st.session_state.pop(DN_EDIT_FOCUS_KEY, None)
+    get_strategy(DN_EDIT_FOCUS_STRATEGY).inject(
+        chain=[date_key, *qty_keys, save_key],
+        restore_key=restore,
+        columns={"qty": qty_keys},
+        above_first=date_key,
+        below_last=save_key,
+        component_key=f"dn_edit_{len(qty_keys)}",
+    )
+
+    if do_save:
         try:
             sales.update_delivery_note(
                 dn.id,
                 delivery_date=edit_date,
-                lines=edited_df.to_dict("records"),
+                lines=updated_lines,
                 notes=edit_notes,
                 custom_values=custom_values,
                 terms_and_conditions=terms,
             )
             _clear_prefix(DN_EDIT_DIALOG)
+            st.session_state.pop(DN_EDIT_SUBMIT_KEY, None)
             st.rerun()
         except Exception as exc:
             st.error(str(exc))

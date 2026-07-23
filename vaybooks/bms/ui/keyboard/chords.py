@@ -107,6 +107,10 @@ def needs_prevent_default(chord: str) -> bool:
         "meta+f",
         "meta+n",
         "f1",
+        "f2",
+        "f3",
+        "f4",
+        "f5",
     } or norm.startswith("ctrl+") or norm.startswith("meta+")
 
 

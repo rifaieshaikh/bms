@@ -13,10 +13,20 @@ from vaybooks.bms.ui.components.common.customer_identity_selector import (
     render_customer_identity_selector,
     resolve_customer_identity,
 )
-from vaybooks.bms.ui.components.sales.sales_lines_editor import render_sales_lines_editor
-from vaybooks.bms.ui.dialog_utils import make_dismiss_handler
+from vaybooks.bms.ui.components.sales.sales_lines_entry_table import (
+    entry_table_focus_chain,
+    entry_table_focus_columns,
+    entry_table_grid_roles,
+    render_sales_lines_entry_table,
+)
+from vaybooks.bms.ui.dialog_utils import make_dismiss_handler, register_armed_dialog
+from vaybooks.bms.ui.keyboard.dialog_actions import consume_submit, open_dialog
+from vaybooks.bms.ui.keyboard.focus.registry import get_strategy
+from vaybooks.bms.ui.keyboard.wired import mark_wired
 
 SALES_RETURN_EDIT_DIALOG = "sales_return_edit_dialog"
+SALES_RETURN_EDIT_SUBMIT_KEY = "sales_return_edit_dialog_submit"
+SALES_RETURN_EDIT_FOCUS_KEY = f"{SALES_RETURN_EDIT_DIALOG}_focus"
 
 
 def arm_sales_return_edit_dialog(return_id: str) -> None:
@@ -25,7 +35,14 @@ def arm_sales_return_edit_dialog(return_id: str) -> None:
             f"{SALES_RETURN_EDIT_DIALOG}_"
         ):
             st.session_state.pop(key, None)
-    st.session_state[SALES_RETURN_EDIT_DIALOG] = return_id
+    open_dialog(
+        SALES_RETURN_EDIT_DIALOG,
+        submit_key=SALES_RETURN_EDIT_SUBMIT_KEY,
+        value=return_id,
+        clear_others=True,
+    )
+    st.session_state[SALES_RETURN_EDIT_FOCUS_KEY] = f"{SALES_RETURN_EDIT_DIALOG}_date"
+    mark_wired("dialog.save")
 
 
 def _clear() -> None:
@@ -34,6 +51,7 @@ def _clear() -> None:
             f"{SALES_RETURN_EDIT_DIALOG}_"
         ):
             st.session_state.pop(key, None)
+    st.session_state.pop(SALES_RETURN_EDIT_SUBMIT_KEY, None)
 
 
 @st.dialog(
@@ -43,6 +61,8 @@ def _clear() -> None:
 )
 def _edit_dialog(services: dict) -> None:
     return_id = st.session_state.get(SALES_RETURN_EDIT_DIALOG)
+    register_armed_dialog(SALES_RETURN_EDIT_DIALOG)
+    mark_wired("dialog.save")
     sales = services["sales"]
     sales_return = sales.get_sales_return(return_id)
     if not sales_return:
@@ -113,8 +133,7 @@ def _edit_dialog(services: dict) -> None:
         }
         for line in sales_return.lines
     ]
-    st.markdown("**Product details**")
-    lines, gst_errors = render_sales_lines_editor(
+    lines, gst_errors = render_sales_lines_entry_table(
         key_prefix=SALES_RETURN_EDIT_DIALOG,
         products=products,
         initial_lines=initial_lines,
@@ -128,6 +147,7 @@ def _edit_dialog(services: dict) -> None:
         business_state_code=business_state,
         customer_state_code=customer_state,
         qty_field="qty",
+        focus_restore_key=SALES_RETURN_EDIT_FOCUS_KEY,
     )
     reason = st.text_input(
         "Return reason",
@@ -195,11 +215,35 @@ def _edit_dialog(services: dict) -> None:
             key=f"{SALES_RETURN_EDIT_DIALOG}_refund_account",
         )
 
-    if st.button(
+    save_key = f"{SALES_RETURN_EDIT_DIALOG}_save"
+    do_save = st.button(
         "Update Sales Return",
         type="primary",
-        key=f"{SALES_RETURN_EDIT_DIALOG}_save",
-    ):
+        key=save_key,
+    ) or consume_submit(SALES_RETURN_EDIT_SUBMIT_KEY)
+
+    row_chain = entry_table_focus_chain(SALES_RETURN_EDIT_DIALOG)
+    row_columns = entry_table_focus_columns(SALES_RETURN_EDIT_DIALOG)
+    grid_roles = entry_table_grid_roles(SALES_RETURN_EDIT_DIALOG)
+    date_key = f"{SALES_RETURN_EDIT_DIALOG}_date"
+    restore = st.session_state.pop(SALES_RETURN_EDIT_FOCUS_KEY, None)
+    get_strategy(SALES_RETURN_EDIT_DIALOG).inject(
+        chain=[
+            f"{SALES_RETURN_EDIT_DIALOG}_customer_name",
+            date_key,
+            *row_chain,
+            f"{SALES_RETURN_EDIT_DIALOG}_reason",
+            save_key,
+        ],
+        restore_key=restore,
+        columns=row_columns,
+        above_first=date_key,
+        below_last=save_key,
+        grid_roles=grid_roles,
+        component_key=f"sales_ret_edit_{len(row_chain)}",
+    )
+
+    if do_save:
         try:
             if gst_errors:
                 raise ValueError(gst_errors[0])

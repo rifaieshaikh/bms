@@ -42,6 +42,8 @@ from vaybooks.bms.ui.pages.sales.returns import detail as sales_return_detail_mo
 from vaybooks.bms.ui.pages.sales.returns import list as sales_returns_mod
 from vaybooks.bms.ui.pages.sales.orders import detail as sales_order_detail_mod
 from vaybooks.bms.ui.pages.sales.orders import list as sales_orders_mod
+from vaybooks.bms.ui.pages.sales import overview as sales_overview_mod
+from vaybooks.bms.ui.pages.sales import reports as sales_reports_mod
 from vaybooks.bms.ui.pages.inventory.categories import list as inventory_categories
 from vaybooks.bms.ui.pages.inventory.customer_prices import list as inventory_customer_prices
 from vaybooks.bms.ui.pages.inventory.movements import list as inventory_movements
@@ -55,6 +57,8 @@ from vaybooks.bms.ui.pages.purchases.goods_receipt import detail as purchase_grn
 from vaybooks.bms.ui.pages.purchases.bills import detail as purchase_bill_detail_mod
 from vaybooks.bms.ui.pages.purchases.orders import detail as purchase_order_detail_mod
 from vaybooks.bms.ui.pages.purchases.orders import list as purchase_orders_mod
+from vaybooks.bms.ui.pages.purchases import overview as purchases_overview_mod
+from vaybooks.bms.ui.pages.purchases import reports as purchases_reports_mod
 from vaybooks.bms.ui.pages.purchases.returns import detail as purchase_return_detail_mod
 from vaybooks.bms.ui.pages.purchases.returns import list as purchase_returns_mod
 from vaybooks.bms.ui.pages.system.settings import list as system_settings
@@ -175,9 +179,11 @@ mtd_page = st.Page(
     _page(mtd_dashboard), title="Period Dashboard", icon=":material/calendar_month:",
     url_path="mtd-dashboard",
 )
-sales_orders_page = st.Page(
-    _page(sales_orders_mod), title="Sales Orders", icon=":material/assignment:",
-    url_path="sales-orders",
+sales_overview_page = st.Page(
+    _page(sales_overview_mod),
+    title="Overview",
+    icon=":material/dashboard:",
+    url_path="sales-overview",
 )
 sales_estimates_page = st.Page(
     _page(sales_estimates_mod), title="Estimates", icon=":material/request_quote:",
@@ -186,6 +192,10 @@ sales_estimates_page = st.Page(
 sales_quotations_page = st.Page(
     _page(sales_quotations_mod), title="Quotations", icon=":material/description:",
     url_path="quotations",
+)
+sales_orders_page = st.Page(
+    _page(sales_orders_mod), title="Sales Orders", icon=":material/assignment:",
+    url_path="sales-orders",
 )
 sales_delivery_notes_page = st.Page(
     _page(sales_delivery_notes_mod), title="Delivery Notes", icon=":material/local_shipping:",
@@ -198,6 +208,18 @@ sales_invoices_page = st.Page(
 sales_returns_page = st.Page(
     _page(sales_returns_mod), title="Sales Returns", icon=":material/undo:",
     url_path="sales-returns",
+)
+sales_reports_page = st.Page(
+    _page(sales_reports_mod),
+    title="Reports",
+    icon=":material/analytics:",
+    url_path="sales-reports",
+)
+purchases_overview_page = st.Page(
+    _page(purchases_overview_mod),
+    title="Overview",
+    icon=":material/dashboard:",
+    url_path="purchases-overview",
 )
 purchase_orders_page = st.Page(
     _page(purchase_orders_mod), title="Purchase Orders", icon=":material/shopping_cart:",
@@ -214,6 +236,12 @@ purchase_bills_page = st.Page(
 purchase_returns_page = st.Page(
     _page(purchase_returns_mod), title="Returns", icon=":material/undo:",
     url_path="purchase-returns",
+)
+purchases_reports_page = st.Page(
+    _page(purchases_reports_mod),
+    title="Reports",
+    icon=":material/analytics:",
+    url_path="purchases-reports",
 )
 reports_page = st.Page(
     _page(reports), title="Reports", icon=":material/analytics:", url_path="reports",
@@ -440,6 +468,7 @@ navigation.register("accounting_invoices_list", accounting_invoices_page)
 navigation.register("journal_list", journal_page)
 navigation.register("trial_balance_list", trial_balance_page)
 navigation.register("mtd_dashboard", mtd_page)
+navigation.register("sales_overview", sales_overview_page)
 navigation.register("sales_orders_list", sales_orders_page)
 navigation.register("sales_order_detail", sales_order_detail_page)
 navigation.register("estimates_list", sales_estimates_page)
@@ -452,6 +481,8 @@ navigation.register("sales_invoices_list", sales_invoices_page)
 navigation.register("sales_detail", sales_detail_page)
 navigation.register("sales_returns_list", sales_returns_page)
 navigation.register("sales_return_detail", sales_return_detail_page)
+navigation.register("sales_reports", sales_reports_page)
+navigation.register("purchases_overview", purchases_overview_page)
 navigation.register("purchase_orders_list", purchase_orders_page)
 navigation.register("purchase_order_detail", purchase_order_detail_page)
 navigation.register("goods_receipt_list", purchase_grn_page)
@@ -460,6 +491,7 @@ navigation.register("purchases_list", purchase_bills_page)
 navigation.register("purchase_detail", purchase_detail_page)
 navigation.register("purchase_returns_list", purchase_returns_page)
 navigation.register("purchase_return_detail", purchase_return_detail_page)
+navigation.register("purchases_reports", purchases_reports_page)
 navigation.register("reports", reports_page)
 navigation.register("customization_activities_list", activities_page)
 navigation.register("activities_list", activities_page)  # legacy alias
@@ -522,18 +554,22 @@ page_groups = {
         projects_settings_page,
     ],
     "Sales": [
+        sales_overview_page,
         sales_estimates_page,
         sales_quotations_page,
         sales_orders_page,
         sales_delivery_notes_page,
         sales_invoices_page,
         sales_returns_page,
+        sales_reports_page,
     ],
     "Purchases": [
+        purchases_overview_page,
         purchase_orders_page,
         purchase_grn_page,
         purchase_bills_page,
         purchase_returns_page,
+        purchases_reports_page,
     ],
     "Inventory": [
         inventory_categories_page,

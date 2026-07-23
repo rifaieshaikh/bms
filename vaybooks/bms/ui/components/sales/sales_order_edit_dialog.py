@@ -10,15 +10,30 @@ from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.components.common.document_custom_fields import (
     render_document_custom_fields,
 )
-from vaybooks.bms.ui.components.sales.sales_lines_editor import render_sales_lines_editor
-from vaybooks.bms.ui.dialog_utils import make_dismiss_handler
+from vaybooks.bms.ui.components.sales.sales_lines_entry_table import (
+    entry_table_focus_chain,
+    entry_table_focus_columns,
+    entry_table_grid_roles,
+    render_sales_lines_entry_table,
+)
+from vaybooks.bms.ui.dialog_utils import make_dismiss_handler, register_armed_dialog
+from vaybooks.bms.ui.keyboard.dialog_actions import consume_submit, open_dialog
+from vaybooks.bms.ui.keyboard.focus.registry import get_strategy
+from vaybooks.bms.ui.keyboard.wired import mark_wired
 
 SO_EDIT_DIALOG = "so_edit_dialog"
+SO_EDIT_FOCUS_STRATEGY = "sales_order_edit_dialog"
 SO_INVOICE_DIALOG = "so_invoice_dialog"
+SO_EDIT_SUBMIT_KEY = "so_edit_dialog_submit"
+SO_EDIT_FOCUS_KEY = f"{SO_EDIT_DIALOG}_focus"
 
 
 def arm_so_edit_dialog(order_id: str) -> None:
-    st.session_state[SO_EDIT_DIALOG] = order_id
+    open_dialog(
+        SO_EDIT_DIALOG, submit_key=SO_EDIT_SUBMIT_KEY, value=order_id, clear_others=True
+    )
+    st.session_state[SO_EDIT_FOCUS_KEY] = f"{SO_EDIT_DIALOG}_date"
+    mark_wired("dialog.save")
 
 
 def arm_so_invoice_dialog(order_id: str) -> None:
@@ -40,6 +55,9 @@ def _so_edit_dialog(services: dict) -> None:
     order_id = st.session_state.get(SO_EDIT_DIALOG)
     if not order_id:
         return
+    register_armed_dialog(SO_EDIT_DIALOG)
+    mark_wired("dialog.save")
+
     sales = services["sales"]
     order = sales.get_sales_order(order_id)
     if not order:
@@ -63,13 +81,18 @@ def _so_edit_dialog(services: dict) -> None:
         if not customer_state:
             customer_state = business_state
 
+    date_key = f"{SO_EDIT_DIALOG}_date"
+    expected_key = f"{SO_EDIT_DIALOG}_expected"
+    save_key = f"{SO_EDIT_DIALOG}_save"
+    cancel_key = f"{SO_EDIT_DIALOG}_cancel"
+
     edit_date = st.date_input(
-        "Order date", value=order.order_date, key=f"{SO_EDIT_DIALOG}_date"
+        "Order date", value=order.order_date, key=date_key
     )
     edit_expected = st.date_input(
         "Expected date",
         value=order.expected_date or order.order_date,
-        key=f"{SO_EDIT_DIALOG}_expected",
+        key=expected_key,
     )
     edit_notes = st.text_area(
         "Notes", value=order.notes, key=f"{SO_EDIT_DIALOG}_notes"
@@ -83,8 +106,7 @@ def _so_edit_dialog(services: dict) -> None:
         }
         for line in order.lines
     ]
-    st.markdown("**Line items**")
-    lines, gst_errors = render_sales_lines_editor(
+    lines, gst_errors = render_sales_lines_entry_table(
         key_prefix=SO_EDIT_DIALOG,
         products=products,
         initial_lines=initial_lines,
@@ -98,6 +120,7 @@ def _so_edit_dialog(services: dict) -> None:
         business_state_code=business_state,
         customer_state_code=customer_state,
         qty_field="qty_ordered",
+        focus_restore_key=SO_EDIT_FOCUS_KEY,
     )
     initial_custom = {
         item.key: item.value for item in order.document_content.custom_fields
@@ -127,7 +150,35 @@ def _so_edit_dialog(services: dict) -> None:
         value=order.document_content.terms_and_conditions,
         key=f"{SO_EDIT_DIALOG}_terms",
     )
-    if st.button("Update Sales Order", type="primary", key=f"{SO_EDIT_DIALOG}_save"):
+
+    row_chain = entry_table_focus_chain(SO_EDIT_DIALOG)
+    row_columns = entry_table_focus_columns(SO_EDIT_DIALOG)
+    grid_roles = entry_table_grid_roles(SO_EDIT_DIALOG)
+
+    save_cols = st.columns(2)
+    do_save = save_cols[0].button(
+        "Update Sales Order",
+        type="primary",
+        use_container_width=True,
+        key=save_key,
+    ) or consume_submit(SO_EDIT_SUBMIT_KEY)
+    if save_cols[1].button("Cancel", use_container_width=True, key=cancel_key):
+        _clear_prefix(SO_EDIT_DIALOG)
+        st.session_state.pop(SO_EDIT_SUBMIT_KEY, None)
+        st.rerun()
+
+    restore = st.session_state.pop(SO_EDIT_FOCUS_KEY, None)
+    get_strategy(SO_EDIT_FOCUS_STRATEGY).inject(
+        chain=[date_key, expected_key, *row_chain, save_key, cancel_key],
+        restore_key=restore,
+        columns=row_columns,
+        above_first=expected_key,
+        below_last=save_key,
+        grid_roles=grid_roles,
+        component_key=f"so_edit_entry_{len(row_chain)}",
+    )
+
+    if do_save:
         try:
             if gst_errors:
                 raise ValueError(gst_errors[0])
@@ -145,6 +196,7 @@ def _so_edit_dialog(services: dict) -> None:
                 terms_and_conditions=terms,
             )
             _clear_prefix(SO_EDIT_DIALOG)
+            st.session_state.pop(SO_EDIT_SUBMIT_KEY, None)
             st.rerun()
         except Exception as exc:
             st.error(str(exc))

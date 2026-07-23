@@ -12,6 +12,17 @@ from vaybooks.bms.ui.keyboard.focus.purchase_lines import (
     PurchaseOrderFocusStrategy,
     PurchaseReturnFocusStrategy,
 )
+from vaybooks.bms.ui.keyboard.focus.sales_lines import (
+    DeliveryNoteEditFocusStrategy,
+    DeliveryNoteFocusStrategy,
+    PricedDocumentFocusStrategy,
+    SalesInvoiceEditFocusStrategy,
+    SalesInvoiceFocusStrategy,
+    SalesOrderEditFocusStrategy,
+    SalesOrderFocusStrategy,
+    SalesReturnEditFocusStrategy,
+    SalesReturnFocusStrategy,
+)
 
 _STRATEGIES: dict[str, FocusStrategy] = {
     "purchase_order_dialog": PurchaseOrderFocusStrategy(),
@@ -21,6 +32,15 @@ _STRATEGIES: dict[str, FocusStrategy] = {
     "purchase_return_dialog": PurchaseReturnFocusStrategy(),
     "grn_dialog": GrnFocusStrategy(),
     "linear_apply": LinearApplyFocusStrategy(),
+    "sales_order_dialog": SalesOrderFocusStrategy(),
+    "sales_order_edit_dialog": SalesOrderEditFocusStrategy(),
+    "sales_invoice_dialog": SalesInvoiceFocusStrategy(),
+    "sales_invoice_edit_dialog": SalesInvoiceEditFocusStrategy(),
+    "sales_return_dialog": SalesReturnFocusStrategy(),
+    "sales_return_edit_dialog": SalesReturnEditFocusStrategy(),
+    "priced_document_dialog": PricedDocumentFocusStrategy(),
+    "delivery_note_dialog": DeliveryNoteFocusStrategy(),
+    "delivery_note_edit_dialog": DeliveryNoteEditFocusStrategy(),
 }
 
 

@@ -16,7 +16,19 @@ from vaybooks.bms.ui.components.sales.sales_line_ui import (
 
 
 def _sku_label(product) -> str:
-    return f"{product.sku} — {product.name}"
+    """Selectbox label: name · qty · rate · item code (all searchable)."""
+    qty = float(getattr(product, "current_qty", 0) or 0)
+    rate = float(
+        getattr(product, "active_selling_rate", 0)
+        or getattr(product, "selling_rate", 0)
+        or 0
+    )
+    sku = str(getattr(product, "sku", "") or "").strip()
+    name = str(getattr(product, "name", "") or "").strip() or "Item"
+    label = f"{name} · {qty:g} · ₹{rate:,.2f}"
+    if sku:
+        label = f"{label} · {sku}"
+    return label
 
 
 def _default_rate_for_product(

@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from vaybooks.bms.domain.shared.enums import ExpenseSource, OrderStatus, StockMovementType
+from vaybooks.bms.domain.shared.enums import (
+    ExpenseSource,
+    OrderStatus,
+    PurchaseOrderStatus,
+    SalesOrderStatus,
+    StockMovementType,
+)
 from vaybooks.bms.ui import filtering as F
 from vaybooks.bms.ui.filtering import FilterField, ListSchema, SortOption
 from vaybooks.bms.ui.pagination import REPORT_PAGE_SIZE
@@ -665,11 +671,35 @@ STOCK_MOVEMENTS = ListSchema(
 PO_PIPELINE = ListSchema(
     entity_key="report_po_pipeline",
     title="Purchase Orders Pipeline",
-    filter_fields=[],
+    filter_fields=[
+        FilterField(
+            "date_range",
+            "Period",
+            F.DATE_RANGE,
+            default=_mtd,
+            record_attr="order_date",
+            help="Filter by purchase order date.",
+        ),
+        FilterField(
+            "status",
+            "Status",
+            F.SELECT,
+            options=_enum_opts(PurchaseOrderStatus),
+        ),
+        FilterField(
+            "vendor_name",
+            "Vendor",
+            F.REGEX,
+            placeholder="Name contains…",
+        ),
+        FilterField("overdue", "Overdue only", F.CHECKBOX),
+    ],
     sort_options=[
         SortOption("order_date", "Order date"),
         SortOption("po_number", "PO number"),
         SortOption("status", "Status"),
+        SortOption("total_amount", "Amount"),
+        SortOption("vendor_name", "Vendor"),
     ],
     default_sort="order_date",
     page_size=REPORT_PAGE_SIZE,
@@ -678,10 +708,35 @@ PO_PIPELINE = ListSchema(
 GRN_PENDING = ListSchema(
     entity_key="report_grn_pending",
     title="GRN Pending",
-    filter_fields=[],
+    filter_fields=[
+        FilterField(
+            "date_range",
+            "Period",
+            F.DATE_RANGE,
+            default=_mtd,
+            record_attr="order_date",
+            help="Filter by linked PO order date.",
+        ),
+        FilterField(
+            "vendor_name",
+            "Vendor",
+            F.REGEX,
+            placeholder="Name contains…",
+        ),
+        FilterField(
+            "product_name",
+            "Product",
+            F.REGEX,
+            placeholder="Name contains…",
+        ),
+        FilterField("qty_pending", "Min pending qty", F.NUMBER_MIN),
+    ],
     sort_options=[
         SortOption("po_number", "PO number"),
         SortOption("qty_pending", "Qty pending"),
+        SortOption("vendor_name", "Vendor"),
+        SortOption("product_name", "Product"),
+        SortOption("order_date", "PO order date"),
     ],
     default_sort="qty_pending",
     page_size=REPORT_PAGE_SIZE,
@@ -691,11 +746,24 @@ PURCHASES_BY_VENDOR = ListSchema(
     entity_key="report_purchases_by_vendor",
     title="Purchases by Vendor",
     filter_fields=[
-        FilterField("date_range", "Period", F.DATE_RANGE, default=_mtd),
+        FilterField(
+            "date_range",
+            "Period",
+            F.DATE_RANGE,
+            default=_mtd,
+            help="Filter by purchase bill date.",
+        ),
+        FilterField(
+            "vendor_name",
+            "Vendor",
+            F.REGEX,
+            placeholder="Name contains…",
+        ),
     ],
     sort_options=[
         SortOption("total", "Total amount"),
         SortOption("vendor_name", "Vendor"),
+        SortOption("bill_count", "Bill count"),
     ],
     default_sort="total",
     page_size=REPORT_PAGE_SIZE,
@@ -705,11 +773,154 @@ PURCHASE_RETURNS_SUMMARY = ListSchema(
     entity_key="report_purchase_returns",
     title="Purchase Returns Summary",
     filter_fields=[
-        FilterField("date_range", "Period", F.DATE_RANGE, default=_mtd),
+        FilterField(
+            "date_range",
+            "Period",
+            F.DATE_RANGE,
+            default=_mtd,
+            record_attr="return_date",
+            help="Filter by return date.",
+        ),
+        FilterField(
+            "vendor_name",
+            "Vendor",
+            F.REGEX,
+            placeholder="Name contains…",
+        ),
     ],
     sort_options=[
         SortOption("return_date", "Return date"),
         SortOption("total_amount", "Amount"),
+        SortOption("vendor_name", "Vendor"),
+    ],
+    default_sort="return_date",
+    page_size=REPORT_PAGE_SIZE,
+)
+
+SO_PIPELINE = ListSchema(
+    entity_key="report_so_pipeline",
+    title="Sales Orders Pipeline",
+    filter_fields=[
+        FilterField(
+            "date_range",
+            "Period",
+            F.DATE_RANGE,
+            default=_mtd,
+            record_attr="order_date",
+            help="Filter by sales order date.",
+        ),
+        FilterField(
+            "status",
+            "Status",
+            F.SELECT,
+            options=_enum_opts(SalesOrderStatus),
+        ),
+        FilterField(
+            "customer_name",
+            "Customer",
+            F.REGEX,
+            placeholder="Name contains…",
+        ),
+        FilterField("overdue", "Overdue only", F.CHECKBOX),
+    ],
+    sort_options=[
+        SortOption("order_date", "Order date"),
+        SortOption("so_number", "SO number"),
+        SortOption("status", "Status"),
+        SortOption("total_amount", "Amount"),
+        SortOption("customer_name", "Customer"),
+    ],
+    default_sort="order_date",
+    page_size=REPORT_PAGE_SIZE,
+)
+
+DN_PENDING = ListSchema(
+    entity_key="report_dn_pending",
+    title="Delivery Pending",
+    filter_fields=[
+        FilterField(
+            "date_range",
+            "Period",
+            F.DATE_RANGE,
+            default=_mtd,
+            record_attr="order_date",
+            help="Filter by linked SO order date.",
+        ),
+        FilterField(
+            "customer_name",
+            "Customer",
+            F.REGEX,
+            placeholder="Name contains…",
+        ),
+        FilterField(
+            "product_name",
+            "Product",
+            F.REGEX,
+            placeholder="Name contains…",
+        ),
+        FilterField("qty_pending", "Min pending qty", F.NUMBER_MIN),
+    ],
+    sort_options=[
+        SortOption("so_number", "SO number"),
+        SortOption("qty_pending", "Qty pending"),
+        SortOption("customer_name", "Customer"),
+        SortOption("product_name", "Product"),
+        SortOption("order_date", "SO order date"),
+    ],
+    default_sort="qty_pending",
+    page_size=REPORT_PAGE_SIZE,
+)
+
+SALES_BY_CUSTOMER = ListSchema(
+    entity_key="report_sales_by_customer",
+    title="Sales by Customer",
+    filter_fields=[
+        FilterField(
+            "date_range",
+            "Period",
+            F.DATE_RANGE,
+            default=_mtd,
+            help="Filter by sales invoice date.",
+        ),
+        FilterField(
+            "customer_name",
+            "Customer",
+            F.REGEX,
+            placeholder="Name contains…",
+        ),
+    ],
+    sort_options=[
+        SortOption("total", "Total amount"),
+        SortOption("customer_name", "Customer"),
+        SortOption("invoice_count", "Invoice count"),
+    ],
+    default_sort="total",
+    page_size=REPORT_PAGE_SIZE,
+)
+
+SALES_RETURNS_SUMMARY = ListSchema(
+    entity_key="report_sales_returns",
+    title="Sales Returns Summary",
+    filter_fields=[
+        FilterField(
+            "date_range",
+            "Period",
+            F.DATE_RANGE,
+            default=_mtd,
+            record_attr="return_date",
+            help="Filter by return date.",
+        ),
+        FilterField(
+            "customer_name",
+            "Customer",
+            F.REGEX,
+            placeholder="Name contains…",
+        ),
+    ],
+    sort_options=[
+        SortOption("return_date", "Return date"),
+        SortOption("total_amount", "Amount"),
+        SortOption("customer_name", "Customer"),
     ],
     default_sort="return_date",
     page_size=REPORT_PAGE_SIZE,
@@ -779,6 +990,12 @@ REPORT_CATEGORIES: dict[str, list[str]] = {
         "Purchases by Vendor",
         "Purchase Returns Summary",
     ],
+    "Sales Documents": [
+        "Sales Orders Pipeline",
+        "Delivery Pending",
+        "Sales by Customer",
+        "Sales Returns Summary",
+    ],
 }
 
 SCHEMA_BY_REPORT_TYPE = {
@@ -812,6 +1029,10 @@ SCHEMA_BY_REPORT_TYPE = {
     "GRN Pending": GRN_PENDING,
     "Purchases by Vendor": PURCHASES_BY_VENDOR,
     "Purchase Returns Summary": PURCHASE_RETURNS_SUMMARY,
+    "Sales Orders Pipeline": SO_PIPELINE,
+    "Delivery Pending": DN_PENDING,
+    "Sales by Customer": SALES_BY_CUSTOMER,
+    "Sales Returns Summary": SALES_RETURNS_SUMMARY,
 }
 
 CATEGORY_BY_REPORT_TYPE = {
@@ -828,6 +1049,7 @@ CATEGORY_SERVICE_KEYS = {
     "Customers": "reports_customers",
     "Inventory": "reports_inventory",
     "Purchases": "reports_purchases",
+    "Sales Documents": "reports_sales_module",
 }
 
 REPORT_TYPES = [

@@ -10,6 +10,13 @@ from vaybooks.bms.ui.list_schemas import (
 )
 
 
+def _mtd():
+    from datetime import date
+
+    today = date.today()
+    return today.replace(day=1), today
+
+
 def _match_customer(record, selected):
     if not selected:
         return True
@@ -20,6 +27,26 @@ def _match_sales_customer(row, value):
     if isinstance(row, dict):
         return row.get("customer_account_id") == value
     return False
+
+
+SALES_OVERVIEW = ListSchema(
+    entity_key="sales_overview",
+    title="Sales Overview",
+    filter_fields=[
+        FilterField(
+            "date_range",
+            "Period",
+            F.DATE_RANGE,
+            default=_mtd,
+            help="Applies to sales KPIs and date-scoped charts.",
+        ),
+    ],
+    sort_options=[
+        SortOption("date_range", "Period"),
+    ],
+    default_sort="date_range",
+    page_size=12,
+)
 
 
 ESTIMATES = ListSchema(

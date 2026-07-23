@@ -117,11 +117,10 @@ def render(services: dict) -> None:
         key=f"return_view_restock_{sales_return.id}",
     )
 
-    actions = []
+    actions = [{"label": "Edit", "key": "edit"}]
     if sales_return.status == SalesReturnStatus.PENDING:
         actions.extend(
             [
-                {"label": "Edit", "key": "edit"},
                 {"label": "Approve", "key": "approve", "type": "primary"},
                 {"label": "Reject", "key": "reject"},
             ]
@@ -146,8 +145,11 @@ def render(services: dict) -> None:
         actions.append({"label": "Close", "key": "close", "type": "primary"})
     clicked = document_actions(actions, suffix=f"sales_return_{sales_return.id}")
     if clicked.get("edit"):
-        arm_sales_return_edit_dialog(sales_return.id)
-        st.rerun()
+        if sales_return.status != SalesReturnStatus.PENDING:
+            st.warning("Only pending returns can be edited.")
+        else:
+            arm_sales_return_edit_dialog(sales_return.id)
+            st.rerun()
     if clicked.get("approve"):
         try:
             sales.approve_sales_return(sales_return.id)

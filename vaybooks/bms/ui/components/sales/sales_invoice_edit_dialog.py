@@ -10,20 +10,39 @@ from vaybooks.bms.domain.shared.enums import PartyRegistrationType
 from vaybooks.bms.ui.components.common.document_custom_fields import (
     render_document_custom_fields,
 )
-from vaybooks.bms.ui.components.sales.sales_lines_editor import render_sales_lines_editor
-from vaybooks.bms.ui.dialog_utils import make_dismiss_handler
+from vaybooks.bms.ui.components.sales.sales_lines_entry_table import (
+    entry_table_focus_chain,
+    entry_table_focus_columns,
+    entry_table_grid_roles,
+    render_sales_lines_entry_table,
+)
+from vaybooks.bms.ui.dialog_utils import make_dismiss_handler, register_armed_dialog
+from vaybooks.bms.ui.keyboard.dialog_actions import consume_submit, open_dialog
+from vaybooks.bms.ui.keyboard.focus.registry import get_strategy
+from vaybooks.bms.ui.keyboard.wired import mark_wired
 
 INVOICE_EDIT_DIALOG = "invoice_edit_dialog"
+INVOICE_EDIT_FOCUS_STRATEGY = "sales_invoice_edit_dialog"
+INVOICE_EDIT_SUBMIT_KEY = "invoice_edit_dialog_submit"
+INVOICE_EDIT_FOCUS_KEY = f"{INVOICE_EDIT_DIALOG}_focus"
 
 
 def arm_invoice_edit_dialog(voucher_id: str) -> None:
-    st.session_state[INVOICE_EDIT_DIALOG] = voucher_id
+    open_dialog(
+        INVOICE_EDIT_DIALOG,
+        submit_key=INVOICE_EDIT_SUBMIT_KEY,
+        value=voucher_id,
+        clear_others=True,
+    )
+    st.session_state[INVOICE_EDIT_FOCUS_KEY] = f"{INVOICE_EDIT_DIALOG}_date"
+    mark_wired("dialog.save")
 
 
 def _clear() -> None:
     for key in list(st.session_state.keys()):
         if key == INVOICE_EDIT_DIALOG or key.startswith(f"{INVOICE_EDIT_DIALOG}_"):
             st.session_state.pop(key, None)
+    st.session_state.pop(INVOICE_EDIT_SUBMIT_KEY, None)
 
 
 @st.dialog(
@@ -43,6 +62,9 @@ def _invoice_edit_dialog(
     voucher_id = st.session_state.get(INVOICE_EDIT_DIALOG)
     if not voucher_id:
         return
+    register_armed_dialog(INVOICE_EDIT_DIALOG)
+    mark_wired("dialog.save")
+
     accounting = services["accounting"]
     sales = services["sales"]
     business_service = services.get("business")
@@ -103,8 +125,7 @@ def _invoice_edit_dialog(
         }
         for item in line_items
     ]
-    st.markdown("**Line items**")
-    updated_items, gst_errors = render_sales_lines_editor(
+    updated_items, gst_errors = render_sales_lines_entry_table(
         key_prefix=INVOICE_EDIT_DIALOG,
         products=products,
         initial_lines=initial_lines,
@@ -118,6 +139,7 @@ def _invoice_edit_dialog(
         business_state_code=business_state or "",
         customer_state_code=customer_state or "",
         qty_field="qty",
+        focus_restore_key=INVOICE_EDIT_FOCUS_KEY,
     )
     edit_received = st.number_input(
         "Amount received",
@@ -162,7 +184,9 @@ def _invoice_edit_dialog(
         value=current_content.get("terms_and_conditions", ""),
         key=f"{INVOICE_EDIT_DIALOG}_terms",
     )
-    if st.button("Update invoice", type="primary", key=f"{INVOICE_EDIT_DIALOG}_save"):
+    if st.button("Update invoice", type="primary", key=f"{INVOICE_EDIT_DIALOG}_save") or consume_submit(
+        INVOICE_EDIT_SUBMIT_KEY
+    ):
         try:
             if gst_errors:
                 raise ValueError(gst_errors[0])
@@ -185,6 +209,22 @@ def _invoice_edit_dialog(
             st.rerun()
         except Exception as exc:
             st.error(str(exc))
+
+    row_chain = entry_table_focus_chain(INVOICE_EDIT_DIALOG)
+    row_columns = entry_table_focus_columns(INVOICE_EDIT_DIALOG)
+    grid_roles = entry_table_grid_roles(INVOICE_EDIT_DIALOG)
+    date_key = f"{INVOICE_EDIT_DIALOG}_date"
+    save_key = f"{INVOICE_EDIT_DIALOG}_save"
+    restore = st.session_state.pop(INVOICE_EDIT_FOCUS_KEY, None)
+    get_strategy(INVOICE_EDIT_FOCUS_STRATEGY).inject(
+        chain=[date_key, *row_chain, f"{INVOICE_EDIT_DIALOG}_received", save_key],
+        restore_key=restore,
+        columns=row_columns,
+        above_first=date_key,
+        below_last=save_key,
+        grid_roles=grid_roles,
+        component_key=f"inv_edit_entry_{len(row_chain)}",
+    )
 
 
 def open_invoice_edit_dialog_if_armed(

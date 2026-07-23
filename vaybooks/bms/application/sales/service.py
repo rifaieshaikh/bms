@@ -476,6 +476,128 @@ class SalesAppService:
         self._quotation_repo.save(quotation)
         return order
 
+    def set_estimate_status(
+        self, estimate_id: str, status: EstimateStatus
+    ) -> Estimate:
+        if not self._estimate_repo:
+            raise ValueError("Estimate repository is not configured")
+        estimate = self._estimate_repo.find_by_id(estimate_id)
+        if not estimate:
+            raise ValueError("Estimate not found")
+        if estimate.status in (
+            EstimateStatus.CANCELLED,
+            EstimateStatus.EXPIRED,
+            EstimateStatus.CONVERTED,
+        ):
+            raise ValueError(
+                "Cannot change status of a cancelled, expired, or converted estimate"
+            )
+        if status == EstimateStatus.CONVERTED:
+            raise ValueError(
+                "Use Convert to Sales Order or Convert to Sales Invoice"
+            )
+        estimate.status = status
+        estimate.updated_at = utc_now()
+        return self._estimate_repo.save(estimate)
+
+    def convert_estimate_to_sales_order(
+        self,
+        estimate_id: str,
+        *,
+        order_date: Optional[date] = None,
+        expected_date: Optional[date] = None,
+    ) -> SalesOrder:
+        if not self._estimate_repo:
+            raise ValueError("Estimate repository is not configured")
+        estimate = self._estimate_repo.find_by_id(estimate_id)
+        if not estimate:
+            raise ValueError("Estimate not found")
+        if estimate.status != EstimateStatus.ACCEPTED:
+            raise ValueError("Only an accepted estimate can be converted")
+        if estimate.converted_sales_order_id or estimate.converted_invoice_id:
+            raise ValueError("Estimate is already converted")
+        source_values = {
+            item.key: item.value for item in estimate.document_content.custom_fields
+        }
+        order = self.create_sales_order(
+            customer_id=estimate.customer_id,
+            order_date=order_date or date.today(),
+            expected_date=expected_date,
+            lines=[
+                {
+                    "product_id": line.product_id,
+                    "product_name": line.product_name,
+                    "qty": line.qty,
+                    "rate": line.rate,
+                }
+                for line in estimate.lines
+            ],
+            notes=estimate.notes,
+            status=SalesOrderStatus.CONFIRMED,
+        )
+        order.document_content = self.build_document_content(
+            "sales_order", custom_values=source_values
+        )
+        self._so_repo.save(order)
+        estimate.converted_sales_order_id = order.id
+        estimate.status = EstimateStatus.CONVERTED
+        self._estimate_repo.save(estimate)
+        return order
+
+    def convert_estimate_to_invoice(
+        self,
+        estimate_id: str,
+        *,
+        store_account_id: str,
+        store_invoice_number: str,
+        amount_received: float = 0.0,
+        voucher_date: Optional[date] = None,
+    ) -> Voucher:
+        if not self._estimate_repo:
+            raise ValueError("Estimate repository is not configured")
+        estimate = self._estimate_repo.find_by_id(estimate_id)
+        if not estimate:
+            raise ValueError("Estimate not found")
+        if estimate.status != EstimateStatus.ACCEPTED:
+            raise ValueError("Only an accepted estimate can be converted")
+        if estimate.converted_sales_order_id or estimate.converted_invoice_id:
+            raise ValueError("Estimate is already converted")
+        if not estimate.lines:
+            raise ValueError("Estimate has no line items")
+        customer_account = self._accounting.get_customer_account(estimate.customer_id)
+        if not customer_account:
+            raise ValueError("Customer account not found")
+        source_values = {
+            item.key: item.value for item in estimate.document_content.custom_fields
+        }
+        content = self.build_document_content(
+            "sales_invoice", custom_values=source_values
+        )
+        raw_lines = [
+            {
+                "product_id": line.product_id,
+                "description": line.product_name,
+                "qty": line.qty,
+                "rate": line.rate,
+            }
+            for line in estimate.lines
+        ]
+        voucher = self.create_sales_invoice(
+            customer_account_id=customer_account.id,
+            store_account_id=store_account_id,
+            gross_amount=estimate.total_amount,
+            discount_amount=0.0,
+            amount_received=amount_received,
+            store_invoice_number=store_invoice_number,
+            voucher_date=voucher_date or estimate.estimate_date,
+            line_items=raw_lines,
+            document_content=content,
+        )
+        estimate.converted_invoice_id = voucher.id
+        estimate.status = EstimateStatus.CONVERTED
+        self._estimate_repo.save(estimate)
+        return voucher
+
     def list_sales_orders(self) -> List[SalesOrder]:
         return self._so_repo.list_all()
 

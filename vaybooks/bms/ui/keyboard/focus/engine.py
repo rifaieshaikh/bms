@@ -74,7 +74,7 @@ def inject_focus_engine(config: FocusConfig) -> None:
     if (!c || !key) return false;
     if ((c.chain || []).indexOf(key) >= 0) return true;
     const cols = c.columns || {{}};
-    const names = ['product', 'qty', 'rate'];
+    const names = gridRoles(c);
     for (let i = 0; i < names.length; i++) {{
       if ((cols[names[i]] || []).indexOf(key) >= 0) return true;
     }}
@@ -561,13 +561,17 @@ def inject_focus_engine(config: FocusConfig) -> None:
   }}
 
   function rowDeleteKey(widgetKey) {{
-    const m = String(widgetKey || '').match(/^(.*)_r([^_]+)_(product|qty|rate|qty_recv)$/);
+    const m = String(widgetKey || '').match(
+      /^(.*)_r([^_]+)_(product|qty|rate|discount|qty_recv)$/
+    );
     if (!m) return null;
     return m[1] + '_del_' + m[2];
   }}
 
   function rowProductKey(widgetKey) {{
-    const m = String(widgetKey || '').match(/^(.*)_r([^_]+)_(product|qty|rate)$/);
+    const m = String(widgetKey || '').match(
+      /^(.*)_r([^_]+)_(product|qty|rate|discount)$/
+    );
     if (!m) return null;
     return m[1] + '_r' + m[2] + '_product';
   }}

@@ -22,11 +22,23 @@ from vaybooks.bms.ui.components.sales.sales_line_ui import (
     preview_sales_line_gst,
     tax_summary_from_previews,
 )
-from vaybooks.bms.ui.components.sales.sales_lines_editor import render_sales_lines_editor
-from vaybooks.bms.ui.dialog_utils import make_dismiss_handler
+from vaybooks.bms.ui.components.common.dialog_state import reset_dialog_state
+from vaybooks.bms.ui.components.sales.sales_lines_entry_table import (
+    entry_table_focus_chain,
+    entry_table_focus_columns,
+    entry_table_grid_roles,
+    render_sales_lines_entry_table,
+)
+from vaybooks.bms.ui.dialog_utils import make_dismiss_handler, register_armed_dialog
+from vaybooks.bms.ui.keyboard.dialog_actions import consume_submit, open_dialog
+from vaybooks.bms.ui.keyboard.focus.registry import get_strategy
+from vaybooks.bms.ui.keyboard.wired import mark_wired
 
 SALES_RECORD_DIALOG = "sales_record_dialog"
+SALES_INVOICE_FOCUS_STRATEGY = "sales_invoice_dialog"
 SALES_RECORD_PRESELECT = "sales_record_dialog_preselect_customer_id"
+SALES_RECORD_SUBMIT_KEY = "sales_record_dialog_submit"
+SALES_RECORD_FOCUS_KEY = f"{SALES_RECORD_DIALOG}_focus"
 
 
 def _index_of(options: dict, target_id, default: int = 0) -> int:
@@ -35,14 +47,19 @@ def _index_of(options: dict, target_id, default: int = 0) -> int:
 
 
 def arm_sales_record_dialog(customer_id: str | None = None) -> None:
-    for key in list(st.session_state.keys()):
-        if key.startswith(SALES_RECORD_DIALOG):
-            st.session_state.pop(key, None)
-    st.session_state[SALES_RECORD_DIALOG] = "new"
+    reset_dialog_state(SALES_RECORD_DIALOG)
+    open_dialog(
+        SALES_RECORD_DIALOG,
+        submit_key=SALES_RECORD_SUBMIT_KEY,
+        value="new",
+        clear_others=True,
+    )
+    st.session_state[SALES_RECORD_FOCUS_KEY] = f"{SALES_RECORD_DIALOG}_customer_name"
     if customer_id:
         st.session_state[SALES_RECORD_PRESELECT] = customer_id
     else:
         st.session_state.pop(SALES_RECORD_PRESELECT, None)
+    mark_wired("dialog.save")
 
 
 def _clear_dialog_session() -> None:
@@ -51,6 +68,7 @@ def _clear_dialog_session() -> None:
             st.session_state.pop(key, None)
     st.session_state.pop(SALES_RECORD_DIALOG, None)
     st.session_state.pop(SALES_RECORD_PRESELECT, None)
+    st.session_state.pop(SALES_RECORD_SUBMIT_KEY, None)
 
 
 @st.dialog(
@@ -61,6 +79,9 @@ def _clear_dialog_session() -> None:
 def sales_record_dialog(services: dict) -> None:
     if st.session_state.get(SALES_RECORD_DIALOG) != "new":
         return
+
+    register_armed_dialog(SALES_RECORD_DIALOG)
+    mark_wired("dialog.save")
 
     accounting_service = services["accounting"]
     customer_service = services["customers"]
@@ -137,8 +158,7 @@ def sales_record_dialog(services: dict) -> None:
         st.error("Add inventory products first.")
         return
 
-    st.markdown("**Line items**")
-    editor_lines, gst_errors = render_sales_lines_editor(
+    editor_lines, gst_errors = render_sales_lines_entry_table(
         key_prefix=SALES_RECORD_DIALOG,
         products=products,
         initial_lines=None,
@@ -152,6 +172,7 @@ def sales_record_dialog(services: dict) -> None:
         business_state_code=business_state,
         customer_state_code=customer_state or "",
         qty_field="qty",
+        focus_restore_key=SALES_RECORD_FOCUS_KEY,
     )
 
     line_items = [
@@ -193,12 +214,19 @@ def sales_record_dialog(services: dict) -> None:
         "grand_total", line_items_total(line_items, gst_previews)
     )
 
+    inv_disc_key = f"{SALES_RECORD_DIALOG}_inv_disc"
+    received_key = f"{SALES_RECORD_DIALOG}_received"
+    save_key = f"{SALES_RECORD_DIALOG}_save"
+    cancel_key = f"{SALES_RECORD_DIALOG}_cancel"
+    date_key = f"{SALES_RECORD_DIALOG}_date"
+    customer_name_key = f"{SALES_RECORD_DIALOG}_customer_name"
+
     inv_disc_cols = st.columns(2)
     invoice_discount = inv_disc_cols[0].number_input(
         "Invoice-level discount (₹)",
         min_value=0.0,
         value=0.0,
-        key=f"{SALES_RECORD_DIALOG}_inv_disc",
+        key=inv_disc_key,
     )
     max_inv_disc = max(taxable_sub - line_discount_total, 0.0) if taxable_sub else max(
         gross - line_discount_total, 0.0
@@ -222,7 +250,7 @@ def sales_record_dialog(services: dict) -> None:
         min_value=0.0,
         max_value=float(net_due) if net_due > 0 else 0.0,
         value=float(net_due),
-        key=f"{SALES_RECORD_DIALOG}_received",
+        key=received_key,
     )
     balance = round(net_due - received, 2)
 
@@ -251,7 +279,36 @@ def sales_record_dialog(services: dict) -> None:
     st.caption(f"Revenue credited to: **{sales_account.account_name}**")
 
     cols = st.columns(2)
-    if cols[0].button("Save", type="primary", use_container_width=True):
+    do_save = cols[0].button(
+        "Save", type="primary", use_container_width=True, key=save_key
+    ) or consume_submit(SALES_RECORD_SUBMIT_KEY)
+    if cols[1].button("Cancel", use_container_width=True, key=cancel_key):
+        _clear_dialog_session()
+        st.rerun()
+
+    row_chain = entry_table_focus_chain(SALES_RECORD_DIALOG)
+    row_columns = entry_table_focus_columns(SALES_RECORD_DIALOG)
+    grid_roles = entry_table_grid_roles(SALES_RECORD_DIALOG)
+    restore = st.session_state.pop(SALES_RECORD_FOCUS_KEY, None)
+    get_strategy(SALES_INVOICE_FOCUS_STRATEGY).inject(
+        chain=[
+            customer_name_key,
+            date_key,
+            *row_chain,
+            inv_disc_key,
+            received_key,
+            save_key,
+            cancel_key,
+        ],
+        restore_key=restore,
+        columns=row_columns,
+        above_first=date_key,
+        below_last=save_key,
+        grid_roles=grid_roles,
+        component_key=f"sales_inv_entry_{len(row_chain)}",
+    )
+
+    if do_save:
         try:
             if gst_errors:
                 raise ValueError(gst_errors[0])
@@ -303,9 +360,6 @@ def sales_record_dialog(services: dict) -> None:
             st.rerun()
         except Exception as exc:
             st.error(str(exc))
-    if cols[1].button("Cancel", use_container_width=True):
-        _clear_dialog_session()
-        st.rerun()
 
 
 def open_sales_record_dialog_if_armed(services: dict) -> None:

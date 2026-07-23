@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from calendar import monthrange
-from datetime import date, datetime
+from collections import defaultdict
+from datetime import date, datetime, timedelta
 
 from vaybooks.bms.application.purchases.service import PurchaseAppService
 from vaybooks.bms.application.report_filters import PurchasesByVendorFilter
@@ -18,15 +19,32 @@ def _as_date(value) -> date | None:
     return None
 
 
+def _default_month_range(today: date | None = None) -> tuple[date, date]:
+    today = today or date.today()
+    start = today.replace(day=1)
+    _, last_day = monthrange(today.year, today.month)
+    end = today.replace(day=last_day)
+    return start, end
+
+
+def _period_key(d: date, grain: str) -> str:
+    if grain == "week":
+        monday = d - timedelta(days=d.weekday())
+        return monday.isoformat()
+    if grain == "month":
+        return f"{d.year:04d}-{d.month:02d}"
+    return d.isoformat()
+
+
 class PurchaseReportService:
     def __init__(self, purchases: PurchaseAppService):
         self._purchases = purchases
 
-    def dashboard_summary(self) -> dict:
-        today = date.today()
-        start = today.replace(day=1)
-        _, last_day = monthrange(today.year, today.month)
-        end = today.replace(day=last_day)
+    def dashboard_summary(
+        self, start: date | None = None, end: date | None = None
+    ) -> dict:
+        if start is None or end is None:
+            start, end = _default_month_range()
 
         orders = self._purchases.list_purchase_orders()
         open_pos = [
@@ -67,6 +85,9 @@ class PurchaseReportService:
             "returns_this_month": round(returns_month, 2),
         }
 
+    def overdue_po_count(self) -> int:
+        return sum(1 for row in self.purchase_orders_pipeline() if row.get("overdue"))
+
     def purchase_orders_pipeline(self) -> list[dict]:
         rows = []
         today = date.today()
@@ -83,6 +104,7 @@ class PurchaseReportService:
             )
             rows.append(
                 {
+                    "id": po.id,
                     "po_number": po.po_number,
                     "vendor_name": po.vendor_name,
                     "order_date": po.order_date,
@@ -105,8 +127,10 @@ class PurchaseReportService:
                     continue
                 rows.append(
                     {
+                        "id": po.id,
                         "po_number": po.po_number,
                         "vendor_name": po.vendor_name,
+                        "order_date": po.order_date,
                         "product_name": line.product_name or line.product_id,
                         "qty_ordered": line.qty_ordered,
                         "qty_received": line.qty_received,
@@ -151,6 +175,75 @@ class PurchaseReportService:
                 }
             )
         return rows
+
+    def spend_time_series(
+        self, start: date, end: date, grain: str = "day"
+    ) -> list[dict]:
+        if grain not in ("day", "week", "month"):
+            grain = "day"
+        totals: dict[str, float] = defaultdict(float)
+        for row in self._purchases.list_purchase_bills():
+            bd = _as_date(row.get("bill_date"))
+            if not bd or bd < start or bd > end:
+                continue
+            key = _period_key(bd, grain)
+            totals[key] += float(row.get("total") or 0)
+        return [
+            {"period": period, "amount": round(amount, 2)}
+            for period, amount in sorted(totals.items())
+        ]
+
+    def po_status_breakdown(self) -> list[dict]:
+        counts: dict[str, int] = defaultdict(int)
+        for po in self._purchases.list_purchase_orders():
+            if po.status in (
+                PurchaseOrderStatus.CANCELLED,
+                PurchaseOrderStatus.CLOSED,
+            ):
+                continue
+            counts[po.status.value] += 1
+        return [
+            {"status": status, "count": count}
+            for status, count in sorted(counts.items(), key=lambda r: r[0])
+        ]
+
+    def grn_pending_by_vendor(self, limit: int = 10) -> list[dict]:
+        totals: dict[str, float] = defaultdict(float)
+        for row in self.grn_pending():
+            vendor = row.get("vendor_name") or "Unknown"
+            totals[vendor] += float(row.get("qty_pending") or 0)
+        ranked = sorted(totals.items(), key=lambda r: r[1], reverse=True)
+        if limit > 0:
+            ranked = ranked[:limit]
+        return [
+            {"vendor_name": vendor, "qty_pending": round(qty, 2)}
+            for vendor, qty in ranked
+        ]
+
+    def purchases_vs_returns_series(
+        self, start: date, end: date
+    ) -> list[dict]:
+        purchases: dict[str, float] = defaultdict(float)
+        returns: dict[str, float] = defaultdict(float)
+        for row in self._purchases.list_purchase_bills():
+            bd = _as_date(row.get("bill_date"))
+            if not bd or bd < start or bd > end:
+                continue
+            purchases[_period_key(bd, "month")] += float(row.get("total") or 0)
+        for ret in self._purchases.list_purchase_returns():
+            rd = ret.return_date
+            if rd < start or rd > end:
+                continue
+            returns[_period_key(rd, "month")] += float(ret.total_amount or 0)
+        periods = sorted(set(purchases) | set(returns))
+        return [
+            {
+                "period": period,
+                "purchases": round(purchases.get(period, 0.0), 2),
+                "returns": round(returns.get(period, 0.0), 2),
+            }
+            for period in periods
+        ]
 
     def inventory_valuation(self, inventory_service) -> list[dict]:
         products = inventory_service.list_products(active_only=True)

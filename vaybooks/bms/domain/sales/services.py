@@ -533,8 +533,12 @@ class SalesDomainService:
         estimate = self._estimate_repo.find_by_id(estimate_id)
         if not estimate:
             raise ValidationError("Estimate not found")
-        if estimate.status in (EstimateStatus.CANCELLED, EstimateStatus.EXPIRED):
-            raise ValidationError("Cannot edit a cancelled or expired estimate")
+        if estimate.status in (
+            EstimateStatus.CANCELLED,
+            EstimateStatus.EXPIRED,
+            EstimateStatus.CONVERTED,
+        ):
+            raise ValidationError("Cannot edit a cancelled, expired, or converted estimate")
         lines = changes.pop("lines", None)
         if lines is not None:
             changes["lines"] = self._priced_lines(lines)

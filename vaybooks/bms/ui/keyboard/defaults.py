@@ -21,14 +21,18 @@ _PARENTS = [
     ParentShortcut("items_list", "Customization Items", "Customization", "ctrl+i"),
     ParentShortcut("measurements_list", "Measurements", "Customization", "ctrl+alt+5"),
     ParentShortcut("time_list", "Time Log", "Customization", "ctrl+t"),
+    ParentShortcut("sales_overview", "Sales Overview", "Sales", "alt+shift+o"),
     ParentShortcut("sales_orders_list", "Sales Orders", "Sales", "ctrl+shift+o"),
     ParentShortcut("delivery_notes_list", "Delivery Notes", "Sales", "ctrl+shift+d"),
     ParentShortcut("sales_invoices_list", "Sales Invoices", "Sales", "ctrl+shift+i"),
     ParentShortcut("sales_returns_list", "Sales Returns", "Sales", "ctrl+shift+r"),
+    ParentShortcut("sales_reports", "Sales Reports", "Sales", "alt+shift+e"),
+    ParentShortcut("purchases_overview", "Purchases Overview", "Purchases", "alt+shift+p"),
     ParentShortcut("purchase_orders_list", "Purchase Orders", "Purchases", "alt+p"),
     ParentShortcut("goods_receipt_list", "Goods Receipt", "Purchases", "ctrl+g"),
     ParentShortcut("purchases_list", "Purchase Bills", "Purchases", "ctrl+b"),
     ParentShortcut("purchase_returns_list", "Purchase Returns", "Purchases", "ctrl+shift+u"),
+    ParentShortcut("purchases_reports", "Purchases Reports", "Purchases", "alt+shift+r"),
     ParentShortcut("inventory_categories_list", "Categories", "Inventory", "ctrl+shift+c"),
     ParentShortcut("inventory_products_list", "Products", "Inventory", "ctrl+shift+k"),
     ParentShortcut("inventory_stock_list", "Stock on Hand", "Inventory", "ctrl+shift+w"),
@@ -117,13 +121,37 @@ _ACTIONS = [
     ActionShortcut("sales.orders.deliver", "Deliver against SO", "Sales", "ctrl+d"),
     ActionShortcut("sales.deliveries.create_invoice", "Invoice from DN", "Sales", "ctrl+i"),
     ActionShortcut(
-        "purchases.orders.receive", "Receive against PO", "Purchases", "ctrl+g"
-    ),
-    ActionShortcut(
         "purchases.orders.create",
         "Create Purchase Order (any screen)",
         "Purchases",
         "f1",
+    ),
+    ActionShortcut(
+        "purchases.bills.create",
+        "Create Purchase Bill (any screen)",
+        "Purchases",
+        "f2",
+    ),
+    ActionShortcut(
+        "sales.estimates.create",
+        "Create Estimate (any screen)",
+        "Sales",
+        "f3",
+    ),
+    ActionShortcut(
+        "sales.orders.create",
+        "Create Sales Order (any screen)",
+        "Sales",
+        "f4",
+    ),
+    ActionShortcut(
+        "sales.invoices.create",
+        "Create Sales Invoice (any screen)",
+        "Sales",
+        "f5",
+    ),
+    ActionShortcut(
+        "purchases.orders.receive", "Receive against PO", "Purchases", "ctrl+g"
     ),
     ActionShortcut(
         "purchases.orders.print", "Print purchase order PDF", "Purchases", "ctrl+p"

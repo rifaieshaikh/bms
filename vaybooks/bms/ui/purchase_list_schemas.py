@@ -7,12 +7,38 @@ from vaybooks.bms.ui.list_schemas import (
     SortOption,
     VOUCHER_PAGE_SIZE,
 )
+from datetime import date
+
+
+def _mtd() -> tuple[date, date]:
+    today = date.today()
+    return today.replace(day=1), today
 
 
 def _match_vendor(record, selected):
   if not selected:
     return True
   return record.get("vendor_id") == selected or record.get("vendor_account_id") == selected
+
+
+PURCHASES_OVERVIEW = ListSchema(
+    entity_key="purchases_overview",
+    title="Purchases Overview",
+    filter_fields=[
+        FilterField(
+            "date_range",
+            "Period",
+            F.DATE_RANGE,
+            default=_mtd,
+            help="Applies to spend KPIs and date-scoped charts.",
+        ),
+    ],
+    sort_options=[
+        SortOption("date_range", "Period"),
+    ],
+    default_sort="date_range",
+    page_size=12,
+)
 
 
 PURCHASE_ORDERS = ListSchema(

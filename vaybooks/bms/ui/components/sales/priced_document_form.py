@@ -17,7 +17,18 @@ from vaybooks.bms.ui.components.common.customer_identity_selector import (
 from vaybooks.bms.ui.components.common.document_custom_fields import (
     render_document_custom_fields,
 )
-from vaybooks.bms.ui.components.sales.sales_lines_editor import render_sales_lines_editor
+from vaybooks.bms.ui.components.sales.sales_lines_entry_table import (
+    entry_table_focus_chain,
+    entry_table_focus_columns,
+    entry_table_grid_roles,
+    render_sales_lines_entry_table,
+)
+from vaybooks.bms.ui.dialog_utils import register_armed_dialog
+from vaybooks.bms.ui.keyboard.dialog_actions import consume_submit
+from vaybooks.bms.ui.keyboard.focus.registry import get_strategy
+from vaybooks.bms.ui.keyboard.wired import mark_wired
+
+PRICED_DOC_FOCUS_STRATEGY = "priced_document_dialog"
 
 
 def render_priced_document_form(
@@ -38,6 +49,12 @@ def render_priced_document_form(
     template = business.document_templates.get(document_type)
     is_estimate = document_type == "estimate"
     date_field = "estimate_date" if is_estimate else "quotation_date"
+    submit_key = f"{key_prefix}_kb_submit"
+    focus_key = f"{key_prefix}_focus"
+
+    register_armed_dialog(key_prefix)
+    mark_wired("dialog.save")
+
     initial_lines = [
         {
             "product_id": line.product_id,
@@ -74,21 +91,24 @@ def render_priced_document_form(
     if not customer_registered and not customer_state:
         customer_state = business_state
 
+    date_key = f"{key_prefix}_date"
+    valid_key = f"{key_prefix}_valid"
+    save_key = f"{key_prefix}_submit"
+
     cols = st.columns(2)
     document_date = cols[0].date_input(
         "Document date",
         value=getattr(existing, date_field, date.today()),
-        key=f"{key_prefix}_date",
+        key=date_key,
     )
     valid_until = cols[1].date_input(
         "Valid until",
         value=getattr(existing, "valid_until", None)
         or (document_date + timedelta(days=30)),
-        key=f"{key_prefix}_valid",
+        key=valid_key,
     )
 
-    st.markdown("**Line items**")
-    lines, gst_errors = render_sales_lines_editor(
+    lines, gst_errors = render_sales_lines_entry_table(
         key_prefix=key_prefix,
         products=products,
         initial_lines=initial_lines,
@@ -102,20 +122,37 @@ def render_priced_document_form(
         business_state_code=business_state,
         customer_state_code=customer_state,
         qty_field="qty",
+        focus_restore_key=focus_key,
     )
 
     notes = st.text_area(
         "Notes", value=getattr(existing, "notes", ""), key=f"{key_prefix}_notes"
     )
-    status_values = list(EstimateStatus if is_estimate else QuotationStatus)
+    status_enum = EstimateStatus if is_estimate else QuotationStatus
+    status_values = [item for item in status_enum if item != status_enum.CONVERTED]
     current_status = getattr(existing, "status", status_values[0])
-    status = st.selectbox(
-        "Status",
-        status_values,
-        index=status_values.index(current_status),
-        format_func=lambda item: item.value,
-        key=f"{key_prefix}_status",
-    )
+    if current_status == status_enum.CONVERTED:
+        st.selectbox(
+            "Status",
+            [status_enum.CONVERTED],
+            index=0,
+            format_func=lambda item: item.value,
+            key=f"{key_prefix}_status",
+            disabled=True,
+        )
+        status = status_enum.CONVERTED
+    else:
+        status = st.selectbox(
+            "Status",
+            status_values,
+            index=(
+                status_values.index(current_status)
+                if current_status in status_values
+                else 0
+            ),
+            format_func=lambda item: item.value,
+            key=f"{key_prefix}_status",
+        )
     existing_content = getattr(existing, "document_content", None)
     initial_custom = {
         item.key: item.value
@@ -155,11 +192,34 @@ def render_priced_document_form(
         ),
         key=f"{key_prefix}_terms",
     )
-    if not st.button(
+
+    do_save = st.button(
         "Update" if existing else "Create",
         type="primary",
-        key=f"{key_prefix}_submit",
-    ):
+        key=save_key,
+    ) or consume_submit(submit_key)
+
+    row_chain = entry_table_focus_chain(key_prefix)
+    row_columns = entry_table_focus_columns(key_prefix)
+    grid_roles = entry_table_grid_roles(key_prefix)
+    restore = st.session_state.pop(focus_key, None)
+    get_strategy(PRICED_DOC_FOCUS_STRATEGY).inject(
+        chain=[
+            f"{key_prefix}_customer_name",
+            date_key,
+            valid_key,
+            *row_chain,
+            save_key,
+        ],
+        restore_key=restore,
+        columns=row_columns,
+        above_first=valid_key,
+        below_last=save_key,
+        grid_roles=grid_roles,
+        component_key=f"priced_doc_{key_prefix}_{len(row_chain)}",
+    )
+
+    if not do_save:
         return False
     if gst_errors:
         st.error(gst_errors[0])

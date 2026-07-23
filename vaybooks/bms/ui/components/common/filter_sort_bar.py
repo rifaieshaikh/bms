@@ -18,6 +18,48 @@ from vaybooks.bms.ui.filtering import ListSchema
 from vaybooks.bms.ui.session_keys import filters_key, sort_key
 
 
+def _quarter_start(today: date | None = None) -> date:
+    today = today or date.today()
+    month = ((today.month - 1) // 3) * 3 + 1
+    return today.replace(month=month, day=1)
+
+
+def _mtd_range(today: date | None = None) -> tuple[date, date]:
+    today = today or date.today()
+    return today.replace(day=1), today
+
+
+def _normalize_date_range(value) -> tuple[date, date] | None:
+    if isinstance(value, (list, tuple)) and len(value) == 2:
+        start, end = value
+        if start and end:
+            if start > end:
+                start, end = end, start
+            return start, end
+    return None
+
+
+def _date_range_presets(today: date | None = None) -> list[tuple[str, tuple[date, date]]]:
+    today = today or date.today()
+    return [
+        ("Today", (today, today)),
+        ("Last 7 days", (today - timedelta(days=6), today)),
+        ("MTD", _mtd_range(today)),
+        ("Last 30 days", (today - timedelta(days=29), today)),
+        ("This quarter", (_quarter_start(today), today)),
+    ]
+
+
+def _preset_suffix(label: str) -> str:
+    return {
+        "Today": "today",
+        "Last 7 days": "7d",
+        "MTD": "mtd",
+        "Last 30 days": "30d",
+        "This quarter": "qtr",
+    }.get(label, label.lower().replace(" ", "_"))
+
+
 def _filters_flag(entity: str) -> str:
     return f"list_filters_dialog_{entity}"
 
@@ -186,24 +228,23 @@ def _render_filter_widgets(
         elif fld.type == F.DATE_RANGE:
             # Presets must run before date_input: Streamlit forbids writing a
             # widget's session key after that widget is instantiated.
-            mtd_key = f"{wkey}_mtd"
-            d30_key = f"{wkey}_30d"
             if include_date_presets:
-                quick = st.columns(2)
-                if quick[0].button("MTD", key=mtd_key, use_container_width=True):
-                    today = date.today()
-                    st.session_state[wkey] = (today.replace(day=1), today)
-                    st.rerun()
-                if quick[1].button(
-                    "Last 30d", key=d30_key, use_container_width=True
-                ):
-                    today = date.today()
-                    st.session_state[wkey] = (today - timedelta(days=30), today)
-                    st.rerun()
-                chain.extend([mtd_key, d30_key])
-            current = committed.get(fld.key)
-            _seed(wkey, list(current) if current else [])
-            st.date_input(fld.label, key=wkey, help=fld.help or None)
+                chain.extend(
+                    _render_date_range_preset_buttons(
+                        _widget_key(schema.entity_key, fld.key),
+                        label=fld.label,
+                        entity=schema.entity_key,
+                        field_key=fld.key,
+                    )
+                )
+            seeded = _normalize_date_range(committed.get(fld.key)) or _mtd_range()
+            _seed(wkey, seeded)
+            st.date_input(
+                fld.label,
+                key=wkey,
+                help=fld.help or None,
+                format="DD/MM/YYYY",
+            )
             chain.append(wkey)
         elif fld.type == F.DATE:
             _seed(wkey, committed.get(fld.key) or date.today())
@@ -222,27 +263,51 @@ def _render_filter_widgets(
     return chain, deferred
 
 
+def _render_date_range_preset_buttons(
+    wkey: str,
+    *,
+    label: str = "",
+    entity: str | None = None,
+    field_key: str | None = None,
+) -> list[str]:
+    """Preset buttons that write ``wkey`` (and committed filters) then rerun.
+
+    Must run before ``date_input`` for the same ``wkey``.
+    """
+    if label:
+        st.caption(label)
+    presets = _date_range_presets()
+    cols = st.columns(len(presets))
+    chain: list[str] = []
+    for col, (name, rang) in zip(cols, presets):
+        pkey = f"{wkey}_{_preset_suffix(name)}"
+        if col.button(name, key=pkey, use_container_width=True):
+            st.session_state[wkey] = rang
+            if entity and field_key:
+                fkey = filters_key(entity)
+                if fkey not in st.session_state:
+                    st.session_state[fkey] = {}
+                st.session_state[fkey][field_key] = rang
+            st.rerun()
+        chain.append(pkey)
+    return chain
+
+
 def _render_date_range_presets(schema: ListSchema, committed: dict) -> list[str]:
-    """MTD / Last 30d controls that must sit outside ``st.form``."""
-    entity = schema.entity_key
+    """Date presets that must sit outside ``st.form``."""
     chain: list[str] = []
     for fld in schema.filter_fields:
         if fld.type != F.DATE_RANGE:
             continue
-        wkey = _widget_key(entity, fld.key)
-        mtd_key = f"{wkey}_mtd"
-        d30_key = f"{wkey}_30d"
-        st.caption(fld.label)
-        quick = st.columns(2)
-        if quick[0].button("MTD", key=mtd_key, use_container_width=True):
-            today = date.today()
-            st.session_state[wkey] = (today.replace(day=1), today)
-            st.rerun()
-        if quick[1].button("Last 30d", key=d30_key, use_container_width=True):
-            today = date.today()
-            st.session_state[wkey] = (today - timedelta(days=30), today)
-            st.rerun()
-        chain.extend([mtd_key, d30_key])
+        wkey = _widget_key(schema.entity_key, fld.key)
+        chain.extend(
+            _render_date_range_preset_buttons(
+                wkey,
+                label=fld.label,
+                entity=schema.entity_key,
+                field_key=fld.key,
+            )
+        )
     return chain
 
 
@@ -255,10 +320,8 @@ def _collect_filter_values(schema: ListSchema) -> dict:
         if fld.type in (F.EXACT, F.REGEX):
             result[fld.key] = (value or "").strip() or None
         elif fld.type == F.DATE_RANGE:
-            if isinstance(value, (list, tuple)) and len(value) == 2:
-                result[fld.key] = (value[0], value[1])
-            else:
-                result[fld.key] = None
+            normalized = _normalize_date_range(value)
+            result[fld.key] = normalized
         elif fld.type == F.MULTISELECT:
             result[fld.key] = list(value or [])
         else:
@@ -271,8 +334,9 @@ def _clear_widgets(schema: ListSchema) -> None:
     for fld in schema.filter_fields:
         wkey = _widget_key(entity, fld.key)
         st.session_state.pop(wkey, None)
-        st.session_state.pop(f"{wkey}_mtd", None)
-        st.session_state.pop(f"{wkey}_30d", None)
+        if fld.type == F.DATE_RANGE:
+            for name, _ in _date_range_presets():
+                st.session_state.pop(f"{wkey}_{_preset_suffix(name)}", None)
 
 
 def _clear_sort_widgets(entity: str) -> None:

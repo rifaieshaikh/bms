@@ -100,6 +100,7 @@ class EstimateStatus(str, Enum):
     ACCEPTED = "Accepted"
     REJECTED = "Rejected"
     EXPIRED = "Expired"
+    CONVERTED = "Converted"
     CANCELLED = "Cancelled"
 
 

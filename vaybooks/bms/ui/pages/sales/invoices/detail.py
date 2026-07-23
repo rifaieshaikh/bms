@@ -197,17 +197,19 @@ def render(services: dict) -> None:
                 "mime": "application/pdf",
             }
         )
-    if editable:
-        actions.append({"label": "Edit", "key": "edit"})
+    actions.append({"label": "Edit", "key": "edit"})
     if linked_customer_id:
         actions.append({"label": "View customer →", "key": "view_customer"})
     clicked = document_actions(actions, suffix=f"sale_{voucher.id}")
     if not editable:
         st.info("Locked: invoice month has ended")
 
-    if clicked.get("edit") and editable:
-        arm_invoice_edit_dialog(voucher.id)
-        st.rerun()
+    if clicked.get("edit"):
+        if not editable:
+            st.warning("This invoice is locked because its invoice month has ended.")
+        else:
+            arm_invoice_edit_dialog(voucher.id)
+            st.rerun()
     if clicked.get("view_customer") and linked_customer_id:
         navigation.go_to_detail("customer_detail", linked_customer_id)
         return

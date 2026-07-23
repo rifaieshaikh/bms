@@ -14,14 +14,35 @@ logger = logging.getLogger(__name__)
 
 
 def product_label(product) -> str:
-    return f"{product.sku} — {product.name}"
+    """Selectbox label: name · qty · rate · item code (all searchable)."""
+    qty = float(getattr(product, "current_qty", 0) or 0)
+    rate = 0.0
+    for attr in ("last_purchase_rate", "active_selling_rate", "selling_rate"):
+        value = float(getattr(product, attr, 0) or 0)
+        if value > 0:
+            rate = value
+            break
+    sku = str(getattr(product, "sku", "") or "").strip()
+    name = str(getattr(product, "name", "") or "").strip() or "Item"
+    label = f"{name} · {qty:g} · ₹{rate:,.2f}"
+    if sku:
+        label = f"{label} · {sku}"
+    return label
 
 
 def product_lookup_map(products: list) -> dict[str, Any]:
-    """Case-insensitive aliases for SKU / name / canonical label → product."""
+    """Case-insensitive aliases for label / SKU / name / product → product."""
     lookup: dict[str, Any] = {}
     for product in products:
-        for alias in (product_label(product), product.sku, product.name):
+        aliases = [
+            product_label(product),
+            getattr(product, "sku", None),
+            getattr(product, "name", None),
+            # "product" search: bare name and sku–name combos
+            f"{getattr(product, 'sku', '')} {getattr(product, 'name', '')}".strip(),
+            f"{getattr(product, 'name', '')} {getattr(product, 'sku', '')}".strip(),
+        ]
+        for alias in aliases:
             key = str(alias or "").strip().casefold()
             if key:
                 lookup[key] = product

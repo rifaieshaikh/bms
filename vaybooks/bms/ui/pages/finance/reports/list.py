@@ -52,6 +52,10 @@ REPORT_LOADERS: dict[str, tuple[str, str]] = {
     "GRN Pending": ("reports_purchases", "grn_pending_report"),
     "Purchases by Vendor": ("reports_purchases", "purchases_by_vendor_report"),
     "Purchase Returns Summary": ("reports_purchases", "purchase_returns_summary_report"),
+    "Sales Orders Pipeline": ("reports_sales_module", "sales_orders_pipeline_report"),
+    "Delivery Pending": ("reports_sales_module", "delivery_pending_report"),
+    "Sales by Customer": ("reports_sales_module", "sales_by_customer_report"),
+    "Sales Returns Summary": ("reports_sales_module", "sales_returns_summary_report"),
 }
 
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import streamlit as st
 
 from vaybooks.bms.domain.sales.sales_line_resolver import business_is_registered
-from vaybooks.bms.domain.shared.enums import QuotationStatus
+from vaybooks.bms.domain.shared.enums import EstimateStatus, QuotationStatus
 from vaybooks.bms.infrastructure.pdf.sales_doc_pdf import generate_sales_document_pdf
 from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.components.common.list_view import render_list as render_standard_list
@@ -12,6 +12,7 @@ from vaybooks.bms.ui.components.sales.priced_document_card import (
     priced_document_row,
 )
 from vaybooks.bms.ui.components.sales.priced_document_dialog import (
+    arm_estimate_invoice_dialog,
     arm_priced_document_dialog,
     open_priced_document_dialog_if_armed,
 )
@@ -143,13 +144,14 @@ def render_detail(services: dict, document_type: str) -> None:
     ]
     if document.supply_type:
         right_facts.append(("Supply type", document.supply_type))
-    if (
-        not is_estimate
-        and getattr(document, "converted_sales_order_id", None)
-    ):
-        order = services["sales"].get_sales_order(document.converted_sales_order_id)
+    so_id = getattr(document, "converted_sales_order_id", None)
+    invoice_id = getattr(document, "converted_invoice_id", None)
+    if so_id:
+        order = services["sales"].get_sales_order(so_id)
         if order:
-            right_facts.append(("Converted to", order.so_number))
+            right_facts.append(("Converted to SO", order.so_number))
+    if invoice_id:
+        right_facts.append(("Converted to invoice", invoice_id[:8]))
 
     document_header(
         number=number,
@@ -170,14 +172,21 @@ def render_detail(services: dict, document_type: str) -> None:
     except Exception as exc:
         st.error(f"Could not generate PDF: {exc}")
 
-    terminal = {"Cancelled", "Expired"}
+    terminal = {"Cancelled", "Expired", "Converted"}
     if not is_estimate:
-        terminal.update({"Converted", "Rejected"})
+        terminal.add("Rejected")
     can_edit = document.status.value not in terminal
-    can_convert = (
+
+    can_convert_quote = (
         not is_estimate
         and document.status == QuotationStatus.ACCEPTED
         and not document.converted_sales_order_id
+    )
+    can_convert_estimate = (
+        is_estimate
+        and document.status == EstimateStatus.ACCEPTED
+        and not document.converted_sales_order_id
+        and not document.converted_invoice_id
     )
 
     actions = []
@@ -192,9 +201,8 @@ def render_detail(services: dict, document_type: str) -> None:
                 "mime": "application/pdf",
             }
         )
-    if can_edit:
-        actions.append({"label": "Edit", "key": "edit"})
-    if can_convert:
+    actions.append({"label": "Edit", "key": "edit"})
+    if can_convert_quote:
         actions.append(
             {
                 "label": "Convert to Sales Order",
@@ -202,11 +210,82 @@ def render_detail(services: dict, document_type: str) -> None:
                 "type": "primary",
             }
         )
+    if can_convert_estimate:
+        actions.append(
+            {
+                "label": "Convert to Sales Order",
+                "key": "convert_so",
+                "type": "primary",
+            }
+        )
+        actions.append(
+            {
+                "label": "Convert to Sales Invoice",
+                "key": "convert_invoice",
+            }
+        )
     clicked = document_actions(actions, suffix=f"{document_type}_{document.id}")
 
+    if is_estimate and can_edit:
+        status_actions = []
+        if document.status == EstimateStatus.DRAFT:
+            status_actions.extend(
+                [
+                    ("Mark as Sent", EstimateStatus.SENT, "status_sent"),
+                    ("Accept", EstimateStatus.ACCEPTED, "status_accept"),
+                    ("Reject", EstimateStatus.REJECTED, "status_reject"),
+                ]
+            )
+        elif document.status == EstimateStatus.SENT:
+            status_actions.extend(
+                [
+                    ("Accept", EstimateStatus.ACCEPTED, "status_accept"),
+                    ("Reject", EstimateStatus.REJECTED, "status_reject"),
+                ]
+            )
+        elif document.status == EstimateStatus.ACCEPTED:
+            status_actions.append(
+                ("Mark as Sent", EstimateStatus.SENT, "status_sent")
+            )
+        elif document.status == EstimateStatus.REJECTED:
+            status_actions.append(
+                ("Reopen as Draft", EstimateStatus.DRAFT, "status_draft")
+            )
+        if document.status not in (
+            EstimateStatus.CANCELLED,
+            EstimateStatus.EXPIRED,
+            EstimateStatus.CONVERTED,
+        ):
+            status_actions.append(
+                ("Cancel", EstimateStatus.CANCELLED, "status_cancel")
+            )
+        if status_actions:
+            st.caption("Change status")
+            status_clicked = document_actions(
+                [
+                    {"label": label, "key": key}
+                    for label, _status, key in status_actions
+                ],
+                suffix=f"{document_type}_status_{document.id}",
+            )
+            for label, new_status, key in status_actions:
+                if status_clicked.get(key):
+                    try:
+                        services["sales"].set_estimate_status(
+                            document.id, new_status
+                        )
+                        st.success(f"Status updated to {new_status.value}")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(str(exc))
+                    break
+
     if clicked.get("edit"):
-        arm_priced_document_dialog(document_type, document_id=document.id)
-        st.rerun()
+        if not can_edit:
+            st.warning("This document can no longer be edited.")
+        else:
+            arm_priced_document_dialog(document_type, document_id=document.id)
+            st.rerun()
     if clicked.get("convert"):
         try:
             order = services["sales"].convert_quotation_to_sales_order(document.id)
@@ -215,6 +294,17 @@ def render_detail(services: dict, document_type: str) -> None:
             return
         except Exception as exc:
             st.error(str(exc))
+    if clicked.get("convert_so"):
+        try:
+            order = services["sales"].convert_estimate_to_sales_order(document.id)
+            st.success(f"Created {order.so_number}")
+            navigation.go_to_detail("sales_order_detail", order.id)
+            return
+        except Exception as exc:
+            st.error(str(exc))
+    if clicked.get("convert_invoice"):
+        arm_estimate_invoice_dialog(document.id)
+        st.rerun()
 
     inventory = services.get("inventory")
     line_items_table(

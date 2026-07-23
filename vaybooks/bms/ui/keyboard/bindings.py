@@ -61,6 +61,12 @@ def get_bindings() -> dict[str, dict[str, str]]:
         for k, v in stored_actions.items():
             if v:
                 actions[k] = normalize_chord(str(v))
+    # Legacy: Create SO was F2; F2 is now Purchase Bill and SO is F4.
+    if actions.get("sales.orders.create") == "f2" and "purchases.bills.create" not in (
+        stored_actions if isinstance(stored_actions, dict) else {}
+    ):
+        actions["sales.orders.create"] = "f4"
+        actions["purchases.bills.create"] = "f2"
     # Enforce locked
     locked_defaults = default_parents()
     for k in LOCKED_PARENTS:

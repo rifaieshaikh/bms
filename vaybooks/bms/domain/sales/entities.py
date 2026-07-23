@@ -230,6 +230,8 @@ class Estimate:
     status: EstimateStatus = EstimateStatus.DRAFT
     notes: str = ""
     supply_type: str = ""
+    converted_sales_order_id: Optional[str] = None
+    converted_invoice_id: Optional[str] = None
     document_content: DocumentContentSnapshot = field(
         default_factory=DocumentContentSnapshot
     )

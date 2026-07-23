@@ -16,31 +16,52 @@ from vaybooks.bms.ui.components.common.customer_identity_selector import (
     render_customer_identity_selector,
     resolve_customer_identity,
 )
-from vaybooks.bms.ui.components.sales.sales_lines_editor import render_sales_lines_editor
-from vaybooks.bms.ui.dialog_utils import make_dismiss_handler
+from vaybooks.bms.ui.components.sales.sales_lines_entry_table import (
+    entry_table_focus_chain,
+    entry_table_focus_columns,
+    entry_table_grid_roles,
+    render_sales_lines_entry_table,
+)
+from vaybooks.bms.ui.dialog_utils import make_dismiss_handler, register_armed_dialog
+from vaybooks.bms.ui.keyboard.dialog_actions import consume_submit, open_dialog
+from vaybooks.bms.ui.keyboard.focus.registry import get_strategy
+from vaybooks.bms.ui.keyboard.wired import mark_wired
 
 SALES_RETURN_DIALOG = "sales_return_dialog"
+SALES_RETURN_SUBMIT_KEY = "sales_return_dialog_submit"
+SALES_RETURN_FOCUS_KEY = f"{SALES_RETURN_DIALOG}_focus"
 
 
 def arm_sales_return_dialog(source_invoice_id: str | None = None) -> None:
     for key in list(st.session_state.keys()):
         if key.startswith(SALES_RETURN_DIALOG):
             st.session_state.pop(key, None)
-    st.session_state[SALES_RETURN_DIALOG] = "new"
+    open_dialog(
+        SALES_RETURN_DIALOG,
+        submit_key=SALES_RETURN_SUBMIT_KEY,
+        value="new",
+        clear_others=True,
+    )
+    st.session_state[SALES_RETURN_FOCUS_KEY] = f"{SALES_RETURN_DIALOG}_customer_name"
     if source_invoice_id:
         st.session_state[f"{SALES_RETURN_DIALOG}_invoice_id"] = source_invoice_id
+    mark_wired("dialog.save")
 
 
 def _clear() -> None:
     for key in list(st.session_state.keys()):
         if key.startswith(SALES_RETURN_DIALOG):
             st.session_state.pop(key, None)
+    st.session_state.pop(SALES_RETURN_SUBMIT_KEY, None)
 
 
 @st.dialog("Record Sales Return", width="large", on_dismiss=make_dismiss_handler(SALES_RETURN_DIALOG))
 def sales_return_dialog(services: dict) -> None:
     if st.session_state.get(SALES_RETURN_DIALOG) != "new":
         return
+
+    register_armed_dialog(SALES_RETURN_DIALOG)
+    mark_wired("dialog.save")
 
     sales = services["sales"]
     accounting = services["accounting"]
@@ -116,8 +137,10 @@ def sales_return_dialog(services: dict) -> None:
                 break
 
     def _invoice_changed() -> None:
-        for suffix in ("lines_df", "lines_snapshot", "lines_editor"):
-            st.session_state.pop(f"{SALES_RETURN_DIALOG}_{suffix}", None)
+        st.session_state.pop(f"{SALES_RETURN_DIALOG}_rows", None)
+        for key in list(st.session_state.keys()):
+            if key.startswith(f"{SALES_RETURN_DIALOG}_r"):
+                st.session_state.pop(key, None)
 
     invoice_label = st.selectbox(
         "Original invoice number",
@@ -154,8 +177,7 @@ def sales_return_dialog(services: dict) -> None:
         and not (matched_customer.gstin or "").strip()
     ):
         customer_state = customer_state or business_state
-    st.markdown("**Product details**")
-    line_items, gst_errors = render_sales_lines_editor(
+    line_items, gst_errors = render_sales_lines_entry_table(
         key_prefix=SALES_RETURN_DIALOG,
         products=products,
         initial_lines=initial_lines,
@@ -169,6 +191,7 @@ def sales_return_dialog(services: dict) -> None:
         business_state_code=business_state,
         customer_state_code=customer_state,
         qty_field="qty",
+        focus_restore_key=SALES_RETURN_FOCUS_KEY,
     )
 
     return_reason = st.text_input(
@@ -212,9 +235,32 @@ def sales_return_dialog(services: dict) -> None:
             key=f"{SALES_RETURN_DIALOG}_refund_acct",
         )
 
+    save_key = f"{SALES_RETURN_DIALOG}_save"
     submit_clicked = st.button(
-        "Submit for approval", type="primary", use_container_width=True
+        "Submit for approval", type="primary", use_container_width=True, key=save_key
+    ) or consume_submit(SALES_RETURN_SUBMIT_KEY)
+
+    row_chain = entry_table_focus_chain(SALES_RETURN_DIALOG)
+    row_columns = entry_table_focus_columns(SALES_RETURN_DIALOG)
+    grid_roles = entry_table_grid_roles(SALES_RETURN_DIALOG)
+    date_key = f"{SALES_RETURN_DIALOG}_date"
+    restore = st.session_state.pop(SALES_RETURN_FOCUS_KEY, None)
+    get_strategy(SALES_RETURN_DIALOG).inject(
+        chain=[
+            f"{SALES_RETURN_DIALOG}_customer_name",
+            date_key,
+            *row_chain,
+            f"{SALES_RETURN_DIALOG}_reason",
+            save_key,
+        ],
+        restore_key=restore,
+        columns=row_columns,
+        above_first=date_key,
+        below_last=save_key,
+        grid_roles=grid_roles,
+        component_key=f"sales_ret_entry_{len(row_chain)}",
     )
+
     if submit_clicked:
         try:
             if gst_errors:

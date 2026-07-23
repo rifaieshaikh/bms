@@ -1,4 +1,4 @@
-"""Create sales order dialog."""
+"""Create sales order dialog (product lines via entry table)."""
 
 from __future__ import annotations
 
@@ -12,22 +12,33 @@ from vaybooks.bms.ui.components.common.customer_identity_selector import (
     render_customer_identity_selector,
     resolve_customer_identity,
 )
-from vaybooks.bms.ui.components.sales.sales_lines_editor import render_sales_lines_editor
-from vaybooks.bms.ui.dialog_utils import make_dismiss_handler
+from vaybooks.bms.ui.components.common.dialog_state import reset_dialog_state
+from vaybooks.bms.ui.components.sales.sales_lines_entry_table import (
+    entry_table_focus_chain,
+    entry_table_focus_columns,
+    entry_table_grid_roles,
+    render_sales_lines_entry_table,
+)
+from vaybooks.bms.ui.dialog_utils import make_dismiss_handler, register_armed_dialog
+from vaybooks.bms.ui.keyboard.dialog_actions import consume_submit, open_dialog
+from vaybooks.bms.ui.keyboard.focus.registry import get_strategy
+from vaybooks.bms.ui.keyboard.wired import mark_wired
 
 SO_DIALOG = "sales_order_dialog"
 SO_PRESELECT = "sales_order_dialog_preselect_customer_id"
+SO_SUBMIT_KEY = "so_dialog_submit"
+SO_FOCUS_KEY = f"{SO_DIALOG}_focus"
 
 
 def arm_so_dialog(customer_id: str | None = None) -> None:
-    for key in list(st.session_state.keys()):
-        if key.startswith(SO_DIALOG):
-            st.session_state.pop(key, None)
-    st.session_state[SO_DIALOG] = "new"
+    reset_dialog_state(SO_DIALOG)
+    open_dialog(SO_DIALOG, submit_key=SO_SUBMIT_KEY, value="new", clear_others=True)
+    st.session_state[SO_FOCUS_KEY] = f"{SO_DIALOG}_customer_name"
     if customer_id:
         st.session_state[SO_PRESELECT] = customer_id
     else:
         st.session_state.pop(SO_PRESELECT, None)
+    mark_wired("dialog.save")
 
 
 def _clear() -> None:
@@ -35,6 +46,7 @@ def _clear() -> None:
         if key.startswith(SO_DIALOG):
             st.session_state.pop(key, None)
     st.session_state.pop(SO_PRESELECT, None)
+    st.session_state.pop(SO_SUBMIT_KEY, None)
 
 
 def _customer_is_registered(customer) -> bool:
@@ -49,6 +61,9 @@ def _customer_is_registered(customer) -> bool:
 def sales_order_dialog(services: dict) -> None:
     if st.session_state.get(SO_DIALOG) != "new":
         return
+
+    register_armed_dialog(SO_DIALOG)
+    mark_wired("dialog.save")
 
     sales = services["sales"]
     customers = services["customers"]
@@ -88,15 +103,19 @@ def sales_order_dialog(services: dict) -> None:
         st.error("Add inventory products first.")
         return
 
+    customer_name_key = f"{SO_DIALOG}_customer_name"
+    expected_key = f"{SO_DIALOG}_expected"
+    save_key = f"{SO_DIALOG}_save"
+    cancel_key = f"{SO_DIALOG}_cancel"
+
     c1, c2 = st.columns(2)
     order_date = c1.date_input("Order date", value=date.today(), key=f"{SO_DIALOG}_date")
     expected_date = c2.date_input(
-        "Expected date", value=date.today(), key=f"{SO_DIALOG}_expected"
+        "Expected date", value=date.today(), key=expected_key
     )
     notes = st.text_input("Notes", key=f"{SO_DIALOG}_notes")
 
-    st.markdown("**Line items**")
-    lines, gst_errors = render_sales_lines_editor(
+    lines, gst_errors = render_sales_lines_entry_table(
         key_prefix=SO_DIALOG,
         products=products,
         initial_lines=None,
@@ -110,9 +129,36 @@ def sales_order_dialog(services: dict) -> None:
         business_state_code=business_state,
         customer_state_code=customer_state,
         qty_field="qty_ordered",
+        focus_restore_key=SO_FOCUS_KEY,
     )
 
-    if st.button("Save SO", type="primary"):
+    row_chain = entry_table_focus_chain(SO_DIALOG)
+    row_columns = entry_table_focus_columns(SO_DIALOG)
+    grid_roles = entry_table_grid_roles(SO_DIALOG)
+
+    save_cols = st.columns(2)
+    do_save = save_cols[0].button(
+        "Save SO",
+        type="primary",
+        use_container_width=True,
+        key=save_key,
+    ) or consume_submit(SO_SUBMIT_KEY)
+    if save_cols[1].button("Cancel", use_container_width=True, key=cancel_key):
+        _clear()
+        st.rerun()
+
+    restore = st.session_state.pop(SO_FOCUS_KEY, None)
+    get_strategy(SO_DIALOG).inject(
+        chain=[customer_name_key, expected_key, *row_chain, save_key, cancel_key],
+        restore_key=restore,
+        columns=row_columns,
+        above_first=expected_key,
+        below_last=save_key,
+        grid_roles=grid_roles,
+        component_key=f"so_entry_{len(row_chain)}",
+    )
+
+    if do_save:
         try:
             if gst_errors:
                 raise ValueError(gst_errors[0])

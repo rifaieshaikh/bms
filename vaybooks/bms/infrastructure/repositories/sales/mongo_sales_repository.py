@@ -411,6 +411,9 @@ class _MongoPricedDocumentRepository:
         }
         if isinstance(value, Quotation):
             doc["converted_sales_order_id"] = value.converted_sales_order_id
+        if isinstance(value, Estimate):
+            doc["converted_sales_order_id"] = value.converted_sales_order_id
+            doc["converted_invoice_id"] = value.converted_invoice_id
         return doc
 
     def _from_doc(self, doc: dict):
@@ -437,6 +440,9 @@ class _MongoPricedDocumentRepository:
         }
         if self.document_class is Quotation:
             kwargs["converted_sales_order_id"] = doc.get("converted_sales_order_id")
+        if self.document_class is Estimate:
+            kwargs["converted_sales_order_id"] = doc.get("converted_sales_order_id")
+            kwargs["converted_invoice_id"] = doc.get("converted_invoice_id")
         return self.document_class(**kwargs)
 
     def save(self, value):

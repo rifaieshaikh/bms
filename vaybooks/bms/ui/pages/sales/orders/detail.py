@@ -105,6 +105,8 @@ def render(services: dict) -> None:
         and any(line.qty_invoiced < line.qty_ordered for line in order.lines)
     )
     can_deliver = order.status.value not in ("Cancelled", "Closed", "Delivered")
+    if can_deliver:
+        mark_wired("sales.orders.deliver")
 
     actions = []
     if pdf_bytes is not None:
@@ -118,8 +120,7 @@ def render(services: dict) -> None:
                 "mime": "application/pdf",
             }
         )
-    if can_edit:
-        actions.append({"label": "Edit", "key": "edit"})
+    actions.append({"label": "Edit", "key": "edit"})
     if can_direct_invoice:
         actions.append({"label": "Create Sales Invoice", "key": "invoice"})
     if can_deliver:
@@ -133,12 +134,17 @@ def render(services: dict) -> None:
     clicked = document_actions(actions, suffix=f"so_{order.id}")
 
     if clicked.get("edit"):
-        arm_so_edit_dialog(order.id)
-        st.rerun()
+        if not can_edit:
+            st.warning("This sales order can no longer be edited.")
+        else:
+            arm_so_edit_dialog(order.id)
+            st.rerun()
     if clicked.get("invoice"):
         arm_so_invoice_dialog(order.id)
         st.rerun()
-    if clicked.get("deliver"):
+    if clicked.get("deliver") or (
+        can_deliver and consume_action("sales.orders.deliver")
+    ):
         arm_dn_dialog(so_id=order.id)
         st.rerun()
 

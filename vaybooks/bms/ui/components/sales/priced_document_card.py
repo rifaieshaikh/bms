@@ -52,9 +52,9 @@ def priced_document_row(document, document_type: str) -> dict:
 
 
 def _is_editable(row: dict) -> bool:
-    terminal = {"Cancelled", "Expired"}
+    terminal = {"Cancelled", "Expired", "Converted"}
     if row["document_type"] == "quotation":
-        terminal.update({"Converted", "Rejected"})
+        terminal.add("Rejected")
     return row.get("status") not in terminal
 
 

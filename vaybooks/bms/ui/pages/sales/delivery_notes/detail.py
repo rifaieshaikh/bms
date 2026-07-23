@@ -140,6 +140,8 @@ def render(services: dict) -> None:
 
     can_edit = dn.status == DeliveryNoteStatus.DRAFT
     can_invoice = dn.status == DeliveryNoteStatus.DELIVERED and not dn.voucher_id
+    if can_invoice:
+        mark_wired("sales.deliveries.create_invoice")
 
     actions = []
     if pdf_bytes is not None:
@@ -153,8 +155,7 @@ def render(services: dict) -> None:
                 "mime": "application/pdf",
             }
         )
-    if can_edit:
-        actions.append({"label": "Edit", "key": "edit"})
+    actions.append({"label": "Edit", "key": "edit"})
     if can_invoice:
         actions.append(
             {
@@ -168,9 +169,14 @@ def render(services: dict) -> None:
 
     clicked = document_actions(actions, suffix=f"dn_{dn.id}")
     if clicked.get("edit"):
-        arm_dn_edit_dialog(dn.id)
-        st.rerun()
-    if clicked.get("invoice"):
+        if not can_edit:
+            st.warning("Only draft delivery notes can be edited.")
+        else:
+            arm_dn_edit_dialog(dn.id)
+            st.rerun()
+    if clicked.get("invoice") or (
+        can_invoice and consume_action("sales.deliveries.create_invoice")
+    ):
         arm_dn_invoice_dialog(dn.id)
         st.rerun()
     if clicked.get("view_invoice") and dn.voucher_id:
