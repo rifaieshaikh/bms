@@ -54,13 +54,21 @@ def test_default_actions_include_list_roles():
     assert actions["list.primary"] == "ctrl+shift+n"
     assert actions["list.filters.open"] == "ctrl+shift+q"
     assert actions["list.sort.open"] == "ctrl+shift+s"
+    assert actions["list.filters.clear"] == "ctrl+1"
+    assert actions["list.sort.clear"] == "ctrl+2"
     assert actions["dialog.save"] == "ctrl+s"
 
 
 def test_list_chords_do_not_collide_with_parents():
     ensure_defaults_loaded(force=True)
     parent_chords = set(default_parents().values())
-    for aid in ("list.primary", "list.filters.open", "list.sort.open"):
+    for aid in (
+        "list.primary",
+        "list.filters.open",
+        "list.sort.open",
+        "list.filters.clear",
+        "list.sort.clear",
+    ):
         chord = default_actions()[aid]
         assert chord not in parent_chords, f"{aid}={chord} collides with a parent"
 
@@ -81,6 +89,42 @@ def test_pick_action_po_detail_receive():
         "purchase_order_detail",
     )
     assert chosen == "purchases.orders.receive"
+
+
+def test_pick_action_list_clear_filters_on_list_page():
+    chosen = _pick_action(
+        "ctrl+1",
+        ["list.filters.clear", "orders.record_invoice", "dashboard.period.today"],
+        "customers_list",
+    )
+    assert chosen == "list.filters.clear"
+
+
+def test_pick_action_list_clear_sort_on_list_page():
+    chosen = _pick_action(
+        "ctrl+2",
+        ["list.sort.clear", "orders.record_delivery", "dashboard.period.last_7d"],
+        "purchase_orders_list",
+    )
+    assert chosen == "list.sort.clear"
+
+
+def test_pick_action_order_detail_keeps_ctrl_1_invoice():
+    chosen = _pick_action(
+        "ctrl+1",
+        ["list.filters.clear", "orders.record_invoice"],
+        "order_detail",
+    )
+    assert chosen == "orders.record_invoice"
+
+
+def test_pick_action_mtd_keeps_ctrl_1_period():
+    chosen = _pick_action(
+        "ctrl+1",
+        ["list.filters.clear", "dashboard.period.today"],
+        "mtd_dashboard",
+    )
+    assert chosen == "dashboard.period.today"
 
 
 def test_parents_do_not_use_reserved_list_children():

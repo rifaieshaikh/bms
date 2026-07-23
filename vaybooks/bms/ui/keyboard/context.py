@@ -9,6 +9,7 @@ from vaybooks.bms.ui.dialog_utils import _ARMED_FLAGS  # noqa: SLF001
 _PAGE_KEY = "_kb_current_page"
 _FORM_EDITING = "_kb_form_editing"
 _FILTERS_UI = "_kb_filters_ui_open"
+_SORT_UI = "_kb_sort_ui_open"
 _SUBMIT_MAP = "_kb_dialog_submit_map"
 _CARD_IDS = "_kb_card_ids"
 _CARD_EDITABLE = "_kb_card_editable"
@@ -32,6 +33,8 @@ def is_form_editing() -> bool:
 
 def set_filters_ui_open(entity: str | None) -> None:
     st.session_state[_FILTERS_UI] = entity
+    if entity:
+        st.session_state[_SORT_UI] = None
 
 
 def is_filters_ui_open(entity: str | None = None) -> bool:
@@ -39,6 +42,24 @@ def is_filters_ui_open(entity: str | None = None) -> bool:
     if entity is None:
         return bool(cur)
     return cur == entity
+
+
+def set_sort_ui_open(entity: str | None) -> None:
+    st.session_state[_SORT_UI] = entity
+    if entity:
+        st.session_state[_FILTERS_UI] = None
+
+
+def is_sort_ui_open(entity: str | None = None) -> bool:
+    cur = st.session_state.get(_SORT_UI)
+    if entity is None:
+        return bool(cur)
+    return cur == entity
+
+
+def clear_list_panel_ui() -> None:
+    st.session_state[_FILTERS_UI] = None
+    st.session_state[_SORT_UI] = None
 
 
 def is_dialog_armed() -> bool:

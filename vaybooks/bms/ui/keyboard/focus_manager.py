@@ -24,9 +24,17 @@ def inject_focus_manager(
     above_first: str | None = None,
     below_last: str | None = None,
     component_key: str = "focus_mgr",
+    mode: str = "form",
+    apply_key: str | None = None,
 ) -> None:
     """Focus ``restore_key`` when set; traverse with Enter and arrows.
 
+    Modes:
+    - ``form`` (default, PO lines): Enter advances; arrows use grid rules
+    - ``linear_apply`` (filter/sort dialogs): Tab/arrows move along ``chain``;
+      Enter clicks ``apply_key``
+
+    Form mode details:
     - Enter → next widget in ``chain`` (Vendor → Expected → Product…)
     - ArrowLeft / ArrowRight → previous/next **grid** cell only (not Vendor/Expected)
     - ArrowUp / ArrowDown → same column previous/next row when ``columns`` set
@@ -57,6 +65,8 @@ def inject_focus_manager(
         "columns": col_payload,
         "aboveFirst": above_first or "",
         "belowLast": below_last or "",
+        "mode": str(mode or "form"),
+        "applyKey": str(apply_key or ""),
         "nonce": str(component_key),
     }
     data = json.dumps(payload).replace("</", "<\\/")
@@ -370,16 +380,25 @@ def inject_focus_manager(
     const isLeft = ev.key === 'ArrowLeft';
     const isUp = ev.key === 'ArrowUp';
     const isDown = ev.key === 'ArrowDown';
-    if (!isEnter && !isRight && !isLeft && !isUp && !isDown) return;
-    if (ev.ctrlKey || ev.metaKey || ev.altKey || ev.shiftKey) return;
+    const isTab = ev.key === 'Tab';
+    const c = win.__vayFocusMgrCfg || cfg;
+    const linear = c.mode === 'linear_apply';
+
+    if (linear) {{
+      if (!isEnter && !isRight && !isLeft && !isUp && !isDown && !isTab) return;
+      if ((isEnter || isRight || isLeft || isUp || isDown) &&
+          (ev.ctrlKey || ev.metaKey || ev.altKey || ev.shiftKey)) return;
+      if (isTab && (ev.ctrlKey || ev.metaKey || ev.altKey)) return;
+    }} else {{
+      if (!isEnter && !isRight && !isLeft && !isUp && !isDown) return;
+      if (ev.ctrlKey || ev.metaKey || ev.altKey || ev.shiftKey) return;
+    }}
 
     const tag = (ev.target && ev.target.tagName) ? ev.target.tagName.toLowerCase() : '';
     if (tag === 'textarea') return;
     if (listOpen(ev.target)) return;
 
-    const c = win.__vayFocusMgrCfg || cfg;
-
-    if (nodeInsideDataEditor(ev.target) || nodeInsideDataEditor(doc.activeElement)) {{
+    if (!linear && (nodeInsideDataEditor(ev.target) || nodeInsideDataEditor(doc.activeElement))) {{
       if (!isEnter) return;
       setTimeout(function () {{
         if (listOpen(doc.activeElement)) return;
@@ -394,6 +413,54 @@ def inject_focus_manager(
     const inChain = c.chain.indexOf(key) >= 0;
     const onBelowLast = !!(c.belowLast && key === c.belowLast);
     const inGrid = !!findColumn(key);
+
+    // Filter/sort dialogs: linear chain nav; Enter applies.
+    if (linear) {{
+      if (!inChain) return;
+      if (isEnter) {{
+        // Text / number inputs: let Streamlit (and st.form) handle Enter so the
+        // typed value is committed with the submit. Intercepting Enter here
+        // used to Apply with a stale empty string.
+        const t = (ev.target && ev.target.tagName)
+          ? ev.target.tagName.toLowerCase() : '';
+        const inputType = (ev.target && ev.target.type)
+          ? String(ev.target.type).toLowerCase() : '';
+        const textish = (
+          t === 'textarea'
+          || (t === 'input' && (
+            !inputType
+            || inputType === 'text'
+            || inputType === 'search'
+            || inputType === 'email'
+            || inputType === 'tel'
+            || inputType === 'url'
+            || inputType === 'password'
+            || inputType === 'number'
+          ))
+          || (ev.target && ev.target.getAttribute
+              && ev.target.getAttribute('contenteditable') === 'true')
+        );
+        if (textish) return;
+
+        ev.preventDefault();
+        ev.stopPropagation();
+        setTimeout(function () {{
+          if (c.applyKey) clickKey(c.applyKey);
+        }}, 0);
+        return;
+      }}
+      const forward = isDown || isRight || (isTab && !ev.shiftKey);
+      const backward = isUp || isLeft || (isTab && ev.shiftKey);
+      if (!forward && !backward) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (forward) {{
+        setTimeout(function () {{ advanceFrom(key); }}, 0);
+      }} else {{
+        setTimeout(function () {{ retreatFrom(key); }}, 0);
+      }}
+      return;
+    }}
 
     // Vertical: grid columns, or Up from Save. Never steal arrows from Expected date.
     if (isUp || isDown) {{

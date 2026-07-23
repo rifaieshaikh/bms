@@ -80,6 +80,8 @@ DIALOG_FLAG_PREFIXES = (
     "prj_stock_add_dialog",
     "prj_qi_add_dialog",
     "prj_dpr_add_dialog",
+    "list_filters_dialog_",
+    "list_sort_dialog_",
 )
 
 _ARMED_FLAGS = "_armed_dialog_flags"

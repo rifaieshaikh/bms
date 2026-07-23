@@ -90,7 +90,7 @@ def save_parent_binding(nav_key: str, chord: str) -> tuple[bool, str]:
     if not chord:
         return False, "Chord is required."
     if chord in RESERVED_LIST_CHILDREN:
-        return False, f"{chord} is reserved for list actions (Add / Filter / Sort)."
+        return False, f"{chord} is reserved for list actions (Add / Filter / Sort / Clear)."
     bindings = get_bindings()
     parents = dict(bindings["parents"])
     # Parent uniqueness

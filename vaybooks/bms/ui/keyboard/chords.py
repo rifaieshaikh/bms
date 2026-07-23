@@ -97,4 +97,6 @@ def needs_prevent_default(chord: str) -> bool:
     } or norm.startswith("ctrl+") or norm.startswith("meta+")
 
 
-RESERVED_LIST_CHILDREN = frozenset({"ctrl+shift+n", "ctrl+shift+q", "ctrl+shift+s"})
+RESERVED_LIST_CHILDREN = frozenset(
+    {"ctrl+shift+n", "ctrl+shift+q", "ctrl+shift+s", "ctrl+1", "ctrl+2"}
+)

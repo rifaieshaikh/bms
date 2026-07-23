@@ -66,6 +66,8 @@ def activate_shortcuts() -> None:
             "ctrl+shift+n",
             "ctrl+shift+q",
             "ctrl+shift+s",
+            "ctrl+1",
+            "ctrl+2",
             "ctrl+s",
             "ctrl+x",
             "alt+backspace",

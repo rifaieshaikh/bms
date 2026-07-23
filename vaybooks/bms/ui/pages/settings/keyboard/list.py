@@ -27,7 +27,7 @@ def render(services: dict):
     st.title("Keyboard Shortcuts")
     st.caption(
         "Parents jump to a page from anywhere. Actions run in context "
-        "(Add / Filter / Sort on lists; Save when a dialog is open)."
+        "(Add / Filter / Sort / Clear on lists; Save when a dialog is open)."
     )
 
     bindings = get_bindings()

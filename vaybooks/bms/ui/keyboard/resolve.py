@@ -11,6 +11,7 @@ from vaybooks.bms.ui.keyboard.context import (
     is_dialog_armed,
     is_filters_ui_open,
     is_form_editing,
+    is_sort_ui_open,
 )
 from vaybooks.bms.ui.keyboard.dialog_actions import armed_submit_key, request_submit
 from vaybooks.bms.ui.keyboard.wired import clear_wired
@@ -53,12 +54,10 @@ def _pick_action(chord: str, action_ids: list[str], page: str | None) -> str | N
         if chord == "ctrl+shift+." and "form.add_line" in action_ids:
             return "form.add_line"
 
-    # Filters UI open
+    # Filters dialog open
     if is_filters_ui_open():
         if chord == "ctrl+enter" and "list.filters.apply" in action_ids:
             return "list.filters.apply"
-        if chord == "ctrl+shift+backspace" and "list.filters.clear" in action_ids:
-            return "list.filters.clear"
 
     # Page-specific context
     if page == _EXPORT_PAGE:
@@ -94,6 +93,14 @@ def _pick_action(chord: str, action_ids: list[str], page: str | None) -> str | N
             # Prefer record_* over others when multiple match same chord (shouldn't)
             return matching[0]
 
+    # List clear actions (ctrl+1 / ctrl+2) — only when panels closed and not
+    # claimed by order-detail / MTD above.
+    if not is_filters_ui_open() and not is_sort_ui_open():
+        if chord == "ctrl+1" and "list.filters.clear" in action_ids:
+            return "list.filters.clear"
+        if chord == "ctrl+2" and "list.sort.clear" in action_ids:
+            return "list.sort.clear"
+
     # Prefer shared list roles when on any list
     for preferred in (
         "list.primary",
@@ -112,7 +119,16 @@ def _pick_action(chord: str, action_ids: list[str], page: str | None) -> str | N
         if aid.startswith("list.view_nth.") or aid.startswith("list.edit_nth."):
             return aid
 
-    return action_ids[0]
+    # Do not fall through to clear-filter/sort while a panel is open.
+    filtered = [
+        aid
+        for aid in action_ids
+        if aid not in ("list.filters.clear", "list.sort.clear")
+        or (not is_filters_ui_open() and not is_sort_ui_open())
+    ]
+    if filtered:
+        return filtered[0]
+    return None
 
 
 def _navigate_parent(nav_key: str) -> bool:
