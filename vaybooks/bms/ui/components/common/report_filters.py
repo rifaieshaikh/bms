@@ -325,6 +325,10 @@ _BUILDERS = {
     "report_grn_pending": build_empty_report_filter,
     "report_purchases_by_vendor": build_purchases_by_vendor_filter,
     "report_purchase_returns": build_purchases_by_vendor_filter,
+    "report_so_pipeline": build_empty_report_filter,
+    "report_dn_pending": build_empty_report_filter,
+    "report_sales_by_customer": build_purchases_by_vendor_filter,
+    "report_sales_returns": build_purchases_by_vendor_filter,
 }
 
 

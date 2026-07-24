@@ -1609,8 +1609,118 @@ class AccountingAppService:
         )
         return self._domain.save_voucher(voucher)
 
-    def get_account(self, account_id: str) -> Optional[Account]:
-        return self._account_repo.find_by_id(account_id)
+    def _resolve_note_party_and_contra(
+        self,
+        party_kind: str,
+        party_account_id: str,
+        contra_account_id: Optional[str],
+    ):
+        kind = (party_kind or "").strip().lower()
+        if kind not in ("customer", "vendor"):
+            raise ValueError("party_kind must be customer or vendor")
+        party = self._account_repo.find_by_id(party_account_id)
+        if not party:
+            raise ValueError("Party account not found")
+        if kind == "customer" and not party.linked_customer_id:
+            raise ValueError("Selected account is not a customer account")
+        if kind == "vendor" and not party.linked_vendor_id:
+            raise ValueError("Selected account is not a vendor account")
+        if contra_account_id:
+            contra = self._account_repo.find_by_id(contra_account_id)
+            if not contra:
+                raise ValueError("Contra account not found")
+        elif kind == "customer":
+            contra = self.get_sales_account()
+            if not contra:
+                raise ValueError('No "Sales" revenue account found')
+        else:
+            expenses = self.get_expense_accounts()
+            if not expenses:
+                raise ValueError("No expense account found for vendor note")
+            contra = expenses[0]
+        return kind, party, contra
+
+    def create_credit_note(
+        self,
+        party_kind: str,
+        party_account_id: str,
+        amount: float,
+        description: str,
+        contra_account_id: Optional[str] = None,
+        voucher_date: Optional[date] = None,
+        amount_settled: float = 0.0,
+        settle_account_id: Optional[str] = None,
+        reference_invoice_id: Optional[str] = None,
+    ) -> Voucher:
+        kind, party, contra = self._resolve_note_party_and_contra(
+            party_kind, party_account_id, contra_account_id
+        )
+        settle = None
+        if amount_settled and float(amount_settled) > 0:
+            if not settle_account_id:
+                raise ValueError("Settlement account is required when settling cash")
+            settle = self._account_repo.find_by_id(settle_account_id)
+            if not settle:
+                raise ValueError("Settlement account not found")
+        voucher_number = self._counter_repo.next("voucher_number")
+        v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
+        voucher = self._domain.build_credit_note_voucher(
+            voucher_number=voucher_number,
+            voucher_date=v_date,
+            description=description,
+            party_kind=kind,
+            party_account_id=party.id,
+            party_account_name=party.account_name,
+            contra_account_id=contra.id,
+            contra_account_name=contra.account_name,
+            amount=amount,
+            amount_settled=amount_settled,
+            settle_account_id=settle.id if settle else None,
+            settle_account_name=settle.account_name if settle else None,
+            reference_invoice_id=reference_invoice_id,
+        )
+        return self._domain.save_voucher(voucher)
+
+    def create_debit_note(
+        self,
+        party_kind: str,
+        party_account_id: str,
+        amount: float,
+        description: str,
+        contra_account_id: Optional[str] = None,
+        voucher_date: Optional[date] = None,
+        amount_settled: float = 0.0,
+        settle_account_id: Optional[str] = None,
+        reference_invoice_id: Optional[str] = None,
+    ) -> Voucher:
+        kind, party, contra = self._resolve_note_party_and_contra(
+            party_kind, party_account_id, contra_account_id
+        )
+        settle = None
+        if amount_settled and float(amount_settled) > 0:
+            if not settle_account_id:
+                raise ValueError("Settlement account is required when settling cash")
+            settle = self._account_repo.find_by_id(settle_account_id)
+            if not settle:
+                raise ValueError("Settlement account not found")
+        voucher_number = self._counter_repo.next("voucher_number")
+        v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
+        voucher = self._domain.build_debit_note_voucher(
+            voucher_number=voucher_number,
+            voucher_date=v_date,
+            description=description,
+            party_kind=kind,
+            party_account_id=party.id,
+            party_account_name=party.account_name,
+            contra_account_id=contra.id,
+            contra_account_name=contra.account_name,
+            amount=amount,
+            amount_settled=amount_settled,
+            settle_account_id=settle.id if settle else None,
+            settle_account_name=settle.account_name if settle else None,
+            reference_invoice_id=reference_invoice_id,
+        )
+        return self._domain.save_voucher(voucher)
 
     def get_store_accounts(self) -> List[Account]:
         """Accounts flagged as store accounts (cash drawer, bank, etc.)."""

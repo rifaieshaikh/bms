@@ -469,6 +469,46 @@ PAYMENTS = ListSchema(
     page_size=VOUCHER_PAGE_SIZE,
 )
 
+CREDIT_NOTES = ListSchema(
+    entity_key="credit_notes",
+    title="Credit Notes",
+    filter_fields=[
+        FilterField("voucher_number", "Voucher number", F.EXACT),
+        FilterField("description", "Description", F.EXACT),
+        FilterField("voucher_date", "Note date", F.DATE_RANGE),
+        FilterField("account_id", "Account", F.ENTITY_SELECT,
+                    options_loader="accounts", match=_match_voucher_any_account),
+        FilterField("min_amount", "Min amount (₹)", F.NUMBER_MIN,
+                    record_attr="total_debit"),
+    ],
+    sort_options=[
+        SortOption("voucher_date", "Date"),
+        SortOption("total_debit", "Amount"),
+    ],
+    default_sort="voucher_date",
+    page_size=VOUCHER_PAGE_SIZE,
+)
+
+DEBIT_NOTES = ListSchema(
+    entity_key="debit_notes",
+    title="Debit Notes",
+    filter_fields=[
+        FilterField("voucher_number", "Voucher number", F.EXACT),
+        FilterField("description", "Description", F.EXACT),
+        FilterField("voucher_date", "Note date", F.DATE_RANGE),
+        FilterField("account_id", "Account", F.ENTITY_SELECT,
+                    options_loader="accounts", match=_match_voucher_any_account),
+        FilterField("min_amount", "Min amount (₹)", F.NUMBER_MIN,
+                    record_attr="total_debit"),
+    ],
+    sort_options=[
+        SortOption("voucher_date", "Date"),
+        SortOption("total_debit", "Amount"),
+    ],
+    default_sort="voucher_date",
+    page_size=VOUCHER_PAGE_SIZE,
+)
+
 ACCOUNTING_INVOICES = ListSchema(
     entity_key="accounting_invoices",
     title="Accounting Invoices",
@@ -629,7 +669,8 @@ SCHEMAS = {
     s.entity_key: s
     for s in [
         ORDERS, ITEMS, MEASUREMENTS, CUSTOMERS, VENDORS, TIME, ACCOUNTS, VOUCHERS, RECEIPTS,
-        PAYMENTS, ACCOUNTING_INVOICES, STORE_SALES, JOURNAL, TRIAL_BALANCE, ACTIVITIES,
+        PAYMENTS, CREDIT_NOTES, DEBIT_NOTES, ACCOUNTING_INVOICES, STORE_SALES, JOURNAL,
+        TRIAL_BALANCE, ACTIVITIES,
         PROJECT_ACTIVITIES, SERVICES, INVENTORY_OVERVIEW, INVENTORY_CATEGORIES,
         INVENTORY_PRODUCTS, INVENTORY_STOCK, INVENTORY_STOCK_LEDGER, INVENTORY_MOVEMENTS,
         INVENTORY_CUSTOMER_PRICES,

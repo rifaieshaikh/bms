@@ -68,6 +68,8 @@ class VoucherType(str, Enum):
     VENDOR_PAYMENT = "Vendor Payment"
     SALARY_PAYMENT = "Salary Payment"
     SALES_RETURN = "Sales Return"
+    CREDIT_NOTE = "Credit Note"
+    DEBIT_NOTE = "Debit Note"
 
 
 class SalesOrderStatus(str, Enum):

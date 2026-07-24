@@ -40,6 +40,8 @@ DIALOG_FLAG_PREFIXES = (
     "acc_cust_inv_dialog",
     "acc_sales_inv_dialog",
     "acc_journal_dialog",
+    "acc_credit_note_dialog",
+    "acc_debit_note_dialog",
     "vendor_add_dialog",
     "vendor_edit_dialog",
     "vendor_pay_dialog",

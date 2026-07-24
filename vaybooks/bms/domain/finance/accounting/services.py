@@ -1252,6 +1252,244 @@ class AccountingDomainService:
             lines=lines,
         )
 
+    def build_credit_note_voucher(
+        self,
+        voucher_number: str,
+        voucher_date,
+        description: str,
+        party_kind: str,
+        party_account_id: str,
+        party_account_name: str,
+        contra_account_id: str,
+        contra_account_name: str,
+        amount: float,
+        amount_settled: float = 0.0,
+        settle_account_id: Optional[str] = None,
+        settle_account_name: Optional[str] = None,
+        reference_invoice_id: Optional[str] = None,
+    ) -> Voucher:
+        """Non-stock credit note for customer or vendor.
+
+        Customer: Dr Sales(contra) / Cr Customer
+        Vendor:   Dr Vendor / Cr Purchase(contra)
+        """
+        amount = round(float(amount), 2)
+        if amount <= 0:
+            raise ValidationError("Credit note amount must be positive")
+        kind = (party_kind or "").strip().lower()
+        if kind not in ("customer", "vendor"):
+            raise ValidationError("party_kind must be customer or vendor")
+        amount_settled = round(max(float(amount_settled or 0), 0.0), 2)
+        if amount_settled > amount + 0.01:
+            raise ValidationError("Settlement cannot exceed credit note amount")
+        if kind == "customer":
+            lines = [
+                VoucherLine(
+                    account_id=contra_account_id,
+                    account_name=contra_account_name,
+                    debit_amount=amount,
+                    credit_amount=0,
+                    description="Credit note (sales)",
+                ),
+                VoucherLine(
+                    account_id=party_account_id,
+                    account_name=party_account_name,
+                    debit_amount=0,
+                    credit_amount=amount,
+                    description="Customer credit note",
+                ),
+            ]
+            if amount_settled > 0:
+                if not settle_account_id:
+                    raise ValidationError(
+                        "Settlement account is required when settling cash"
+                    )
+                lines.extend(
+                    [
+                        VoucherLine(
+                            account_id=party_account_id,
+                            account_name=party_account_name,
+                            debit_amount=amount_settled,
+                            credit_amount=0,
+                            description="Credit note settled",
+                        ),
+                        VoucherLine(
+                            account_id=settle_account_id,
+                            account_name=settle_account_name or "",
+                            debit_amount=0,
+                            credit_amount=amount_settled,
+                            description="Cash/Bank refund",
+                        ),
+                    ]
+                )
+        else:
+            lines = [
+                VoucherLine(
+                    account_id=party_account_id,
+                    account_name=party_account_name,
+                    debit_amount=amount,
+                    credit_amount=0,
+                    description="Vendor credit note",
+                ),
+                VoucherLine(
+                    account_id=contra_account_id,
+                    account_name=contra_account_name,
+                    debit_amount=0,
+                    credit_amount=amount,
+                    description="Credit note (purchase)",
+                ),
+            ]
+            if amount_settled > 0:
+                if not settle_account_id:
+                    raise ValidationError(
+                        "Settlement account is required when settling cash"
+                    )
+                lines.extend(
+                    [
+                        VoucherLine(
+                            account_id=party_account_id,
+                            account_name=party_account_name,
+                            debit_amount=0,
+                            credit_amount=amount_settled,
+                            description="Credit note settled",
+                        ),
+                        VoucherLine(
+                            account_id=settle_account_id,
+                            account_name=settle_account_name or "",
+                            debit_amount=amount_settled,
+                            credit_amount=0,
+                            description="Cash/Bank refund",
+                        ),
+                    ]
+                )
+        return Voucher(
+            voucher_number=voucher_number,
+            voucher_type=VoucherType.CREDIT_NOTE,
+            voucher_date=voucher_date,
+            description=description,
+            lines=lines,
+            reference_invoice_id=reference_invoice_id,
+        )
+
+    def build_debit_note_voucher(
+        self,
+        voucher_number: str,
+        voucher_date,
+        description: str,
+        party_kind: str,
+        party_account_id: str,
+        party_account_name: str,
+        contra_account_id: str,
+        contra_account_name: str,
+        amount: float,
+        amount_settled: float = 0.0,
+        settle_account_id: Optional[str] = None,
+        settle_account_name: Optional[str] = None,
+        reference_invoice_id: Optional[str] = None,
+    ) -> Voucher:
+        """Non-stock debit note for customer or vendor.
+
+        Customer: Dr Customer / Cr Sales(contra)
+        Vendor:   Dr Purchase(contra) / Cr Vendor
+        """
+        amount = round(float(amount), 2)
+        if amount <= 0:
+            raise ValidationError("Debit note amount must be positive")
+        kind = (party_kind or "").strip().lower()
+        if kind not in ("customer", "vendor"):
+            raise ValidationError("party_kind must be customer or vendor")
+        amount_settled = round(max(float(amount_settled or 0), 0.0), 2)
+        if amount_settled > amount + 0.01:
+            raise ValidationError("Settlement cannot exceed debit note amount")
+        if kind == "customer":
+            lines = [
+                VoucherLine(
+                    account_id=party_account_id,
+                    account_name=party_account_name,
+                    debit_amount=amount,
+                    credit_amount=0,
+                    description="Customer debit note",
+                ),
+                VoucherLine(
+                    account_id=contra_account_id,
+                    account_name=contra_account_name,
+                    debit_amount=0,
+                    credit_amount=amount,
+                    description="Debit note (sales)",
+                ),
+            ]
+            if amount_settled > 0:
+                if not settle_account_id:
+                    raise ValidationError(
+                        "Settlement account is required when settling cash"
+                    )
+                lines.extend(
+                    [
+                        VoucherLine(
+                            account_id=settle_account_id,
+                            account_name=settle_account_name or "",
+                            debit_amount=amount_settled,
+                            credit_amount=0,
+                            description="Cash/Bank received",
+                        ),
+                        VoucherLine(
+                            account_id=party_account_id,
+                            account_name=party_account_name,
+                            debit_amount=0,
+                            credit_amount=amount_settled,
+                            description="Debit note settled",
+                        ),
+                    ]
+                )
+        else:
+            lines = [
+                VoucherLine(
+                    account_id=contra_account_id,
+                    account_name=contra_account_name,
+                    debit_amount=amount,
+                    credit_amount=0,
+                    description="Debit note (purchase)",
+                ),
+                VoucherLine(
+                    account_id=party_account_id,
+                    account_name=party_account_name,
+                    debit_amount=0,
+                    credit_amount=amount,
+                    description="Vendor debit note",
+                ),
+            ]
+            if amount_settled > 0:
+                if not settle_account_id:
+                    raise ValidationError(
+                        "Settlement account is required when settling cash"
+                    )
+                lines.extend(
+                    [
+                        VoucherLine(
+                            account_id=party_account_id,
+                            account_name=party_account_name,
+                            debit_amount=amount_settled,
+                            credit_amount=0,
+                            description="Debit note settled",
+                        ),
+                        VoucherLine(
+                            account_id=settle_account_id,
+                            account_name=settle_account_name or "",
+                            debit_amount=0,
+                            credit_amount=amount_settled,
+                            description="Cash/Bank payment",
+                        ),
+                    ]
+                )
+        return Voucher(
+            voucher_number=voucher_number,
+            voucher_type=VoucherType.DEBIT_NOTE,
+            voucher_date=voucher_date,
+            description=description,
+            lines=lines,
+            reference_invoice_id=reference_invoice_id,
+        )
+
     def get_trial_balance(self) -> List[dict]:
         accounts = self._account_repo.list_all(active_only=False)
         return [

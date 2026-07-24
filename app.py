@@ -78,6 +78,8 @@ from vaybooks.bms.ui.pages.migration import (
 from vaybooks.bms.ui.keyboard.resolve import resolve_pressed_shortcuts
 from vaybooks.bms.ui.keyboard.defaults import ensure_defaults_loaded
 from vaybooks.bms.ui.pages.finance.accounting_invoices import list as accounting_invoices
+from vaybooks.bms.ui.pages.finance.credit_notes import list as finance_credit_notes
+from vaybooks.bms.ui.pages.finance.debit_notes import list as finance_debit_notes
 from vaybooks.bms.ui.pages.finance.journal import list as finance_journal
 from vaybooks.bms.ui.pages.finance.payments import list as finance_payments
 from vaybooks.bms.ui.pages.finance.receipts import list as finance_receipts
@@ -164,6 +166,14 @@ receipts_page = st.Page(
 payments_page = st.Page(
     _page(finance_payments), title="Payments", icon=":material/send_money:",
     url_path="payments",
+)
+credit_notes_page = st.Page(
+    _page(finance_credit_notes), title="Credit Notes", icon=":material/credit_card:",
+    url_path="credit-notes",
+)
+debit_notes_page = st.Page(
+    _page(finance_debit_notes), title="Debit Notes", icon=":material/receipt:",
+    url_path="debit-notes",
 )
 accounting_invoices_page = st.Page(
     _page(accounting_invoices), title="Accounting Invoices",
@@ -478,6 +488,8 @@ navigation.register("account_detail", account_detail_page)
 navigation.register("vouchers_list", vouchers_page)
 navigation.register("receipts_list", receipts_page)
 navigation.register("payments_list", payments_page)
+navigation.register("credit_notes_list", credit_notes_page)
+navigation.register("debit_notes_list", debit_notes_page)
 navigation.register("accounting_invoices_list", accounting_invoices_page)
 navigation.register("journal_list", journal_page)
 navigation.register("trial_balance_list", trial_balance_page)
@@ -602,6 +614,8 @@ page_groups = {
         vouchers_page,
         receipts_page,
         payments_page,
+        credit_notes_page,
+        debit_notes_page,
         accounting_invoices_page,
         journal_page,
         trial_balance_page,

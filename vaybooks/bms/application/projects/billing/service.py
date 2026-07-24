@@ -1022,33 +1022,17 @@ class ProjectBillingAppService:
         self._ensure_billing_allowed(project, allow_credit_note=True)
         if float(amount or 0) <= 0:
             raise ValidationError("Credit note amount must be greater than zero")
-        customer_account = self._get_customer_account(project)
-        if self._sales and hasattr(self._sales, "create_sales_return"):
-            try:
-                sales_return = self._sales.create_sales_return(
-                    customer_id=project.customer_id,
-                    return_date=voucher_date or today(),
-                    lines=[{"description": description or "Credit note", "qty": 1, "rate": amount}],
-                    amount_refunded=float(amount_refunded or 0.0),
-                    refund_account_id=refund_account_id,
-                    notes=description or f"Credit note for {project.project_number}",
-                )
-                voucher_id = getattr(sales_return, "voucher_id", "") or ""
-                if voucher_id and self._voucher_repo:
-                    voucher = self._voucher_repo.find_by_id(voucher_id)
-                    if voucher:
-                        return self._save_voucher(voucher, project.id)
-            except Exception:
-                pass
         if not self._accounting:
             raise ValidationError("Accounting service is unavailable")
-        voucher = self._accounting.create_sales_return_voucher(
-            customer_account_id=customer_account.id,
-            return_amount=float(amount),
+        customer_account = self._get_customer_account(project)
+        voucher = self._accounting.create_credit_note(
+            party_kind="customer",
+            party_account_id=customer_account.id,
+            amount=float(amount),
             description=description or f"Credit note for {project.project_number}",
-            amount_refunded=float(amount_refunded or 0.0),
-            refund_account_id=refund_account_id,
             voucher_date=voucher_date,
+            amount_settled=float(amount_refunded or 0.0),
+            settle_account_id=refund_account_id,
         )
         return self._save_voucher(voucher, project.id)
 
@@ -1064,36 +1048,18 @@ class ProjectBillingAppService:
         self._ensure_billing_allowed(project)
         if float(amount or 0) <= 0:
             raise ValidationError("Debit note amount must be greater than zero")
-        customer_account = self._get_customer_account(project)
         if not self._accounting:
             raise ValidationError("Accounting service is unavailable")
-        sales = None
-        if hasattr(self._accounting, "get_sales_account"):
-            sales = self._accounting.get_sales_account()
-        if not sales:
-            raise ValidationError('No "Sales" revenue account found')
+        customer_account = self._get_customer_account(project)
         final_description = description or f"Debit note for {project.project_number}"
         final_description = self._append_meta(
             final_description, "DEBIT_NOTE", {"amount": float(amount)}
         )
-        voucher = self._accounting.create_journal_entry(
+        voucher = self._accounting.create_debit_note(
+            party_kind="customer",
+            party_account_id=customer_account.id,
+            amount=float(amount),
             description=final_description,
-            lines=[
-                {
-                    "account_id": customer_account.id,
-                    "account_name": customer_account.account_name,
-                    "debit_amount": float(amount),
-                    "credit_amount": 0,
-                    "description": "Customer debit note",
-                },
-                {
-                    "account_id": sales.id,
-                    "account_name": sales.account_name,
-                    "debit_amount": 0,
-                    "credit_amount": float(amount),
-                    "description": "Debit note revenue",
-                },
-            ],
             voucher_date=voucher_date,
         )
         return self._save_voucher(voucher, project.id)

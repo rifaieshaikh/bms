@@ -33,6 +33,8 @@ PAY = "acc_payment_dialog"
 SAL = "acc_salary_dialog"
 INV_CUST = "acc_cust_inv_dialog"
 JOURNAL = "acc_journal_dialog"
+CREDIT_NOTE = "acc_credit_note_dialog"
+DEBIT_NOTE = "acc_debit_note_dialog"
 
 
 def _clear_other_invoice_dialog_flags(keep: str) -> None:
@@ -534,6 +536,168 @@ def _journal_dialog(accounting_service):
         st.rerun()
 
 
+def _party_accounts_for_kind(accounting_service, party_kind: str):
+    accounts = accounting_service.list_accounts()
+    if party_kind == "Customer":
+        return [a for a in accounts if a.linked_customer_id]
+    return [a for a in accounts if a.linked_vendor_id]
+
+
+def _contra_accounts_for_kind(accounting_service, party_kind: str):
+    if party_kind == "Customer":
+        income = accounting_service.get_income_accounts()
+        sales = accounting_service.get_sales_account()
+        if sales and sales.id not in {a.id for a in income}:
+            return [sales] + income
+        return income or ([sales] if sales else [])
+    return accounting_service.get_expense_accounts()
+
+
+def _source_docs_for_party(accounting_service, party_kind: str, party_account_id: str):
+    """Optional invoice/bill vouchers that touch the party account."""
+    if party_kind == "Customer":
+        types = (VoucherType.SALES_INVOICE, VoucherType.CUSTOMIZATION_INVOICE)
+    else:
+        types = (VoucherType.PURCHASE_BILL,)
+    docs = []
+    for vtype in types:
+        for v in accounting_service.list_vouchers_by_type(vtype):
+            if any(line.account_id == party_account_id for line in v.lines):
+                docs.append(v)
+    docs.sort(key=lambda v: v.voucher_date or date.today(), reverse=True)
+    return docs
+
+
+def _note_dialog_body(accounting_service, *, note_kind: str, flag_key: str, key_prefix: str):
+    """Shared create form for credit/debit notes."""
+    party_kind = st.radio(
+        "Party type",
+        ["Customer", "Vendor"],
+        horizontal=True,
+        key=f"{key_prefix}_party_kind",
+    )
+    parties = _party_accounts_for_kind(accounting_service, party_kind)
+    contras = _contra_accounts_for_kind(accounting_service, party_kind)
+    stores = accounting_service.get_store_accounts()
+    if not parties:
+        st.error(f"Need at least one {party_kind.lower()} account.")
+        if st.button("Close", key=f"{key_prefix}_close_party"):
+            st.session_state.pop(flag_key, None)
+            st.rerun()
+        return
+    if not contras:
+        label = "income" if party_kind == "Customer" else "expense"
+        st.error(f"Need at least one {label} account for the contra entry.")
+        if st.button("Close", key=f"{key_prefix}_close_contra"):
+            st.session_state.pop(flag_key, None)
+            st.rerun()
+        return
+
+    party_opts = {a.account_name: a.id for a in parties}
+    contra_opts = {a.account_name: a.id for a in contras}
+    default_contra = None
+    if party_kind == "Customer":
+        sales = accounting_service.get_sales_account()
+        if sales and sales.account_name in contra_opts:
+            default_contra = sales.id
+
+    party = st.selectbox(
+        f"{party_kind} Account",
+        list(party_opts.keys()),
+        key=f"{key_prefix}_party",
+    )
+    contra = st.selectbox(
+        "Contra Account",
+        list(contra_opts.keys()),
+        index=_index_of(contra_opts, default_contra),
+        key=f"{key_prefix}_contra",
+    )
+    amount = st.number_input(
+        "Amount", min_value=0.0, value=0.0, key=f"{key_prefix}_amount"
+    )
+    v_date = st.date_input("Date", value=date.today(), key=f"{key_prefix}_date")
+    desc = st.text_input("Description", value="", key=f"{key_prefix}_desc")
+
+    source_docs = _source_docs_for_party(
+        accounting_service, party_kind, party_opts[party]
+    )
+    source_opts = {"(none)": None}
+    for v in source_docs:
+        label = f"{v.voucher_number} — {v.description or v.voucher_type.value}"
+        source_opts[label] = v.id
+    source_label = st.selectbox(
+        "Source invoice/bill (optional)",
+        list(source_opts.keys()),
+        key=f"{key_prefix}_source",
+    )
+
+    settle_amount = st.number_input(
+        "Settle amount (optional)",
+        min_value=0.0,
+        value=0.0,
+        key=f"{key_prefix}_settle_amt",
+    )
+    settle_account_id = None
+    if settle_amount > 0:
+        if not stores:
+            st.error("Need a store/cash account to settle.")
+        else:
+            store_opts = {a.account_name: a.id for a in stores}
+            settle_name = st.selectbox(
+                "Settlement Account (Cash/Bank)",
+                list(store_opts.keys()),
+                key=f"{key_prefix}_settle_acct",
+            )
+            settle_account_id = store_opts[settle_name]
+
+    cols = st.columns(2)
+    if cols[0].button("Save", type="primary", use_container_width=True, key=f"{key_prefix}_save"):
+        try:
+            create_fn = (
+                accounting_service.create_credit_note
+                if note_kind == "credit"
+                else accounting_service.create_debit_note
+            )
+            create_fn(
+                party_kind=party_kind.lower(),
+                party_account_id=party_opts[party],
+                amount=amount,
+                description=desc,
+                contra_account_id=contra_opts[contra],
+                voucher_date=v_date,
+                amount_settled=settle_amount,
+                settle_account_id=settle_account_id,
+                reference_invoice_id=source_opts[source_label],
+            )
+            st.session_state.pop(flag_key, None)
+            st.rerun()
+        except Exception as exc:
+            st.error(str(exc))
+    if cols[1].button("Cancel", use_container_width=True, key=f"{key_prefix}_cancel"):
+        st.session_state.pop(flag_key, None)
+        st.rerun()
+
+
+@st.dialog("Create Credit Note", on_dismiss=make_dismiss_handler(CREDIT_NOTE))
+def _credit_note_dialog(accounting_service):
+    _note_dialog_body(
+        accounting_service,
+        note_kind="credit",
+        flag_key=CREDIT_NOTE,
+        key_prefix="acc_cn",
+    )
+
+
+@st.dialog("Create Debit Note", on_dismiss=make_dismiss_handler(DEBIT_NOTE))
+def _debit_note_dialog(accounting_service):
+    _note_dialog_body(
+        accounting_service,
+        note_kind="debit",
+        flag_key=DEBIT_NOTE,
+        key_prefix="acc_dn",
+    )
+
+
 # --- tabs --------------------------------------------------------------------
 def _render_accounts_tab(accounting_service):
     if st.button("+ Create Account", type="primary", key="btn_create_acc"):
@@ -766,6 +930,10 @@ def open_pending_dialogs(services: dict) -> None:
         _customization_invoice_dialog(accounting_service)
     elif st.session_state.get(JOURNAL):
         _journal_dialog(accounting_service)
+    elif st.session_state.get(CREDIT_NOTE):
+        _credit_note_dialog(accounting_service)
+    elif st.session_state.get(DEBIT_NOTE):
+        _debit_note_dialog(accounting_service)
 
 
 def _load_accounts(services, filters, sort):
