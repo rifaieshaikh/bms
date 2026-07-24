@@ -354,7 +354,7 @@ VENDORS = ListSchema(
 
 TIME = ListSchema(
     entity_key="time",
-    title="Time Log",
+    title="Tasks",
     filter_fields=[
         FilterField("work_date", "Work date", F.DATE_RANGE),
         FilterField("bill_number", "Measurement bill number", F.EXACT),
@@ -608,7 +608,7 @@ ACTIVITIES = ListSchema(
                     record_attr="activity_type", options=_enum_opts(ActivityType)),
         FilterField("active_only", "Active only", F.CHECKBOX,
                     match=_match_activity_active),
-        FilterField("time_tracking", "Requires time tracking", F.SELECT,
+        FilterField("time_tracking", "Requires task", F.SELECT,
                     options=[("yes", "Yes"), ("no", "No")],
                     match=_match_activity_time_tracking),
     ],

@@ -1,6 +1,8 @@
 from datetime import date
-from typing import List, Optional
+from typing import List, Optional, Union
 
+from vaybooks.bms.domain.boutique.deliveries.entities import Delivery
+from vaybooks.bms.domain.boutique.orders.entities import CustomizationItem, CustomizationOrder
 from vaybooks.bms.domain.boutique.orders.repository import OrderRepository
 from vaybooks.bms.domain.shared.date_utils import (
     calculate_duration_minutes,
@@ -8,7 +10,7 @@ from vaybooks.bms.domain.shared.date_utils import (
     utc_now,
 )
 from vaybooks.bms.domain.shared.exceptions import ValidationError
-from vaybooks.bms.domain.boutique.time_tracking.entities import TimeEntry
+from vaybooks.bms.domain.boutique.time_tracking.entities import TaskType, TimeEntry
 from vaybooks.bms.domain.boutique.time_tracking.repository import TimeTrackingRepository
 from vaybooks.bms.domain.boutique.time_tracking.services import TimeTrackingDomainService
 
@@ -47,7 +49,6 @@ class TimeTrackingAppService:
 
         order = self._order_repo.find_by_id(order_id)
         bill = order.get_bill_by_id(bill_id)
-        from vaybooks.bms.domain.boutique.activities.repository import ActivityRepository
 
         activity_name = ""
         for oa in order.order_activities:
@@ -68,6 +69,36 @@ class TimeTrackingAppService:
             worker_name=worker_name,
             notes=notes,
             ends_next_day=ends_next_day,
+            task_type=TaskType.ACTIVITY,
+        )
+
+    def upsert_etd_task(
+        self, order: CustomizationOrder, item: CustomizationItem
+    ) -> Optional[TimeEntry]:
+        return self._domain.upsert_etd_task(order, item)
+
+    def sync_etd_tasks_for_order(self, order: CustomizationOrder) -> List[TimeEntry]:
+        return self._domain.sync_etd_tasks_for_order(order)
+
+    def create_delivery_task(
+        self, order: CustomizationOrder, delivery: Delivery
+    ) -> TimeEntry:
+        return self._domain.create_delivery_task(order, delivery)
+
+    def list_for_calendar(
+        self,
+        start_date: date,
+        end_date: date,
+        task_type: Optional[Union[TaskType, str]] = None,
+        worker_name: Optional[str] = None,
+        activity_name: Optional[str] = None,
+    ) -> List[TimeEntry]:
+        return self._domain.list_for_calendar(
+            start_date,
+            end_date,
+            task_type=task_type,
+            worker_name=worker_name,
+            activity_name=activity_name,
         )
 
     def get_entries_by_order(self, order_id: str) -> List[TimeEntry]:

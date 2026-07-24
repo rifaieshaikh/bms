@@ -28,6 +28,7 @@ from vaybooks.bms.application.finance.reports.services.sales_module_report_servi
     SalesModuleReportService,
 )
 from vaybooks.bms.application.finance.reports.services.sales_report_service import SalesReportService
+from vaybooks.bms.application.boutique.reports.service import BoutiqueModuleReportService
 from vaybooks.bms.application.boutique.time_tracking.service import TimeTrackingAppService
 from vaybooks.bms.application.finance.accounting.service import AccountingAppService
 from vaybooks.bms.application.boutique.activities.service import ActivityAppService
@@ -424,6 +425,13 @@ def get_services():
     reports_inventory = InventoryReportService(inventory_service, sales=sales_service)
     reports_purchases = PurchaseReportService(purchase_service)
     reports_sales_module = SalesModuleReportService(sales_service)
+    reports_boutique_module = BoutiqueModuleReportService(
+        reports_operations,
+        reports_labor,
+        order_repo,
+        invoice_repo,
+        delivery_repo,
+    )
     report_facade = ReportAppService(
         report_repo,
         reports_business,
@@ -630,7 +638,7 @@ def get_services():
         "expenses": expense_service,
         "invoices": invoice_service,
         "deliveries": DeliveryAppService(
-            delivery_repo, order_repo, invoice_repo, expense_repo
+            delivery_repo, order_repo, invoice_repo, expense_repo, time_repo
         ),
         "accounting": accounting_service,
         "measurements": measurement_service,
@@ -676,6 +684,7 @@ def get_services():
         "sales": sales_service,
         "reports_purchases": reports_purchases,
         "reports_sales_module": reports_sales_module,
+        "reports_boutique_module": reports_boutique_module,
         "activity_repo": activity_repo,
         "order_repo": order_repo,
         "invoice_repo": invoice_repo,

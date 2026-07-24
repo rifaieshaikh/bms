@@ -46,7 +46,7 @@ def _add_activity_dialog(activity_service):
 
     hourly_expense = 0.0
     if meta["requires_pricing"]:
-        st.caption("Time tracking is required. Set the default hourly expense.")
+        st.caption("Task required. Set the default hourly expense.")
         hourly_expense = st.number_input(
             "Default Hourly Expense", min_value=0.0, key="add_act_expense"
         )
@@ -98,7 +98,7 @@ def _edit_activity_dialog(activity_service, activity_id: str):
 
     hourly_expense = activity.default_hourly_expense
     if meta["requires_pricing"]:
-        st.caption("Time tracking is required. Set the default hourly expense.")
+        st.caption("Task required. Set the default hourly expense.")
         hourly_expense = st.number_input(
             "Default Hourly Expense",
             min_value=0.0,
@@ -149,9 +149,9 @@ def _activity_card(activity, index: int):
         st.caption(" · ".join(tags))
 
         if activity.requires_time_tracking:
-            st.write("Time tracking: Required")
+            st.write("Task required")
         else:
-            st.write("Time tracking: Not required")
+            st.write("Task not required")
 
         if activity.requires_pricing:
             st.write(f"Hourly Expense: ₹{activity.default_hourly_expense:,.0f}")

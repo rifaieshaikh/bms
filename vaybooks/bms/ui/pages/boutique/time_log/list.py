@@ -15,10 +15,10 @@ from vaybooks.bms.ui.styles import render_card_grid
 
 def _render_entries(services: dict, time_service, entries):
     if not entries:
-        st.info("No time entries match your filters.")
+        st.info("No tasks match your filters.")
         return
 
-    st.caption(f"{len(entries)} time entries match your filters.")
+    st.caption(f"{len(entries)} tasks match your filters.")
 
     def _render(entry, _i):
         edit_clicked, delete_clicked = time_entry_card(entry, f"tt_{entry.id}")
@@ -46,9 +46,9 @@ def render(services: dict):
     bar = render_filter_sort_bar(
         TIME,
         services=services,
-        primary_label="+ Record Time",
+        primary_label="+ Record Task",
         primary_key="time_record_btn",
-        title="Time Log",
+        title="Tasks",
     )
     if bar["primary_clicked"]:
         st.session_state[TIME_PAGE_RECORD_OPEN] = True

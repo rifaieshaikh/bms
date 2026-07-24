@@ -9,7 +9,7 @@ LIST_PAGES = [
     ("vendors", "Vendors", "strong"),
     ("customizationOrders", "Customization Orders", "h3"),
     ("customizationItems", "Customization Items", "h3"),
-    ("time", "Time Log", "h3"),
+    ("time", "Tasks", "h3"),
     ("accounts", "Chart of Accounts", "h3"),
     ("vouchers", "All Vouchers", "h3"),
     ("receipts", "Receipts", "h3"),

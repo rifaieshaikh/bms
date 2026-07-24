@@ -5,7 +5,7 @@ from vaybooks.bms.domain.boutique.activities.entities import ActivityConfig
 from vaybooks.bms.domain.boutique.orders.entities import CustomizationOrder, OrderActivity
 from vaybooks.bms.domain.shared.date_utils import is_time_entry_complete, minutes_to_hours
 from vaybooks.bms.domain.shared.exceptions import IncompleteTimeEntriesError, ValidationError
-from vaybooks.bms.domain.boutique.time_tracking.entities import TimeEntry
+from vaybooks.bms.domain.boutique.time_tracking.entities import TaskType, TimeEntry
 
 
 @dataclass
@@ -54,10 +54,15 @@ class ActivityDomainService:
                 preview.bill_number = bill.bill_number
             time_entries = [t for t in time_entries if t.bill_id == order_activity.bill_id]
 
+        # Only activity tasks satisfy in-house completion; ETD/Delivery are milestones.
+        time_entries = [
+            t for t in time_entries if t.task_type == TaskType.ACTIVITY
+        ]
+
         if activity_config.requires_time_tracking:
             if not time_entries:
                 raise IncompleteTimeEntriesError(
-                    "No time entries found for this activity"
+                    "No tasks found for this activity"
                 )
             incomplete = [
                 t
@@ -67,8 +72,8 @@ class ActivityDomainService:
             if incomplete:
                 preview.incomplete_time_warning = True
                 raise IncompleteTimeEntriesError(
-                    "Time is recorded but not fully completed. "
-                    "Please complete the time entry before marking this activity as completed."
+                    "Task is recorded but not fully completed. "
+                    "Please complete the task before marking this activity as completed."
                 )
 
             total_minutes = sum(t.duration_minutes for t in time_entries)

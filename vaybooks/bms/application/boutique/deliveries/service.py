@@ -9,6 +9,8 @@ from vaybooks.bms.domain.boutique.orders.entities import CustomizationOrder
 from vaybooks.bms.domain.boutique.orders.repository import OrderRepository
 from vaybooks.bms.domain.boutique.orders.services import OrderDomainService
 from vaybooks.bms.domain.boutique.orders.order_refs import order_ref_search_variants
+from vaybooks.bms.domain.boutique.time_tracking.repository import TimeTrackingRepository
+from vaybooks.bms.domain.boutique.time_tracking.services import TimeTrackingDomainService
 from vaybooks.bms.domain.shared.date_utils import utc_now
 from vaybooks.bms.domain.shared.exceptions import ValidationError
 
@@ -20,11 +22,15 @@ class DeliveryAppService:
         order_repo: OrderRepository,
         invoice_repo,
         expense_repo=None,
+        time_repo: Optional[TimeTrackingRepository] = None,
     ):
         self._delivery_repo = delivery_repo
         self._order_repo = order_repo
         self._invoice_repo = invoice_repo
         self._expense_repo = expense_repo
+        self._time_domain = (
+            TimeTrackingDomainService(time_repo) if time_repo is not None else None
+        )
         self._domain = DeliveryDomainService(delivery_repo)
         self._order_domain = OrderDomainService(order_repo, None)
 
@@ -70,6 +76,8 @@ class DeliveryAppService:
         self._snapshot_item_mph(order, invoices, deliveries)
         order.updated_at = utc_now()
         self._order_repo.save(order)
+        if self._time_domain is not None:
+            self._time_domain.create_delivery_task(order, delivery)
         return delivery
 
     def get_delivery(self, delivery_id: str) -> Optional[Delivery]:
@@ -103,6 +111,8 @@ class DeliveryAppService:
         self._snapshot_item_mph(order, invoices, deliveries)
         order.updated_at = utc_now()
         self._order_repo.save(order)
+        if self._time_domain is not None:
+            self._time_domain.create_delivery_task(order, saved)
         return saved
 
     def list_by_order(self, order_id: str) -> List[Delivery]:

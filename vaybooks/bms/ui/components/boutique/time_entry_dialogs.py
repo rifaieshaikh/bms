@@ -117,7 +117,7 @@ def save_time_entry(services, order, item, data, entry, flag_key=None):
     time_service = services["time_tracking"]
     if entry is not None:
         if not data["activity_id"]:
-            st.error("Select an activity for this time entry")
+            st.error("Select an activity for this task")
             return False
         time_service.update_time_entry(
             entry.id,
@@ -132,7 +132,7 @@ def save_time_entry(services, order, item, data, entry, flag_key=None):
         )
     else:
         if not data["activity_id"]:
-            st.error("Add an activity to this item before recording time")
+            st.error("Add an activity to this item before recording a task")
             return False
         time_service.record_time_entry(
             order_id=order.id,
@@ -162,7 +162,7 @@ def _validate_time_form(data) -> dict:
     return field_errors
 
 
-@st.dialog("Record Time", on_dismiss=dismiss_armed_dialogs)
+@st.dialog("Record Task", on_dismiss=dismiss_armed_dialogs)
 def record_time_dialog(services: dict):
     order_id = order_selector(services, "time_page_ord")
     if not order_id:
@@ -221,7 +221,7 @@ def record_time_dialog(services: dict):
         st.rerun()
 
 
-@st.dialog("Edit Time Entry", on_dismiss=dismiss_armed_dialogs)
+@st.dialog("Edit Task", on_dismiss=dismiss_armed_dialogs)
 def edit_time_dialog(services: dict, entry_id: str):
     time_service = services["time_tracking"]
     entry = time_service.get_entry(entry_id)
@@ -274,7 +274,7 @@ def edit_time_dialog(services: dict, entry_id: str):
         st.rerun()
 
 
-@st.dialog("Record Time", on_dismiss=dismiss_armed_dialogs)
+@st.dialog("Record Task", on_dismiss=dismiss_armed_dialogs)
 def item_time_dialog(services, order_id, item_id, key_prefix, flag_key):
     target = st.session_state.get(flag_key)
     order = services["orders"].get_order_detail(order_id)

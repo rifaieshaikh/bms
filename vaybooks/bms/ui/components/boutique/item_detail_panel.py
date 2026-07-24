@@ -10,6 +10,7 @@ from vaybooks.bms.domain.boutique.orders.entities import (
 )
 from vaybooks.bms.domain.shared.date_utils import minutes_to_hours
 from vaybooks.bms.domain.shared.enums import ActivityStatus, ExpenseSource
+from vaybooks.bms.domain.boutique.time_tracking.entities import TaskType
 from vaybooks.bms.ui.components.boutique.time_entry_dialogs import (
     item_activities,
     item_time_dialog,
@@ -58,7 +59,9 @@ def _activity_time_minutes(services, order_id, item_id, activity_id) -> int:
     return sum(
         e.duration_minutes
         for e in services["time_tracking"].get_entries_by_order(order_id)
-        if e.bill_id == item_id and e.activity_id == activity_id
+        if e.bill_id == item_id
+        and e.activity_id == activity_id
+        and e.task_type == TaskType.ACTIVITY
     )
 
 
@@ -303,16 +306,16 @@ def _complete_activity_body(services, order, item, activity, key_prefix, flag_ke
     hours = minutes_to_hours(minutes)
     if is_service and minutes == 0:
         st.warning(
-            "Time tracking required. Please record time for "
+            "Task required. Please record a task for "
             f"**{activity.activity_name}** before completing it."
         )
         cols = st.columns(2)
         if cols[0].button(
-            "Record Time", key=f"cmpl_rectime_{key_prefix}", type="primary",
+            "Record Task", key=f"cmpl_rectime_{key_prefix}", type="primary",
             use_container_width=True,
         ):
             st.session_state.pop(flag_key, None)
-            st.session_state[f"section_{key_prefix}"] = "Time"
+            st.session_state[f"section_{key_prefix}"] = "Tasks"
             st.rerun()
         if cols[1].button(
             "Close", key=f"cmpl_notime_close_{key_prefix}", use_container_width=True
@@ -608,10 +611,14 @@ def _render_activity_management(services, order, item, key_prefix, allow_dialogs
                         _change_status_flag_key(key_prefix),
                     )
 
-    # Activities that have recorded time or expense cannot be removed.
+    # Activities that have recorded tasks or expense cannot be removed.
     time_entries = services["time_tracking"].get_entries_by_order(order.id)
     expenses = services["expenses"].get_expenses_by_bill(item.item_id)
-    locked = {e.activity_id for e in time_entries if e.bill_id == item.item_id}
+    locked = {
+        e.activity_id
+        for e in time_entries
+        if e.bill_id == item.item_id and e.task_type == TaskType.ACTIVITY
+    }
     locked |= {e.activity_id for e in expenses}
 
     activities = _item_activities(order, item)
@@ -630,7 +637,7 @@ def _render_activity_management(services, order, item, key_prefix, allow_dialogs
 
 # --- time dialogs / management ----------------------------------------------
 def _render_time_summary(entries, item_activities_list):
-    st.markdown("**Time summary**")
+    st.markdown("**Task summary**")
     totals = {}
     for e in entries:
         totals[e.activity_name] = totals.get(e.activity_name, 0) + e.duration_minutes
@@ -641,9 +648,9 @@ def _render_time_summary(entries, item_activities_list):
     ]
     metrics.append(
         (
-            "Total time",
+            "Total tasks",
             f"{minutes_to_hours(total_minutes):.2f} h",
-            f"{total_minutes} min across {len(entries)} entries",
+            f"{total_minutes} min across {len(entries)} tasks",
         )
     )
     metric_grid(metrics, suffix="time_summary")
@@ -651,10 +658,14 @@ def _render_time_summary(entries, item_activities_list):
 
 def _render_time_management(services, order, item, key_prefix, allow_dialogs):
     time_service = services["time_tracking"]
-    entries = [e for e in time_service.get_entries_by_order(order.id) if e.bill_id == item.item_id]
+    entries = [
+        e
+        for e in time_service.get_entries_by_order(order.id)
+        if e.bill_id == item.item_id and e.task_type == TaskType.ACTIVITY
+    ]
     item_activities = _item_activities(order, item)
 
-    if st.button("+ Record Time", key=f"rec_time_{key_prefix}", type="primary"):
+    if st.button("+ Record Task", key=f"rec_time_{key_prefix}", type="primary"):
         if not item_activities:
             st.warning("Add an activity to this item first.")
         elif allow_dialogs:
@@ -670,7 +681,7 @@ def _render_time_management(services, order, item, key_prefix, allow_dialogs):
         target = st.session_state.get(f"inline_time_{key_prefix}")
         entry = None if target == "new" else time_service.get_entry(target)
         with st.container(border=True):
-            st.markdown("**Record / Edit Time**")
+            st.markdown("**Record / Edit Task**")
             data = time_form_fields(item_activities, f"inl_{key_prefix}", entry)
             cols = st.columns(2)
             if cols[0].button("Save", key=f"inl_time_save_{key_prefix}", type="primary"):
@@ -687,9 +698,9 @@ def _render_time_management(services, order, item, key_prefix, allow_dialogs):
 
     _render_time_summary(entries, item_activities)
 
-    st.markdown("**Recorded entries**")
+    st.markdown("**Recorded tasks**")
     if not entries:
-        st.caption("No time entries yet.")
+        st.caption("No tasks yet.")
         return
 
     def _entry_card(entry, _i):
@@ -912,7 +923,7 @@ def customization_item_detail_panel(
     section_key = f"section_{key_prefix}"
     section = st.segmented_control(
         "Manage",
-        ["Activities", "Time", "Expenses"],
+        ["Activities", "Tasks", "Expenses"],
         default="Activities",
         key=section_key,
         label_visibility="collapsed",
@@ -920,7 +931,7 @@ def customization_item_detail_panel(
 
     if section == "Activities":
         _render_activity_management(services, order, item, key_prefix, allow_activity_dialogs)
-    elif section == "Time":
+    elif section == "Tasks":
         _render_time_management(services, order, item, key_prefix, allow_activity_dialogs)
     else:
         _render_expense_management(services, order, item, key_prefix, allow_activity_dialogs)

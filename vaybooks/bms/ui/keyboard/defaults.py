@@ -17,10 +17,13 @@ _PARENTS = [
     ParentShortcut("customers_list", "Customers", "Parties", "ctrl+x", locked=True),
     ParentShortcut("vendors_list", "Vendors", "Parties", "ctrl+shift+v"),
     ParentShortcut("workers_list", "Employees", "Parties", "ctrl+e"),
+    ParentShortcut("boutique_overview", "Boutique Overview", "Customization", "alt+shift+b"),
     ParentShortcut("orders_list", "Customization Orders", "Customization", "ctrl+o"),
     ParentShortcut("items_list", "Customization Items", "Customization", "ctrl+i"),
     ParentShortcut("measurements_list", "Measurements", "Customization", "ctrl+alt+5"),
-    ParentShortcut("time_list", "Time Log", "Customization", "ctrl+t"),
+    ParentShortcut("time_list", "Tasks", "Customization", "ctrl+t"),
+    ParentShortcut("calendar_list", "Calendar", "Customization", "ctrl+shift+c"),
+    ParentShortcut("boutique_reports", "Boutique Reports", "Customization", "alt+shift+t"),
     ParentShortcut("sales_overview", "Sales Overview", "Sales", "alt+shift+o"),
     ParentShortcut("sales_orders_list", "Sales Orders", "Sales", "ctrl+shift+o"),
     ParentShortcut("delivery_notes_list", "Delivery Notes", "Sales", "ctrl+shift+d"),
@@ -117,7 +120,7 @@ _ACTIONS = [
     ActionShortcut(
         "items.activity.mark_done", "Mark activity done", "Items", "ctrl+enter"
     ),
-    ActionShortcut("items.time.add", "Record Time", "Items", "ctrl+shift+t"),
+    ActionShortcut("items.time.add", "Record Task", "Items", "ctrl+shift+t"),
     ActionShortcut("items.expense.add", "Add Expense", "Items", "ctrl+shift+x"),
     ActionShortcut(
         "items.activity.remove",

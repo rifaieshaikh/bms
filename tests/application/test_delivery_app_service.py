@@ -19,12 +19,14 @@ def _delivery_service(
     invoice_repo=None,
     expense_repo=None,
     delivery_repo=None,
+    time_repo=None,
 ) -> DeliveryAppService:
     return DeliveryAppService(
         delivery_repo or FakeDeliveryRepository(),
         order_repo or FakeOrderRepository(),
         invoice_repo or FakeInvoiceRepository(),
         expense_repo or FakeExpenseRepository(),
+        time_repo,
     )
 
 

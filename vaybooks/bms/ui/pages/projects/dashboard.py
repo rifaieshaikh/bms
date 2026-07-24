@@ -107,7 +107,7 @@ def _load_portfolio_rows(services: dict) -> tuple[list[dict], str]:
 
 
 def render(services: dict) -> None:
-    st.header("Projects Dashboard")
+    st.header("Projects Overview")
 
     rows, source = _load_portfolio_rows(services)
     if not rows:

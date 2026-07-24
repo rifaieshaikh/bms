@@ -2,6 +2,7 @@ import streamlit as st
 
 from vaybooks.bms.domain.boutique.orders.bill_status import bill_is_delivered, bill_is_invoiced
 from vaybooks.bms.domain.boutique.orders.entities import BillNumber, CustomizationOrder
+from vaybooks.bms.domain.boutique.time_tracking.entities import TaskType
 from vaybooks.bms.domain.shared.enums import ExpenseSource
 from vaybooks.bms.ui.components.boutique.activity_checklist import activity_checklist
 from vaybooks.bms.ui.components.boutique.time_entry_form import time_entry_form
@@ -39,7 +40,7 @@ def bill_card(
         st.caption(_status_badges(bill, order, invoices, deliveries))
         st.write(f"**Item:** {bill.item_description or '—'}")
 
-        tab_acts, tab_time, tab_exp = st.tabs(["Activities", "Time", "Expenses"])
+        tab_acts, tab_time, tab_exp = st.tabs(["Activities", "Tasks", "Expenses"])
 
         with tab_acts:
             activity_checklist(services, order, bill_id=bill.bill_id)
@@ -47,7 +48,7 @@ def bill_card(
         with tab_time:
             entries = [
                 e for e in time_service.get_entries_by_order(order.id)
-                if e.bill_id == bill.bill_id
+                if e.bill_id == bill.bill_id and e.task_type == TaskType.ACTIVITY
             ]
             if entries:
                 for e in entries:
@@ -56,7 +57,7 @@ def bill_card(
                         f"{e.start_time}-{e.end_time} ({e.duration_minutes} min)"
                     )
             else:
-                st.caption("No time entries yet.")
+                st.caption("No tasks yet.")
 
             bill_activities = [
                 a for a in order.activities_for_bill(bill.bill_id) if a.is_required
@@ -72,7 +73,7 @@ def bill_card(
                         activity_id=act_map.get(act_name),
                         key_prefix=f"time_{bill.bill_id}",
                     )
-                    if st.form_submit_button("Record Time"):
+                    if st.form_submit_button("Record Task"):
                         try:
                             time_service.record_time_entry(
                                 order_id=order.id,
@@ -84,7 +85,7 @@ def bill_card(
                                 worker_name=form_data["worker_name"],
                                 notes=form_data["notes"],
                             )
-                            st.success("Time recorded")
+                            st.success("Task recorded")
                             st.rerun()
                         except Exception as e:
                             st.error(str(e))

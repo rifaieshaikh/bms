@@ -23,6 +23,7 @@ from vaybooks.bms.domain.shared.date_utils import today, utc_now
 from vaybooks.bms.domain.shared.enums import OrderStatus, VoucherType
 from vaybooks.bms.domain.shared.exceptions import ValidationError
 from vaybooks.bms.domain.boutique.time_tracking.repository import TimeTrackingRepository
+from vaybooks.bms.domain.boutique.time_tracking.services import TimeTrackingDomainService
 
 
 class OrderAppService:
@@ -52,6 +53,7 @@ class OrderAppService:
         self._accounting_domain = AccountingDomainService(account_repo, voucher_repo)
         self._activity_repo = activity_repo
         self._time_repo = time_repo
+        self._time_domain = TimeTrackingDomainService(time_repo)
         self._counter_repo = counter_repo
         self._invoice_repo = invoice_repo
         self._delivery_repo = delivery_repo
@@ -59,6 +61,9 @@ class OrderAppService:
         self._measurement_repo = measurement_repo
         self._attachment_service = attachment_service
         self._voucher_repo = voucher_repo
+
+    def _sync_etd_tasks(self, order: CustomizationOrder) -> None:
+        self._time_domain.sync_etd_tasks_for_order(order)
 
     def _release_order_advance(self, order: CustomizationOrder) -> None:
         if not self._accounting_service:
@@ -156,7 +161,9 @@ class OrderAppService:
             if item.expected_delivery_date is None:
                 item.expected_delivery_date = expected_delivery_date
         order.updated_at = utc_now()
-        return self._order_repo.save(order)
+        saved = self._order_repo.save(order)
+        self._sync_etd_tasks(saved)
+        return saved
 
     def find_advance_voucher(self, order_id: str) -> Optional[Voucher]:
         vouchers = self._voucher_repo.list_by_order(order_id) if hasattr(
@@ -268,6 +275,7 @@ class OrderAppService:
             measurement_number=measurement_number,
         )
         self._order_repo.save(order)
+        self._sync_etd_tasks(order)
         return item
 
     def create_customization_order(self, request: CreateOrderRequest) -> CustomizationOrder:
@@ -344,6 +352,7 @@ class OrderAppService:
                 )
                 self._accounting_domain.save_voucher(voucher)
 
+        self._sync_etd_tasks(saved)
         return saved
 
     def search_customization_orders(self, query: str) -> List[CustomizationOrder]:
@@ -379,7 +388,9 @@ class OrderAppService:
         )
 
         self._recalculate_order(order)
-        return self._order_repo.save(order)
+        saved = self._order_repo.save(order)
+        self._sync_etd_tasks(saved)
+        return saved
 
     def list_all_customization_items(self) -> List[dict]:
         rows = []
@@ -593,7 +604,9 @@ class OrderAppService:
                     item.updated_at = utc_now()
         order.updated_at = utc_now()
         self._recalculate_order(order)
-        return self._order_repo.save(order)
+        saved = self._order_repo.save(order)
+        self._sync_etd_tasks(saved)
+        return saved
 
     def update_customization_item(
         self,
@@ -616,7 +629,9 @@ class OrderAppService:
             customer_specification=customer_specification,
         )
         self._recalculate_order(order)
-        return self._order_repo.save(order)
+        saved = self._order_repo.save(order)
+        self._sync_etd_tasks(saved)
+        return saved
 
     def remove_customization_item(
         self,

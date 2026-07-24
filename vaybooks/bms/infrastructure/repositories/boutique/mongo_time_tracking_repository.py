@@ -3,7 +3,7 @@ from typing import List, Optional
 
 from pymongo.database import Database
 
-from vaybooks.bms.domain.boutique.time_tracking.entities import TimeEntry
+from vaybooks.bms.domain.boutique.time_tracking.entities import TaskType, TimeEntry
 from vaybooks.bms.infrastructure.db.bson_utils import from_bson_date, to_bson_value
 
 
@@ -26,11 +26,17 @@ class MongoTimeTrackingRepository:
             "duration_minutes": entry.duration_minutes,
             "worker_name": entry.worker_name,
             "notes": entry.notes,
+            "task_type": entry.task_type.value,
             "created_at": entry.created_at,
             "updated_at": entry.updated_at,
         }
 
     def _from_doc(self, doc: dict) -> TimeEntry:
+        raw_type = doc.get("task_type", TaskType.ACTIVITY.value)
+        try:
+            task_type = TaskType(raw_type)
+        except ValueError:
+            task_type = TaskType.ACTIVITY
         return TimeEntry(
             id=doc["_id"],
             order_id=doc["order_id"],
@@ -45,6 +51,7 @@ class MongoTimeTrackingRepository:
             duration_minutes=doc["duration_minutes"],
             worker_name=doc.get("worker_name", ""),
             notes=doc.get("notes", ""),
+            task_type=task_type,
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
         )

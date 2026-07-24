@@ -64,6 +64,44 @@ def test_cannot_complete_without_time_entries():
         service.prepare_completion(order, order_activity, activity, [])
 
 
+def test_etd_and_delivery_tasks_do_not_satisfy_completion():
+    from vaybooks.bms.domain.boutique.time_tracking.entities import TaskType
+
+    order, order_activity, activity = _make_order_with_activity()
+    order_activity.bill_id = "b1"
+    etd = TimeEntry(
+        order_id="ord1",
+        order_number="CO-0001",
+        bill_id="b1",
+        bill_number="ZB001",
+        activity_id="system:etd",
+        activity_name="ETD",
+        work_date=date.today(),
+        start_time="",
+        end_time="",
+        duration_minutes=0,
+        task_type=TaskType.ETD,
+    )
+    delivery = TimeEntry(
+        order_id="ord1",
+        order_number="CO-0001",
+        bill_id="b1",
+        bill_number="ZB001",
+        activity_id="delivery:d1",
+        activity_name="Delivery",
+        work_date=date.today(),
+        start_time="",
+        end_time="",
+        duration_minutes=0,
+        task_type=TaskType.DELIVERY,
+    )
+    service = ActivityDomainService()
+    with pytest.raises(IncompleteTimeEntriesError, match="No tasks found"):
+        service.prepare_completion(
+            order, order_activity, activity, [etd, delivery]
+        )
+
+
 def test_ready_for_delivery_when_all_done():
     from vaybooks.bms.domain.boutique.orders.services import OrderDomainService
     from tests.conftest import FakeBillRegistryRepository, FakeOrderRepository

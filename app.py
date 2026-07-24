@@ -18,6 +18,8 @@ from vaybooks.bms.ui.pages.parties.vendors import detail as vendor_detail
 from vaybooks.bms.ui.pages.parties.workers import list as workers
 from vaybooks.bms.ui.pages.settings.customization_activities import list as activities
 from vaybooks.bms.ui.pages.settings.project_activities import list as project_activities_mod
+from vaybooks.bms.ui.pages.boutique import overview as boutique_overview_mod
+from vaybooks.bms.ui.pages.boutique import reports as boutique_reports_mod
 from vaybooks.bms.ui.pages.boutique.orders import list as customization_orders_list
 from vaybooks.bms.ui.pages.boutique.orders import detail as customization_order_detail
 from vaybooks.bms.ui.pages.boutique.orders import orders as customization_orders
@@ -27,6 +29,7 @@ from vaybooks.bms.ui.pages.boutique.items import detail as customization_item_de
 from vaybooks.bms.ui.pages.boutique.measurements import list as measurements
 from vaybooks.bms.ui.pages.boutique.measurements import detail as measurement_detail
 from vaybooks.bms.ui.pages.boutique.time_log import list as time_tracking
+from vaybooks.bms.ui.pages.boutique.calendar import list as boutique_calendar
 from vaybooks.bms.ui.pages.finance.accounts import detail as account_detail
 from vaybooks.bms.ui.pages.home.period_dashboard import list as mtd_dashboard
 from vaybooks.bms.ui.pages.sales.invoices import detail as sales_detail
@@ -135,6 +138,10 @@ vendors_page = st.Page(
     _page(vendors), title="Vendors", icon=":material/local_shipping:",
     url_path="vendors",
 )
+boutique_overview_page = st.Page(
+    _page(boutique_overview_mod), title="Overview",
+    icon=":material/dashboard:", url_path="boutique-overview",
+)
 orders_list_page = st.Page(
     _page(customization_orders_list), title="Customization Orders",
     icon=":material/shopping_bag:", url_path="customizationOrders",
@@ -148,8 +155,16 @@ measurements_page = st.Page(
     icon=":material/straighten:", url_path="measurements",
 )
 time_page = st.Page(
-    _page(time_tracking), title="Time Log", icon=":material/schedule:",
+    _page(time_tracking), title="Tasks", icon=":material/schedule:",
     url_path="time",
+)
+calendar_page = st.Page(
+    _page(boutique_calendar), title="Calendar", icon=":material/calendar_month:",
+    url_path="calendar",
+)
+boutique_reports_page = st.Page(
+    _page(boutique_reports_mod), title="Reports", icon=":material/analytics:",
+    url_path="boutique-reports",
 )
 accounts_page = st.Page(
     _page(accounts), title="Accounts", icon=":material/account_balance:",
@@ -302,7 +317,7 @@ workers_page = st.Page(
     _page(workers), title="Employees", icon=":material/badge:", url_path="employees",
 )
 projects_dashboard_page = st.Page(
-    _page(projects_dashboard_mod), title="Dashboard", icon=":material/dashboard:",
+    _page(projects_dashboard_mod), title="Overview", icon=":material/dashboard:",
     url_path="projects-dashboard",
 )
 projects_list_page = st.Page(
@@ -474,6 +489,8 @@ inventory_product_detail_page = st.Page(
 navigation.register("dashboard", dashboard_page)
 navigation.register("customers_list", customers_page)
 navigation.register("vendors_list", vendors_page)
+navigation.register("boutique_overview", boutique_overview_page)
+navigation.register("boutique_reports", boutique_reports_page)
 navigation.register("orders_list", orders_list_page)
 navigation.register("order_detail", order_detail_page)
 navigation.register("items_list", items_page)
@@ -483,6 +500,7 @@ navigation.register("measurement_detail", measurement_detail_page)
 navigation.register("customer_detail", customer_detail_page)
 navigation.register("vendor_detail", vendor_detail_page)
 navigation.register("time_list", time_page)
+navigation.register("calendar_list", calendar_page)
 navigation.register("accounts_list", accounts_page)
 navigation.register("account_detail", account_detail_page)
 navigation.register("vouchers_list", vouchers_page)
@@ -567,10 +585,13 @@ page_groups = {
         workers_page,
     ],
     "Boutique": [
+        boutique_overview_page,
         orders_list_page,
         measurements_page,
         items_page,
         time_page,
+        calendar_page,
+        boutique_reports_page,
     ],
     "Projects": [
         projects_dashboard_page,
