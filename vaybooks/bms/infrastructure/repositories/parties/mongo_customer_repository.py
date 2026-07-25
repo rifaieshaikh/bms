@@ -37,6 +37,8 @@ class MongoCustomerRepository:
             "registration_type": customer.registration_type.value,
             "msme_number": customer.msme_number,
             "notes": customer.notes,
+            "segment_ids": list(customer.segment_ids or []),
+            "segment_names": list(customer.segment_names or []),
             "created_at": customer.created_at,
             "updated_at": customer.updated_at,
         }
@@ -69,6 +71,8 @@ class MongoCustomerRepository:
             msme_number=doc.get("msme_number", ""),
             legacy_address=legacy if not doc.get("address_line1") else "",
             notes=doc.get("notes", ""),
+            segment_ids=list(doc.get("segment_ids") or []),
+            segment_names=list(doc.get("segment_names") or []),
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
         )

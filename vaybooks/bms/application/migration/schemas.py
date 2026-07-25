@@ -88,6 +88,11 @@ _PARTY_COMMON: List[TargetField] = [
     TargetField("msme_number", "MSME Number", aliases=("msme", "udyam")),
     TargetField("notes", "Notes", aliases=("remark", "remarks")),
     TargetField(
+        "segments",
+        "Segments",
+        aliases=("segment", "tags", "party segments", "customer segments", "vendor segments"),
+    ),
+    TargetField(
         "opening_balance",
         "Opening Balance",
         field_type=FieldType.FLOAT,

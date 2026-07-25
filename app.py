@@ -11,11 +11,13 @@ from vaybooks.bms.ui.pages.settings.services import list as vendor_services
 from vaybooks.bms.ui.pages.home.dashboard import list as dashboard
 from vaybooks.bms.ui.pages.finance.export_backup import list as export_backup
 from vaybooks.bms.ui.pages.finance.reports import list as reports
+from vaybooks.bms.ui.pages.finance import overview as finance_overview_mod
 from vaybooks.bms.ui.pages.parties.customers import list as customers
 from vaybooks.bms.ui.pages.parties.customers import detail as customer_detail
 from vaybooks.bms.ui.pages.parties.vendors import list as vendors
 from vaybooks.bms.ui.pages.parties.vendors import detail as vendor_detail
 from vaybooks.bms.ui.pages.parties.workers import list as workers
+from vaybooks.bms.ui.pages.parties.segments import list as party_segments
 from vaybooks.bms.ui.pages.settings.customization_activities import list as activities
 from vaybooks.bms.ui.pages.settings.project_activities import list as project_activities_mod
 from vaybooks.bms.ui.pages.boutique import overview as boutique_overview_mod
@@ -170,6 +172,12 @@ accounts_page = st.Page(
     _page(accounts), title="Accounts", icon=":material/account_balance:",
     url_path="accounts",
 )
+finance_overview_page = st.Page(
+    _page(finance_overview_mod),
+    title="Overview",
+    icon=":material/dashboard:",
+    url_path="finance-overview",
+)
 vouchers_page = st.Page(
     _page(finance_vouchers), title="Vouchers", icon=":material/receipt_long:",
     url_path="vouchers",
@@ -315,6 +323,10 @@ services_page = st.Page(
 )
 workers_page = st.Page(
     _page(workers), title="Employees", icon=":material/badge:", url_path="employees",
+)
+party_segments_page = st.Page(
+    _page(party_segments), title="Segments", icon=":material/label:",
+    url_path="party-segments",
 )
 projects_dashboard_page = st.Page(
     _page(projects_dashboard_mod), title="Overview", icon=":material/dashboard:",
@@ -501,6 +513,7 @@ navigation.register("customer_detail", customer_detail_page)
 navigation.register("vendor_detail", vendor_detail_page)
 navigation.register("time_list", time_page)
 navigation.register("calendar_list", calendar_page)
+navigation.register("finance_overview", finance_overview_page)
 navigation.register("accounts_list", accounts_page)
 navigation.register("account_detail", account_detail_page)
 navigation.register("vouchers_list", vouchers_page)
@@ -544,6 +557,7 @@ navigation.register("measurement_specs", measurement_specs_page)
 navigation.register("order_workspace", order_workspace_page)
 navigation.register("services_list", services_page)
 navigation.register("workers_list", workers_page)
+navigation.register("segments_list", party_segments_page)
 navigation.register("projects_dashboard", projects_dashboard_page)
 navigation.register("projects_list", projects_list_page)
 navigation.register("project_enquiries_list", project_enquiries_list_page)
@@ -583,6 +597,7 @@ page_groups = {
         customers_page,
         vendors_page,
         workers_page,
+        party_segments_page,
     ],
     "Boutique": [
         boutique_overview_page,
@@ -631,6 +646,7 @@ page_groups = {
         inventory_reports_page,
     ],
     "Finance": [
+        finance_overview_page,
         accounts_page,
         vouchers_page,
         receipts_page,

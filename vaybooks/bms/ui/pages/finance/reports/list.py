@@ -1,3 +1,5 @@
+"""Finance Reports — Business Insights and Profitability only."""
+
 from datetime import date
 
 import pandas as pd
@@ -11,7 +13,6 @@ from vaybooks.bms.ui.components.common.report_filters import (
 )
 from vaybooks.bms.ui.pagination import REPORT_PAGE_SIZE, paginate_list, render_page_controls
 from vaybooks.bms.ui.report_schemas import (
-    CUSTOMER_HISTORY,
     REPORT_CATEGORIES,
     SCHEMA_BY_REPORT_TYPE,
     SUMMARY_REPORT_TYPES,
@@ -33,25 +34,6 @@ REPORT_LOADERS: dict[str, tuple[str, str]] = {
     "Expense Detail": ("reports_business", "expense_detail_report"),
     "Item Profitability (MPH)": ("reports_profitability", "item_profitability_report"),
     "Margin Per Hour (MPH)": ("reports_profitability", "mph_report"),
-    "Order Pipeline": ("reports_operations", "order_pipeline_report"),
-    "Bills Pending Invoice": ("reports_operations", "bills_pending_invoice_report"),
-    "Activity Bottleneck": ("reports_operations", "activity_bottleneck_report"),
-    "Delivery Performance": ("reports_operations", "delivery_performance_report"),
-    "Activity Pending": ("reports_operations", "activity_pending_report"),
-    "Overdue Orders": ("reports_operations", "overdue_order_report"),
-    "Completed Orders": ("reports_operations", "completed_order_report"),
-    "Time Tracking": ("reports_labor", "time_tracking_report"),
-    "Employee Productivity": ("reports_labor", "worker_productivity_report"),
-    "Labor vs MPH": ("reports_labor", "labor_vs_mph_report"),
-    "Customer Order History": ("reports_customers", "customer_order_history"),
-    "Purchase Orders Pipeline": ("reports_purchases", "purchase_orders_pipeline_report"),
-    "GRN Pending": ("reports_purchases", "grn_pending_report"),
-    "Purchases by Vendor": ("reports_purchases", "purchases_by_vendor_report"),
-    "Purchase Returns Summary": ("reports_purchases", "purchase_returns_summary_report"),
-    "Sales Orders Pipeline": ("reports_sales_module", "sales_orders_pipeline_report"),
-    "Delivery Pending": ("reports_sales_module", "delivery_pending_report"),
-    "Sales by Customer": ("reports_sales_module", "sales_by_customer_report"),
-    "Sales Returns Summary": ("reports_sales_module", "sales_returns_summary_report"),
 }
 
 
@@ -153,53 +135,6 @@ def _render_standard_report(services: dict, report_type: str) -> None:
     _render_report_table(ordered, schema.entity_key, token)
 
 
-def _render_customer_history(services: dict) -> None:
-    customer_service = services["customers"]
-    report_service = services["reports_customers"]
-    query = st.text_input(
-        "Search customer by name or phone", key="report_cust_search"
-    )
-    if not query:
-        st.caption("Search and select a customer to view order history.")
-        return
-    customers = customer_service.search_customers(query)
-    if not customers:
-        st.info("No customers found")
-        return
-    options = {f"{c.customer_name} — {c.phone_number}": c.id for c in customers}
-    choice = st.selectbox(
-        "Select customer", list(options.keys()), key="report_cust_pick"
-    )
-    customer_id = options[choice]
-
-    bar = render_filter_sort_bar(
-        CUSTOMER_HISTORY,
-        services=services,
-        title="Customer Order History",
-    )
-    committed = bar["filters"]
-    sort = bar["sort"]
-    service_filters = build_report_filter(
-        "Customer Order History",
-        committed,
-        customer_id=customer_id,
-    )
-    token = report_filter_token(
-        "Customer Order History",
-        committed,
-        sort,
-        customer_id=customer_id,
-    )
-    data = report_service.customer_order_history(service_filters)
-    ordered = F.sort_records(data, CUSTOMER_HISTORY, sort)
-    st.caption(f"{len(ordered)} rows")
-    _render_report_table(
-        ordered,
-        f"{CUSTOMER_HISTORY.entity_key}_{customer_id}",
-        token,
-    )
-
-
 def _render_category_tab(services: dict, category: str, reports: list[str]) -> None:
     report_type = st.selectbox(
         "Report",
@@ -207,9 +142,7 @@ def _render_category_tab(services: dict, category: str, reports: list[str]) -> N
         key=f"report_pick_{category.replace(' ', '_').lower()}",
     )
     st.divider()
-    if report_type == "Customer Order History":
-        _render_customer_history(services)
-    elif report_type == "Period Financial Summary":
+    if report_type == "Period Financial Summary":
         _render_period_financial_summary(services)
     else:
         _render_standard_report(services, report_type)
@@ -217,7 +150,7 @@ def _render_category_tab(services: dict, category: str, reports: list[str]) -> N
 
 def render(services: dict):
     st.title("Reports")
-    st.caption("Browse reports by category — each tab has its own report list.")
+    st.caption("Browse finance reports by category — each tab has its own report list.")
     tabs = st.tabs(list(REPORT_CATEGORIES.keys()))
     for tab, (category, reports) in zip(tabs, REPORT_CATEGORIES.items()):
         with tab:

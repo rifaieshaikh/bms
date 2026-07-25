@@ -133,6 +133,8 @@ class BusinessInsightsReportService:
                 continue
             rows.append(
                 {
+                    "account_id": acc.id,
+                    "customer_id": acc.linked_customer_id,
                     "customer_name": customer_name,
                     "account_name": acc.account_name,
                     "balance_due": round(balance, 2),
@@ -157,6 +159,8 @@ class BusinessInsightsReportService:
                 continue
             rows.append(
                 {
+                    "account_id": acc.id,
+                    "vendor_id": acc.linked_vendor_id,
                     "vendor_name": vendor_name,
                     "account_name": acc.account_name,
                     "payable": round(payable, 2),

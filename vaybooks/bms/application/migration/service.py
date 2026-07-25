@@ -32,6 +32,7 @@ from vaybooks.bms.application.migration.validators import (
     validate_mapped_rows,
 )
 from vaybooks.bms.application.parties.vendors.service import VendorAppService
+from vaybooks.bms.application.parties.segments.service import PartySegmentAppService
 from vaybooks.bms.domain.parties.customers.entities import CustomerInput
 from vaybooks.bms.domain.inventory.category_tree import build_category_path
 from vaybooks.bms.domain.inventory.entities import InventoryProduct
@@ -49,12 +50,14 @@ class MigrationAppService:
         vendor_service: VendorAppService,
         inventory_service: InventoryAppService,
         accounting_service: AccountingAppService,
+        party_segment_service: Optional[PartySegmentAppService] = None,
     ):
         self._profiles = profile_repo
         self._customers = customer_service
         self._vendors = vendor_service
         self._inventory = inventory_service
         self._accounting = accounting_service
+        self._party_segments = party_segment_service
 
     # --- templates / parsing / mapping ---------------------------------
 
@@ -549,6 +552,7 @@ class MigrationAppService:
             registration_type = PartyRegistrationType(reg)
         except ValueError:
             registration_type = PartyRegistrationType.UNREGISTERED
+        segment_ids = self._resolve_segment_ids(row.get("segments"), party)
         common = {
             "phone_number": (row.get("phone_number") or "").strip(),
             "alternate_phone_number": (row.get("alternate_phone_number") or None) or None,
@@ -565,6 +569,7 @@ class MigrationAppService:
             "registration_type": registration_type,
             "msme_number": (row.get("msme_number") or "") or "",
             "notes": (row.get("notes") or "") or "",
+            "segment_ids": segment_ids,
         }
         if party == "customer":
             return {
@@ -579,6 +584,24 @@ class MigrationAppService:
             "bank_ifsc": (row.get("bank_ifsc") or "") or "",
             "bank_name": (row.get("bank_name") or "") or "",
         }
+
+    def _resolve_segment_ids(self, raw: Any, party: str) -> List[str]:
+        if raw is None or self._party_segments is None:
+            return []
+        text = str(raw).strip()
+        if not text:
+            return []
+        ids: List[str] = []
+        seen = set()
+        for part in text.replace(";", ",").split(","):
+            name = part.strip()
+            if not name:
+                continue
+            segment = self._party_segments.find_or_create(name, party)
+            if segment.id not in seen:
+                seen.add(segment.id)
+                ids.append(segment.id)
+        return ids
 
     def _apply_party_opening_balance(
         self, party_id: str, amount: Any, party: str

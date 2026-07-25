@@ -1,4 +1,4 @@
-﻿from typing import List, Optional
+﻿from typing import List, Optional, TYPE_CHECKING
 
 from vaybooks.bms.domain.finance.accounting.repository import AccountRepository
 from vaybooks.bms.domain.finance.accounting.services import AccountingDomainService
@@ -6,19 +6,25 @@ from vaybooks.bms.domain.parties.customers.entities import Customer, CustomerInp
 from vaybooks.bms.domain.parties.customers.repository import CustomerRepository
 from vaybooks.bms.domain.parties.customers.services import CustomerDomainService
 
+if TYPE_CHECKING:
+    from vaybooks.bms.application.parties.segments.service import PartySegmentAppService
+
 
 class CustomerAppService:
     def __init__(
         self,
         customer_repo: CustomerRepository,
         account_repo: AccountRepository,
+        segment_service: Optional["PartySegmentAppService"] = None,
     ):
         self._customer_repo = customer_repo
         self._customer_domain = CustomerDomainService(customer_repo)
         self._accounting_domain = AccountingDomainService(account_repo, None)
+        self._segments = segment_service
 
     def create_customer(self, customer_input: CustomerInput) -> Customer:
         customer = self._customer_domain.create(customer_input)
+        customer = self._apply_segment_names(customer)
         account_name = CustomerDomainService.build_account_name(customer)
         self._accounting_domain.ensure_customer_account(customer.id, account_name)
         return customer
@@ -35,6 +41,7 @@ class CustomerAppService:
         self, customer_id: str, customer_input: CustomerInput
     ) -> Customer:
         customer = self._customer_domain.update(customer_id, customer_input)
+        customer = self._apply_segment_names(customer)
         account_name = CustomerDomainService.build_account_name(customer)
         self._accounting_domain.sync_customer_account(customer.id, account_name)
         return customer
@@ -59,3 +66,12 @@ class CustomerAppService:
 
     def list_all_customers(self) -> List[Customer]:
         return self._customer_repo.list_all()
+
+    def _apply_segment_names(self, customer: Customer) -> Customer:
+        if self._segments:
+            customer.segment_names = self._segments.names_for_ids(
+                list(customer.segment_ids or [])
+            )
+        else:
+            customer.segment_names = []
+        return self._customer_repo.save(customer)

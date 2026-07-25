@@ -15,6 +15,7 @@ BUSINESS_COLLECTIONS = (
     "bill_registry",
     "customers",
     "vendors",
+    "party_segments",
     "workers",
     "invoices",
     "deliveries",

@@ -5,6 +5,9 @@ from __future__ import annotations
 import streamlit as st
 
 from vaybooks.bms.ui import navigation
+from vaybooks.bms.ui.components.common.overview_action_cards import (
+    overview_action_cards,
+)
 from vaybooks.bms.ui.styles import metric_grid
 
 DASH_VIEW_MODE = "projects_dashboard_view_mode"
@@ -12,6 +15,10 @@ DASH_VIEW_MODE = "projects_dashboard_view_mode"
 
 def _fmt_currency(value: float) -> str:
     return f"₹{float(value or 0):,.0f}"
+
+
+def _tone_if(positive: bool, tone: str) -> str:
+    return tone if positive else "neutral"
 
 
 def _aggregate_portfolio(rows: list[dict]) -> dict:
@@ -106,17 +113,45 @@ def _load_portfolio_rows(services: dict) -> tuple[list[dict], str]:
     return _enrich_with_billing(services, rows), "projects"
 
 
+def _at_risk_meta(row: dict) -> str:
+    parts = []
+    if row.get("over_contract"):
+        parts.append("Over contract")
+    if row.get("high_unbilled"):
+        parts.append("High unbilled")
+    outstanding = float(row.get("customer_outstanding") or 0)
+    if outstanding > 0:
+        parts.append(f"AR {_fmt_currency(outstanding)}")
+    unbilled = float(row.get("unbilled_cost") or 0)
+    if unbilled > 0:
+        parts.append(f"Unbilled {_fmt_currency(unbilled)}")
+    return " · ".join(parts) if parts else "Needs review"
+
+
+def _render_quick_actions() -> None:
+    st.markdown("**Quick actions**")
+    quick_cols = st.columns(3)
+    if quick_cols[0].button("View all projects", use_container_width=True):
+        navigation.go_to_list("projects_list")
+    if quick_cols[1].button("Project reports", use_container_width=True):
+        navigation.go_to_list("projects_reports")
+    if quick_cols[2].button("Create project", use_container_width=True):
+        navigation.go_to_list("projects_list")
+
+
 def render(services: dict) -> None:
     st.header("Projects Overview")
 
     rows, source = _load_portfolio_rows(services)
     if not rows:
         st.info("No projects yet. Create one from the Projects list.")
-        return
 
     totals = _aggregate_portfolio(rows)
     active = sum(1 for r in rows if r.get("status") in ("Active", "Draft", "On Hold"))
     books_attention = _count_books_attention(rows)
+    unbilled = float(totals["unbilled_cost"] or 0)
+
+    _render_quick_actions()
 
     view_mode = st.radio(
         "View",
@@ -140,6 +175,24 @@ def render(services: dict) -> None:
         )
         revenue_caption = "Billed minus outstanding (portfolio estimate)"
 
+    st.markdown("#### Attention")
+    metric_grid(
+        [
+            (
+                "Books need attention",
+                books_attention,
+                _tone_if(books_attention > 0, "warn"),
+            ),
+            (
+                "Unbilled cost",
+                _fmt_currency(unbilled),
+                _tone_if(unbilled > 0, "warn"),
+            ),
+        ],
+        suffix="projects_dashboard_attention",
+    )
+
+    st.markdown("#### Portfolio")
     metric_grid(
         [
             ("Projects", totals["projects"]),
@@ -147,12 +200,10 @@ def render(services: dict) -> None:
             ("Contract value", _fmt_currency(totals["contract_value"])),
             ("Person-hours", f"{totals['person_hours']:,.1f}"),
             ("Total cost", _fmt_currency(totals["total_cost"])),
-            ("Unbilled cost", _fmt_currency(totals["unbilled_cost"])),
-            ("Books need attention", books_attention),
             (revenue_label, _fmt_currency(revenue_value)),
             ("Unallocated cost", _fmt_currency(totals["unallocated_cost"])),
         ],
-        suffix="projects_dashboard",
+        suffix="projects_dashboard_portfolio",
     )
 
     st.caption(
@@ -162,23 +213,40 @@ def render(services: dict) -> None:
     )
 
     report_svc = services.get("reports_projects")
+    at_risk: list[dict] = []
     if report_svc is not None:
         try:
             at_risk = report_svc.at_risk()
         except Exception as exc:
             st.warning(f"At-risk report unavailable: {exc}")
             at_risk = []
-        if at_risk:
-            with st.expander("At-risk projects", expanded=True):
-                st.dataframe(at_risk, use_container_width=True, hide_index=True)
 
-    quick_cols = st.columns(3)
-    if quick_cols[0].button("View all projects", use_container_width=True):
-        navigation.go_to_list("projects_list")
-    if quick_cols[1].button("Project reports", use_container_width=True):
-        navigation.go_to_list("projects_reports")
-    if quick_cols[2].button("Create project", use_container_width=True):
-        navigation.go_to_list("projects_list")
+    queue_rows = [
+        {
+            **row,
+            "id": row.get("project_id"),
+        }
+        for row in at_risk
+    ]
+    overview_action_cards(
+        "At-risk projects",
+        queue_rows,
+        "projects_dashboard_at_risk",
+        accent="orange",
+        title_fn=lambda r: r.get("project_number") or "—",
+        subtitle_fn=lambda r: _fmt_currency(r.get("contract_value") or 0),
+        meta_fn=_at_risk_meta,
+        badge_fn=lambda r: (
+            ("Over contract", "red")
+            if r.get("over_contract")
+            else (("High unbilled", "orange") if r.get("high_unbilled") else None)
+        ),
+        on_open=lambda r: navigation.go_to_list(
+            "project_workspace", project=r.get("project_id") or r.get("id")
+        ),
+        empty_msg="All clear — no at-risk projects.",
+        max_cards=8,
+    )
 
     with st.expander("Portfolio detail", expanded=False):
         st.dataframe(rows, use_container_width=True, hide_index=True)

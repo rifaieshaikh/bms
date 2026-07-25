@@ -29,6 +29,20 @@ SUBMIT_ADD = "submit_customer_add"
 SUBMIT_EDIT = "submit_customer_edit"
 
 
+def _customer_segment_options(
+    services: dict, customer=None
+) -> dict:
+    segments = services.get("party_segments")
+    if not segments:
+        return {}
+    assigned = set(getattr(customer, "segment_ids", None) or [])
+    options = {}
+    for s in segments.list_for_party("customer", active_only=False):
+        if s.is_active or s.id in assigned:
+            options[s.name] = s.id
+    return options
+
+
 def _open_add_customer() -> None:
     clear_all_dialog_flags()
     st.session_state.pop(C_DUP_CUSTOMER_ID, None)
@@ -83,13 +97,15 @@ def _do_update_customer(
 
 
 @st.dialog("Add Customer", width="large", on_dismiss=make_dismiss_handler(C_ADD))
-def _add_customer_dialog(customer_service):
+def _add_customer_dialog(customer_service, services: dict):
     mark_wired("dialog.save", "customers.create")
     dup_id = st.session_state.get(C_DUP_CUSTOMER_ID)
     if dup_id:
         _render_duplicate_customer_warning(dup_id, customer_service)
 
-    customer_input = render_customer_form("c_add")
+    customer_input = render_customer_form(
+        "c_add", segment_options=_customer_segment_options(services)
+    )
 
     cols = st.columns(2)
     do_create = cols[0].button(
@@ -104,14 +120,18 @@ def _add_customer_dialog(customer_service):
 
 
 @st.dialog("Edit Customer", width="large", on_dismiss=make_dismiss_handler(C_EDIT))
-def _edit_customer_dialog(customer_service, customer_id: str):
+def _edit_customer_dialog(customer_service, customer_id: str, services: dict):
     mark_wired("dialog.save", "customers.save")
     customer = customer_service.get_customer_detail(customer_id)
     if not customer:
         st.error("Customer not found")
         return
 
-    customer_input = render_customer_form("c_edit", customer=customer)
+    customer_input = render_customer_form(
+        "c_edit",
+        customer=customer,
+        segment_options=_customer_segment_options(services, customer),
+    )
 
     cols = st.columns(2)
     do_save = cols[0].button(
@@ -185,10 +205,12 @@ def render(services: dict):
 
         get_submit_map().setdefault(C_ADD, SUBMIT_ADD)
         register_armed_dialog(C_ADD)
-        _add_customer_dialog(services["customers"])
+        _add_customer_dialog(services["customers"], services)
     if st.session_state.get(C_EDIT):
         from vaybooks.bms.ui.keyboard.context import get_submit_map
 
         get_submit_map().setdefault(C_EDIT, SUBMIT_EDIT)
         register_armed_dialog(C_EDIT)
-        _edit_customer_dialog(services["customers"], st.session_state[C_EDIT])
+        _edit_customer_dialog(
+            services["customers"], st.session_state[C_EDIT], services
+        )

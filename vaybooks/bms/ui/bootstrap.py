@@ -4,6 +4,7 @@ import streamlit as st
 from vaybooks.bms.application.settings.business.service import BusinessAppService
 from vaybooks.bms.application.parties.customers.service import CustomerAppService
 from vaybooks.bms.application.parties.vendors.service import VendorAppService
+from vaybooks.bms.application.parties.segments.service import PartySegmentAppService
 from vaybooks.bms.application.boutique.deliveries.service import DeliveryAppService
 from vaybooks.bms.application.boutique.expenses.service import ExpenseAppService
 from vaybooks.bms.application.finance.export.service import ExportAppService
@@ -79,6 +80,9 @@ from vaybooks.bms.infrastructure.repositories.boutique.mongo_activity_repository
 from vaybooks.bms.infrastructure.repositories.finance.mongo_counter_repository import MongoCounterRepository
 from vaybooks.bms.infrastructure.repositories.parties.mongo_customer_repository import MongoCustomerRepository
 from vaybooks.bms.infrastructure.repositories.parties.mongo_vendor_repository import MongoVendorRepository
+from vaybooks.bms.infrastructure.repositories.parties.mongo_party_segment_repository import (
+    MongoPartySegmentRepository,
+)
 from vaybooks.bms.infrastructure.repositories.shared.mongo_vendor_service_repository import (
     MongoVendorServiceRepository,
 )
@@ -293,6 +297,7 @@ def get_services():
 
     customer_repo = MongoCustomerRepository(db)
     vendor_repo = MongoVendorRepository(db)
+    party_segment_repo = MongoPartySegmentRepository(db)
     vendor_service_repo = MongoVendorServiceRepository(db)
     account_repo = MongoAccountRepository(db)
     voucher_repo = MongoVoucherRepository(db)
@@ -369,8 +374,13 @@ def get_services():
     project_audit_repo = MongoProjectAuditRepository(db)
 
     accounting_service = AccountingAppService(account_repo, voucher_repo, counter_repo)
-    customer_service = CustomerAppService(customer_repo, account_repo)
-    vendor_service = VendorAppService(vendor_repo, account_repo)
+    party_segment_service = PartySegmentAppService(party_segment_repo)
+    customer_service = CustomerAppService(
+        customer_repo, account_repo, segment_service=party_segment_service
+    )
+    vendor_service = VendorAppService(
+        vendor_repo, account_repo, segment_service=party_segment_service
+    )
     business_service = BusinessAppService(business_profile_repo)
     vendor_services_config = VendorServiceAppService(vendor_service_repo)
 
@@ -396,6 +406,7 @@ def get_services():
         vendor_service,
         inventory_service,
         accounting_service,
+        party_segment_service=party_segment_service,
     )
     purchase_service = PurchaseAppService(
         po_repo,
@@ -614,6 +625,7 @@ def get_services():
     return {
         "customers": customer_service,
         "vendors": vendor_service,
+        "party_segments": party_segment_service,
         "vendor_services": vendor_services_config,
         "business": business_service,
         "orders": OrderAppService(

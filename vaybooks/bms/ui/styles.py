@@ -173,6 +173,21 @@ def inject_global_css() -> None:
             border-radius: 10px;
             padding: 0.5rem 0.75rem;
           }
+          div[class*="st-key-metric_tone_warn"] div[data-testid="stMetric"] {
+            border-left: 3px solid #B4711A;
+            background: #FFFBF5;
+          }
+          div[class*="st-key-metric_tone_danger"] div[data-testid="stMetric"] {
+            border-left: 3px solid #B03636;
+            background: #FFF8F8;
+          }
+          div[class*="st-key-metric_tone_good"] div[data-testid="stMetric"] {
+            border-left: 3px solid #2E7D46;
+            background: #F6FBF7;
+          }
+          div[class*="st-key-metric_tone_neutral"] div[data-testid="stMetric"] {
+            border-left: 3px solid var(--z-plum);
+          }
 
           /* ---- Detail panels: single bordered cards on detail pages ------ */
           /* Same plum accent + elevation as grid cards, but no hover lift    */
@@ -277,6 +292,23 @@ def status_badge(label: str, color: str | None = None, *, compact: bool = False)
     return f'<span class="z-badge {tone}{extra}">{label}</span>'
 
 
+_METRIC_TONES = frozenset({"neutral", "warn", "danger", "good"})
+
+
+def _parse_metric(metric: tuple) -> tuple[str, object, str | None, str]:
+    """Normalize ``(label, value[, help[, tone]])`` to four fields."""
+    label, value = metric[0], metric[1]
+    helptext = metric[2] if len(metric) > 2 else None
+    tone = metric[3] if len(metric) > 3 else "neutral"
+    if helptext in _METRIC_TONES and len(metric) == 3:
+        # Allow ``(label, value, tone)`` without a help string.
+        tone = helptext
+        helptext = None
+    if tone not in _METRIC_TONES:
+        tone = "neutral"
+    return label, value, helptext, tone
+
+
 def metric_grid(
     metrics: Sequence[tuple],
     *,
@@ -285,7 +317,9 @@ def metric_grid(
 ) -> None:
     """Render KPI metrics responsively (wraps on tablet/phone).
 
-    ``metrics`` is a sequence of ``(label, value)`` or ``(label, value, help)``.
+    ``metrics`` is a sequence of ``(label, value)``, ``(label, value, help)``,
+    ``(label, value, tone)``, or ``(label, value, help, tone)``.
+    Tone is one of ``neutral``, ``warn``, ``danger``, ``good``.
     """
     if not metrics:
         return
@@ -295,6 +329,7 @@ def metric_grid(
             row = metrics[row_start : row_start + n_cols]
             cols = st.columns(n_cols)
             for offset, metric in enumerate(row):
-                label, value = metric[0], metric[1]
-                helptext = metric[2] if len(metric) > 2 else None
-                cols[offset].metric(label, value, help=helptext, border=True)
+                label, value, helptext, tone = _parse_metric(metric)
+                with cols[offset]:
+                    with st.container(key=f"metric_tone_{tone}_{suffix}_{row_start}_{offset}"):
+                        st.metric(label, value, help=helptext, border=True)

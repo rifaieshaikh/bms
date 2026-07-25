@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 from uuid import uuid4
 
 from vaybooks.bms.domain.shared.date_utils import utc_now
@@ -30,6 +30,7 @@ class VendorInput:
     bank_ifsc: str = ""
     bank_name: str = ""
     notes: str = ""
+    segment_ids: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -55,6 +56,8 @@ class Vendor:
     bank_ifsc: str = ""
     bank_name: str = ""
     notes: str = ""
+    segment_ids: List[str] = field(default_factory=list)
+    segment_names: List[str] = field(default_factory=list)
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
 
@@ -102,6 +105,7 @@ class Vendor:
             bank_ifsc=vendor_input.bank_ifsc,
             bank_name=vendor_input.bank_name.strip(),
             notes=vendor_input.notes,
+            segment_ids=list(vendor_input.segment_ids or []),
         )
 
     def apply_input(self, vendor_input: VendorInput) -> None:
@@ -126,4 +130,5 @@ class Vendor:
             bank_ifsc=vendor_input.bank_ifsc,
             bank_name=vendor_input.bank_name.strip(),
             notes=vendor_input.notes,
+            segment_ids=list(vendor_input.segment_ids or []),
         )

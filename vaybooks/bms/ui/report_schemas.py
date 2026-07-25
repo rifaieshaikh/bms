@@ -1254,6 +1254,7 @@ PRODUCT_RATE_CARD = ListSchema(
     page_size=REPORT_PAGE_SIZE,
 )
 
+# Finance → Reports only. Module-owned reports live under their own menus.
 REPORT_CATEGORIES: dict[str, list[str]] = {
     "Business Insights": [
         "Period Financial Summary",
@@ -1270,36 +1271,38 @@ REPORT_CATEGORIES: dict[str, list[str]] = {
         "Item Profitability (MPH)",
         "Margin Per Hour (MPH)",
     ],
-    "Operations": [
-        "Order Pipeline",
-        "Bills Pending Invoice",
-        "Activity Bottleneck",
-        "Delivery Performance",
-        "Activity Pending",
-        "Overdue Orders",
-        "Completed Orders",
-    ],
-    "Labor": [
-        "Time Tracking",
-        "Employee Productivity",
-        "Labor vs MPH",
-    ],
-    "Customers": [
-        "Customer Order History",
-    ],
-    "Purchases": [
-        "Purchase Orders Pipeline",
-        "GRN Pending",
-        "Purchases by Vendor",
-        "Purchase Returns Summary",
-    ],
-    "Sales Documents": [
-        "Sales Orders Pipeline",
-        "Delivery Pending",
-        "Sales by Customer",
-        "Sales Returns Summary",
-    ],
 }
+
+# Boutique → Reports (operations, labor, customer history).
+BOUTIQUE_REPORT_TYPES = [
+    "Order Pipeline",
+    "Bills Pending Invoice",
+    "Activity Bottleneck",
+    "Delivery Performance",
+    "Activity Pending",
+    "Overdue Orders",
+    "Completed Orders",
+    "Time Tracking",
+    "Employee Productivity",
+    "Labor vs MPH",
+    "Customer Order History",
+]
+
+# Sales → Reports.
+SALES_MODULE_REPORT_TYPES = [
+    "Sales Orders Pipeline",
+    "Delivery Pending",
+    "Sales by Customer",
+    "Sales Returns Summary",
+]
+
+# Purchases → Reports.
+PURCHASE_MODULE_REPORT_TYPES = [
+    "Purchase Orders Pipeline",
+    "GRN Pending",
+    "Purchases by Vendor",
+    "Purchase Returns Summary",
+]
 
 # Inventory reports live only under Inventory → Reports (not Finance).
 INVENTORY_REPORT_TYPES = [
@@ -1375,12 +1378,15 @@ CATEGORY_BY_REPORT_TYPE = {
 CATEGORY_SERVICE_KEYS = {
     "Business Insights": "reports_business",
     "Profitability": "reports_profitability",
-    "Operations": "reports_operations",
-    "Labor": "reports_labor",
-    "Customers": "reports_customers",
-    "Purchases": "reports_purchases",
-    "Sales Documents": "reports_sales_module",
 }
+
+# All non-Finance report menus (schemas still live in SCHEMA_BY_REPORT_TYPE).
+MODULE_OWNED_REPORT_TYPES = (
+    BOUTIQUE_REPORT_TYPES
+    + SALES_MODULE_REPORT_TYPES
+    + PURCHASE_MODULE_REPORT_TYPES
+    + INVENTORY_REPORT_TYPES
+)
 
 REPORT_TYPES = [
     report

@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 from uuid import uuid4
 
 from vaybooks.bms.domain.shared.date_utils import utc_now
@@ -26,6 +26,7 @@ class CustomerInput:
     registration_type: PartyRegistrationType = PartyRegistrationType.UNREGISTERED
     msme_number: str = ""
     notes: str = ""
+    segment_ids: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -48,6 +49,8 @@ class Customer:
     msme_number: str = ""
     legacy_address: str = ""
     notes: str = ""
+    segment_ids: List[str] = field(default_factory=list)
+    segment_names: List[str] = field(default_factory=list)
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
 
@@ -96,6 +99,7 @@ class Customer:
             registration_type=customer_input.registration_type,
             msme_number=customer_input.msme_number.strip(),
             notes=customer_input.notes,
+            segment_ids=list(customer_input.segment_ids or []),
         )
 
     def apply_input(self, customer_input: CustomerInput) -> None:
@@ -116,4 +120,5 @@ class Customer:
             registration_type=customer_input.registration_type,
             msme_number=customer_input.msme_number.strip(),
             notes=customer_input.notes,
+            segment_ids=list(customer_input.segment_ids or []),
         )

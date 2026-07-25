@@ -105,6 +105,33 @@ def _inventory_products(services):
     ]
 
 
+def _party_segments(services):
+    segments = services.get("party_segments")
+    if segments is None:
+        return []
+    return [(s.id, s.name) for s in segments.list_segments(active_only=False)]
+
+
+def _customer_segments(services):
+    segments = services.get("party_segments")
+    if segments is None:
+        return []
+    return [
+        (s.id, s.name)
+        for s in segments.list_for_party("customer", active_only=False)
+    ]
+
+
+def _vendor_segments(services):
+    segments = services.get("party_segments")
+    if segments is None:
+        return []
+    return [
+        (s.id, s.name)
+        for s in segments.list_for_party("vendor", active_only=False)
+    ]
+
+
 OPTION_LOADERS = {
     "customers": _customers,
     "vendors": _vendors,
@@ -117,6 +144,9 @@ OPTION_LOADERS = {
     "services_by_id": _services_by_id,
     "inventory_categories": _inventory_categories,
     "inventory_products": _inventory_products,
+    "party_segments": _party_segments,
+    "customer_segments": _customer_segments,
+    "vendor_segments": _vendor_segments,
 }
 
 
@@ -149,6 +179,11 @@ def _match_vendor_balance(vendor, value) -> bool:
     if value == "cr":
         return bal < 0
     return bal == 0
+
+
+def _match_has_segment(party, value) -> bool:
+    ids = getattr(party, "segment_ids", None) or []
+    return value in ids
 
 
 def _match_account_active(account, _value) -> bool:
@@ -304,6 +339,13 @@ CUSTOMERS = ListSchema(
         FilterField("gstin", "GSTIN", F.REGEX),
         FilterField("registration_type", "Registration type", F.SELECT,
                     options=_enum_opts(PartyRegistrationType)),
+        FilterField(
+            "segment_id",
+            "Segment",
+            F.ENTITY_SELECT,
+            options_loader="customer_segments",
+            match=_match_has_segment,
+        ),
         FilterField("has_orders", "Has orders", F.SELECT,
                     options=[("with", "With orders"), ("without", "Without orders")],
                     match=_match_customer_has_orders),
@@ -330,6 +372,13 @@ VENDORS = ListSchema(
         ),
         FilterField("phone_number", "Phone", F.REGEX),
         FilterField("alternate_phone_number", "Alternate phone", F.REGEX),
+        FilterField(
+            "segment_id",
+            "Segment",
+            F.ENTITY_SELECT,
+            options_loader="vendor_segments",
+            match=_match_has_segment,
+        ),
         FilterField(
             "balance_state",
             "Payable balance",

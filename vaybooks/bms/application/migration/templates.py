@@ -35,6 +35,7 @@ _SAMPLE_ROWS = {
             "email": "sample@example.com",
             "city": "Chennai",
             "state_code": "33",
+            "segments": "Retail, Wholesale",
             "opening_balance": "1500",
         }
     ],
@@ -45,6 +46,7 @@ _SAMPLE_ROWS = {
             "email": "vendor@example.com",
             "city": "Chennai",
             "state_code": "33",
+            "segments": "Fabric Supplier",
             "opening_balance": "2000",
         }
     ],

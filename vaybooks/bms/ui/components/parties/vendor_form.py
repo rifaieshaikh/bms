@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Dict, List, Optional
 
 import streamlit as st
 
@@ -25,7 +25,12 @@ def _vendor_has_banking(vendor: Optional[Vendor]) -> bool:
 def render_vendor_form(
     key_prefix: str,
     vendor: Optional[Vendor] = None,
+    segment_options: Optional[Dict[str, str]] = None,
 ) -> VendorInput:
+    """Render vendor fields.
+
+    ``segment_options`` maps display name -> segment id (active vendor segments).
+    """
     col_name, col_contact = st.columns(2)
     vendor_name = col_name.text_input(
         "Vendor Name *",
@@ -60,6 +65,27 @@ def render_vendor_form(
         party=vendor,
         registration_type_enum=PartyRegistrationType,
     )
+
+    segment_ids: List[str] = list(vendor.segment_ids or []) if vendor else []
+    opts = segment_options or {}
+    if opts:
+        id_to_name = {sid: name for name, sid in opts.items()}
+        current_names = []
+        if vendor:
+            for sid in vendor.segment_ids or []:
+                name = id_to_name.get(sid)
+                if name:
+                    current_names.append(name)
+        selected = st.multiselect(
+            "Segments",
+            list(opts.keys()),
+            default=current_names,
+            key=f"{key_prefix}_segments",
+            placeholder="Select segments…",
+        )
+        segment_ids = [opts[n] for n in selected if n in opts]
+    else:
+        st.caption("No party segments defined yet. Add them under Parties → Segments.")
 
     with st.expander("Banking", expanded=_vendor_has_banking(vendor)):
         col_holder, col_bank = st.columns(2)
@@ -115,4 +141,5 @@ def render_vendor_form(
         bank_ifsc=bank_ifsc,
         bank_name=bank_name,
         notes=notes,
+        segment_ids=segment_ids,
     )

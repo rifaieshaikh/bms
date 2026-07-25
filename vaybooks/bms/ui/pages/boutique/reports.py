@@ -1,4 +1,4 @@
-"""Boutique Reports - module-facing subset of operations and labor reports."""
+"""Boutique Reports — operations, labor, and customer order history."""
 
 from __future__ import annotations
 
@@ -19,18 +19,25 @@ from vaybooks.bms.ui.pagination import (
     paginate_list,
     render_page_controls,
 )
-from vaybooks.bms.ui.report_schemas import SCHEMA_BY_REPORT_TYPE
+from vaybooks.bms.ui.report_schemas import (
+    BOUTIQUE_REPORT_TYPES,
+    CUSTOMER_HISTORY,
+    SCHEMA_BY_REPORT_TYPE,
+)
 
-# report_type -> method on reports_boutique_module
+# report_type -> method on reports_boutique_module (except Customer Order History)
 BOUTIQUE_REPORT_METHODS: dict[str, str] = {
     "Order Pipeline": "order_pipeline_report",
     "Overdue Orders": "overdue_order_report",
     "Bills Pending Invoice": "bills_pending_invoice_report",
     "Activity Pending": "activity_pending_report",
+    "Activity Bottleneck": "activity_bottleneck_report",
+    "Delivery Performance": "delivery_performance_report",
+    "Completed Orders": "completed_order_report",
     "Time Tracking": "time_tracking_report",
+    "Employee Productivity": "worker_productivity_report",
+    "Labor vs MPH": "labor_vs_mph_report",
 }
-
-BOUTIQUE_REPORT_TYPES = list(BOUTIQUE_REPORT_METHODS.keys())
 
 
 def _slug(report_type: str) -> str:
@@ -76,6 +83,58 @@ def _render_table(data: list, entity_key: str, filter_token: str) -> None:
     )
 
 
+def _render_customer_history(services: dict) -> None:
+    customer_service = services.get("customers")
+    report_service = services.get("reports_customers")
+    if customer_service is None or report_service is None:
+        st.error("Customer history services are unavailable.")
+        return
+
+    query = st.text_input(
+        "Search customer by name or phone", key="boutique_report_cust_search"
+    )
+    if not query:
+        st.caption("Search and select a customer to view order history.")
+        return
+    customers = customer_service.search_customers(query)
+    if not customers:
+        st.info("No customers found")
+        return
+    options = {f"{c.customer_name} — {c.phone_number}": c.id for c in customers}
+    choice = st.selectbox(
+        "Select customer", list(options.keys()), key="boutique_report_cust_pick"
+    )
+    customer_id = options[choice]
+
+    bar = render_filter_sort_bar(
+        CUSTOMER_HISTORY,
+        services=services,
+        title="Customer Order History",
+    )
+    committed = bar["filters"]
+    sort = bar["sort"]
+    service_filters = build_report_filter(
+        "Customer Order History",
+        committed,
+        customer_id=customer_id,
+    )
+    token = report_filter_token(
+        "Customer Order History",
+        committed,
+        sort,
+        customer_id=customer_id,
+    )
+    data = report_service.customer_order_history(service_filters)
+    ordered = F.sort_records(data, CUSTOMER_HISTORY, sort)
+    st.caption(f"{len(ordered)} rows")
+    _download_button(pd.DataFrame(ordered), "Customer Order History")
+    _render_table(
+        ordered,
+        f"{CUSTOMER_HISTORY.entity_key}_{customer_id}",
+        token,
+    )
+
+
 def render(services: dict) -> None:
     st.header("Boutique Reports")
 
@@ -89,6 +148,10 @@ def render(services: dict) -> None:
         options=BOUTIQUE_REPORT_TYPES,
         key="boutique_reports_type",
     )
+
+    if report_type == "Customer Order History":
+        _render_customer_history(services)
+        return
 
     schema = SCHEMA_BY_REPORT_TYPE[report_type]
     bar = render_filter_sort_bar(schema, services=services, title=report_type)

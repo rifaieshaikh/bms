@@ -4,8 +4,8 @@ from vaybooks.bms.application.report_filters import DateRange, ItemProfitability
 from vaybooks.bms.ui.components.common.report_filters import build_item_profitability_filter
 from vaybooks.bms.ui import filtering as F
 from vaybooks.bms.ui.report_schemas import (
-    INVENTORY_REPORT_TYPES,
     ITEM_PROFITABILITY,
+    MODULE_OWNED_REPORT_TYPES,
     ORDER_MPH,
     REPORT_CATEGORIES,
     REPORT_TYPES,
@@ -47,7 +47,10 @@ def test_report_categories_cover_all_reports():
     assert len(listed) == len(REPORT_TYPES)
     assert set(listed) == set(REPORT_TYPES)
     assert "Inventory" not in REPORT_CATEGORIES
-    assert set(REPORT_TYPES).isdisjoint(INVENTORY_REPORT_TYPES)
-    assert set(REPORT_TYPES) | set(INVENTORY_REPORT_TYPES) == set(
+    assert "Operations" not in REPORT_CATEGORIES
+    assert "Purchases" not in REPORT_CATEGORIES
+    assert "Sales Documents" not in REPORT_CATEGORIES
+    assert set(REPORT_TYPES).isdisjoint(MODULE_OWNED_REPORT_TYPES)
+    assert set(REPORT_TYPES) | set(MODULE_OWNED_REPORT_TYPES) == set(
         SCHEMA_BY_REPORT_TYPE.keys()
     )

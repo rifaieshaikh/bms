@@ -25,8 +25,13 @@ def _create_index(collection, keys, **kwargs):
 def ensure_indexes(db):
     _create_index(db.customers, "phone_number", unique=True, sparse=True)
     _create_index(db.customers, "gstin", unique=True, sparse=True)
+    _create_index(db.customers, "segment_ids")
     _create_index(db.vendors, "phone_number", unique=True, sparse=True)
     _create_index(db.vendors, "gstin", unique=True, sparse=True)
+    _create_index(db.vendors, "segment_ids")
+    _create_index(db.party_segments, "name", unique=True)
+    _create_index(db.party_segments, "applies_to")
+    _create_index(db.party_segments, "is_active")
     # One account per customer / vendor. Partial filter on string values excludes
     # the null link shared by all other accounts.
     _create_index(

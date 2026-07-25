@@ -34,6 +34,8 @@ class MongoVendorRepository:
             "bank_ifsc": vendor.bank_ifsc,
             "bank_name": vendor.bank_name,
             "notes": vendor.notes,
+            "segment_ids": list(vendor.segment_ids or []),
+            "segment_names": list(vendor.segment_names or []),
             "created_at": vendor.created_at,
             "updated_at": vendor.updated_at,
         }
@@ -72,6 +74,8 @@ class MongoVendorRepository:
             bank_ifsc=doc.get("bank_ifsc", ""),
             bank_name=doc.get("bank_name", ""),
             notes=doc.get("notes", ""),
+            segment_ids=list(doc.get("segment_ids") or []),
+            segment_names=list(doc.get("segment_names") or []),
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
         )

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Dict, List, Optional
 
 import streamlit as st
 
@@ -14,7 +14,12 @@ from vaybooks.bms.ui.components.common.party_form_fields import render_party_add
 def render_customer_form(
     key_prefix: str,
     customer: Optional[Customer] = None,
+    segment_options: Optional[Dict[str, str]] = None,
 ) -> CustomerInput:
+    """Render customer fields.
+
+    ``segment_options`` maps display name -> segment id (active customer segments).
+    """
     col_name, col_contact = st.columns(2)
     customer_name = col_name.text_input(
         "Customer Name *",
@@ -50,6 +55,27 @@ def render_customer_form(
         registration_type_enum=PartyRegistrationType,
     )
 
+    segment_ids: List[str] = list(customer.segment_ids or []) if customer else []
+    opts = segment_options or {}
+    if opts:
+        id_to_name = {sid: name for name, sid in opts.items()}
+        current_names = []
+        if customer:
+            for sid in customer.segment_ids or []:
+                name = id_to_name.get(sid)
+                if name:
+                    current_names.append(name)
+        selected = st.multiselect(
+            "Segments",
+            list(opts.keys()),
+            default=current_names,
+            key=f"{key_prefix}_segments",
+            placeholder="Select segments…",
+        )
+        segment_ids = [opts[n] for n in selected if n in opts]
+    else:
+        st.caption("No party segments defined yet. Add them under Parties → Segments.")
+
     with st.expander("Notes", expanded=bool(customer and customer.notes)):
         notes = st.text_area(
             "Notes",
@@ -75,4 +101,5 @@ def render_customer_form(
         registration_type=tax_fields["registration_type"],
         msme_number=tax_fields["msme_number"],
         notes=notes,
+        segment_ids=segment_ids,
     )

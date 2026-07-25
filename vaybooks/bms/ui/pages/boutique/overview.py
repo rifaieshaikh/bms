@@ -14,6 +14,9 @@ from vaybooks.bms.ui.components.common.filter_sort_bar import (
     _normalize_date_range,
     render_filter_sort_bar,
 )
+from vaybooks.bms.ui.components.common.overview_action_cards import (
+    overview_action_cards,
+)
 from vaybooks.bms.ui.styles import metric_grid
 
 QUEUE_LIMIT = 8
@@ -25,6 +28,10 @@ def _fmt_currency(value: float) -> str:
 
 def _resolved_range(committed: dict) -> tuple[date, date]:
     return _normalize_date_range(committed.get("date_range")) or _mtd_range()
+
+
+def _tone_if(positive: bool, tone: str) -> str:
+    return tone if positive else "neutral"
 
 
 def _render_quick_actions() -> None:
@@ -42,57 +49,147 @@ def _render_quick_actions() -> None:
         navigation.go_to_list("boutique_reports")
 
 
-def _render_pipeline_chart(reports) -> None:
-    breakdown = reports.status_breakdown()
-    st.markdown("**Order pipeline by status**")
-    if not breakdown:
-        st.caption("No active orders.")
+def _chart_or_caption(title: str, df: pd.DataFrame, chart_fn, empty_msg: str) -> None:
+    st.markdown(f"**{title}**")
+    if df.empty:
+        st.caption(empty_msg)
         return
-    df = pd.DataFrame(breakdown).set_index("status")[["count"]]
-    df = df.rename(columns={"count": "Orders"})
-    st.bar_chart(df)
-    st.caption("As of now - excludes cancelled orders.")
+    chart_fn(df)
+
+
+def _render_charts(reports, start: date, end: date) -> None:
+    st.markdown("#### Charts")
+    span_days = (end - start).days + 1
+    grain = "day" if span_days <= 45 else "week"
+
+    revenue_rows = reports.invoiced_revenue_series(start, end, grain=grain)
+    hours_rows = reports.hours_logged_series(start, end, grain=grain)
+    status_rows = reports.status_breakdown()
+    customer_rows = reports.top_customers_by_revenue(start, end, limit=10)
+    worker_rows = reports.hours_by_worker(start, end, limit=10)
+    delivery_rows = reports.delivery_on_time_breakdown(start, end)
+
+    row1 = st.columns(2)
+    with row1[0]:
+        revenue_df = (
+            pd.DataFrame(revenue_rows).set_index("period")[["amount"]]
+            if revenue_rows
+            else pd.DataFrame()
+        )
+        if not revenue_df.empty:
+            revenue_df = revenue_df.rename(columns={"amount": "Revenue"})
+        _chart_or_caption(
+            "Invoiced revenue over time",
+            revenue_df,
+            st.line_chart,
+            "No invoices in this date range.",
+        )
+    with row1[1]:
+        hours_df = (
+            pd.DataFrame(hours_rows).set_index("period")[["hours"]]
+            if hours_rows
+            else pd.DataFrame()
+        )
+        if not hours_df.empty:
+            hours_df = hours_df.rename(columns={"hours": "Hours"})
+        _chart_or_caption(
+            "Hours logged over time",
+            hours_df,
+            st.line_chart,
+            "No time entries in this date range.",
+        )
+
+    row2 = st.columns(2)
+    with row2[0]:
+        status_df = (
+            pd.DataFrame(status_rows).set_index("status")[["count"]]
+            if status_rows
+            else pd.DataFrame()
+        )
+        if not status_df.empty:
+            status_df = status_df.rename(columns={"count": "Orders"})
+        _chart_or_caption(
+            "Order pipeline by status",
+            status_df,
+            st.bar_chart,
+            "No active orders.",
+        )
+        st.caption("As of now — excludes cancelled orders.")
+    with row2[1]:
+        delivery_df = (
+            pd.DataFrame(delivery_rows).set_index("outcome")[["count"]]
+            if delivery_rows
+            else pd.DataFrame()
+        )
+        if not delivery_df.empty:
+            delivery_df = delivery_df.rename(columns={"count": "Deliveries"})
+        _chart_or_caption(
+            "Delivery on-time vs late",
+            delivery_df,
+            st.bar_chart,
+            "No completed deliveries in this date range.",
+        )
+
+    row3 = st.columns(2)
+    with row3[0]:
+        customer_df = (
+            pd.DataFrame(customer_rows).set_index("customer_name")[["total_revenue"]]
+            if customer_rows
+            else pd.DataFrame()
+        )
+        if not customer_df.empty:
+            customer_df = customer_df.rename(columns={"total_revenue": "Revenue"})
+        _chart_or_caption(
+            "Top customers by invoiced revenue",
+            customer_df,
+            st.bar_chart,
+            "No customer revenue in this date range.",
+        )
+    with row3[1]:
+        worker_df = (
+            pd.DataFrame(worker_rows).set_index("worker_name")[["total_hours"]]
+            if worker_rows
+            else pd.DataFrame()
+        )
+        if not worker_df.empty:
+            worker_df = worker_df.rename(columns={"total_hours": "Hours"})
+        _chart_or_caption(
+            "Hours by worker",
+            worker_df,
+            st.bar_chart,
+            "No worker hours in this date range.",
+        )
 
 
 def _render_queues(reports) -> None:
     overdue = reports.overdue_queue(limit=QUEUE_LIMIT)
     pending = reports.bills_pending_invoice_queue(limit=QUEUE_LIMIT)
 
-    with st.expander(f"Overdue orders ({len(overdue)})", expanded=bool(overdue)):
-        st.caption("As of now - ETD past and not yet delivered.")
-        if not overdue:
-            st.caption("All clear - no overdue orders.")
-        else:
-            for row in overdue:
-                cols = st.columns([3, 3, 2, 1])
-                cols[0].markdown(f"**{row.get('order_number')}**")
-                cols[1].write(row.get("customer_name") or "\u2014")
-                cols[2].write(f"{row.get('days_overdue')} days")
-                if cols[3].button(
-                    "Open",
-                    key=f"boutique_overview_overdue_{row.get('id')}",
-                    use_container_width=True,
-                ):
-                    navigation.go_to_detail("order_detail", row.get("id"))
+    overview_action_cards(
+        "Overdue orders",
+        overdue,
+        "boutique_overview_overdue",
+        accent="red",
+        title_fn=lambda r: r.get("order_number") or "\u2014",
+        subtitle_fn=lambda r: r.get("customer_name") or "\u2014",
+        meta_fn=lambda r: f"{r.get('days_overdue')} days overdue",
+        on_open=lambda r: navigation.go_to_detail("order_detail", r.get("id")),
+        empty_msg="All clear - no overdue orders.",
+        max_cards=QUEUE_LIMIT,
+    )
 
-    with st.expander(
-        f"Bills pending invoice ({len(pending)})", expanded=bool(pending)
-    ):
-        st.caption("As of now - order bills not yet invoiced.")
-        if not pending:
-            st.caption("All clear - no bills pending invoice.")
-        else:
-            for row in pending:
-                cols = st.columns([3, 4, 2, 1])
-                cols[0].markdown(f"**{row.get('order_number')}**")
-                cols[1].write(row.get("customer_name") or "\u2014")
-                cols[2].write(f"{row.get('pending_bills')} bills")
-                if cols[3].button(
-                    "Open",
-                    key=f"boutique_overview_pending_{row.get('id')}",
-                    use_container_width=True,
-                ):
-                    navigation.go_to_detail("order_detail", row.get("id"))
+    overview_action_cards(
+        "Bills pending invoice",
+        pending,
+        "boutique_overview_pending",
+        accent="orange",
+        title_fn=lambda r: r.get("order_number") or "\u2014",
+        subtitle_fn=lambda r: r.get("customer_name") or "\u2014",
+        meta_fn=lambda r: f"{r.get('pending_bills')} bills pending",
+        on_open=lambda r: navigation.go_to_detail("order_detail", r.get("id")),
+        empty_msg="All clear - no bills pending invoice.",
+        max_cards=QUEUE_LIMIT,
+    )
 
 
 def render(services: dict) -> None:
@@ -121,23 +218,46 @@ def render(services: dict) -> None:
 
     if not summary.get("open_orders") and not summary.get("invoiced_revenue"):
         st.info("No boutique activity yet. Create an order to get started.")
-        return
 
+    overdue = int(summary.get("overdue_orders", 0) or 0)
+    pending_inv = int(summary.get("bills_pending_invoice", 0) or 0)
+    pending_del = int(summary.get("bills_pending_delivery", 0) or 0)
+
+    st.markdown("#### Attention")
     metric_grid(
         [
             ("Open orders", summary.get("open_orders", 0)),
-            ("Overdue orders", summary.get("overdue_orders", 0)),
-            ("Bills pending invoice", summary.get("bills_pending_invoice", 0)),
-            ("Bills pending delivery", summary.get("bills_pending_delivery", 0)),
+            (
+                "Overdue orders",
+                overdue,
+                _tone_if(overdue > 0, "danger"),
+            ),
+            (
+                "Bills pending invoice",
+                pending_inv,
+                _tone_if(pending_inv > 0, "warn"),
+            ),
+            (
+                "Bills pending delivery",
+                pending_del,
+                _tone_if(pending_del > 0, "warn"),
+            ),
+        ],
+        suffix="boutique_overview_attention",
+    )
+
+    st.markdown("#### Period")
+    metric_grid(
+        [
             ("Invoiced (range)", _fmt_currency(summary.get("invoiced_revenue", 0))),
             ("Hours logged (range)", f"{summary.get('hours_logged', 0):g}"),
         ],
-        suffix="boutique_overview",
+        suffix="boutique_overview_period",
     )
     st.caption(
         "Open, overdue, and pending counts are as of now. "
         "Invoiced revenue and logged hours use the Filters period."
     )
 
-    _render_pipeline_chart(reports)
+    _render_charts(reports, start, end)
     _render_queues(reports)

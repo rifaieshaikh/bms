@@ -14,6 +14,9 @@ from vaybooks.bms.ui.components.common.filter_sort_bar import (
     _normalize_date_range,
     render_filter_sort_bar,
 )
+from vaybooks.bms.ui.components.common.overview_action_cards import (
+    overview_action_cards,
+)
 from vaybooks.bms.ui.purchase_list_schemas import PURCHASES_OVERVIEW
 from vaybooks.bms.ui.styles import metric_grid
 
@@ -28,16 +31,19 @@ def _resolved_range(committed: dict) -> tuple[date, date]:
     return _normalize_date_range(committed.get("date_range")) or _mtd_range()
 
 
-def _vendor_payables_total(services: dict) -> str:
+def _vendor_payables_total(services: dict) -> float:
     reports = services.get("reports_business")
     if reports is None:
-        return "—"
+        return 0.0
     try:
         rows = reports.vendor_payables_report(OutstandingFilter())
     except Exception:
-        return "—"
-    total = sum(float(r.get("payable") or 0) for r in rows)
-    return _fmt_currency(total)
+        return 0.0
+    return sum(float(r.get("payable") or 0) for r in rows)
+
+
+def _tone_if(positive: bool, tone: str) -> str:
+    return tone if positive else "neutral"
 
 
 def _chart_or_caption(title: str, df: pd.DataFrame, chart_fn, empty_msg: str) -> None:
@@ -49,6 +55,7 @@ def _chart_or_caption(title: str, df: pd.DataFrame, chart_fn, empty_msg: str) ->
 
 
 def _render_charts(reports, start: date, end: date) -> None:
+    st.markdown("#### Charts")
     span_days = (end - start).days + 1
     grain = "day" if span_days <= 45 else "week"
 
@@ -135,6 +142,15 @@ def _render_charts(reports, start: date, end: date) -> None:
     )
 
 
+def _fmt_expected(row: dict) -> str:
+    expected = row.get("expected_date")
+    if expected is None:
+        return "—"
+    if hasattr(expected, "strftime"):
+        return expected.strftime("%d %b %Y")
+    return str(expected)
+
+
 def _render_queues(reports) -> None:
     pipeline = reports.purchase_orders_pipeline()
     overdue = [r for r in pipeline if r.get("overdue")][:QUEUE_LIMIT]
@@ -144,45 +160,37 @@ def _render_queues(reports) -> None:
         reverse=True,
     )[:QUEUE_LIMIT]
 
-    with st.expander(f"Overdue POs ({len(overdue)})", expanded=bool(overdue)):
-        st.caption("As of now — expected date past, not yet received.")
-        if not overdue:
-            st.caption("All clear — no overdue purchase orders.")
-        else:
-            for row in overdue:
-                cols = st.columns([3, 3, 2, 1])
-                cols[0].markdown(f"**{row.get('po_number')}**")
-                cols[1].write(row.get("vendor_name") or "—")
-                expected = row.get("expected_date")
-                cols[2].write(
-                    expected.strftime("%d %b %Y") if expected else "—"
-                )
-                if cols[3].button(
-                    "Open",
-                    key=f"purchases_overview_overdue_{row.get('id')}",
-                    use_container_width=True,
-                ):
-                    navigation.go_to_detail("purchase_order_detail", row.get("id"))
+    overview_action_cards(
+        "Overdue POs",
+        overdue,
+        "purchases_overview_overdue",
+        accent="red",
+        title_fn=lambda r: r.get("po_number") or "—",
+        subtitle_fn=lambda r: r.get("vendor_name") or "—",
+        meta_fn=lambda r: f"Expected {_fmt_expected(r)}",
+        on_open=lambda r: navigation.go_to_detail(
+            "purchase_order_detail", r.get("id")
+        ),
+        empty_msg="All clear — no overdue purchase orders.",
+        max_cards=QUEUE_LIMIT,
+    )
 
-    with st.expander(
-        f"Pending receive ({len(pending)})", expanded=bool(pending)
-    ):
-        st.caption("As of now — open PO lines awaiting goods receipt.")
-        if not pending:
-            st.caption("All clear — no pending GRN lines.")
-        else:
-            for idx, row in enumerate(pending):
-                cols = st.columns([2, 3, 2, 1, 1])
-                cols[0].markdown(f"**{row.get('po_number')}**")
-                cols[1].write(row.get("vendor_name") or "—")
-                cols[2].write(row.get("product_name") or "—")
-                cols[3].write(f"{float(row.get('qty_pending') or 0):g}")
-                if cols[4].button(
-                    "Open",
-                    key=f"purchases_overview_pending_{idx}_{row.get('id')}",
-                    use_container_width=True,
-                ):
-                    navigation.go_to_detail("purchase_order_detail", row.get("id"))
+    overview_action_cards(
+        "Pending receive",
+        pending,
+        "purchases_overview_pending",
+        accent="orange",
+        title_fn=lambda r: r.get("po_number") or "—",
+        subtitle_fn=lambda r: (
+            f"{r.get('vendor_name') or '—'} · {r.get('product_name') or '—'}"
+        ),
+        meta_fn=lambda r: f"Pending qty {float(r.get('qty_pending') or 0):g}",
+        on_open=lambda r: navigation.go_to_detail(
+            "purchase_order_detail", r.get("id")
+        ),
+        empty_msg="All clear — no pending GRN lines.",
+        max_cards=QUEUE_LIMIT,
+    )
 
 
 def _render_quick_actions() -> None:
@@ -221,7 +229,7 @@ def render(services: dict) -> None:
     purchases_svc = services.get("purchases")
     try:
         summary = reports.dashboard_summary(start, end)
-        overdue_count = reports.overdue_po_count()
+        overdue_count = int(reports.overdue_po_count() or 0)
         orders = purchases_svc.list_purchase_orders() if purchases_svc else []
         bills = purchases_svc.list_purchase_bills() if purchases_svc else []
     except Exception as exc:
@@ -230,18 +238,47 @@ def render(services: dict) -> None:
 
     if not orders and not bills:
         st.info("No purchase activity yet. Create a purchase order to get started.")
-        return
 
+    open_po = int(summary.get("open_po_count", 0) or 0)
+    pending_grn = float(summary.get("pending_grn_qty", 0) or 0)
+    payables = _vendor_payables_total(services)
+
+    st.markdown("#### Attention")
     metric_grid(
         [
-            ("Open POs", summary.get("open_po_count", 0)),
-            ("Overdue POs", overdue_count),
-            ("Pending GRN qty", f"{summary.get('pending_grn_qty', 0):g}"),
-            ("Purchases (range)", _fmt_currency(summary.get("purchases_this_month", 0))),
-            ("Returns (range)", _fmt_currency(summary.get("returns_this_month", 0))),
-            ("Vendor payables", _vendor_payables_total(services)),
+            ("Open POs", open_po),
+            (
+                "Overdue POs",
+                overdue_count,
+                _tone_if(overdue_count > 0, "danger"),
+            ),
+            (
+                "Pending GRN qty",
+                f"{pending_grn:g}",
+                _tone_if(pending_grn > 0, "warn"),
+            ),
+            (
+                "Vendor payables",
+                _fmt_currency(payables),
+                _tone_if(payables > 0, "warn"),
+            ),
         ],
-        suffix="purchases_overview",
+        suffix="purchases_overview_attention",
+    )
+
+    st.markdown("#### Period")
+    metric_grid(
+        [
+            (
+                "Purchases (range)",
+                _fmt_currency(summary.get("purchases_this_month", 0)),
+            ),
+            (
+                "Returns (range)",
+                _fmt_currency(summary.get("returns_this_month", 0)),
+            ),
+        ],
+        suffix="purchases_overview_period",
     )
     st.caption(
         "Open POs, overdue, pending GRN, and vendor payables are as of now. "

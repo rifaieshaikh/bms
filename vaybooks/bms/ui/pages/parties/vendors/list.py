@@ -27,6 +27,18 @@ SUBMIT_ADD = "submit_vendor_add"
 SUBMIT_EDIT = "submit_vendor_edit"
 
 
+def _vendor_segment_options(services: dict, vendor=None) -> dict:
+    segments = services.get("party_segments")
+    if not segments:
+        return {}
+    assigned = set(getattr(vendor, "segment_ids", None) or [])
+    options = {}
+    for s in segments.list_for_party("vendor", active_only=False):
+        if s.is_active or s.id in assigned:
+            options[s.name] = s.id
+    return options
+
+
 def _open_add_vendor() -> None:
     clear_all_dialog_flags()
     st.session_state.pop(V_DUP_VENDOR_ID, None)
@@ -47,12 +59,14 @@ def _render_duplicate_vendor_warning(existing_vendor_id: str, vendor_service) ->
 
 # --- dialogs -----------------------------------------------------------------
 @st.dialog("Add Vendor", width="large", on_dismiss=make_dismiss_handler(V_ADD))
-def _add_vendor_dialog(vendor_service):
+def _add_vendor_dialog(vendor_service, services: dict):
     dup_id = st.session_state.get(V_DUP_VENDOR_ID)
     if dup_id:
         _render_duplicate_vendor_warning(dup_id, vendor_service)
 
-    vendor_input = render_vendor_form("v_add")
+    vendor_input = render_vendor_form(
+        "v_add", segment_options=_vendor_segment_options(services)
+    )
 
     cols = st.columns(2)
     do_create = cols[0].button(
@@ -79,13 +93,17 @@ def _add_vendor_dialog(vendor_service):
 
 
 @st.dialog("Edit Vendor", width="large", on_dismiss=make_dismiss_handler(V_EDIT))
-def _edit_vendor_dialog(vendor_service):
+def _edit_vendor_dialog(vendor_service, services: dict):
     vendor = vendor_service.get_vendor_detail(st.session_state.get(V_EDIT))
     if not vendor:
         st.error("Vendor not found")
         return
 
-    vendor_input = render_vendor_form("v_edit", vendor=vendor)
+    vendor_input = render_vendor_form(
+        "v_edit",
+        vendor=vendor,
+        segment_options=_vendor_segment_options(services, vendor),
+    )
 
     cols = st.columns(2)
     do_save = cols[0].button(
@@ -256,13 +274,13 @@ def render(services: dict):
 
         get_submit_map().setdefault(V_ADD, SUBMIT_ADD)
         register_armed_dialog(V_ADD)
-        _add_vendor_dialog(services["vendors"])
+        _add_vendor_dialog(services["vendors"], services)
     if st.session_state.get(V_EDIT):
         from vaybooks.bms.ui.keyboard.context import get_submit_map
 
         get_submit_map().setdefault(V_EDIT, SUBMIT_EDIT)
         register_armed_dialog(V_EDIT)
-        _edit_vendor_dialog(services["vendors"])
+        _edit_vendor_dialog(services["vendors"], services)
 
 
 # Re-export for callers that still import from list.

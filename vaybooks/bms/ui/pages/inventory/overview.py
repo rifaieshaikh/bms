@@ -37,6 +37,10 @@ def _resolved_range(committed: dict) -> tuple[date, date]:
     return _normalize_date_range(committed.get("date_range")) or _mtd_range()
 
 
+def _tone_if(positive: bool, tone: str) -> str:
+    return tone if positive else "neutral"
+
+
 def _chart_or_caption(title: str, df: pd.DataFrame, chart_fn, empty_msg: str) -> None:
     st.markdown(f"**{title}**")
     if df.empty:
@@ -61,6 +65,7 @@ def _render_quick_actions() -> None:
 
 
 def _render_charts(summary: dict, movements_in_range: list[dict]) -> None:
+    st.markdown("#### Charts")
     row1 = st.columns(2)
     with row1[0]:
         status_df = pd.DataFrame(
@@ -129,7 +134,6 @@ def render(services: dict) -> None:
 
     if summary.get("total_products", 0) == 0:
         st.info("No products yet. Add a product to get started.")
-        return
 
     movements_in_range = [
         row
@@ -137,18 +141,37 @@ def render(services: dict) -> None:
         if (md := _as_date(row.get("movement_date"))) is not None and start <= md <= end
     ]
 
+    low_count = int(summary.get("low_stock_count", 0) or 0)
+    out_count = int(summary.get("out_of_stock_count", 0) or 0)
+
+    st.markdown("#### Attention")
+    metric_grid(
+        [
+            (
+                "Low stock",
+                low_count,
+                _tone_if(low_count > 0, "warn"),
+            ),
+            (
+                "Out of stock",
+                out_count,
+                _tone_if(out_count > 0, "danger"),
+            ),
+        ],
+        suffix="inventory_overview_attention",
+    )
+
+    st.markdown("#### Stock")
     metric_grid(
         [
             ("Active products", summary.get("active_products", 0)),
             ("Active categories", summary.get("active_categories", 0)),
             ("Total units", f"{summary.get('total_units', 0):g}"),
             ("Stock value", _fmt_currency(summary.get("stock_value", 0))),
-            ("Low stock", summary.get("low_stock_count", 0)),
-            ("Out of stock", summary.get("out_of_stock_count", 0)),
             ("Movements (period)", len(movements_in_range)),
             ("Movements (MTD)", summary.get("movements_this_month", 0)),
         ],
-        suffix="inventory_overview",
+        suffix="inventory_overview_stock",
     )
     st.caption(
         "Stock KPIs are as of now. Movement counts use the Filters period "
@@ -158,10 +181,10 @@ def render(services: dict) -> None:
     _render_charts(summary, movements_in_range)
 
     low_items = summary.get("low_stock_items") or []
-    with st.expander(
-        f"Low / out-of-stock queue ({len(low_items)})",
-        expanded=bool(low_items),
-    ):
-        inventory_low_stock_cards(low_items, key_prefix="inv_overview_low")
-        if st.button("Open Stock on Hand", key="inv_overview_open_stock"):
-            navigation.go_to_list("inventory_stock_list")
+    alert_total = len(low_items)
+    accent = "red" if out_count > 0 else "orange"
+    st.markdown(f"#### Low / out-of-stock queue &nbsp; :{accent}[{alert_total}]")
+    inventory_low_stock_cards(low_items, key_prefix="inv_overview_low")
+    if st.button("Open Stock on Hand", key="inv_overview_open_stock"):
+        navigation.go_to_list("inventory_stock_list")
+    st.divider()
