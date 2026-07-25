@@ -159,6 +159,10 @@ def inject_global_css() -> None:
           header[data-testid="stHeader"] {
             background: transparent !important;
             box-shadow: none !important;
+            /* Transparent overlay still steals clicks from our header actions. */
+            pointer-events: none !important;
+            /* Sit under our custom bar so popovers receive clicks. */
+            z-index: 999900 !important;
           }
           div[data-testid="stDecoration"] {
             display: none !important;
@@ -178,7 +182,7 @@ def inject_global_css() -> None:
             position: fixed !important;
             top: 0.45rem !important;
             left: 0.45rem !important;
-            z-index: 10050 !important;
+            z-index: 1000001 !important;
             background: #FBF8F6 !important;
             border: 1px solid var(--z-line) !important;
             border-radius: 8px !important;
@@ -202,15 +206,17 @@ def inject_global_css() -> None:
           }
 
           /* ---- Global top header (keyed container: zheader) --------------- */
-          div[class*="st-key-zheader"] {
+          /* Use exact-ish key match so nested zh_actions is not also sticky. */
+          div[class*="st-key-zheader"]:not([class*="zh_actions"]) {
             position: sticky;
             top: 0;
-            z-index: 999;
+            z-index: 999990;
             background: #FBF8F6;
             border-bottom: 1px solid var(--z-line);
             box-shadow: 0 1px 4px rgba(42, 30, 36, 0.06);
             margin: 0 -1.5rem 0.85rem -1.5rem;
-            padding: 0.4rem 1.25rem;
+            padding: 0.35rem 1rem 0.35rem 1.25rem;
+            pointer-events: auto !important;
           }
           /* Kill Streamlit's default vertical gaps inside the header bar. */
           div[class*="st-key-zheader"] div[data-testid="stVerticalBlock"] {
@@ -222,7 +228,7 @@ def inject_global_css() -> None:
             margin-bottom: 0 !important;
           }
           div[class*="st-key-zheader"] .z-header-brand,
-          div[class*="st-key-zheader"] p {
+          div[class*="st-key-zheader"] p.z-header-brand {
             font-size: 1.05rem;
             font-weight: 700;
             color: var(--z-plum);
@@ -231,33 +237,61 @@ def inject_global_css() -> None:
             margin: 0 !important;
             white-space: nowrap;
           }
+          /* Icon-action cluster: hug the right edge as a tight group. */
+          div[class*="st-key-zh_actions"] {
+            display: flex !important;
+            justify-content: flex-end !important;
+            width: 100%;
+          }
+          div[class*="st-key-zh_actions"] div[data-testid="stHorizontalBlock"] {
+            gap: 0.3rem !important;
+            justify-content: flex-end !important;
+            width: auto !important;
+            margin-left: auto !important;
+          }
+          div[class*="st-key-zh_actions"] div[data-testid="stColumn"] {
+            flex: 0 0 auto !important;
+            width: auto !important;
+            min-width: 0 !important;
+          }
+          div[class*="st-key-zheader"] div[data-testid="stPopover"],
+          div[class*="st-key-zh_actions"] div[data-testid="stPopover"] {
+            pointer-events: auto !important;
+          }
           div[class*="st-key-zheader"] div[data-testid="stPopover"] > div > button,
           div[class*="st-key-zheader"] div[data-testid="stPopover"] button {
             border-radius: 8px;
             border-color: var(--z-line);
             background: var(--z-card);
-            min-height: 2rem;
-            height: 2rem;
-            padding: 0.2rem 0.65rem;
+            min-height: 2.1rem;
+            height: 2.1rem;
+            min-width: 2.1rem;
+            padding: 0.2rem 0.45rem;
             white-space: nowrap;
-          }
-          /* Right-align the control cluster: columns size to their content and
-             the brand column absorbs the leftover space. */
-          div[class*="st-key-zheader"] div[data-testid="stColumn"] {
-            flex: 0 0 auto !important;
-            width: auto !important;
-            min-width: 0 !important;
-          }
-          div[class*="st-key-zheader"] div[data-testid="stColumn"]:first-child {
-            flex: 1 1 auto !important;
+            pointer-events: auto !important;
+            position: relative;
+            z-index: 2;
           }
           div[class*="st-key-zheader"] div[data-testid="stPopover"] > div > button:hover {
             border-color: var(--z-plum);
             color: var(--z-plum);
           }
-          div[class*="st-key-zheader"] div[data-testid="stHorizontalBlock"] {
-            gap: 0.35rem;
-            align-items: center;
+          /* Outer brand | actions: let the actions column size to its icons and
+             sit flush on the right edge of the bar. */
+          div[class*="st-key-zheader"]:not([class*="zh_actions"])
+            > div
+            > div[data-testid="stHorizontalBlock"]
+            > div[data-testid="stColumn"]:first-child {
+            flex: 1 1 auto !important;
+            width: auto !important;
+          }
+          div[class*="st-key-zheader"]:not([class*="zh_actions"])
+            > div
+            > div[data-testid="stHorizontalBlock"]
+            > div[data-testid="stColumn"]:last-child {
+            flex: 0 0 auto !important;
+            width: auto !important;
+            min-width: fit-content !important;
           }
 
           /* ---- Sidebar polish -------------------------------------------- */

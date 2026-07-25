@@ -767,11 +767,11 @@ if not is_authenticated():
         st.session_state["signin_dialog_open"] = True
     open_sign_in_dialog_if_needed(_services)
 else:
-    # Settings routes stay registered with st.navigation (deep links keep
-    # working) but are surfaced from the header instead of the sidebar.
+    # Settings / Access / Migration stay registered with st.navigation (deep
+    # links keep working) but are surfaced from the header gear popover.
     visible_groups = {}
     for group, pages in page_groups.items():
-        if group == "Settings":
+        if group in ("Settings", "Access", "Migration"):
             continue
         visible = [
             p
@@ -799,7 +799,12 @@ else:
         st.divider()
         st.caption(f"v{__version__}")
 
-    render_app_header(_services, settings_pages=page_groups["Settings"])
+    render_app_header(
+        _services,
+        settings_pages=page_groups["Settings"],
+        access_pages=page_groups["Access"],
+        migration_pages=page_groups["Migration"],
+    )
 
     # Parents navigate here; action chords only set session flags for page render.
     resolve_pressed_shortcuts()

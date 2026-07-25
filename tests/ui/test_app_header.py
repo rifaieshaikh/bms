@@ -115,6 +115,47 @@ def test_visible_settings_pages_filters_by_permission(monkeypatch):
     ]
 
 
+def test_visible_pages_filters_access_and_migration(monkeypatch):
+    pages = [
+        SimpleNamespace(url_path="users-settings"),
+        SimpleNamespace(url_path="audit-logs"),
+        SimpleNamespace(url_path="data-migration"),
+    ]
+    monkeypatch.setattr(
+        app_header,
+        "can_see_page",
+        lambda services, url: url != "audit-logs",
+    )
+    visible = app_header.visible_pages({}, pages)
+    assert [p.url_path for p in visible] == [
+        "users-settings",
+        "data-migration",
+    ]
+
+
+def test_settings_popover_renders_sectioned_links(monkeypatch):
+    settings = [SimpleNamespace(url_path="business-settings")]
+    access = [SimpleNamespace(url_path="users-settings")]
+    migration = [SimpleNamespace(url_path="data-migration")]
+    monkeypatch.setattr(app_header, "can_see_page", lambda services, url: True)
+    with patch.object(app_header, "st") as mock_st:
+        mock_st.session_state = {}
+        app_header._render_settings(
+            {},
+            settings_pages=settings,
+            access_pages=access,
+            migration_pages=migration,
+        )
+        headings = [
+            call.args[0]
+            for call in mock_st.markdown.call_args_list
+            if call.args
+        ]
+        assert headings == ["**Settings**", "**Access**", "**Migration**"]
+        assert mock_st.page_link.call_count == 3
+        assert mock_st.divider.call_count == 2
+
+
 def test_account_popover_dispatches_sign_out():
     with patch.object(app_header, "st") as mock_st, patch(
         "vaybooks.bms.ui.auth.dialogs.sign_out_dialog"

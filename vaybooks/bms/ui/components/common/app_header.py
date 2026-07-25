@@ -19,6 +19,9 @@ NOTIF_CACHE_AT = "_header_notifications_cached_at"
 NOTIF_TTL_SECONDS = 120
 MAX_NOTIFICATIONS = 15
 
+# Icon-only popover labels (Streamlit requires a label string; keep visually empty).
+_ICON_LABEL = "\u00a0"
+
 # Notification kind -> permission required to see it.
 _KIND_PERMISSIONS = {
     "quotation_approval": "projects.commercial.approve",
@@ -61,17 +64,11 @@ def _load_pending_approvals(services: dict) -> list:
     return [i for i in items if getattr(i, "kind", "") in allowed_kinds]
 
 
-def _short_name(name: str, *, max_len: int = 18) -> str:
-    name = (name or "").strip() or "Account"
-    if len(name) <= max_len:
-        return name
-    return name[: max_len - 1].rstrip() + "…"
-
-
 def _render_notifications(services: dict) -> None:
     items = _load_pending_approvals(services)
     count = len(items)
-    label = f" {count}" if count else ""
+    # Badge count only when there are pending items; otherwise icon-only.
+    label = str(count) if count else _ICON_LABEL
     with st.popover(label, icon=":material/notifications:"):
         head_l, head_r = st.columns([3, 1], vertical_alignment="center")
         head_l.markdown("**Notifications**")
@@ -95,31 +92,58 @@ def _render_notifications(services: dict) -> None:
             st.caption(f"… and {count - MAX_NOTIFICATIONS} more")
 
 
-def visible_settings_pages(services: dict, settings_pages: list) -> list:
+def visible_pages(services: dict, pages: list) -> list:
+    """Permission-filter a list of ``st.Page`` objects by ``url_path``."""
     return [
         page
-        for page in settings_pages or []
+        for page in pages or []
         if can_see_page(services, getattr(page, "url_path", "") or "")
     ]
 
 
-def _render_settings(services: dict, settings_pages: list) -> None:
-    visible = visible_settings_pages(services, settings_pages)
-    with st.popover("", icon=":material/settings:"):
-        st.markdown("**Settings**")
-        if not visible:
+# Backward-compatible alias used by existing tests.
+visible_settings_pages = visible_pages
+
+
+def _render_menu_section(title: str, pages: list) -> None:
+    if not pages:
+        return
+    st.markdown(f"**{title}**")
+    for page in pages:
+        st.page_link(page)
+
+
+def _render_settings(
+    services: dict,
+    *,
+    settings_pages: list,
+    access_pages: list,
+    migration_pages: list,
+) -> None:
+    settings = visible_pages(services, settings_pages)
+    access = visible_pages(services, access_pages)
+    migration = visible_pages(services, migration_pages)
+    with st.popover(_ICON_LABEL, icon=":material/settings:"):
+        if not (settings or access or migration):
             st.caption("No settings available.")
             return
-        for page in visible:
-            st.page_link(page)
+        _render_menu_section("Settings", settings)
+        if settings and (access or migration):
+            st.divider()
+        _render_menu_section("Access", access)
+        if access and migration:
+            st.divider()
+        _render_menu_section("Migration", migration)
 
 
 def _render_account(services: dict) -> None:
     from vaybooks.bms.ui.auth.dialogs import sign_out_dialog
 
     name = current_user_name() or "Account"
-    with st.popover(_short_name(name), icon=":material/account_circle:"):
+    # Icon only in the header; display name lives inside the popover.
+    with st.popover(_ICON_LABEL, icon=":material/account_circle:"):
         st.markdown(f"**{name}**")
+        st.caption("Signed in")
         if st.button(
             "Sign out",
             icon=":material/logout:",
@@ -129,20 +153,32 @@ def _render_account(services: dict) -> None:
             sign_out_dialog(services)
 
 
-def render_app_header(services: dict, *, settings_pages: list) -> None:
-    """Sticky top bar with brand on the left and account controls on the right."""
+def render_app_header(
+    services: dict,
+    *,
+    settings_pages: list,
+    access_pages: list | None = None,
+    migration_pages: list | None = None,
+) -> None:
+    """Sticky top bar: brand left, icon actions hugging the right edge."""
     with st.container(key="zheader"):
-        c_brand, c_notif, c_settings, c_account = st.columns(
-            [8, 1, 1, 2], vertical_alignment="center"
-        )
+        c_brand, c_actions = st.columns([10, 1], vertical_alignment="center")
         with c_brand:
             st.markdown(
                 '<p class="z-header-brand">VayBooks</p>',
                 unsafe_allow_html=True,
             )
-        with c_notif:
-            _render_notifications(services)
-        with c_settings:
-            _render_settings(services, settings_pages)
-        with c_account:
-            _render_account(services)
+        with c_actions:
+            with st.container(key="zh_actions"):
+                c_notif, c_settings, c_account = st.columns(3, gap="small")
+                with c_notif:
+                    _render_notifications(services)
+                with c_settings:
+                    _render_settings(
+                        services,
+                        settings_pages=settings_pages,
+                        access_pages=access_pages or [],
+                        migration_pages=migration_pages or [],
+                    )
+                with c_account:
+                    _render_account(services)
