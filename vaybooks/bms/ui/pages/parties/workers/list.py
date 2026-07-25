@@ -107,7 +107,7 @@ def _worker_card(worker, activity_names: dict, index: int):
         if st.button(
             "Edit",
             key=f"edit_worker_btn_{index}_{worker.id}",
-            use_container_width=True,
+            width="stretch",
         ):
             st.session_state[PENDING_EDIT_WORKER] = worker.id
 

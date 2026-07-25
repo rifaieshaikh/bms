@@ -1,4 +1,4 @@
-﻿import streamlit as st
+import streamlit as st
 
 from vaybooks.bms.domain.parties.customers.entities import CustomerInput
 from vaybooks.bms.domain.shared.exceptions import (
@@ -109,11 +109,11 @@ def _add_customer_dialog(customer_service, services: dict):
 
     cols = st.columns(2)
     do_create = cols[0].button(
-        "Create Customer", type="primary", use_container_width=True
+        "Create Customer", type="primary", width="stretch"
     ) or consume_submit(SUBMIT_ADD)
     if do_create:
         _do_create_customer(customer_service, customer_input)
-    if cols[1].button("Cancel", use_container_width=True):
+    if cols[1].button("Cancel", width="stretch"):
         st.session_state.pop(C_ADD, None)
         st.session_state.pop(C_DUP_CUSTOMER_ID, None)
         st.rerun()
@@ -135,11 +135,11 @@ def _edit_customer_dialog(customer_service, customer_id: str, services: dict):
 
     cols = st.columns(2)
     do_save = cols[0].button(
-        "Save Changes", type="primary", use_container_width=True
+        "Save Changes", type="primary", width="stretch"
     ) or consume_submit(SUBMIT_EDIT)
     if do_save:
         _do_update_customer(customer_service, customer_id, customer_input)
-    if cols[1].button("Cancel", use_container_width=True):
+    if cols[1].button("Cancel", width="stretch"):
         st.session_state.pop(C_EDIT, None)
         st.rerun()
 

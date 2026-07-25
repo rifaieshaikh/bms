@@ -138,6 +138,19 @@ def render_product_form(
             key=f"{key_prefix}_active",
         )
 
+    st.markdown("**Tracking**")
+    track_cols = st.columns(2)
+    track_batch = track_cols[0].checkbox(
+        "Track batch",
+        value=bool(existing.track_batch) if existing else False,
+        key=f"{key_prefix}_track_batch",
+    )
+    track_serial = track_cols[1].checkbox(
+        "Track serial",
+        value=bool(existing.track_serial) if existing else False,
+        key=f"{key_prefix}_track_serial",
+    )
+
     show_specs = st.checkbox(
         "Edit specifications & custom fields",
         key=f"{key_prefix}_show_specs",
@@ -211,6 +224,8 @@ def render_product_form(
             "gst_required": registered,
             "opening_qty": float(opening_qty),
             "is_active": is_active,
+            "track_batch": bool(track_batch),
+            "track_serial": bool(track_serial),
             "specifications": specifications,
             "custom_fields": custom_values,
         }

@@ -64,7 +64,7 @@ def _sales_card(row: dict, suffix: str) -> None:
         if sale_id and st.button(
             "View",
             key=f"{suffix}_view_{sale_id}",
-            use_container_width=True,
+            width="stretch",
         ):
             navigation.go_to_detail("sales_detail", sale_id)
 

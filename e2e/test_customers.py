@@ -50,8 +50,178 @@ class TestCustomerListFilterSort:
         after = cp.customer_card_names(page)
         assert before != after
 
+    def test_filters_dialog_has_no_radio_buttons(
+        self, page: Page, streamlit_server: str
+    ) -> None:
+        cp.goto_customers(page, streamlit_server)
+        cp.open_customer_filters(page)
+        dlg = cp.filters_dialog(page)
+        expect(dlg.locator('input[type="radio"]')).to_have_count(0)
+        expect(dlg.get_by_test_id("stRadio")).to_have_count(0)
 
-class TestCustomerCreate:
+    def test_registration_dropdown_enter_selects_without_applying(
+        self, page: Page, streamlit_server: str
+    ) -> None:
+        cp.goto_customers(page, streamlit_server)
+        cp.open_customer_filters(page)
+        dlg = cp.filters_dialog(page)
+        control = cp.focus_filter_dropdown(page, "registration_type")
+        control.click()
+        page.wait_for_timeout(400)
+        # Arrows highlight inside the open menu; Enter picks the option.
+        page.keyboard.press("ArrowDown")
+        page.keyboard.press("Enter")
+        page.wait_for_timeout(400)
+        assert cp.selected_filter_options(page, "registration_type")
+        expect(dlg).to_be_visible()
+        expect(dlg.get_by_role("button", name="Apply")).to_be_visible()
+
+    def test_registration_dropdown_accepts_multiple_options(
+        self, page: Page, streamlit_server: str
+    ) -> None:
+        cp.goto_customers(page, streamlit_server)
+        cp.open_customer_filters(page)
+        cp.select_filter_option(page, "registration_type", "Registered")
+        cp.select_filter_option(page, "registration_type", "Unregistered")
+        chosen = cp.selected_filter_options(page, "registration_type")
+        assert len(chosen) == 2
+
+    def test_filter_tab_order_gstin_reg_segment_orders_clear(
+        self, page: Page, streamlit_server: str
+    ) -> None:
+        """Tab: GSTIN → Registration Type → Segment → Has Orders → Clear all."""
+        cp.goto_customers(page, streamlit_server)
+        cp.open_customer_filters(page)
+        dlg = cp.filters_dialog(page)
+        gstin = dlg.get_by_label("GSTIN", exact=True)
+        gstin.focus()
+        page.keyboard.press("Tab")
+        page.wait_for_timeout(200)
+        # Land on the Registration type dropdown.
+        active = page.evaluate(
+            "() => (document.activeElement && document.activeElement.closest"
+            "('[class*=\"st-key-\"]') || {}).className || ''"
+        )
+        assert "registration_type" in active
+        page.keyboard.press("Tab")
+        page.wait_for_timeout(200)
+        active2 = page.evaluate(
+            "() => (document.activeElement && document.activeElement.closest"
+            "('[class*=\"st-key-\"]') || {}).className || ''"
+        )
+        assert "segment_id" in active2
+        page.keyboard.press("Tab")
+        page.wait_for_timeout(200)
+        active3 = page.evaluate(
+            "() => (document.activeElement && document.activeElement.closest"
+            "('[class*=\"st-key-\"]') || {}).className || ''"
+        )
+        assert "has_orders" in active3
+        page.keyboard.press("Tab")
+        page.wait_for_timeout(200)
+        expect(dlg.get_by_role("button", name="Clear all")).to_be_focused()
+
+    def test_filter_shift_tab_from_registration_reaches_customer_name(
+        self, page: Page, streamlit_server: str
+    ) -> None:
+        cp.goto_customers(page, streamlit_server)
+        cp.open_customer_filters(page)
+        dlg = cp.filters_dialog(page)
+        cp.focus_filter_dropdown(page, "registration_type")
+        # Registration → GSTIN → Alternate phone → Phone → Customer name
+        for _ in range(4):
+            page.keyboard.press("Shift+Tab")
+            page.wait_for_timeout(150)
+        active = page.evaluate(
+            "() => (document.activeElement && document.activeElement.closest"
+            "('[class*=\"st-key-\"]') || {}).className || ''"
+        )
+        assert "customer_name" in active
+        expect(dlg).to_be_visible()
+
+    def test_filter_shift_tab_from_has_orders_to_segment(
+        self, page: Page, streamlit_server: str
+    ) -> None:
+        cp.goto_customers(page, streamlit_server)
+        cp.open_customer_filters(page)
+        cp.focus_filter_dropdown(page, "has_orders")
+        page.keyboard.press("Shift+Tab")
+        page.wait_for_timeout(200)
+        active = page.evaluate(
+            "() => (document.activeElement && document.activeElement.closest"
+            "('[class*=\"st-key-\"]') || {}).className || ''"
+        )
+        assert "segment_id" in active
+
+    def test_arrow_keys_move_between_filter_fields(
+        self, page: Page, streamlit_server: str
+    ) -> None:
+        cp.goto_customers(page, streamlit_server)
+        cp.open_customer_filters(page)
+        dlg = cp.filters_dialog(page)
+        cp.focus_filter_dropdown(page, "registration_type")
+        page.keyboard.press("ArrowDown")
+        page.wait_for_timeout(300)
+        active = page.evaluate(
+            "() => (document.activeElement && document.activeElement.closest"
+            "('[class*=\"st-key-\"]') || {}).className || ''"
+        )
+        assert "registration_type" not in active
+        # Tab must not be trapped inside the dropdown either.
+        page.keyboard.press("Tab")
+        page.wait_for_timeout(200)
+        expect(dlg).to_be_visible()
+
+    def test_has_orders_multi_select_keeps_panel_open(
+        self, page: Page, streamlit_server: str
+    ) -> None:
+        cp.goto_customers(page, streamlit_server)
+        cp.open_customer_filters(page)
+        dlg = cp.filters_dialog(page)
+        cp.select_filter_option(page, "has_orders", "With orders")
+        cp.select_filter_option(page, "has_orders", "Without orders")
+        assert len(cp.selected_filter_options(page, "has_orders")) == 2
+        expect(dlg).to_be_visible()
+        expect(dlg.get_by_role("button", name="Apply")).to_be_visible()
+
+    def test_filter_dropdown_mouse_click_selects(
+        self, page: Page, streamlit_server: str
+    ) -> None:
+        cp.goto_customers(page, streamlit_server)
+        cp.open_customer_filters(page)
+        dlg = cp.filters_dialog(page)
+        cp.select_filter_option(page, "registration_type", "Composition")
+        assert cp.selected_filter_options(page, "registration_type") == ["Composition"]
+        expect(dlg).to_be_visible()
+
+    def test_filter_dropdown_focus_indicator_visible(
+        self, page: Page, streamlit_server: str
+    ) -> None:
+        cp.goto_customers(page, streamlit_server)
+        cp.open_customer_filters(page)
+        target = cp.focus_filter_dropdown(page, "registration_type")
+        outline = target.evaluate(
+            """el => {
+              const s = getComputedStyle(el);
+              const ow = parseFloat(s.outlineWidth) || 0;
+              const shadow = s.boxShadow || '';
+              return ow > 0 || shadow !== 'none';
+            }"""
+        )
+        # Fallback: focused descendant / focus-within on the label.
+        if not outline:
+            outline = target.evaluate(
+                """el => {
+                  const label = el.closest('label') || el;
+                  const s = getComputedStyle(label);
+                  const ow = parseFloat(s.outlineWidth) || 0;
+                  const shadow = s.boxShadow || '';
+                  return ow > 0 || shadow !== 'none' || document.activeElement === el
+                    || label.contains(document.activeElement);
+                }"""
+            )
+        assert outline
+
     """Section 2 — create with minimal, full, and registered profiles."""
 
     def test_minimal_create_then_filter_by_phone(

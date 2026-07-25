@@ -11,6 +11,7 @@ from vaybooks.bms.domain.inventory.entities import (
     ProductCategory,
     ProductUnit,
     StockMovement,
+    Warehouse,
 )
 from vaybooks.bms.domain.inventory.field_definitions import (
     ProductFieldDefinition,
@@ -24,6 +25,7 @@ from vaybooks.bms.domain.inventory.repository import (
     ProductFieldDefinitionRepository,
     ProductUnitRepository,
     StockMovementRepository,
+    WarehouseRepository,
 )
 from vaybooks.bms.domain.inventory.rate_history_service import ProductRateHistoryService
 from vaybooks.bms.domain.inventory.units import default_unit_label, normalize_unit_code
@@ -66,6 +68,7 @@ class InventoryDomainService:
         unit_repo: Optional[ProductUnitRepository] = None,
         field_def_repo: Optional[ProductFieldDefinitionRepository] = None,
         rate_history: Optional[ProductRateHistoryService] = None,
+        warehouse_repo: Optional[WarehouseRepository] = None,
     ):
         self._category_repo = category_repo
         self._product_repo = product_repo
@@ -73,6 +76,7 @@ class InventoryDomainService:
         self._unit_repo = unit_repo
         self._field_def_repo = field_def_repo
         self._rate_history = rate_history
+        self._warehouse_repo = warehouse_repo
 
     def _categories_by_id(self) -> Dict[str, ProductCategory]:
         return {c.id: c for c in self._category_repo.list_all(active_only=False)}
@@ -196,6 +200,77 @@ class InventoryDomainService:
             raise ValidationError("Cannot delete a category that has products")
         self._category_repo.delete(category_id)
 
+    def list_warehouses(self, active_only: bool = True) -> List[Warehouse]:
+        if not self._warehouse_repo:
+            return []
+        return self._warehouse_repo.list_all(active_only=active_only)
+
+    def get_warehouse(self, warehouse_id: str) -> Optional[Warehouse]:
+        if not self._warehouse_repo or not warehouse_id:
+            return None
+        return self._warehouse_repo.find_by_id(warehouse_id)
+
+    def create_warehouse(
+        self,
+        code: str,
+        name: str,
+        address: str = "",
+    ) -> Warehouse:
+        if not self._warehouse_repo:
+            raise ValidationError("Warehouse repository not configured")
+        code = (code or "").strip().upper()
+        name = (name or "").strip()
+        if not code:
+            raise ValidationError("Warehouse code is required")
+        if not name:
+            raise ValidationError("Warehouse name is required")
+        if self._warehouse_repo.find_by_code(code):
+            raise ValidationError("A warehouse with this code already exists")
+        warehouse = Warehouse(
+            code=code,
+            name=name,
+            address=(address or "").strip(),
+        )
+        return self._warehouse_repo.save(warehouse)
+
+    def update_warehouse(
+        self,
+        warehouse_id: str,
+        code: str,
+        name: str,
+        address: str = "",
+        is_active: bool = True,
+    ) -> Warehouse:
+        if not self._warehouse_repo:
+            raise ValidationError("Warehouse repository not configured")
+        warehouse = self._warehouse_repo.find_by_id(warehouse_id)
+        if not warehouse:
+            raise ValidationError("Warehouse not found")
+        code = (code or "").strip().upper()
+        name = (name or "").strip()
+        if not code:
+            raise ValidationError("Warehouse code is required")
+        if not name:
+            raise ValidationError("Warehouse name is required")
+        existing = self._warehouse_repo.find_by_code(code)
+        if existing and existing.id != warehouse_id:
+            raise ValidationError("A warehouse with this code already exists")
+        warehouse.update(
+            code=code,
+            name=name,
+            address=(address or "").strip(),
+            is_active=is_active,
+        )
+        return self._warehouse_repo.save(warehouse)
+
+    def delete_warehouse(self, warehouse_id: str) -> None:
+        if not self._warehouse_repo:
+            raise ValidationError("Warehouse repository not configured")
+        warehouse = self._warehouse_repo.find_by_id(warehouse_id)
+        if not warehouse:
+            raise ValidationError("Warehouse not found")
+        self._warehouse_repo.delete(warehouse_id)
+
     def list_field_definitions(self, active_only: bool = False) -> List[ProductFieldDefinition]:
         if not self._field_def_repo:
             return []
@@ -283,6 +358,8 @@ class InventoryDomainService:
         gst_required: bool = False,
         specifications: Optional[Dict[str, str]] = None,
         custom_fields: Optional[Dict[str, Any]] = None,
+        track_batch: bool = False,
+        track_serial: bool = False,
     ) -> InventoryProduct:
         sku = sku.strip()
         name = name.strip()
@@ -322,6 +399,8 @@ class InventoryDomainService:
             current_qty=0.0,
             specifications=specs,
             custom_fields=field_values,
+            track_batch=bool(track_batch),
+            track_serial=bool(track_serial),
         )
         product.sync_legacy_category_fields()
         saved = self._product_repo.save(product)
@@ -375,6 +454,8 @@ class InventoryDomainService:
         gst_required: bool = False,
         specifications: Optional[Dict[str, str]] = None,
         custom_fields: Optional[Dict[str, Any]] = None,
+        track_batch: Optional[bool] = None,
+        track_serial: Optional[bool] = None,
     ) -> InventoryProduct:
         product = self._product_repo.find_by_id(product_id)
         if not product:
@@ -420,6 +501,10 @@ class InventoryDomainService:
         )
         if hsn_sac is not None:
             product.hsn_sac = (hsn_sac or "").strip()
+        if track_batch is not None:
+            product.track_batch = bool(track_batch)
+        if track_serial is not None:
+            product.track_serial = bool(track_serial)
         product.sync_legacy_category_fields()
         saved = self._product_repo.save(product)
         if selling_rate is not None and mrp is not None and gst_rate is not None:
@@ -556,6 +641,7 @@ class InventoryDomainService:
                 reference_type,
                 reference_id,
                 (line.get("description") or "").strip() or "Purchase receive",
+                warehouse_id=str(line.get("warehouse_id") or "") or None,
             )
             recorded.append(movement)
         return recorded
@@ -674,6 +760,7 @@ class InventoryDomainService:
         reference_type: StockReferenceType,
         reference_id: Optional[str],
         notes: str,
+        warehouse_id: Optional[str] = None,
     ) -> StockMovement:
         qty = round(float(qty), 2)
         if qty <= 0:
@@ -702,6 +789,7 @@ class InventoryDomainService:
             movement_date=movement_date,
             reference_type=reference_type,
             reference_id=reference_id,
+            warehouse_id=(warehouse_id or None),
             notes=notes,
         )
         return self._movement_repo.save(movement)

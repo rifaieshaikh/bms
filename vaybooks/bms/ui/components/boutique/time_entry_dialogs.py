@@ -193,7 +193,7 @@ def record_time_dialog(services: dict):
         include_overnight=True,
     )
     cols = st.columns(2)
-    if cols[0].button("Save", type="primary", use_container_width=True):
+    if cols[0].button("Save", type="primary", width="stretch"):
         field_errors = _validate_time_form(data)
         if field_errors:
             st.session_state[TIME_PAGE_RECORD_OPEN] = True
@@ -215,7 +215,7 @@ def record_time_dialog(services: dict):
             except Exception as exc:
                 st.session_state[TIME_PAGE_RECORD_OPEN] = True
                 st.error(str(exc))
-    if cols[1].button("Cancel", use_container_width=True):
+    if cols[1].button("Cancel", width="stretch"):
         st.session_state.pop(TIME_PAGE_RECORD_OPEN, None)
         st.session_state.pop(TIME_PAGE_FIELD_ERRORS, None)
         st.rerun()
@@ -246,7 +246,7 @@ def edit_time_dialog(services: dict, entry_id: str):
         include_overnight=True,
     )
     cols = st.columns(2)
-    if cols[0].button("Save", type="primary", use_container_width=True):
+    if cols[0].button("Save", type="primary", width="stretch"):
         field_errors = _validate_time_form(data)
         if field_errors:
             st.session_state[PENDING_EDIT_TIME_ENTRY] = entry_id
@@ -268,7 +268,7 @@ def edit_time_dialog(services: dict, entry_id: str):
             except Exception as exc:
                 st.session_state[PENDING_EDIT_TIME_ENTRY] = entry_id
                 st.error(str(exc))
-    if cols[1].button("Cancel", use_container_width=True):
+    if cols[1].button("Cancel", width="stretch"):
         st.session_state.pop(PENDING_EDIT_TIME_ENTRY, None)
         st.session_state.pop(TIME_PAGE_FIELD_ERRORS, None)
         st.rerun()
@@ -285,12 +285,12 @@ def item_time_dialog(services, order_id, item_id, key_prefix, flag_key):
     entry = None if target in (None, "new") else services["time_tracking"].get_entry(target)
     data = time_form_fields(item_activities(order, item), services, f"dlg_{key_prefix}", entry)
     cols = st.columns(2)
-    if cols[0].button("Save", type="primary", use_container_width=True):
+    if cols[0].button("Save", type="primary", width="stretch"):
         try:
             if save_time_entry(services, order, item, data, entry, flag_key):
                 st.rerun()
         except Exception as exc:
             st.error(str(exc))
-    if cols[1].button("Cancel", use_container_width=True):
+    if cols[1].button("Cancel", width="stretch"):
         st.session_state.pop(flag_key, None)
         st.rerun()

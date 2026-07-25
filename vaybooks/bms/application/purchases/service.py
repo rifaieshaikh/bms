@@ -386,6 +386,7 @@ class PurchaseAppService:
         receipt_date: date,
         lines: list[dict],
         purchase_order_id: Optional[str] = None,
+        warehouse_id: str = "",
         freight: float = 0.0,
         duty: float = 0.0,
         other: float = 0.0,
@@ -393,19 +394,39 @@ class PurchaseAppService:
         confirm: bool = True,
         allow_over_receive: bool = False,
     ) -> GoodsReceipt:
+        warehouse_id = (warehouse_id or "").strip()
+        if not warehouse_id:
+            raise ValueError("Warehouse is required")
+        warehouse = self._inventory.get_warehouse(warehouse_id)
+        if not warehouse or not warehouse.is_active:
+            raise ValueError("Warehouse not found or inactive")
         po_number = ""
         if purchase_order_id:
             po = self._po_repo.find_by_id(purchase_order_id)
             po_number = po.po_number if po else ""
+        enriched_lines: list[dict] = []
+        for raw in lines:
+            line = dict(raw)
+            product_id = str(line.get("product_id") or "")
+            if product_id and (
+                "track_batch" not in line or "track_serial" not in line
+            ):
+                product = self._inventory.get_product(product_id)
+                if product:
+                    line.setdefault("track_batch", bool(product.track_batch))
+                    line.setdefault("track_serial", bool(product.track_serial))
+            enriched_lines.append(line)
         grn_number = self._counter_repo.next("grn_number")
         grn = self._domain.create_grn(
             grn_number=grn_number,
             vendor_id=vendor_id,
             vendor_name=self._vendor_name(vendor_id),
             receipt_date=receipt_date,
-            lines=lines,
+            lines=enriched_lines,
             purchase_order_id=purchase_order_id,
             po_number=po_number,
+            warehouse_id=warehouse.id,
+            warehouse_name=warehouse.name,
             freight=freight,
             duty=duty,
             other=other,

@@ -38,14 +38,14 @@ def _render_table(page_rows, services):
                 "SKU": row.get("sku", ""),
                 "Category": row.get("category_name", ""),
                 "Type": row.get("movement_type", ""),
-                "Qty In": row.get("qty_in") or "",
-                "Qty Out": row.get("qty_out") or "",
+                "Qty In": row.get("qty_in") or None,
+                "Qty Out": row.get("qty_out") or None,
                 "Reference": ref,
                 "Notes": row.get("notes", ""),
             }
         )
 
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
 
 def render(services: dict):

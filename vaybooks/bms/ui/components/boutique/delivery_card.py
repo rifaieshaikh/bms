@@ -74,7 +74,7 @@ def delivery_card(
             "Edit",
             key=edit.button_key,
             type="primary",
-            use_container_width=True,
+            width="stretch",
         ):
             if edit.before_edit:
                 edit.before_edit()

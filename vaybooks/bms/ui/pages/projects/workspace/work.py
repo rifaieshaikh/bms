@@ -124,10 +124,10 @@ def _add_activities_dialog(services: dict, project) -> None:
         phase_id = phase_map[phase_label]
 
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True):
+    if cols[0].button("Cancel", width="stretch"):
         st.session_state.pop(ADD_ACTIVITIES, None)
         st.rerun()
-    if cols[1].button("Add selected", type="primary", use_container_width=True):
+    if cols[1].button("Add selected", type="primary", width="stretch"):
         if not picked:
             st.error("Select at least one activity")
             return
@@ -145,10 +145,10 @@ def _add_activities_dialog(services: dict, project) -> None:
 def _add_phase_dialog(services: dict, project) -> None:
     name = st.text_input("Phase name", key="prj_work_new_phase_name")
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True):
+    if cols[0].button("Cancel", width="stretch"):
         st.session_state.pop(ADD_PHASE, None)
         st.rerun()
-    if cols[1].button("Add phase", type="primary", use_container_width=True):
+    if cols[1].button("Add phase", type="primary", width="stretch"):
         if not name.strip():
             st.error("Phase name is required")
             return
@@ -173,11 +173,11 @@ def _edit_phase_dialog(services: dict, project, phase_id: str) -> None:
         key="prj_work_edit_phase_order",
     )
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True):
+    if cols[0].button("Cancel", width="stretch"):
         st.session_state.pop(EDIT_PHASE, None)
         st.session_state.pop(EDIT_PHASE_ID, None)
         st.rerun()
-    if cols[1].button("Save", type="primary", use_container_width=True):
+    if cols[1].button("Save", type="primary", width="stretch"):
         if not name.strip():
             st.error("Phase name is required")
             return
@@ -199,11 +199,11 @@ def _remove_phase_dialog(services: dict, project, phase_id: str) -> None:
         return
     st.write(f"Remove phase **{phase.name}**? Activities in this phase become unassigned.")
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True):
+    if cols[0].button("Cancel", width="stretch"):
         st.session_state.pop(REMOVE_PHASE, None)
         st.session_state.pop(REMOVE_PHASE_ID, None)
         st.rerun()
-    if cols[1].button("Remove", type="primary", use_container_width=True):
+    if cols[1].button("Remove", type="primary", width="stretch"):
         H.run_action(
             lambda: services["projects"].delete_phase(project.id, phase_id),
             "Phase removed",
@@ -232,11 +232,11 @@ def _change_status_dialog(services: dict, project, activity_id: str) -> None:
     )
     st.caption("Flow: " + " → ".join(statuses))
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True):
+    if cols[0].button("Cancel", width="stretch"):
         st.session_state.pop(CHANGE_STATUS, None)
         st.session_state.pop(CHANGE_STATUS_ID, None)
         st.rerun()
-    if cols[1].button("Save", type="primary", use_container_width=True):
+    if cols[1].button("Save", type="primary", width="stretch"):
         H.run_action(
             lambda: services["projects"].set_activity_workflow_status(
                 project.id, activity_id, new_status
@@ -261,11 +261,11 @@ def _edit_amount_dialog(services: dict, project, activity_id: str) -> None:
         key="prj_work_amount_input",
     )
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True):
+    if cols[0].button("Cancel", width="stretch"):
         st.session_state.pop(EDIT_AMOUNT, None)
         st.session_state.pop(EDIT_AMOUNT_ID, None)
         st.rerun()
-    if cols[1].button("Save", type="primary", use_container_width=True):
+    if cols[1].button("Save", type="primary", width="stretch"):
         H.run_action(
             lambda: services["projects"].update_activity_amount(
                 project.id, activity_id, amount
@@ -294,11 +294,11 @@ def _assign_phase_dialog(services: dict, project, activity_id: str) -> None:
         key="prj_work_assign_phase_pick",
     )
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True):
+    if cols[0].button("Cancel", width="stretch"):
         st.session_state.pop(ASSIGN_PHASE, None)
         st.session_state.pop(ASSIGN_PHASE_ID, None)
         st.rerun()
-    if cols[1].button("Save", type="primary", use_container_width=True):
+    if cols[1].button("Save", type="primary", width="stretch"):
         H.run_action(
             lambda: services["projects"].assign_activity_phase(
                 project.id, activity_id, phase_map[phase_label]
@@ -317,11 +317,11 @@ def _remove_activity_dialog(services: dict, project, activity_id: str) -> None:
         return
     st.write(f"Remove **{activity.name}** from this project?")
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True):
+    if cols[0].button("Cancel", width="stretch"):
         st.session_state.pop(REMOVE_ACTIVITY, None)
         st.session_state.pop(REMOVE_ACTIVITY_ID, None)
         st.rerun()
-    if cols[1].button("Remove", type="primary", use_container_width=True):
+    if cols[1].button("Remove", type="primary", width="stretch"):
         time_repo = getattr(services.get("project_time"), "_time_repo", None)
         expense_repo = getattr(services.get("project_expenses"), "_expense_repo", None)
         H.run_action(
@@ -351,7 +351,7 @@ def _render_activity_card(services: dict, project, activity, index: int) -> None
         if btn_cols[0].button(
             "Change status",
             key=f"prj_work_stat_{activity.id}_{index}",
-            use_container_width=True,
+            width="stretch",
         ):
             st.session_state[CHANGE_STATUS] = True
             st.session_state[CHANGE_STATUS_ID] = activity.id
@@ -359,7 +359,7 @@ def _render_activity_card(services: dict, project, activity, index: int) -> None
         if btn_cols[1].button(
             "Edit amount",
             key=f"prj_work_amt_{activity.id}_{index}",
-            use_container_width=True,
+            width="stretch",
         ):
             st.session_state[EDIT_AMOUNT] = True
             st.session_state[EDIT_AMOUNT_ID] = activity.id
@@ -367,7 +367,7 @@ def _render_activity_card(services: dict, project, activity, index: int) -> None
         if btn_cols[2].button(
             "Assign phase",
             key=f"prj_work_phase_{activity.id}_{index}",
-            use_container_width=True,
+            width="stretch",
         ):
             st.session_state[ASSIGN_PHASE] = True
             st.session_state[ASSIGN_PHASE_ID] = activity.id
@@ -375,7 +375,7 @@ def _render_activity_card(services: dict, project, activity, index: int) -> None
         if btn_cols[3].button(
             "Remove",
             key=f"prj_work_rm_{activity.id}_{index}",
-            use_container_width=True,
+            width="stretch",
         ):
             st.session_state[REMOVE_ACTIVITY] = True
             st.session_state[REMOVE_ACTIVITY_ID] = activity.id
@@ -411,7 +411,7 @@ def render_work(services: dict, project) -> None:
                     "Status": activity.current_status or "Created",
                 }
             )
-        st.dataframe(pd.DataFrame(dep_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(dep_rows), width="stretch", hide_index=True)
 
     top_cols = st.columns([1, 1])
     if top_cols[0].button("Add activities", type="primary", key="prj_work_add_catalog"):
@@ -465,7 +465,7 @@ def render_work(services: dict, project) -> None:
                 if material_rows:
                     st.dataframe(
                         pd.DataFrame(material_rows),
-                        use_container_width=True,
+                        width="stretch",
                         hide_index=True,
                     )
                 else:

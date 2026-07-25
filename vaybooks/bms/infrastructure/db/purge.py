@@ -23,6 +23,7 @@ BUSINESS_COLLECTIONS = (
     "time_entries",
     "vouchers",
     "product_categories",
+    "warehouses",
     "inventory_products",
     "stock_movements",
     "purchase_orders",

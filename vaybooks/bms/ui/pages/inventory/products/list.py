@@ -56,6 +56,8 @@ def _create_product(services, payload: dict) -> None:
             custom_fields=payload["custom_fields"],
             pending_category_name=payload.get("pending_category_name"),
             pending_unit_code=payload.get("pending_unit_code"),
+            track_batch=bool(payload.get("track_batch")),
+            track_serial=bool(payload.get("track_serial")),
         )
         inventory.set_product_cost_fields(
             created.id,
@@ -88,6 +90,8 @@ def _update_product(services, product_id: str, payload: dict) -> None:
             custom_fields=payload["custom_fields"],
             pending_category_name=payload.get("pending_category_name"),
             pending_unit_code=payload.get("pending_unit_code"),
+            track_batch=bool(payload.get("track_batch")),
+            track_serial=bool(payload.get("track_serial")),
         )
         inventory.set_product_cost_fields(
             product_id,

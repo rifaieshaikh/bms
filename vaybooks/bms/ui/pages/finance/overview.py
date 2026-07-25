@@ -56,15 +56,15 @@ def _chart_or_caption(title: str, df: pd.DataFrame, chart_fn, empty_msg: str) ->
 def _render_quick_actions() -> None:
     st.markdown("**Quick actions**")
     cols = st.columns(5)
-    if cols[0].button("Accounts", use_container_width=True):
+    if cols[0].button("Accounts", width="stretch"):
         navigation.go_to_list("accounts_list")
-    if cols[1].button("Receipts", use_container_width=True):
+    if cols[1].button("Receipts", width="stretch"):
         navigation.go_to_list("receipts_list")
-    if cols[2].button("Payments", use_container_width=True):
+    if cols[2].button("Payments", width="stretch"):
         navigation.go_to_list("payments_list")
-    if cols[3].button("Journal", use_container_width=True):
+    if cols[3].button("Journal", width="stretch"):
         navigation.go_to_list("journal_list")
-    if cols[4].button("Reports", use_container_width=True):
+    if cols[4].button("Reports", width="stretch"):
         navigation.go_to_list("reports")
 
 

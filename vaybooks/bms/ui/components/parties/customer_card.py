@@ -28,6 +28,8 @@ def customer_card(
             + " "
             + status_badge(_format_balance(balance), color)
         )
+        if customer.is_blacklisted:
+            badges += " " + status_badge("Blacklisted", "red")
         st.markdown(badges, unsafe_allow_html=True)
 
         col1, col2 = st.columns(2)
@@ -35,14 +37,14 @@ def customer_card(
             edit_clicked = st.button(
                 "Edit",
                 key=f"{key_prefix}_edit",
-                use_container_width=True,
+                width="stretch",
             )
         with col2:
             if st.button(
                 "View",
                 key=f"{key_prefix}_view",
                 type="primary",
-                use_container_width=True,
+                width="stretch",
             ):
                 navigation.go_to_detail("customer_detail", customer.id)
 

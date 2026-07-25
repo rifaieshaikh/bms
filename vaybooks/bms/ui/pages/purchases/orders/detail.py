@@ -5,11 +5,11 @@ from __future__ import annotations
 import base64
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 from vaybooks.bms.domain.shared.enums import PurchaseOrderStatus
 from vaybooks.bms.infrastructure.pdf.purchase_order_pdf import generate_purchase_order_pdf
 from vaybooks.bms.ui import navigation
+from vaybooks.bms.ui.html_iframe import inject_html
 from vaybooks.bms.ui.components.common.document_detail import (
     document_actions,
     document_header,
@@ -55,7 +55,7 @@ def _trigger_pdf_download(file_name: str, pdf_bytes: bytes) -> None:
 </body></html>
 """
     try:
-        components.html(html, height=0, width=0)
+        inject_html(html, height=1, width=1)
     except Exception:
         pass
 

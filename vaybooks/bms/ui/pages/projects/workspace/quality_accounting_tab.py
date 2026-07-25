@@ -30,10 +30,10 @@ def _qi_dialog(services: dict, project) -> None:
         key="prj_qi_rework_cost",
     )
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True):
+    if cols[0].button("Cancel", width="stretch"):
         st.session_state.pop(QI_DIALOG, None)
         st.rerun()
-    if cols[1].button("Create", type="primary", use_container_width=True):
+    if cols[1].button("Create", type="primary", width="stretch"):
         try:
             services["project_quality_config"].create_quality_issue(
                 project.id,
@@ -63,10 +63,10 @@ def _dpr_dialog(services: dict, project) -> None:
     )
     hours = st.number_input("Hours", min_value=0.0, value=0.0, key="prj_dpr_hours")
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True):
+    if cols[0].button("Cancel", width="stretch"):
         st.session_state.pop(DPR_DIALOG, None)
         st.rerun()
-    if cols[1].button("Create", type="primary", use_container_width=True):
+    if cols[1].button("Create", type="primary", width="stretch"):
         lines = []
         if activity_name:
             lines.append(

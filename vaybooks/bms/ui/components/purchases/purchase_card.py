@@ -40,7 +40,7 @@ def _purchase_card(row: dict, suffix: str) -> None:
             unsafe_allow_html=True,
         )
         st.markdown(_payment_badge(outstanding), unsafe_allow_html=True)
-        if st.button("View", key=f"purchase_view_{suffix}_{row.get('id')}", use_container_width=True):
+        if st.button("View", key=f"purchase_view_{suffix}_{row.get('id')}", width="stretch"):
             navigation.go_to_detail("purchase_detail", row.get("id"))
 
 

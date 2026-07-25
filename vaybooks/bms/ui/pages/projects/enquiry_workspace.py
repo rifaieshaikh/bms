@@ -37,10 +37,10 @@ def _assessment_dialog(services: dict, enquiry_id: str) -> None:
     assumptions = st.text_area("Assumptions", key="enq_assess_assumptions")
     recommended_scope = st.text_area("Recommended scope", key="enq_assess_scope")
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True):
+    if cols[0].button("Cancel", width="stretch"):
         st.session_state.pop(ASSESS_DIALOG, None)
         st.rerun()
-    if cols[1].button("Save", type="primary", use_container_width=True):
+    if cols[1].button("Save", type="primary", width="stretch"):
         try:
             services["project_enquiries"].add_assessment(
                 enquiry_id,

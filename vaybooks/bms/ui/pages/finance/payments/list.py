@@ -42,7 +42,7 @@ def render(services: dict):
         "+ Record Salary",
         type="primary",
         key="btn_rec_sal",
-        use_container_width=True,
+        width="stretch",
     ) or consume_action("list.primary"):
         acc._clear_other_payment_dialog_flags(acc.SAL)
         acc._salary_dialog(accounting_service)

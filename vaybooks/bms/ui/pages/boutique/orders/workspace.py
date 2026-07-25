@@ -44,12 +44,12 @@ def _step_nav(current: str) -> None:
     for i, step in enumerate(STEPS):
         label = f"{i + 1}. {step}"
         if step == current:
-            cols[i].button(label, type="primary", disabled=True, use_container_width=True)
+            cols[i].button(label, type="primary", disabled=True, width="stretch")
         else:
             # Only allow leaving Customer after draft exists (except staying on Customer)
             order_id = st.session_state.get(WORKSPACE_ORDER_ID)
             disabled = step != "Customer" and not order_id
-            if cols[i].button(label, disabled=disabled, use_container_width=True):
+            if cols[i].button(label, disabled=disabled, width="stretch"):
                 _set_step(step)
                 st.rerun()
 
@@ -127,7 +127,7 @@ def _measurement_print_button(
             mime="application/pdf",
             key=key,
             icon=":material/print:",
-            use_container_width=True,
+            width="stretch",
         )
     except Exception as exc:
         st.caption(f"Print unavailable: {exc}")
@@ -233,14 +233,14 @@ def _remove_measurement_dialog(services: dict, order, record_id: str) -> None:
 
     cols = st.columns(2)
     if cols[0].button(
-        "Cancel", use_container_width=True, key=f"ws_rm_ms_cancel_{record.id}"
+        "Cancel", width="stretch", key=f"ws_rm_ms_cancel_{record.id}"
     ):
         st.session_state.pop(WS_REMOVE_MEASUREMENT, None)
         st.rerun()
     if cols[1].button(
         "Remove measurement",
         type="primary",
-        use_container_width=True,
+        width="stretch",
         key=f"ws_rm_ms_confirm_{record.id}",
     ):
         try:
@@ -289,7 +289,7 @@ def _render_measurements_step(services: dict, order) -> None:
                 if head[1].button(
                     "Edit",
                     key=f"ws_ms_edit_{rec.id}",
-                    use_container_width=True,
+                    width="stretch",
                     icon=":material/edit:",
                 ):
                     clear_all_dialog_flags()
@@ -299,7 +299,7 @@ def _render_measurements_step(services: dict, order) -> None:
                 if head[2].button(
                     "Remove",
                     key=f"ws_ms_remove_{rec.id}",
-                    use_container_width=True,
+                    width="stretch",
                     icon=":material/delete:",
                 ):
                     clear_all_dialog_flags()
@@ -489,12 +489,12 @@ def _add_item_dialog(services: dict, order) -> None:
     required_map = _activity_required_map(activities, "ws_add_item")
 
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True, key="ws_add_item_cancel"):
+    if cols[0].button("Cancel", width="stretch", key="ws_add_item_cancel"):
         st.session_state.pop(WS_ADD_ITEM, None)
         _clear_add_item_form_state()
         st.rerun()
     if cols[1].button(
-        "Save item", type="primary", use_container_width=True, key="ws_add_item_save"
+        "Save item", type="primary", width="stretch", key="ws_add_item_save"
     ):
         if not description:
             st.error("Item description is required")
@@ -602,13 +602,13 @@ def _edit_item_dialog(services: dict, order, item_id: str) -> None:
         st.caption(f"Print unavailable: {exc}")
 
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True, key=f"ws_edit_cancel_{item_id}"):
+    if cols[0].button("Cancel", width="stretch", key=f"ws_edit_cancel_{item_id}"):
         st.session_state.pop(WS_EDIT_ITEM, None)
         st.rerun()
     if cols[1].button(
         "Save changes",
         type="primary",
-        use_container_width=True,
+        width="stretch",
         key=f"ws_edit_save_{item_id}",
     ):
         if not description:
@@ -646,13 +646,13 @@ def _remove_item_dialog(services: dict, order, item_id: str) -> None:
         "This also removes its activities from the order."
     )
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True, key=f"ws_rm_cancel_{item_id}"):
+    if cols[0].button("Cancel", width="stretch", key=f"ws_rm_cancel_{item_id}"):
         st.session_state.pop(WS_REMOVE_ITEM, None)
         st.rerun()
     if cols[1].button(
         "Remove item",
         type="primary",
-        use_container_width=True,
+        width="stretch",
         key=f"ws_rm_confirm_{item_id}",
     ):
         try:
@@ -690,7 +690,7 @@ def _render_items_step(services: dict, order) -> None:
                 if head[1].button(
                     "Edit",
                     key=f"ws_item_edit_{item.item_id}",
-                    use_container_width=True,
+                    width="stretch",
                     icon=":material/edit:",
                 ):
                     clear_all_dialog_flags()
@@ -700,7 +700,7 @@ def _render_items_step(services: dict, order) -> None:
                 if head[2].button(
                     "Remove",
                     key=f"ws_item_remove_{item.item_id}",
-                    use_container_width=True,
+                    width="stretch",
                     icon=":material/delete:",
                 ):
                     clear_all_dialog_flags()
@@ -732,7 +732,7 @@ def _render_items_step(services: dict, order) -> None:
                         mime="application/pdf",
                         key=f"ws_item_pdf_{item.item_id}",
                         icon=":material/print:",
-                        use_container_width=True,
+                        width="stretch",
                     )
                 except Exception:
                     head[3].caption("Print N/A")

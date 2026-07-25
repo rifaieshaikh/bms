@@ -16,7 +16,7 @@ def render(services: dict):
     st.title("Software Updates")
     st.caption(f"Current version: **{__version__}**")
 
-    if st.button("Check for Updates", use_container_width=True):
+    if st.button("Check for Updates", width="stretch"):
         st.cache_data.clear()
         st.rerun()
 
@@ -33,7 +33,7 @@ def render(services: dict):
         st.success("New Version Available")
         if info.release_notes:
             st.markdown(info.release_notes)
-        if st.button("Download & Install", type="primary", use_container_width=True):
+        if st.button("Download & Install", type="primary", width="stretch"):
             with st.spinner("Downloading and launching installer..."):
                 ok, message = download_and_install(info)
             if ok:

@@ -5,6 +5,7 @@ from vaybooks.bms.domain.inventory.entities import (
     ProductCategory,
     ProductUnit,
     StockMovement,
+    Warehouse,
 )
 from vaybooks.bms.domain.inventory.field_definitions import ProductFieldDefinition
 
@@ -47,6 +48,22 @@ class ProductCategoryRepository(Protocol):
     def list_children(self, parent_id: Optional[str]) -> List[ProductCategory]: ...
 
     def delete(self, category_id: str) -> None: ...
+
+
+class WarehouseRepository(Protocol):
+    def save(self, warehouse: Warehouse) -> Warehouse: ...
+
+    def find_by_id(self, warehouse_id: str) -> Optional[Warehouse]: ...
+
+    def find_by_code(self, code: str) -> Optional[Warehouse]: ...
+
+    def list_all(self, active_only: bool = True) -> List[Warehouse]: ...
+
+    def search(
+        self, query: str, *, active_only: bool = True, limit: int = 25
+    ) -> List[Warehouse]: ...
+
+    def delete(self, warehouse_id: str) -> None: ...
 
 
 class InventoryProductRepository(Protocol):

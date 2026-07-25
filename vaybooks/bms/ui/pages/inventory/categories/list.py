@@ -74,9 +74,9 @@ def _add_category_dialog(inventory):
     )
     cols = st.columns(2)
     do_create = cols[0].button(
-        "Create Category", type="primary", use_container_width=True
+        "Create Category", type="primary", width="stretch"
     ) or consume_submit(SUBMIT_ADD)
-    if cols[1].button("Cancel", use_container_width=True):
+    if cols[1].button("Cancel", width="stretch"):
         st.session_state.pop(C_ADD, None)
         st.rerun()
     if not do_create:
@@ -136,9 +136,9 @@ def _edit_category_dialog(inventory, category_id: str):
 
     cols = st.columns(2)
     do_save = cols[0].button(
-        "Save Changes", type="primary", use_container_width=True
+        "Save Changes", type="primary", width="stretch"
     ) or consume_submit(SUBMIT_EDIT)
-    if cols[1].button("Delete", use_container_width=True):
+    if cols[1].button("Delete", width="stretch"):
         try:
             inventory.delete_category(category_id)
             st.session_state.pop(C_EDIT, None)

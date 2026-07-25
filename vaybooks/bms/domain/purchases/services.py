@@ -179,6 +179,8 @@ class PurchaseDomainService:
         lines: List[dict],
         purchase_order_id: Optional[str] = None,
         po_number: str = "",
+        warehouse_id: str = "",
+        warehouse_name: str = "",
         freight: float = 0.0,
         duty: float = 0.0,
         other: float = 0.0,
@@ -187,6 +189,9 @@ class PurchaseDomainService:
     ) -> GoodsReceipt:
         if not lines:
             raise ValidationError("At least one receipt line is required")
+        warehouse_id = (warehouse_id or "").strip()
+        if not warehouse_id:
+            raise ValidationError("Warehouse is required")
         po: Optional[PurchaseOrder] = None
         if purchase_order_id:
             po = self._po_repo.find_by_id(purchase_order_id)
@@ -200,6 +205,7 @@ class PurchaseDomainService:
             if qty <= 0:
                 raise ValidationError("Received quantity must be positive")
             product_id = str(raw.get("product_id") or "")
+            product_name = (raw.get("product_name") or "").strip()
             if po:
                 po_line = next(
                     (pl for pl in po.lines if pl.product_id == product_id), None
@@ -211,14 +217,60 @@ class PurchaseDomainService:
                     raise ValidationError(
                         f"Cannot receive more than pending ({pending:g}) for {po_line.product_name or product_id}"
                     )
+            qty_accepted = float(raw.get("qty_accepted", qty) or 0)
+            qty_damaged = float(raw.get("qty_damaged") or 0)
+            qty_rejected = float(raw.get("qty_rejected") or 0)
+            if qty_accepted < 0 or qty_damaged < 0 or qty_rejected < 0:
+                raise ValidationError("Disposition quantities cannot be negative")
+            disposition_sum = round(qty_accepted + qty_damaged + qty_rejected, 2)
+            if abs(disposition_sum - round(qty, 2)) > 0.001:
+                raise ValidationError(
+                    f"Accepted + damaged + rejected must equal received "
+                    f"for {product_name or product_id}"
+                )
+            batch_number = (raw.get("batch_number") or "").strip()
+            serial_raw = raw.get("serial_numbers") or []
+            if isinstance(serial_raw, str):
+                serial_numbers = [
+                    s.strip() for s in serial_raw.replace(",", "\n").splitlines() if s.strip()
+                ]
+            else:
+                serial_numbers = [str(s).strip() for s in serial_raw if str(s).strip()]
+            track_batch = bool(raw.get("track_batch"))
+            track_serial = bool(raw.get("track_serial"))
+            if track_batch and not batch_number:
+                raise ValidationError(
+                    f"Batch number is required for {product_name or product_id}"
+                )
+            if track_serial:
+                if abs(qty_accepted - round(qty_accepted)) > 0.001:
+                    raise ValidationError(
+                        f"Accepted quantity must be a whole number for serial-tracked "
+                        f"{product_name or product_id}"
+                    )
+                expected = int(round(qty_accepted))
+                if len(serial_numbers) != expected:
+                    raise ValidationError(
+                        f"Expected {expected} serial number(s) for "
+                        f"{product_name or product_id}"
+                    )
+                if len(set(serial_numbers)) != len(serial_numbers):
+                    raise ValidationError(
+                        f"Serial numbers must be unique for {product_name or product_id}"
+                    )
             grn_lines.append(
                 GoodsReceiptLine(
                     product_id=product_id,
-                    product_name=(raw.get("product_name") or "").strip(),
+                    product_name=product_name,
                     qty_received=round(qty, 2),
+                    qty_accepted=round(qty_accepted, 2),
+                    qty_damaged=round(qty_damaged, 2),
+                    qty_rejected=round(qty_rejected, 2),
                     rate=round(float(raw.get("rate") or 0), 2),
                     landed_cost_extra=round(float(raw.get("landed_cost_extra") or 0), 2),
                     purchase_order_line_id=str(raw.get("purchase_order_line_id") or ""),
+                    batch_number=batch_number,
+                    serial_numbers=serial_numbers,
                 )
             )
         _allocate_landed_extras_by_value(
@@ -231,6 +283,8 @@ class PurchaseDomainService:
             receipt_date=receipt_date,
             purchase_order_id=purchase_order_id,
             po_number=po_number,
+            warehouse_id=warehouse_id,
+            warehouse_name=(warehouse_name or "").strip(),
             lines=grn_lines,
             freight=round(max(freight, 0.0), 2),
             duty=round(max(duty, 0.0), 2),
@@ -330,19 +384,22 @@ class PurchaseDomainService:
         return [
             {
                 "product_id": line.product_id,
-                "qty": line.qty_received,
+                "qty": line.qty_accepted,
                 "rate": line.unit_cost,
                 "description": line.product_name or "GRN receive",
+                "warehouse_id": grn.warehouse_id or None,
             }
             for line in grn.lines
+            if line.qty_accepted > 0
         ]
 
     def grn_to_landed_cost_lines(self, grn: GoodsReceipt) -> list[dict]:
         return [
             {
                 "product_id": line.product_id,
-                "qty": line.qty_received,
+                "qty": line.qty_accepted,
                 "unit_cost": line.unit_cost,
             }
             for line in grn.lines
+            if line.qty_accepted > 0
         ]

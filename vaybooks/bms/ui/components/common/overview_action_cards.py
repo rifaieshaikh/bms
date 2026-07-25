@@ -65,7 +65,7 @@ def overview_action_cards(
                 if st.button(
                     "Open →",
                     key=f"{key_prefix}_open_{row_key}_{index}",
-                    use_container_width=True,
+                    width="stretch",
                 ):
                     on_open(row)
 

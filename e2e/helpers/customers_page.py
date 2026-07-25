@@ -66,11 +66,61 @@ def filter_by_gstin(page: Page, gstin: str) -> None:
 
 
 def filter_by_registration(page: Page, reg_type: str) -> None:
-    open_filter_popover(page)
-    page.get_by_label("Registration type").click()
-    page.locator('[data-baseweb="popover"]').get_by_text(reg_type, exact=True).click()
+    open_customer_filters(page)
+    select_filter_option(page, "registration_type", reg_type)
     page.get_by_role("button", name="Apply").click()
     wait_for_rerun(page)
+
+
+def open_customer_filters(page: Page) -> None:
+    """Open the Customers Filters dialog (st.dialog, not popover)."""
+    close_popovers(page)
+    btn = page.locator('[class*="st-key-customers_filters_open_btn"] button')
+    if btn.count() == 0:
+        open_filter_popover(page)
+    else:
+        btn.first.click()
+    page.get_by_text("Filters", exact=True).wait_for()
+    expect(page.get_by_test_id("stDialog")).to_be_visible()
+
+
+def filters_dialog(page: Page):
+    return page.get_by_test_id("stDialog")
+
+
+def filter_widget(page: Page, field_key: str):
+    """Container of a Filters widget, addressed by its schema field key."""
+    return filters_dialog(page).locator(f'[class*="st-key-customers_flt_{field_key}"]')
+
+
+def focus_filter_dropdown(page: Page, field_key: str):
+    """Focus the dropdown input of a Filters field and return the control."""
+    root = filter_widget(page, field_key)
+    expect(root.first).to_be_visible()
+    control = root.first.locator('[data-baseweb="select"] input, input').first
+    control.focus()
+    return control
+
+
+def select_filter_option(page: Page, field_key: str, option: str) -> None:
+    """Open a Filters dropdown and pick ``option`` by its visible label."""
+    control = focus_filter_dropdown(page, field_key)
+    control.click()
+    page.wait_for_timeout(300)
+    option_loc = page.get_by_role("option", name=option, exact=True)
+    if option_loc.count() == 0:
+        option_loc = page.locator('[data-baseweb="popover"]').get_by_text(
+            option, exact=True
+        )
+    option_loc.first.click()
+    page.wait_for_timeout(250)
+
+
+def selected_filter_options(page: Page, field_key: str) -> list[str]:
+    """Chosen option labels of a multi-select Filters dropdown."""
+    root = filter_widget(page, field_key).first
+    tags = root.locator('[data-baseweb="tag"]')
+    return [t.strip() for t in tags.all_inner_texts() if t.strip()]
 
 
 def assert_card_count(page: Page, count: int) -> None:

@@ -486,6 +486,47 @@ class FakeProductCategoryRepository:
         self._store.pop(category_id, None)
 
 
+class FakeWarehouseRepository:
+    def __init__(self):
+        self._store: Dict[str, object] = {}
+
+    def save(self, warehouse):
+        self._store[warehouse.id] = warehouse
+        return warehouse
+
+    def find_by_id(self, warehouse_id: str):
+        return self._store.get(warehouse_id)
+
+    def find_by_code(self, code: str):
+        code = (code or "").strip().upper()
+        for warehouse in self._store.values():
+            if warehouse.code == code:
+                return warehouse
+        return None
+
+    def list_all(self, active_only: bool = True):
+        if active_only:
+            return [w for w in self._store.values() if w.is_active]
+        return list(self._store.values())
+
+    def search(self, query: str, *, active_only: bool = True, limit: int = 25):
+        text = (query or "").strip().lower()
+        items = self.list_all(active_only=active_only)
+        if text:
+            items = [
+                w
+                for w in items
+                if text in w.code.lower()
+                or text in w.name.lower()
+                or text in (w.address or "").lower()
+            ]
+        items = sorted(items, key=lambda w: w.code.lower())
+        return items[: max(1, min(int(limit or 25), 50))]
+
+    def delete(self, warehouse_id: str) -> None:
+        self._store.pop(warehouse_id, None)
+
+
 class FakeProductUnitRepository:
     def __init__(self):
         self._store: Dict[str, "ProductUnit"] = {}
@@ -627,6 +668,7 @@ def make_inventory_app_service():
         FakeStockMovementRepository(),
         FakeProductUnitRepository(),
         rate_history=rate_history,
+        warehouse_repo=FakeWarehouseRepository(),
     )
     service.find_or_create_unit("pcs", "Pieces")
     return _ensure_test_product_defaults(service)

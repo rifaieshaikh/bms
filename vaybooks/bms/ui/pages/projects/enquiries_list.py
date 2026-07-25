@@ -102,10 +102,10 @@ def _create_enquiry_dialog(services: dict) -> None:
     source = st.text_input("Source", key="enq_new_source")
 
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True):
+    if cols[0].button("Cancel", width="stretch"):
         st.session_state.pop(CREATE_DIALOG, None)
         st.rerun()
-    if cols[1].button("Create", type="primary", use_container_width=True):
+    if cols[1].button("Create", type="primary", width="stretch"):
         if not customer_label:
             st.error("Customer is required")
             return

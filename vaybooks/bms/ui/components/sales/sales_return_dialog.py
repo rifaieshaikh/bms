@@ -237,7 +237,7 @@ def sales_return_dialog(services: dict) -> None:
 
     save_key = f"{SALES_RETURN_DIALOG}_save"
     submit_clicked = st.button(
-        "Submit for approval", type="primary", use_container_width=True, key=save_key
+        "Submit for approval", type="primary", width="stretch", key=save_key
     ) or consume_submit(SALES_RETURN_SUBMIT_KEY)
 
     row_chain = entry_table_focus_chain(SALES_RETURN_DIALOG)

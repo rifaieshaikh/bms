@@ -131,11 +131,11 @@ def _at_risk_meta(row: dict) -> str:
 def _render_quick_actions() -> None:
     st.markdown("**Quick actions**")
     quick_cols = st.columns(3)
-    if quick_cols[0].button("View all projects", use_container_width=True):
+    if quick_cols[0].button("View all projects", width="stretch"):
         navigation.go_to_list("projects_list")
-    if quick_cols[1].button("Project reports", use_container_width=True):
+    if quick_cols[1].button("Project reports", width="stretch"):
         navigation.go_to_list("projects_reports")
-    if quick_cols[2].button("Create project", use_container_width=True):
+    if quick_cols[2].button("Create project", width="stretch"):
         navigation.go_to_list("projects_list")
 
 
@@ -249,4 +249,4 @@ def render(services: dict) -> None:
     )
 
     with st.expander("Portfolio detail", expanded=False):
-        st.dataframe(rows, use_container_width=True, hide_index=True)
+        st.dataframe(rows, width="stretch", hide_index=True)

@@ -105,12 +105,12 @@ def render_settings(services: dict, project) -> None:
     lock_cols[0].caption(
         f"Billing period: {'Locked' if project.period_locked else 'Open'}"
     )
-    if lock_cols[1].button("Lock period", key="prj_lock_period", use_container_width=True):
+    if lock_cols[1].button("Lock period", key="prj_lock_period", width="stretch"):
         H.run_action(
             lambda: projects_svc.lock_period(project.id),
             "Billing period locked",
         )
-    if lock_cols[2].button("Unlock period", key="prj_unlock_period", use_container_width=True):
+    if lock_cols[2].button("Unlock period", key="prj_unlock_period", width="stretch"):
         H.run_action(
             lambda: projects_svc.unlock_period(project.id),
             "Billing period unlocked",
@@ -207,7 +207,7 @@ def render_settings(services: dict, project) -> None:
                     }
                     for n in sorted(wbs_nodes, key=lambda x: (x.sort_order, x.name))
                 ],
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
         else:
@@ -394,7 +394,7 @@ def render_settings(services: dict, project) -> None:
                     }
                     for s in sorted(snaps, key=lambda x: x.revision, reverse=True)
                 ],
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
         hybrid_phase = st.text_input(

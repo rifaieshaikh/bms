@@ -129,6 +129,7 @@ def _purchase_stack():
     inventory = make_inventory_app_service()
     category = inventory.create_category("Fabric")
     product = inventory.create_product("SKU-1", "Cotton", category.id)
+    warehouse = inventory.create_warehouse("MAIN", "Main Warehouse")
 
     purchases = PurchaseAppService(
         InMemoryPurchaseOrderRepository(),
@@ -140,11 +141,11 @@ def _purchase_stack():
         vendor_service=FakeVendorService(),
         price_history_repo=MongoPurchasePriceHistoryRepository(PriceHistoryFakeDb()),
     )
-    return purchases, inventory, product, expense, vendor_acct, cash
+    return purchases, inventory, product, expense, vendor_acct, cash, warehouse
 
 
 def test_latest_purchase_rate_falls_back_to_product_last_purchase_rate():
-    purchases, inventory, product, _expense, _vendor_acct, _cash = _purchase_stack()
+    purchases, inventory, product, _expense, _vendor_acct, _cash, _wh = _purchase_stack()
     inventory.set_product_cost_fields(product.id, last_purchase_rate=75.5)
     rate = purchases.get_latest_purchase_rate(
         CatalogItemType.PRODUCT, product.id, "v1"
@@ -153,7 +154,7 @@ def test_latest_purchase_rate_falls_back_to_product_last_purchase_rate():
 
 
 def test_bill_records_vendor_rate_and_updates_active_purchase_price():
-    purchases, inventory, product, expense, vendor_acct, cash = _purchase_stack()
+    purchases, inventory, product, expense, vendor_acct, cash, _wh = _purchase_stack()
     purchases.create_purchase_bill_from_lines(
         vendor_id="v1",
         raw_lines=[
@@ -201,7 +202,7 @@ def test_bill_records_vendor_rate_and_updates_active_purchase_price():
     assert [round(h.rate, 2) for h in history] == [95.0, 88.0]
 
 def test_po_to_grn_to_bill_flow():
-    purchases, inventory, product, expense, vendor_acct, cash = _purchase_stack()
+    purchases, inventory, product, expense, vendor_acct, cash, warehouse = _purchase_stack()
 
     po = purchases.create_purchase_order(
         vendor_id="v1",
@@ -221,28 +222,41 @@ def test_po_to_grn_to_bill_flow():
     grn = purchases.create_goods_receipt(
         vendor_id="v1",
         receipt_date=date.today(),
-        lines=[{"product_id": product.id, "qty_received": 4, "rate": 50}],
+        lines=[
+            {
+                "product_id": product.id,
+                "qty_received": 4,
+                "qty_accepted": 3,
+                "qty_damaged": 1,
+                "qty_rejected": 0,
+                "rate": 50,
+            }
+        ],
         purchase_order_id=po.id,
+        warehouse_id=warehouse.id,
         freight=20,
         confirm=True,
     )
     updated_po = purchases.get_purchase_order(po.id)
     assert updated_po.status == PurchaseOrderStatus.PARTIALLY_RECEIVED
-    assert inventory.get_product(product.id).current_qty == 4
+    assert updated_po.lines[0].qty_received == 4
+    assert inventory.get_product(product.id).current_qty == 3
+    assert grn.warehouse_id == warehouse.id
+    assert grn.lines[0].qty_accepted == 3
 
     bill = purchases.create_purchase_bill(
         vendor_account_id=vendor_acct.id,
         expense_lines=[
             {
                 "expense_account_id": expense.id,
-                "amount": 200,
+                "amount": 150,
                 "product_id": product.id,
-                "qty": 4,
+                "qty": 3,
                 "rate": 50,
             }
         ],
         vendor_bill_number="B-1",
-        amount_paid=200,
+        amount_paid=150,
         paying_account_id=cash.id,
         reference_grn_id=grn.id,
     )
@@ -252,7 +266,7 @@ def test_po_to_grn_to_bill_flow():
 
 
 def test_merge_vendor_payment_creates_purchase_bill():
-    purchases, _inventory, _product, expense, vendor_acct, cash = _purchase_stack()
+    purchases, _inventory, _product, expense, vendor_acct, cash, _wh = _purchase_stack()
     voucher = purchases.merge_vendor_payment_into_purchase(
         vendor_account_id=vendor_acct.id,
         expense_account_id=expense.id,
@@ -270,7 +284,7 @@ def test_po_update_cannot_reduce_qty_below_received():
     import pytest
     from vaybooks.bms.domain.shared.exceptions import ValidationError
 
-    purchases, _inventory, product, expense, _vendor_acct, _cash = _purchase_stack()
+    purchases, _inventory, product, expense, _vendor_acct, _cash, warehouse = _purchase_stack()
     po = purchases.create_purchase_order(
         vendor_id="v1",
         order_date=date.today(),
@@ -289,6 +303,7 @@ def test_po_update_cannot_reduce_qty_below_received():
         receipt_date=date.today(),
         lines=[{"product_id": product.id, "qty_received": 4, "rate": 50}],
         purchase_order_id=po.id,
+        warehouse_id=warehouse.id,
         confirm=True,
     )
     with pytest.raises(ValidationError, match="already received"):
@@ -310,7 +325,7 @@ def test_po_update_cannot_reduce_qty_below_received():
 
 def test_po_create_ignores_service_identity_for_product_only_lines():
     """PO domain stores product_id only — service-shaped payloads without product_id are empty."""
-    purchases, _inventory, product, expense, _vendor_acct, _cash = _purchase_stack()
+    purchases, _inventory, product, expense, _vendor_acct, _cash, _wh = _purchase_stack()
     po = purchases.create_purchase_order(
         vendor_id="v1",
         order_date=date.today(),

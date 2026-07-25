@@ -48,10 +48,10 @@ def _add_budget_dialog(budget_svc, services, project) -> None:
     notes = st.text_input("Notes", key="prj_bgt_dlg_notes")
 
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True):
+    if cols[0].button("Cancel", width="stretch"):
         st.session_state.pop(BGT_ADD, None)
         st.rerun()
-    if cols[1].button("Add line", type="primary", use_container_width=True):
+    if cols[1].button("Add line", type="primary", width="stretch"):
         H.run_action(
             lambda: budget_svc.add_line(
                 project.id,
@@ -107,11 +107,11 @@ def _revise_budget_dialog(budget_svc, line_id: str) -> None:
     )
     reason = st.text_input("Reason", value="Budget revision", key="prj_bgt_rev_reason")
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True):
+    if cols[0].button("Cancel", width="stretch"):
         st.session_state.pop(BGT_REV, None)
         st.session_state.pop(BGT_REV_ID, None)
         st.rerun()
-    if cols[1].button("Save revision", type="primary", use_container_width=True):
+    if cols[1].button("Save revision", type="primary", width="stretch"):
         H.run_action(
             lambda: budget_svc.revise_line(
                 line.id,
@@ -207,7 +207,7 @@ def render_budget(services: dict, project) -> None:
             )
         st.dataframe(
             pd.DataFrame([{k: v for k, v in r.items() if k != "id"} for r in reg_rows]),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
         line_opts = {

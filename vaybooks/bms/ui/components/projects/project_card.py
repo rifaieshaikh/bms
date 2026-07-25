@@ -19,7 +19,7 @@ def project_card(project, key_prefix: str) -> None:
         st.caption(f"Contract ₹{float(project.contract_value or 0):,.0f}")
         if project.site_state_code:
             st.caption(f"Site: {project.site_state_code}")
-        if st.button("View", key=f"{key_prefix}_view", use_container_width=True):
+        if st.button("View", key=f"{key_prefix}_view", width="stretch"):
             st.session_state[WORKSPACE_ID] = project.id
             navigation.go_to_list("project_workspace", project=project.id)
 

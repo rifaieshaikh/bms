@@ -1,4 +1,4 @@
-ï»¿"""Cross-project measurements list with project picker."""
+"""Cross-project measurements list with project picker."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ def _project_options(services: dict) -> dict[str, str]:
     except Exception:
         return {}
     return {
-        f"{p.project_number} â€” {p.name}": p.id
+        f"{p.project_number} — {p.name}": p.id
         for p in projects
     }
 
@@ -50,7 +50,7 @@ def _load_measurements(services: dict, project_id: str | None):
                 {
                     "project_id": pid,
                     "project": (
-                        f"{project.project_number} â€” {project.name}"
+                        f"{project.project_number} — {project.name}"
                         if project
                         else pid[:8]
                     ),
@@ -58,7 +58,7 @@ def _load_measurements(services: dict, project_id: str | None):
                     "quantity": m.quantity,
                     "cumulative": m.cumulative_quantity,
                     "status": m.status.value if hasattr(m.status, "value") else m.status,
-                    "ra_bill_id": (m.ra_bill_id or "")[:12] or "â€”",
+                    "ra_bill_id": (m.ra_bill_id or "")[:12] or "—",
                     "eligible": not bool((m.ra_bill_id or "").strip())
                     and str(getattr(m.status, "value", m.status))
                     in (
@@ -83,7 +83,7 @@ def render(services: dict) -> None:
 
     rows = _load_measurements(services, project_id)
     eligible = sum(1 for r in rows if r.get("eligible"))
-    billed = sum(1 for r in rows if r.get("ra_bill_id") not in ("", "â€”"))
+    billed = sum(1 for r in rows if r.get("ra_bill_id") not in ("", "—"))
     metric_grid(
         [
             ("Measurements", str(len(rows))),
@@ -111,7 +111,7 @@ def render(services: dict) -> None:
             for r in rows
         ]
     )
-    st.dataframe(display, use_container_width=True, hide_index=True)
+    st.dataframe(display, width="stretch", hide_index=True)
 
     if project_id:
         if st.button("Open project workspace", key="prj_meas_open_ws"):

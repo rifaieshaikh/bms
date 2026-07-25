@@ -92,10 +92,10 @@ def _add_boq_dialog(boq_svc, project, items) -> None:
     )
 
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True):
+    if cols[0].button("Cancel", width="stretch"):
         st.session_state.pop(BOQ_ADD, None)
         st.rerun()
-    if cols[1].button("Add item", type="primary", use_container_width=True):
+    if cols[1].button("Add item", type="primary", width="stretch"):
         H.run_action(
             lambda: boq_svc.create_item(
                 project.id,
@@ -140,11 +140,11 @@ def _edit_boq_dialog(boq_svc, item_id: str) -> None:
     )
     unit = c5.text_input("Unit", value=item.unit, key="prj_boq_edit_unit")
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True):
+    if cols[0].button("Cancel", width="stretch"):
         st.session_state.pop(BOQ_EDIT, None)
         st.session_state.pop(BOQ_EDIT_ID, None)
         st.rerun()
-    if cols[1].button("Save changes", type="primary", use_container_width=True):
+    if cols[1].button("Save changes", type="primary", width="stretch"):
         H.run_action(
             lambda: boq_svc.update_item(
                 item.id,
@@ -168,11 +168,11 @@ def _delete_boq_dialog(boq_svc, item_id: str) -> None:
         return
     st.write(f"Remove **{item.code} — {item.description}**?")
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True):
+    if cols[0].button("Cancel", width="stretch"):
         st.session_state.pop(BOQ_DEL, None)
         st.session_state.pop(BOQ_DEL_ID, None)
         st.rerun()
-    if cols[1].button("Remove", type="primary", use_container_width=True):
+    if cols[1].button("Remove", type="primary", width="stretch"):
         H.run_action(lambda: boq_svc.delete_item(item.id), "BOQ item deleted")
         st.session_state.pop(BOQ_DEL, None)
         st.session_state.pop(BOQ_DEL_ID, None)
@@ -190,14 +190,14 @@ def _import_boq_dialog(boq_svc, project) -> None:
         file_name="boq_sample.csv",
         mime="text/csv",
         key="prj_boq_dlg_sample",
-        use_container_width=True,
+        width="stretch",
     )
     uploaded = st.file_uploader("BOQ CSV", type=["csv"], key="prj_boq_dlg_upload")
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True):
+    if cols[0].button("Cancel", width="stretch"):
         st.session_state.pop(BOQ_IMPORT, None)
         st.rerun()
-    if cols[1].button("Import", type="primary", use_container_width=True):
+    if cols[1].button("Import", type="primary", width="stretch"):
         if uploaded is None:
             st.error("Choose a CSV file first")
             return
@@ -266,11 +266,11 @@ def _rate_analysis_dialog(boq_svc, item_id: str) -> None:
     )
     reason = st.text_input("Override reason", key="prj_ra_reason")
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True):
+    if cols[0].button("Cancel", width="stretch"):
         st.session_state.pop(BOQ_RATE, None)
         st.session_state.pop(BOQ_RATE_ID, None)
         st.rerun()
-    if cols[1].button("Save analysis", type="primary", use_container_width=True):
+    if cols[1].button("Save analysis", type="primary", width="stretch"):
         kwargs = dict(
             material_cost=material,
             labour_cost=labour,
@@ -336,7 +336,7 @@ def render_boq(services: dict, project) -> None:
         rows = _boq_tree_rows(items)
         st.dataframe(
             pd.DataFrame([{k: v for k, v in r.items() if k != "id"} for r in rows]),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
         id_by_code = {r["code"].strip(): r["id"] for r in rows}
@@ -347,12 +347,12 @@ def render_boq(services: dict, project) -> None:
         )
         item_id = id_by_code.get(pick)
         e1, e2, e3 = st.columns(3)
-        if e1.button("Edit selected", key="prj_boq_edit_btn", use_container_width=True):
+        if e1.button("Edit selected", key="prj_boq_edit_btn", width="stretch"):
             st.session_state[BOQ_EDIT] = True
             st.session_state[BOQ_EDIT_ID] = item_id
             st.rerun()
         if e2.button(
-            "Rate analysis", key="prj_boq_rate_btn", use_container_width=True
+            "Rate analysis", key="prj_boq_rate_btn", width="stretch"
         ):
             if not view_cost:
                 st.error("You do not have permission to view or edit internal cost rates.")
@@ -360,7 +360,7 @@ def render_boq(services: dict, project) -> None:
                 st.session_state[BOQ_RATE] = True
                 st.session_state[BOQ_RATE_ID] = item_id
                 st.rerun()
-        if e3.button("Remove selected", key="prj_boq_del_btn", use_container_width=True):
+        if e3.button("Remove selected", key="prj_boq_del_btn", width="stretch"):
             st.session_state[BOQ_DEL] = True
             st.session_state[BOQ_DEL_ID] = item_id
             st.rerun()

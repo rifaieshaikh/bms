@@ -8,6 +8,7 @@ from vaybooks.bms.domain.inventory.entities import (
     ProductCategory,
     ProductUnit,
     StockMovement,
+    Warehouse,
 )
 from vaybooks.bms.domain.inventory.field_definitions import (
     ProductFieldDefinition,
@@ -166,6 +167,71 @@ class MongoProductCategoryRepository:
         self._collection.delete_one({"_id": category_id})
 
 
+class MongoWarehouseRepository:
+    def __init__(self, db: Database):
+        self._collection = db.warehouses
+
+    def _to_doc(self, warehouse: Warehouse) -> dict:
+        return {
+            "_id": warehouse.id,
+            "code": warehouse.code,
+            "name": warehouse.name,
+            "address": warehouse.address,
+            "is_active": warehouse.is_active,
+            "created_at": warehouse.created_at,
+            "updated_at": warehouse.updated_at,
+        }
+
+    def _from_doc(self, doc: dict) -> Warehouse:
+        return Warehouse(
+            id=doc["_id"],
+            code=doc["code"],
+            name=doc["name"],
+            address=doc.get("address", ""),
+            is_active=doc.get("is_active", True),
+            created_at=doc.get("created_at", datetime.utcnow()),
+            updated_at=doc.get("updated_at", datetime.utcnow()),
+        )
+
+    def save(self, warehouse: Warehouse) -> Warehouse:
+        self._collection.replace_one(
+            {"_id": warehouse.id}, self._to_doc(warehouse), upsert=True
+        )
+        return warehouse
+
+    def find_by_id(self, warehouse_id: str) -> Optional[Warehouse]:
+        doc = self._collection.find_one({"_id": warehouse_id})
+        return self._from_doc(doc) if doc else None
+
+    def find_by_code(self, code: str) -> Optional[Warehouse]:
+        doc = self._collection.find_one({"code": (code or "").strip().upper()})
+        return self._from_doc(doc) if doc else None
+
+    def list_all(self, active_only: bool = True) -> List[Warehouse]:
+        query = {"is_active": True} if active_only else {}
+        return [
+            self._from_doc(d)
+            for d in self._collection.find(query).sort("code", 1)
+        ]
+
+    def search(
+        self, query: str, *, active_only: bool = True, limit: int = 25
+    ) -> List[Warehouse]:
+        limit = max(1, min(int(limit or 25), 50))
+        filters: dict = {}
+        if active_only:
+            filters["is_active"] = True
+        text = (query or "").strip()
+        if text:
+            regex = {"$regex": text, "$options": "i"}
+            filters["$or"] = [{"code": regex}, {"name": regex}, {"address": regex}]
+        cursor = self._collection.find(filters).sort("code", 1).limit(limit)
+        return [self._from_doc(d) for d in cursor]
+
+    def delete(self, warehouse_id: str) -> None:
+        self._collection.delete_one({"_id": warehouse_id})
+
+
 class MongoProductFieldDefinitionRepository:
     def __init__(self, db: Database):
         self._collection = db.product_field_definitions
@@ -257,6 +323,8 @@ class MongoInventoryProductRepository:
             "last_purchase_rate": product.last_purchase_rate,
             "opening_qty": product.opening_qty,
             "current_qty": product.current_qty,
+            "track_batch": product.track_batch,
+            "track_serial": product.track_serial,
             "is_active": product.is_active,
             "created_at": product.created_at,
             "updated_at": product.updated_at,
@@ -279,6 +347,8 @@ class MongoInventoryProductRepository:
             last_purchase_rate=float(doc.get("last_purchase_rate") or 0),
             opening_qty=float(doc.get("opening_qty") or 0),
             current_qty=float(doc.get("current_qty") or 0),
+            track_batch=bool(doc.get("track_batch")),
+            track_serial=bool(doc.get("track_serial")),
             is_active=doc.get("is_active", True),
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
@@ -363,6 +433,7 @@ class MongoStockMovementRepository:
             "movement_date": md.isoformat() if isinstance(md, date) else md,
             "reference_type": _enum_value(movement.reference_type),
             "reference_id": movement.reference_id,
+            "warehouse_id": movement.warehouse_id,
             "notes": movement.notes,
             "created_at": movement.created_at,
         }
@@ -379,6 +450,7 @@ class MongoStockMovementRepository:
             movement_date=md,
             reference_type=StockReferenceType(doc.get("reference_type", "Manual")),
             reference_id=doc.get("reference_id"),
+            warehouse_id=doc.get("warehouse_id"),
             notes=doc.get("notes", ""),
             created_at=doc.get("created_at", datetime.utcnow()),
         )

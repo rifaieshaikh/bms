@@ -190,8 +190,8 @@ class InventoryReportService:
                     "sku": row.get("sku", ""),
                     "category": row.get("category_name", ""),
                     "movement_type": row.get("movement_type", ""),
-                    "qty_in": row.get("qty_in") or "",
-                    "qty_out": row.get("qty_out") or "",
+                    "qty_in": row.get("qty_in") or None,
+                    "qty_out": row.get("qty_out") or None,
                     "reference": row.get("reference_id")
                     or row.get("reference_type", ""),
                     "notes": row.get("notes", ""),

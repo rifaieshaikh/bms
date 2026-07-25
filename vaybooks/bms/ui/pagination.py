@@ -58,7 +58,7 @@ def render_page_controls(
     if total_pages <= 1:
         return
     prev_c, mid_c, next_c = st.columns([1, 2, 1])
-    if prev_c.button("← Prev", disabled=page == 0, use_container_width=True, key=prev_key):
+    if prev_c.button("← Prev", disabled=page == 0, width="stretch", key=prev_key):
         st.session_state[page_key] = page - 1
         st.rerun()
     mid_c.markdown(
@@ -69,7 +69,7 @@ def render_page_controls(
     if next_c.button(
         "Next →",
         disabled=page >= total_pages - 1,
-        use_container_width=True,
+        width="stretch",
         key=next_key,
     ):
         st.session_state[page_key] = page + 1

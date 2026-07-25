@@ -85,7 +85,7 @@ def _add_segment_dialog(segments_svc):
         key="add_segment_applies",
     )
     is_active = st.checkbox("Active", value=True, key="add_segment_active")
-    if st.button("Create Segment", type="primary", use_container_width=True):
+    if st.button("Create Segment", type="primary", width="stretch"):
         if not name.strip():
             st.error("Segment name is required")
             return
@@ -130,7 +130,7 @@ def _edit_segment_dialog(segments_svc, segment_id: str):
         "Active", value=segment.is_active, key="edit_segment_active"
     )
     cols = st.columns(2)
-    if cols[0].button("Save Changes", type="primary", use_container_width=True):
+    if cols[0].button("Save Changes", type="primary", width="stretch"):
         if not name.strip():
             st.error("Segment name is required")
             return
@@ -151,7 +151,7 @@ def _edit_segment_dialog(segments_svc, segment_id: str):
             st.error(str(exc))
         except Exception as exc:
             st.error(str(exc))
-    if cols[1].button("Delete", use_container_width=True):
+    if cols[1].button("Delete", width="stretch"):
         st.session_state.pop(S_EDIT, None)
         st.session_state[S_DELETE] = segment_id
         st.rerun()
@@ -163,7 +163,7 @@ def _delete_segment_dialog(segments_svc, segment_id: str):
     label = segment.name if segment else "this segment"
     st.warning(f"Delete **{label}**? Customers and vendors keep their other segments.")
     cols = st.columns(2)
-    if cols[0].button("Delete", type="primary", use_container_width=True):
+    if cols[0].button("Delete", type="primary", width="stretch"):
         try:
             segments_svc.delete_segment(segment_id)
             st.session_state.pop(S_DELETE, None)
@@ -171,7 +171,7 @@ def _delete_segment_dialog(segments_svc, segment_id: str):
             st.rerun()
         except Exception as exc:
             st.error(str(exc))
-    if cols[1].button("Cancel", use_container_width=True):
+    if cols[1].button("Cancel", width="stretch"):
         st.session_state.pop(S_DELETE, None)
         st.rerun()
 
@@ -187,13 +187,13 @@ def _segment_card(segment, index: int):
         if cols[0].button(
             "Edit",
             key=f"edit_segment_btn_{index}_{segment.id}",
-            use_container_width=True,
+            width="stretch",
         ):
             st.session_state[S_EDIT] = segment.id
         if cols[1].button(
             "Delete",
             key=f"del_segment_btn_{index}_{segment.id}",
-            use_container_width=True,
+            width="stretch",
         ):
             st.session_state[S_DELETE] = segment.id
 

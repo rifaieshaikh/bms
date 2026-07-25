@@ -43,7 +43,7 @@ def _render_export_card(
             file_name=f"zahcci_{export_key}.csv",
             mime="text/csv",
             key=f"export_csv_{index}",
-            use_container_width=True,
+            width="stretch",
         )
 
 
@@ -114,7 +114,7 @@ def render(services: dict):
             file_name="zahcci_backup.json",
             mime="application/json",
             key="export_full_backup_json",
-            use_container_width=True,
+            width="stretch",
         )
 
         if is_desktop():
@@ -126,10 +126,10 @@ def render(services: dict):
                 file_name="vaybooks_backup.zip",
                 mime="application/zip",
                 key="export_full_backup_zip",
-                use_container_width=True,
+                width="stretch",
             )
 
-            if st.button("Save Backup to Disk", use_container_width=True):
+            if st.button("Save Backup to Disk", width="stretch"):
                 path = backup_service.save_backup_to_disk()
                 if path:
                     st.success(f"Backup saved to {path}")

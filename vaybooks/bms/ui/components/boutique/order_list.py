@@ -25,7 +25,7 @@ def order_list_table(orders: list[CustomizationOrder], key_prefix: str = "ord"):
 
     df = pd.DataFrame(rows)
     display_df = df.drop(columns=["_id"])
-    st.dataframe(display_df, use_container_width=True, hide_index=True)
+    st.dataframe(display_df, width="stretch", hide_index=True)
 
     options = {f"{r['Order']} — {r['Customer']}": r["_id"] for r in rows}
     choice = st.selectbox("Open order", ["—"] + list(options.keys()), key=f"{key_prefix}_sel")

@@ -50,13 +50,13 @@ def _return_card(row: dict, suffix: str) -> None:
         if view_col.button(
             "View",
             key=f"return_view_{suffix}_{row.get('id')}",
-            use_container_width=True,
+            width="stretch",
         ):
             navigation.go_to_detail("sales_return_detail", row.get("id"))
         if edit_col.button(
             "Edit",
             key=f"return_edit_{suffix}_{row.get('id')}",
-            use_container_width=True,
+            width="stretch",
             disabled=row.get("status") != SalesReturnStatus.PENDING.value,
         ):
             arm_sales_return_edit_dialog(row.get("id"))

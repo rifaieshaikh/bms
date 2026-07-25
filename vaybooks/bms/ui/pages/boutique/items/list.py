@@ -63,7 +63,7 @@ def _item_summary_card(services: dict, item: dict, index: int):
             "Edit",
             key=f"item_edit_{index}_{item['item_id']}",
             type="primary",
-            use_container_width=True,
+            width="stretch",
         ):
             navigation.go_to_detail(
                 "item_detail", item["item_id"], order_id=item["order_id"]
@@ -72,7 +72,7 @@ def _item_summary_card(services: dict, item: dict, index: int):
         if st.button(
             "Order",
             key=f"item_view_{index}_{item['item_id']}",
-            use_container_width=True,
+            width="stretch",
         ):
             navigation.go_to_detail("order_detail", str(item["order_id"]))
 

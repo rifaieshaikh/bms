@@ -29,7 +29,7 @@ def order_card(
         if st.button(
             view_label,
             key=f"{key_prefix}_view",
-            use_container_width=view_full_width,
+            width="stretch" if view_full_width else "content",
         ):
             navigation.go_to_detail("order_detail", order.id)
 

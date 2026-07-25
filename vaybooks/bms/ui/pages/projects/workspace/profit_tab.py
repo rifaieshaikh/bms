@@ -81,4 +81,4 @@ def render_profit(services: dict, project) -> None:
         rows.append(activity_row)
 
     st.subheader("By activity")
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)

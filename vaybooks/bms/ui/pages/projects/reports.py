@@ -146,7 +146,7 @@ def _render_portfolio_summary(services: dict, start: date, end: date) -> None:
     )
 
     df = pd.DataFrame(rows)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
     _export_csv(df, "project_portfolio_summary.csv")
 
 
@@ -167,7 +167,7 @@ def _render_activity_profitability(services: dict, start: date, end: date) -> No
         st.info("No activity profitability data.")
         return
     df = pd.DataFrame(rows)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
     _export_csv(df, f"activity_profitability_{project_id}.csv")
     st.caption(f"Period: {start:%d %b %Y} → {end:%d %b %Y}")
 
@@ -206,7 +206,7 @@ def _render_man_hours_by_worker(services: dict, start: date, end: date) -> None:
             pass
 
     df = pd.DataFrame(rows)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
     _export_csv(df, f"man_hours_by_worker_{project_id}.csv")
     st.caption(f"Period: {start:%d %b %Y} → {end:%d %b %Y}")
 
@@ -245,7 +245,7 @@ def _render_unallocated_costs(services: dict, start: date, end: date) -> None:
     if df.empty:
         st.info("No unallocated costs in the selected period.")
         return
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
     _export_csv(df, f"unallocated_costs_{project_id}.csv")
 
 
@@ -312,7 +312,7 @@ def _render_billing_register(services: dict, start: date, end: date) -> None:
     if df.empty:
         st.info("No billing vouchers for this project.")
         return
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
     _export_csv(df, f"billing_register_{project_id}.csv")
 
 
@@ -373,7 +373,7 @@ def _render_quotation_pipeline(services: dict, start: date, end: date) -> None:
     if df.empty:
         st.info("No quotations in the selected scope.")
         return
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
     _export_csv(df, "quotation_pipeline.csv")
 
 
@@ -396,7 +396,7 @@ def _render_retention_register(services: dict, start: date, end: date) -> None:
         return
     total_outstanding = sum(float(r.get("outstanding_retention") or 0) for r in rows)
     st.metric("Outstanding retention", f"₹{total_outstanding:,.0f}")
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
     _export_csv(df, f"retention_register_{project_id}.csv")
     st.caption(f"Period: {start:%d %b %Y} → {end:%d %b %Y}")
 
@@ -439,7 +439,7 @@ def _render_at_risk(services: dict, start: date, end: date) -> None:
         st.info("No at-risk projects.")
         return
     df = pd.DataFrame(rows)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
     _export_csv(df, "at_risk_projects.csv")
     st.caption(f"Period: {start:%d %b %Y} → {end:%d %b %Y}")
 
@@ -466,7 +466,7 @@ def _render_variations_log(services: dict, start: date, end: date) -> None:
     if df.empty:
         st.info("No variations logged.")
         return
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
     _export_csv(df, f"variations_{project_id}.csv")
 
 
@@ -487,7 +487,7 @@ def _render_cost_transfers(services: dict, start: date, end: date) -> None:
     if df.empty:
         st.info("No cost transfers.")
         return
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
     _export_csv(df, f"cost_transfers_{project_id}.csv")
     st.caption(f"Period: {start:%d %b %Y} → {end:%d %b %Y}")
 
@@ -509,7 +509,7 @@ def _render_write_offs(services: dict, start: date, end: date) -> None:
     if df.empty:
         st.info("No write-offs.")
         return
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
     _export_csv(df, f"write_offs_{project_id}.csv")
     st.caption(f"Period: {start:%d %b %Y} → {end:%d %b %Y}")
 
@@ -531,7 +531,7 @@ def _render_po_committed(services: dict, start: date, end: date) -> None:
     if df.empty:
         st.info("No open purchase orders tagged to this project.")
         return
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
     total = sum(float(r.get("open_amount") or 0) for r in rows)
     st.metric("Committed cost", f"₹{total:,.0f}")
     _export_csv(df, f"po_committed_{project_id}.csv")
@@ -560,7 +560,7 @@ def _render_tds_deducted(services: dict, start: date, end: date) -> None:
     if df.empty:
         st.info("No TDS deductions recorded.")
         return
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
     _export_csv(df, f"tds_deducted_{project_id}.csv")
 
 
@@ -581,7 +581,7 @@ def _render_document_inventory(services: dict, start: date, end: date) -> None:
     if df.empty:
         st.info("No documents on file.")
         return
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
     _export_csv(df, f"document_inventory_{project_id}.csv")
     st.caption(f"Period: {start:%d %b %Y} → {end:%d %b %Y}")
 
@@ -603,7 +603,7 @@ def _render_boq_status(services: dict, start: date, end: date) -> None:
     if df.empty:
         st.info("No BOQ items for this project.")
         return
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
     _export_csv(df, f"boq_status_{project_id}.csv")
 
 
@@ -629,7 +629,7 @@ def _render_measurement_register(services: dict, start: date, end: date) -> None
     if df.empty:
         st.info("No measurements recorded.")
         return
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
     _export_csv(df, f"measurement_register_{project_id}.csv")
 
 
@@ -655,7 +655,7 @@ def _render_ra_register_dual(services: dict, start: date, end: date) -> None:
     if df.empty:
         st.info("No RA bills for this project.")
         return
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
     _export_csv(df, f"ra_register_{project_id}.csv")
 
 
@@ -683,7 +683,7 @@ def _render_budget_vs_actual(services: dict, start: date, end: date) -> None:
     )
     lines = payload.get("lines") or []
     if lines:
-        st.dataframe(pd.DataFrame(lines), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(lines), width="stretch", hide_index=True)
         _export_csv(pd.DataFrame(lines), f"budget_vs_actual_{project_id}.csv")
     st.caption(f"Period: {start:%d %b %Y} → {end:%d %b %Y}")
 

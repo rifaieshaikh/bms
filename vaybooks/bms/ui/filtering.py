@@ -7,6 +7,9 @@ Policy:
 - Multiple filter fields are combined with AND.
 - A single ``multiselect`` field matches when the record value is in the
   selected values (the only OR allowed, within one field).
+- ``select`` / ``entity_select`` fields hold a list of chosen values by
+  default (``multi=False`` keeps them single-valued). A list matches when any
+  chosen value matches, so per-value ``match`` predicates stay single-valued.
 """
 
 from __future__ import annotations
@@ -27,6 +30,9 @@ DATE = "date"
 NUMBER_MIN = "number_min"
 CHECKBOX = "checkbox"
 ENTITY_SELECT = "entity_select"
+
+# Types rendered as a dropdown of predefined / loaded options.
+SELECT_TYPES = (SELECT, ENTITY_SELECT)
 
 ALL_LABEL = "All"
 
@@ -72,11 +78,13 @@ class FilterField:
     help: str = ""
     default_active: bool = False
     default: Any = None
-    # Label for the leading None option on SELECT / ENTITY_SELECT fields.
+    # Placeholder for an empty SELECT / ENTITY_SELECT dropdown.
     all_label: str = ALL_LABEL
     # Custom predicate(record, value) -> bool. When set, overrides the
-    # type-based default matcher.
+    # type-based default matcher. Always called with a single value.
     match: Optional[Callable[[Any, Any], bool]] = None
+    # SELECT / ENTITY_SELECT: allow choosing several options (OR within field).
+    multi: bool = True
 
     @property
     def attr(self) -> str:
@@ -117,13 +125,30 @@ class ListSchema:
         return None
 
 
+def is_multi_select(fld: FilterField) -> bool:
+    """Whether ``fld`` stores a list of chosen dropdown values."""
+    if fld.type == MULTISELECT:
+        return True
+    return fld.type in SELECT_TYPES and bool(getattr(fld, "multi", True))
+
+
+def _as_values(value: Any) -> Optional[list]:
+    """Return ``value`` as a list of selections, or None when it is scalar."""
+    if isinstance(value, (list, tuple, set)):
+        return list(value)
+    return None
+
+
 def is_active_value(fld: FilterField, value: Any) -> bool:
     """Whether a stored filter value should constrain the results."""
     if value is None:
         return False
     if fld.type in (EXACT, REGEX):
         return bool(str(value).strip())
-    if fld.type in (SELECT, ENTITY_SELECT):
+    if fld.type in SELECT_TYPES:
+        values = _as_values(value)
+        if values is not None:
+            return bool(values)
         return value not in (None, "", ALL_LABEL)
     if fld.type == MULTISELECT:
         return bool(value)
@@ -185,10 +210,19 @@ def _default_match(fld: FilterField, record: Any, value: Any) -> bool:
     return True
 
 
-def matches(fld: FilterField, record: Any, value: Any) -> bool:
+def _match_single(fld: FilterField, record: Any, value: Any) -> bool:
     if fld.match is not None:
         return fld.match(record, value)
     return _default_match(fld, record, value)
+
+
+def matches(fld: FilterField, record: Any, value: Any) -> bool:
+    if fld.type in SELECT_TYPES:
+        values = _as_values(value)
+        if values is not None:
+            # OR within one dropdown; predicates stay single-valued.
+            return any(_match_single(fld, record, v) for v in values)
+    return _match_single(fld, record, value)
 
 
 def apply_filters(
@@ -222,29 +256,69 @@ def _sort_value(record: Any, attr: str) -> Any:
     return (0, str(value).lower())
 
 
-def sort_records(records: list, schema: ListSchema, sort: dict) -> list:
-    sort_key = (sort or {}).get("key", schema.default_sort)
-    desc = (sort or {}).get("desc", schema.default_desc)
-    option = schema.sort_option(sort_key) or schema.sort_option(schema.default_sort)
-    if option is None:
-        return list(records)
-    attr = option.attr
-    try:
-        return sorted(records, key=lambda r: _sort_value(r, attr), reverse=desc)
-    except TypeError:
-        return list(records)
+MAX_SORT_LEVELS = 3
 
 
-def filter_token(schema: ListSchema, filters: dict, sort: dict) -> str:
+def default_sort(schema: ListSchema) -> list[dict]:
+    return [{"key": schema.default_sort, "desc": bool(schema.default_desc)}]
+
+
+def normalize_sort(schema: ListSchema, sort) -> list[dict]:
+    """Return an ordered list of ``{{key, desc}}`` (max ``MAX_SORT_LEVELS``).
+
+    Accepts legacy single-dict ``{{key, desc}}``, a list of such dicts, or
+    empty / invalid input (falls back to ``default_sort``).
+    """
+    allowed = {s.key for s in schema.sort_options}
+    raw: list = []
+    if isinstance(sort, dict) and ("key" in sort or "desc" in sort):
+        raw = [sort]
+    elif isinstance(sort, (list, tuple)):
+        raw = list(sort)
+    seen: set[str] = set()
+    out: list[dict] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        key = item.get("key")
+        if not key or key not in allowed or key in seen:
+            continue
+        seen.add(key)
+        out.append({"key": key, "desc": bool(item.get("desc", schema.default_desc))})
+        if len(out) >= MAX_SORT_LEVELS:
+            break
+    return out or default_sort(schema)
+
+
+def sort_records(records: list, schema: ListSchema, sort) -> list:
+    criteria = normalize_sort(schema, sort)
+    result = list(records)
+    # Stable sort: apply lowest-priority criterion first.
+    for crit in reversed(criteria):
+        option = schema.sort_option(crit["key"])
+        if option is None:
+            continue
+        attr = option.attr
+        desc = bool(crit.get("desc", schema.default_desc))
+        try:
+            result = sorted(result, key=lambda r, a=attr: _sort_value(r, a), reverse=desc)
+        except TypeError:
+            pass
+    return result
+
+
+def filter_token(schema: ListSchema, filters: dict, sort) -> str:
     """Stable string capturing current filters+sort for pagination reset."""
     parts = []
     for fld in schema.filter_fields:
         value = filters.get(fld.key)
         if is_active_value(fld, value):
             parts.append(f"{fld.key}={value}")
-    sort_key = (sort or {}).get("key", schema.default_sort)
-    desc = (sort or {}).get("desc", schema.default_desc)
-    parts.append(f"__sort={sort_key}:{'desc' if desc else 'asc'}")
+    criteria = normalize_sort(schema, sort)
+    encoded = ",".join(
+        f"{c['key']}:{'desc' if c.get('desc') else 'asc'}" for c in criteria
+    )
+    parts.append(f"__sort={encoded}")
     return "|".join(parts)
 
 
@@ -255,12 +329,8 @@ def default_filters(schema: ListSchema) -> dict:
             result[fld.key] = fld.default() if callable(fld.default) else fld.default
         elif fld.type == CHECKBOX:
             result[fld.key] = bool(fld.default_active)
-        elif fld.type == MULTISELECT:
+        elif is_multi_select(fld):
             result[fld.key] = []
         else:
             result[fld.key] = None
     return result
-
-
-def default_sort(schema: ListSchema) -> dict:
-    return {"key": schema.default_sort, "desc": schema.default_desc}

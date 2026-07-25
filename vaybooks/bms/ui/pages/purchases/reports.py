@@ -109,7 +109,7 @@ def _export_buttons(
             mime="text/csv",
             key=f"purchases_report_dl_filtered_{slug}",
             disabled=filtered_df.empty,
-            use_container_width=True,
+            width="stretch",
             icon=":material/download:",
             help="Rows matching the Filters dialog (including period).",
         )
@@ -121,7 +121,7 @@ def _export_buttons(
             mime="text/csv",
             key=f"purchases_report_dl_all_{slug}",
             disabled=all_df.empty,
-            use_container_width=True,
+            width="stretch",
             icon=":material/download:",
             help="All rows with no date or other filters.",
         )
@@ -148,7 +148,7 @@ def _render_table(
         filter_key=f"purchases_report_filter_{entity_key}",
         filter_value=filter_token,
     )
-    st.dataframe(pd.DataFrame(page_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(page_rows), width="stretch", hide_index=True)
     render_page_controls(
         page,
         total_pages,

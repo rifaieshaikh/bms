@@ -70,7 +70,7 @@ def _add_vendor_dialog(vendor_service, services: dict):
 
     cols = st.columns(2)
     do_create = cols[0].button(
-        "Create Vendor", type="primary", use_container_width=True
+        "Create Vendor", type="primary", width="stretch"
     ) or consume_submit(SUBMIT_ADD)
     if do_create:
         try:
@@ -86,7 +86,7 @@ def _add_vendor_dialog(vendor_service, services: dict):
             st.error(str(exc))
         except Exception as exc:
             st.error(str(exc))
-    if cols[1].button("Cancel", use_container_width=True):
+    if cols[1].button("Cancel", width="stretch"):
         st.session_state.pop(V_ADD, None)
         st.session_state.pop(V_DUP_VENDOR_ID, None)
         st.rerun()
@@ -107,7 +107,7 @@ def _edit_vendor_dialog(vendor_service, services: dict):
 
     cols = st.columns(2)
     do_save = cols[0].button(
-        "Save Changes", type="primary", use_container_width=True
+        "Save Changes", type="primary", width="stretch"
     ) or consume_submit(SUBMIT_EDIT)
     if do_save:
         try:
@@ -125,7 +125,7 @@ def _edit_vendor_dialog(vendor_service, services: dict):
             st.error(str(exc))
         except Exception as exc:
             st.error(str(exc))
-    if cols[1].button("Cancel", use_container_width=True):
+    if cols[1].button("Cancel", width="stretch"):
         st.session_state.pop(V_EDIT, None)
         st.rerun()
 
@@ -188,7 +188,7 @@ def _pay_vendor_dialog(services, vendor_id: str):
     selected_service = svc_opts[service_name]
 
     cols = st.columns(2)
-    if cols[0].button("Save", type="primary", use_container_width=True):
+    if cols[0].button("Save", type="primary", width="stretch"):
         try:
             if voucher:
                 accounting.update_vendor_payment(
@@ -206,7 +206,7 @@ def _pay_vendor_dialog(services, vendor_id: str):
             st.rerun()
         except Exception as exc:
             st.error(str(exc))
-    if cols[1].button("Cancel", use_container_width=True):
+    if cols[1].button("Cancel", width="stretch"):
         st.session_state.pop(V_PAY, None)
         st.rerun()
 
@@ -235,12 +235,12 @@ def _render_cards(page_vendors, services):
             st.caption(f"Payable: ₹{abs(balance):,.0f}")
             btns = st.columns(2)
             if btns[0].button("Edit", key=f"v_edit_{vendor.id}",
-                              use_container_width=True):
+                              width="stretch"):
                 clear_all_dialog_flags()
                 open_dialog(V_EDIT, submit_key=SUBMIT_EDIT, value=vendor.id, clear_others=False)
                 st.rerun()
             if btns[1].button("View", key=f"v_view_{vendor.id}",
-                              use_container_width=True):
+                              width="stretch"):
                 navigation.go_to_detail("vendor_detail", vendor.id)
 
     render_card_grid(page_vendors, _render, suffix="vendors")

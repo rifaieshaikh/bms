@@ -31,10 +31,10 @@ def _mr_dialog(services: dict, project) -> None:
         "Principal / Agent", options=["Principal", "Agent"], key="prj_mr_pa"
     )
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True):
+    if cols[0].button("Cancel", width="stretch"):
         st.session_state.pop(MR_DIALOG, None)
         st.rerun()
-    if cols[1].button("Create", type="primary", use_container_width=True):
+    if cols[1].button("Create", type="primary", width="stretch"):
         try:
             services["project_procurement"].create_material_request(
                 project.id,
@@ -72,10 +72,10 @@ def _stock_dialog(services: dict, project) -> None:
         "Principal / Agent", options=["Principal", "Agent"], key="prj_stock_pa"
     )
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True):
+    if cols[0].button("Cancel", width="stretch"):
         st.session_state.pop(STOCK_DIALOG, None)
         st.rerun()
-    if cols[1].button("Save", type="primary", use_container_width=True):
+    if cols[1].button("Save", type="primary", width="stretch"):
         try:
             services["project_procurement"].record_stock_movement(
                 project.id,
@@ -103,10 +103,10 @@ def _sub_dialog(services: dict, project) -> None:
         "Retention %", min_value=0.0, max_value=100.0, value=0.0, key="prj_sub_ret"
     )
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True):
+    if cols[0].button("Cancel", width="stretch"):
         st.session_state.pop(SUB_DIALOG, None)
         st.rerun()
-    if cols[1].button("Create", type="primary", use_container_width=True):
+    if cols[1].button("Create", type="primary", width="stretch"):
         try:
             services["project_subcontract"].create_order(
                 project.id,
@@ -136,11 +136,11 @@ def _sub_measure_dialog(services: dict, order_id: str) -> None:
     line_label = st.selectbox("Line", options=list(line_map.keys()), key="prj_sub_m_line")
     measured = st.number_input("Measured qty", min_value=0.0, value=0.0, key="prj_sub_m_qty")
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True):
+    if cols[0].button("Cancel", width="stretch"):
         st.session_state.pop(SUB_MEASURE, None)
         st.session_state.pop(SUB_MEASURE_ID, None)
         st.rerun()
-    if cols[1].button("Save", type="primary", use_container_width=True):
+    if cols[1].button("Save", type="primary", width="stretch"):
         H.run_action(
             lambda: sub.record_measurement(order_id, line_map[line_label], measured),
             "Measured",
@@ -166,11 +166,11 @@ def _sub_certify_dialog(services: dict, order_id: str) -> None:
         "Certified qty", min_value=0.0, value=0.0, key="prj_sub_c_qty"
     )
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True):
+    if cols[0].button("Cancel", width="stretch"):
         st.session_state.pop(SUB_CERTIFY, None)
         st.session_state.pop(SUB_CERTIFY_ID, None)
         st.rerun()
-    if cols[1].button("Save", type="primary", use_container_width=True):
+    if cols[1].button("Save", type="primary", width="stretch"):
         H.run_action(
             lambda: sub.certify_line(order_id, line_map[line_label], certified),
             "Certified",

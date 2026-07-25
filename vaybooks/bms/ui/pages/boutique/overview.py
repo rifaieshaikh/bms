@@ -37,15 +37,15 @@ def _tone_if(positive: bool, tone: str) -> str:
 def _render_quick_actions() -> None:
     st.markdown("**Quick actions**")
     cols = st.columns(5)
-    if cols[0].button("Orders", use_container_width=True):
+    if cols[0].button("Orders", width="stretch"):
         navigation.go_to_list("orders_list")
-    if cols[1].button("Measurements", use_container_width=True):
+    if cols[1].button("Measurements", width="stretch"):
         navigation.go_to_list("measurements_list")
-    if cols[2].button("Tasks", use_container_width=True):
+    if cols[2].button("Tasks", width="stretch"):
         navigation.go_to_list("time_list")
-    if cols[3].button("Calendar", use_container_width=True):
+    if cols[3].button("Calendar", width="stretch"):
         navigation.go_to_list("calendar_list")
-    if cols[4].button("Reports", use_container_width=True):
+    if cols[4].button("Reports", width="stretch"):
         navigation.go_to_list("boutique_reports")
 
 

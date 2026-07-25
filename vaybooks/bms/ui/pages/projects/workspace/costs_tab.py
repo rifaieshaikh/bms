@@ -210,4 +210,4 @@ def render_costs(services: dict, project) -> None:
                         "Labour": labour_by_activity.get(aid, 0.0),
                     }
                 )
-            st.dataframe(pd.DataFrame(table_rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(table_rows), width="stretch", hide_index=True)

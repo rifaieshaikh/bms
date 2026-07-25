@@ -22,12 +22,12 @@ def time_entry_card(entry: TimeEntry, key_prefix: str) -> tuple[bool, bool]:
         edit_clicked = cols[0].button(
             "Edit",
             key=f"{key_prefix}_edit_{entry.id}",
-            use_container_width=True,
+            width="stretch",
         )
         delete_clicked = cols[1].button(
             "Delete",
             key=f"{key_prefix}_del_{entry.id}",
-            use_container_width=True,
+            width="stretch",
         )
 
     return edit_clicked, delete_clicked

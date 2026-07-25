@@ -40,8 +40,16 @@ from vaybooks.bms.ui import filtering as F
 from vaybooks.bms.ui.report_schemas import SCHEMA_BY_REPORT_TYPE
 
 
+def _single(value: Any) -> Any:
+    """First selection of a dropdown that the service layer reads as one value."""
+    if isinstance(value, (list, tuple, set)):
+        values = [v for v in value if v not in (None, "")]
+        return values[0] if values else None
+    return value
+
+
 def _text(value: Any) -> str:
-    return (value or "").strip().lower()
+    return (_single(value) or "").strip().lower()
 
 
 def _optional_min(value: Any) -> float | None:
@@ -104,7 +112,7 @@ def build_time_tracking_filter(filters: dict) -> TimeTrackingFilter:
 
 
 def build_expense_filter(filters: dict) -> ExpenseFilter:
-    source = filters.get("expense_source") or ""
+    source = _single(filters.get("expense_source")) or ""
     return ExpenseFilter(
         date_range=_date_range(filters),
         expense_source=source if source else "",
@@ -214,7 +222,7 @@ def build_labor_mph_filter(filters: dict) -> LaborMphFilter:
 
 def build_stock_on_hand_filter(filters: dict) -> StockOnHandFilter:
     return StockOnHandFilter(
-        category_id=filters.get("category_id") or "",
+        category_id=_single(filters.get("category_id")) or "",
         active_only=bool(filters.get("active_only")),
         min_qty=_optional_min(filters.get("min_qty")),
         search=_text(filters.get("search")),
@@ -225,7 +233,7 @@ def build_low_stock_filter(filters: dict) -> LowStockFilter:
     threshold = _optional_min(filters.get("threshold")) or 2.0
     return LowStockFilter(
         threshold=threshold,
-        category_id=filters.get("category_id") or "",
+        category_id=_single(filters.get("category_id")) or "",
         include_out_of_stock=bool(filters.get("include_out_of_stock", True)),
     )
 
@@ -233,16 +241,16 @@ def build_low_stock_filter(filters: dict) -> LowStockFilter:
 def build_stock_movements_filter(filters: dict) -> StockMovementsFilter:
     return StockMovementsFilter(
         date_range=_date_range(filters),
-        product_id=filters.get("product_id") or "",
-        category_id=filters.get("category_id") or "",
-        movement_type=(filters.get("movement_type") or "").strip(),
+        product_id=_single(filters.get("product_id")) or "",
+        category_id=_single(filters.get("category_id")) or "",
+        movement_type=(_single(filters.get("movement_type")) or "").strip(),
     )
 
 
 def build_dead_stock_filter(filters: dict) -> DeadStockFilter:
     return DeadStockFilter(
         date_range=_date_range(filters),
-        category_id=filters.get("category_id") or "",
+        category_id=_single(filters.get("category_id")) or "",
         min_qty=_optional_min(filters.get("min_qty")) or 0.0,
         max_qty_out=_optional_min(filters.get("max_qty_out")) or 0.0,
     )
@@ -251,8 +259,8 @@ def build_dead_stock_filter(filters: dict) -> DeadStockFilter:
 def build_opening_closing_stock_filter(filters: dict) -> OpeningClosingStockFilter:
     return OpeningClosingStockFilter(
         date_range=_date_range(filters),
-        category_id=filters.get("category_id") or "",
-        product_id=filters.get("product_id") or "",
+        category_id=_single(filters.get("category_id")) or "",
+        product_id=_single(filters.get("product_id")) or "",
         active_only=bool(filters.get("active_only")),
     )
 
@@ -260,7 +268,7 @@ def build_opening_closing_stock_filter(filters: dict) -> OpeningClosingStockFilt
 def build_fast_moving_stock_filter(filters: dict) -> FastMovingStockFilter:
     return FastMovingStockFilter(
         date_range=_date_range(filters),
-        category_id=filters.get("category_id") or "",
+        category_id=_single(filters.get("category_id")) or "",
         min_qty_out=_optional_min(filters.get("min_qty_out")) or 0.0,
     )
 
@@ -268,7 +276,7 @@ def build_fast_moving_stock_filter(filters: dict) -> FastMovingStockFilter:
 def build_customer_latest_prices_filter(filters: dict) -> CustomerLatestPricesFilter:
     dr = filters.get("date_range")
     return CustomerLatestPricesFilter(
-        customer_id=filters.get("customer_id") or "",
+        customer_id=_single(filters.get("customer_id")) or "",
         search=_text(filters.get("search")),
         date_range=_date_range(filters) if dr else None,
     )

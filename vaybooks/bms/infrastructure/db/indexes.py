@@ -132,6 +132,9 @@ def ensure_indexes(db):
     _create_index(db.stock_movements, "movement_date")
     _create_index(db.stock_movements, "movement_type")
     _create_index(db.stock_movements, "reference_id")
+    _create_index(db.stock_movements, "warehouse_id")
+    _create_index(db.warehouses, "code", unique=True)
+    _create_index(db.warehouses, "name")
 
     _create_index(db.purchase_orders, "po_number", unique=True)
     _create_index(db.purchase_orders, "vendor_id")
@@ -143,6 +146,7 @@ def ensure_indexes(db):
     _create_index(db.goods_receipts, "purchase_order_id")
     _create_index(db.goods_receipts, "vendor_id")
     _create_index(db.goods_receipts, "receipt_date")
+    _create_index(db.goods_receipts, "warehouse_id")
 
     _create_index(db.purchase_returns, "return_number", unique=True)
     _create_index(db.purchase_returns, "vendor_id")

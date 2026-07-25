@@ -31,6 +31,10 @@ def _match_inv_category_active(category, _value) -> bool:
     return bool(getattr(category, "is_active", False))
 
 
+def _match_inv_warehouse_active(warehouse, _value) -> bool:
+    return bool(getattr(warehouse, "is_active", False))
+
+
 def _match_inv_product_active(product, _value) -> bool:
     return bool(getattr(product, "is_active", False))
 
@@ -109,6 +113,25 @@ INVENTORY_CATEGORIES = ListSchema(
         SortOption("name", "Category name"),
     ],
     default_sort="created_at",
+    page_size=CARD_PAGE_SIZE,
+)
+
+INVENTORY_WAREHOUSES = ListSchema(
+    entity_key="inventory_warehouses",
+    title="Warehouses",
+    filter_fields=[
+        FilterField("code", "Code", F.REGEX),
+        FilterField("name", "Name", F.REGEX),
+        FilterField("address", "Address", F.REGEX),
+        FilterField("active_only", "Active only", F.CHECKBOX,
+                    match=_match_inv_warehouse_active),
+    ],
+    sort_options=[
+        SortOption("created_at", "Created"),
+        SortOption("code", "Code"),
+        SortOption("name", "Name"),
+    ],
+    default_sort="code",
     page_size=CARD_PAGE_SIZE,
 )
 
@@ -247,6 +270,7 @@ INVENTORY_SCHEMAS = {
     for s in [
         INVENTORY_OVERVIEW,
         INVENTORY_CATEGORIES,
+        INVENTORY_WAREHOUSES,
         INVENTORY_PRODUCTS,
         INVENTORY_STOCK,
         INVENTORY_STOCK_LEDGER,

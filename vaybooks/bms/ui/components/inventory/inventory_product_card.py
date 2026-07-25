@@ -69,12 +69,12 @@ def inventory_product_card(
         view = cols[0].button(
             "View",
             key=f"{key_prefix}_view_{product.id}",
-            use_container_width=True,
+            width="stretch",
         )
         edit = cols[1].button(
             "Edit",
             key=f"{key_prefix}_edit_{product.id}",
-            use_container_width=True,
+            width="stretch",
         )
     return view, edit
 
@@ -96,7 +96,28 @@ def inventory_category_card(category, *, product_count: int = 0, path: str = "")
         return st.button(
             "Edit",
             key=f"edit_inv_cat_btn_{category.id}",
-            use_container_width=True,
+            width="stretch",
+        )
+
+
+def inventory_warehouse_card(warehouse) -> bool:
+    """Render a warehouse card. Returns True if edit was clicked."""
+    with st.container(border=True):
+        st.markdown(
+            f'<p class="z-card-title">{warehouse.name}</p>',
+            unsafe_allow_html=True,
+        )
+        st.caption(warehouse.code)
+        st.markdown(_status_badge(warehouse.is_active), unsafe_allow_html=True)
+        if warehouse.address:
+            addr = warehouse.address.strip()
+            if len(addr) > 72:
+                addr = addr[:69] + "…"
+            st.caption(addr)
+        return st.button(
+            "Edit",
+            key=f"edit_inv_wh_btn_{warehouse.id}",
+            width="stretch",
         )
 
 
@@ -128,7 +149,7 @@ def inventory_low_stock_cards(items: list[dict], *, key_prefix: str = "inv_low")
             if product_id and st.button(
                 "View →",
                 key=f"{key_prefix}_{product_id}",
-                use_container_width=True,
+                width="stretch",
             ):
                 navigation.go_to_detail("inventory_product_detail", product_id)
 

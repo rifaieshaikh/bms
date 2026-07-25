@@ -74,7 +74,7 @@ def _render_report_table(
         filter_key=f"report_filter_{entity_key}",
         filter_value=filter_token,
     )
-    st.dataframe(pd.DataFrame(page_rows), use_container_width=True)
+    st.dataframe(pd.DataFrame(page_rows), width="stretch")
     render_page_controls(
         page,
         total_pages,

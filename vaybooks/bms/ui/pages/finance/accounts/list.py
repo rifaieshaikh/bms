@@ -82,7 +82,7 @@ def _create_account_dialog(accounting_service):
     )
     opening = st.number_input("Opening Balance", value=0.0)
     cols = st.columns(2)
-    if cols[0].button("Create", type="primary", use_container_width=True):
+    if cols[0].button("Create", type="primary", width="stretch"):
         if not name.strip():
             st.error("Account name is required")
         else:
@@ -94,7 +94,7 @@ def _create_account_dialog(accounting_service):
                 st.rerun()
             except Exception as exc:
                 st.error(str(exc))
-    if cols[1].button("Cancel", use_container_width=True):
+    if cols[1].button("Cancel", width="stretch"):
         st.session_state.pop(CREATE_ACC, None)
         st.rerun()
 
@@ -139,7 +139,7 @@ def _edit_account_dialog(accounting_service):
     )
 
     cols = st.columns(2)
-    if cols[0].button("Save", type="primary", use_container_width=True):
+    if cols[0].button("Save", type="primary", width="stretch"):
         try:
             accounting_service.update_account(
                 account.id, name, acc_type, is_store, is_salary
@@ -148,7 +148,7 @@ def _edit_account_dialog(accounting_service):
             st.rerun()
         except Exception as exc:
             st.error(str(exc))
-    if cols[1].button("Cancel", use_container_width=True):
+    if cols[1].button("Cancel", width="stretch"):
         st.session_state.pop(EDIT_ACC, None)
         st.rerun()
 
@@ -183,7 +183,7 @@ def _ledger_dialog(accounting_service):
                     "Description": e["description"],
                 }
             )
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
     if st.button("Close"):
         st.session_state.pop(LEDGER_ACC, None)
         st.rerun()
@@ -227,7 +227,7 @@ def _receipt_dialog(accounting_service):
     desc = st.text_input("Description", value=voucher.description if voucher else "")
 
     cols = st.columns(2)
-    if cols[0].button("Save", type="primary", use_container_width=True):
+    if cols[0].button("Save", type="primary", width="stretch"):
         try:
             if voucher:
                 accounting_service.update_receipt(
@@ -242,7 +242,7 @@ def _receipt_dialog(accounting_service):
             st.rerun()
         except Exception as exc:
             st.error(str(exc))
-    if cols[1].button("Cancel", use_container_width=True):
+    if cols[1].button("Cancel", width="stretch"):
         st.session_state.pop(RCPT, None)
         st.session_state.pop(RCPT_PRESELECT_ACCOUNT, None)
         st.rerun()
@@ -311,7 +311,7 @@ def _payment_dialog(services):
     selected_service = svc_opts[service_name]
 
     cols = st.columns(2)
-    if cols[0].button("Save", type="primary", use_container_width=True):
+    if cols[0].button("Save", type="primary", width="stretch"):
         try:
             if voucher:
                 accounting_service.update_vendor_payment(
@@ -329,7 +329,7 @@ def _payment_dialog(services):
             st.rerun()
         except Exception as exc:
             st.error(str(exc))
-    if cols[1].button("Cancel", use_container_width=True):
+    if cols[1].button("Cancel", width="stretch"):
         st.session_state.pop(PAY, None)
         st.rerun()
 
@@ -373,7 +373,7 @@ def _salary_dialog(accounting_service):
     desc = st.text_input("Description", value=voucher.description if voucher else "")
 
     cols = st.columns(2)
-    if cols[0].button("Save", type="primary", use_container_width=True):
+    if cols[0].button("Save", type="primary", width="stretch"):
         try:
             if voucher:
                 accounting_service.update_salary_payment(
@@ -388,7 +388,7 @@ def _salary_dialog(accounting_service):
             st.rerun()
         except Exception as exc:
             st.error(str(exc))
-    if cols[1].button("Cancel", use_container_width=True):
+    if cols[1].button("Cancel", width="stretch"):
         st.session_state.pop(SAL, None)
         st.rerun()
 
@@ -490,7 +490,7 @@ def _standalone_invoice_dialog(
         st.warning('No "Discount Allowed" account found for the discount debit.')
 
     cols = st.columns(2)
-    if cols[0].button("Save", type="primary", use_container_width=True):
+    if cols[0].button("Save", type="primary", width="stretch"):
         try:
             discount_id = discount_account.id if discount_amount > 0 and discount_account else None
             if voucher:
@@ -508,7 +508,7 @@ def _standalone_invoice_dialog(
             st.rerun()
         except Exception as exc:
             st.error(str(exc))
-    if cols[1].button("Cancel", use_container_width=True):
+    if cols[1].button("Cancel", width="stretch"):
         st.session_state.pop(flag_key, None)
         st.rerun()
 
@@ -521,7 +521,7 @@ def _journal_dialog(accounting_service):
 
     cols = st.columns(2)
     if cols[0].button(
-        "Save", type="primary", use_container_width=True, disabled=not balanced
+        "Save", type="primary", width="stretch", disabled=not balanced
     ):
         try:
             accounting_service.create_journal_entry(desc, lines)
@@ -530,7 +530,7 @@ def _journal_dialog(accounting_service):
             st.rerun()
         except Exception as exc:
             st.error(str(exc))
-    if cols[1].button("Cancel", use_container_width=True):
+    if cols[1].button("Cancel", width="stretch"):
         st.session_state.pop("acc_jrnl_lines", None)
         st.session_state.pop(JOURNAL, None)
         st.rerun()
@@ -651,7 +651,7 @@ def _note_dialog_body(accounting_service, *, note_kind: str, flag_key: str, key_
             settle_account_id = store_opts[settle_name]
 
     cols = st.columns(2)
-    if cols[0].button("Save", type="primary", use_container_width=True, key=f"{key_prefix}_save"):
+    if cols[0].button("Save", type="primary", width="stretch", key=f"{key_prefix}_save"):
         try:
             create_fn = (
                 accounting_service.create_credit_note
@@ -673,7 +673,7 @@ def _note_dialog_body(accounting_service, *, note_kind: str, flag_key: str, key_
             st.rerun()
         except Exception as exc:
             st.error(str(exc))
-    if cols[1].button("Cancel", use_container_width=True, key=f"{key_prefix}_cancel"):
+    if cols[1].button("Cancel", width="stretch", key=f"{key_prefix}_cancel"):
         st.session_state.pop(flag_key, None)
         st.rerun()
 
@@ -760,16 +760,16 @@ def _render_accounts_tab(accounting_service):
                     )
 
             btns = st.columns(4 if not protected else 3)
-            if btns[0].button("View Ledger", key=f"ledger_{acc.id}", use_container_width=True):
+            if btns[0].button("View Ledger", key=f"ledger_{acc.id}", width="stretch"):
                 st.session_state[LEDGER_ACC] = acc.id
                 st.rerun()
-            if btns[1].button("Edit", key=f"edit_acc_{acc.id}", use_container_width=True):
+            if btns[1].button("Edit", key=f"edit_acc_{acc.id}", width="stretch"):
                 st.session_state[EDIT_ACC] = acc.id
                 st.rerun()
             action_col = 2
             if not protected:
                 if btns[action_col].button(
-                    "Delete", key=f"delete_acc_{acc.id}", use_container_width=True
+                    "Delete", key=f"delete_acc_{acc.id}", width="stretch"
                 ):
                     try:
                         accounting_service.delete_account(acc.id)
@@ -780,7 +780,7 @@ def _render_accounts_tab(accounting_service):
             if btns[action_col].button(
                 "Deactivate",
                 key=f"deactivate_acc_{acc.id}",
-                use_container_width=True,
+                width="stretch",
                 disabled=protected and acc.is_store_account,
             ):
                 try:
@@ -864,7 +864,7 @@ def _render_ledger_tab(accounting_service):
                     "Description": e["description"],
                 }
             )
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
 
 def _render_trial_balance_tab(accounting_service):
@@ -907,7 +907,7 @@ def _render_trial_balance_tab(accounting_service):
         }
         for r in page_trial
     ]
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
     render_page_controls(
         page, total_pages, len(trial),
         page_key="acc_tb_page", prev_key="acc_tb_prev", next_key="acc_tb_next",
@@ -959,17 +959,17 @@ def _render_account_cards(page_accounts, services):
 
             row1 = st.columns(2)
             if row1[0].button("Ledger", key=f"ledger_{acc.id}",
-                              use_container_width=True):
+                              width="stretch"):
                 navigation.go_to_detail("account_detail", acc.id)
             if row1[1].button("Edit", key=f"edit_acc_{acc.id}",
-                              use_container_width=True):
+                              width="stretch"):
                 st.session_state[EDIT_ACC] = acc.id
                 st.rerun()
 
             row2 = st.columns(2)
             if not protected:
                 if row2[0].button("Delete", key=f"delete_acc_{acc.id}",
-                                  use_container_width=True):
+                                  width="stretch"):
                     try:
                         accounting_service.delete_account(acc.id)
                         st.rerun()
@@ -977,7 +977,7 @@ def _render_account_cards(page_accounts, services):
                         st.error(str(exc))
             if row2[1].button(
                 "Disable", key=f"deactivate_acc_{acc.id}",
-                use_container_width=True,
+                width="stretch",
                 disabled=protected and acc.is_store_account,
             ):
                 try:
@@ -1054,4 +1054,4 @@ def render_account_detail(services: dict):
                 "Description": e["description"],
             }
         )
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)

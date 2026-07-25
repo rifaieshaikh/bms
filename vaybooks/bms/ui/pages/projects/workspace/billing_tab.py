@@ -78,7 +78,7 @@ def _render_quotations(services: dict, project) -> None:
             }
             for q in sorted(quotations, key=lambda x: x.quotation_date, reverse=True)
         ]
-        st.dataframe(pd.DataFrame(reg_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(reg_rows), width="stretch", hide_index=True)
 
     st.subheader("Create quotation")
     notes = st.text_input("Notes", key="prj_q_new_notes")
@@ -136,7 +136,7 @@ def _render_quotations(services: dict, project) -> None:
                 ]
                 st.dataframe(
                     pd.DataFrame(line_rows),
-                    use_container_width=True,
+                    width="stretch",
                     hide_index=True,
                 )
 
@@ -272,7 +272,7 @@ def _render_work_orders(services: dict, project) -> None:
         }
         for wo in work_orders
     ]
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
 
 def _render_tax_invoices(services: dict, project) -> None:
@@ -305,7 +305,7 @@ def _render_tax_invoices(services: dict, project) -> None:
                             for r in inv_rows
                         ]
                     ),
-                    use_container_width=True,
+                    width="stretch",
                     hide_index=True,
                 )
         except Exception as exc:
@@ -386,7 +386,7 @@ def _render_measurements(services: dict, project) -> None:
                     "RA": m.ra_bill_id[:8] if m.ra_bill_id else "—",
                 }
             )
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
     st.subheader("Create measurement")
     if not boq_opts:
@@ -533,7 +533,7 @@ def _render_ra_bills(services: dict, project) -> None:
                 }
             )
         st.subheader("RA register")
-        st.dataframe(pd.DataFrame(reg_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(reg_rows), width="stretch", hide_index=True)
 
     if not ra_bills:
         H.empty_state("No RA bills yet.")
@@ -565,7 +565,7 @@ def _render_ra_bills(services: dict, project) -> None:
                 ]
                 st.dataframe(
                     pd.DataFrame(line_rows),
-                    use_container_width=True,
+                    width="stretch",
                     hide_index=True,
                 )
 
@@ -668,7 +668,7 @@ def _render_proforma(services: dict, project) -> None:
         }
         for pf in proformas
     ]
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
 
 def _render_variations(services: dict, project) -> None:

@@ -186,7 +186,7 @@ def render_sales_lines_editor(
     edited_df = st.data_editor(
         pd.DataFrame(st.session_state[df_key]),
         num_rows="dynamic",
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         key=editor_key,
         column_config=column_config,

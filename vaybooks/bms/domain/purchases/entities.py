@@ -61,6 +61,11 @@ class GoodsReceiptLine:
     id: str = field(default_factory=lambda: uuid4().hex)
     product_name: str = ""
     purchase_order_line_id: str = ""
+    qty_accepted: float = 0.0
+    qty_damaged: float = 0.0
+    qty_rejected: float = 0.0
+    batch_number: str = ""
+    serial_numbers: List[str] = field(default_factory=list)
 
     @property
     def line_total(self) -> float:
@@ -83,6 +88,8 @@ class GoodsReceipt:
     purchase_order_id: Optional[str] = None
     po_number: str = ""
     vendor_name: str = ""
+    warehouse_id: str = ""
+    warehouse_name: str = ""
     status: GoodsReceiptStatus = GoodsReceiptStatus.DRAFT
     freight: float = 0.0
     duty: float = 0.0

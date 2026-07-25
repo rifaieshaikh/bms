@@ -194,13 +194,13 @@ def _new_order_dialog(services: dict):
 
     action_cols = st.columns(2)
     with action_cols[0]:
-        st.button("Add Another Item", on_click=_add_item_row, use_container_width=True)
+        st.button("Add Another Item", on_click=_add_item_row, width="stretch")
     with action_cols[1]:
         st.button(
             "Remove Last Item",
             on_click=_remove_item_row,
             disabled=len(st.session_state.new_order_item_rows) <= 1,
-            use_container_width=True,
+            width="stretch",
         )
 
     if st.button("Create Order", type="primary"):
@@ -734,7 +734,7 @@ def _invoice_dialog_content(services: dict, order_id: str, *, generate: bool):
         if generate and is_cancellation and not invoice
         else ("Record cancellation charge" if is_cancellation and not invoice else ("Generate & Save" if generate and not invoice else "Save"))
     )
-    if cols[0].button(save_label, type="primary", use_container_width=True):
+    if cols[0].button(save_label, type="primary", width="stretch"):
         try:
             with st.spinner("Please wait while saving invoice..."):
                 if invoice:
@@ -788,7 +788,7 @@ def _invoice_dialog_content(services: dict, order_id: str, *, generate: bool):
             st.rerun()
         except Exception as exc:
             st.error(str(exc))
-    if cols[1].button("Cancel", use_container_width=True):
+    if cols[1].button("Cancel", width="stretch"):
         _clear_invoice_widget_state(order.id)
         st.session_state.pop(flag_key, None)
         st.rerun()
@@ -927,7 +927,7 @@ def _delivery_dialog(services: dict, order_id: str):
     )
 
     cols = st.columns(2)
-    if cols[0].button("Save", type="primary", use_container_width=True):
+    if cols[0].button("Save", type="primary", width="stretch"):
         try:
             if delivery:
                 delivery_service.update_delivery(delivery.id, bill_ids, del_date, notes)
@@ -939,7 +939,7 @@ def _delivery_dialog(services: dict, order_id: str):
             st.rerun()
         except Exception as exc:
             st.error(str(exc))
-    if cols[1].button("Cancel", use_container_width=True):
+    if cols[1].button("Cancel", width="stretch"):
         st.session_state.pop(flag_key, None)
         st.rerun()
 
@@ -1018,7 +1018,7 @@ def _receipt_dialog(services: dict, order_id: str):
     )
 
     cols = st.columns(2)
-    if cols[0].button("Save", type="primary", use_container_width=True):
+    if cols[0].button("Save", type="primary", width="stretch"):
         try:
             if voucher:
                 accounting.update_customer_payment(
@@ -1034,7 +1034,7 @@ def _receipt_dialog(services: dict, order_id: str):
             st.rerun()
         except Exception as exc:
             st.error(str(exc))
-    if cols[1].button("Cancel", use_container_width=True):
+    if cols[1].button("Cancel", width="stretch"):
         st.session_state.pop(flag_key, None)
         st.rerun()
 
@@ -1143,7 +1143,7 @@ def _payment_dialog(services: dict, order_id: str):
     selected_service = svc_options[service_name]
 
     cols = st.columns(2)
-    if cols[0].button("Save", type="primary", use_container_width=True):
+    if cols[0].button("Save", type="primary", width="stretch"):
         try:
             if voucher:
                 accounting.update_vendor_payment(
@@ -1161,7 +1161,7 @@ def _payment_dialog(services: dict, order_id: str):
             st.rerun()
         except Exception as exc:
             st.error(str(exc))
-    if cols[1].button("Cancel", use_container_width=True):
+    if cols[1].button("Cancel", width="stretch"):
         st.session_state.pop(flag_key, None)
         st.rerun()
 
@@ -1307,7 +1307,7 @@ def _refund_dialog(services: dict, order_id: str):
     )
 
     cols = st.columns(2)
-    if cols[0].button("Save", type="primary", use_container_width=True):
+    if cols[0].button("Save", type="primary", width="stretch"):
         try:
             if voucher:
                 if voucher.is_advance_refund:
@@ -1334,7 +1334,7 @@ def _refund_dialog(services: dict, order_id: str):
             st.rerun()
         except Exception as exc:
             st.error(str(exc))
-    if cols[1].button("Cancel", use_container_width=True):
+    if cols[1].button("Cancel", width="stretch"):
         st.session_state.pop(flag_key, None)
         st.rerun()
 
@@ -1401,7 +1401,7 @@ def _cancel_order_dialog(services: dict, order_id: str) -> None:
             if cols[0].button(
                 "Yes, refund & cancel",
                 type="primary",
-                use_container_width=True,
+                width="stretch",
                 key=f"cancel_yes_refund_{order_id}",
             ):
                 try:
@@ -1421,7 +1421,7 @@ def _cancel_order_dialog(services: dict, order_id: str) -> None:
                     st.error(str(exc))
             if cols[1].button(
                 "No, cancel only",
-                use_container_width=True,
+                width="stretch",
                 key=f"cancel_no_refund_{order_id}",
             ):
                 try:
@@ -1435,7 +1435,7 @@ def _cancel_order_dialog(services: dict, order_id: str) -> None:
                     st.error(str(exc))
             if cols[2].button(
                 "Close",
-                use_container_width=True,
+                width="stretch",
                 key=f"cancel_close_{order_id}",
             ):
                 st.session_state.pop(flag_key, None)
@@ -1457,7 +1457,7 @@ def _cancel_order_dialog(services: dict, order_id: str) -> None:
     if cols[0].button(
         "Yes, cancel order",
         type="primary",
-        use_container_width=True,
+        width="stretch",
         key=f"cancel_confirm_{order_id}",
     ):
         try:
@@ -1469,7 +1469,7 @@ def _cancel_order_dialog(services: dict, order_id: str) -> None:
             st.error(str(exc))
     if cols[1].button(
         "Close",
-        use_container_width=True,
+        width="stretch",
         key=f"cancel_abort_{order_id}",
     ):
         st.session_state.pop(flag_key, None)

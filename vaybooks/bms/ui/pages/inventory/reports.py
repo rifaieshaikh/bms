@@ -70,7 +70,7 @@ def _export_buttons(filtered_df: pd.DataFrame, report_type: str) -> None:
         mime="text/csv",
         key=f"inv_report_dl_{slug}",
         disabled=filtered_df.empty,
-        use_container_width=True,
+        width="stretch",
         icon=":material/download:",
     )
 
@@ -86,7 +86,7 @@ def _render_table(data: list, entity_key: str, filter_token: str) -> None:
         filter_key=f"inv_report_filter_{entity_key}",
         filter_value=filter_token,
     )
-    st.dataframe(pd.DataFrame(page_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(page_rows), width="stretch", hide_index=True)
     render_page_controls(
         page,
         total_pages,

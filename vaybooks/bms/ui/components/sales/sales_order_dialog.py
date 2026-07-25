@@ -140,10 +140,10 @@ def sales_order_dialog(services: dict) -> None:
     do_save = save_cols[0].button(
         "Save SO",
         type="primary",
-        use_container_width=True,
+        width="stretch",
         key=save_key,
     ) or consume_submit(SO_SUBMIT_KEY)
-    if save_cols[1].button("Cancel", use_container_width=True, key=cancel_key):
+    if save_cols[1].button("Cancel", width="stretch", key=cancel_key):
         _clear()
         st.rerun()
 

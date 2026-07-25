@@ -6,6 +6,7 @@ from vaybooks.bms.domain.inventory.entities import (
     InventoryProduct,
     ProductCategory,
     ProductUnit,
+    Warehouse,
 )
 from vaybooks.bms.domain.inventory.field_definitions import ProductFieldDefinition, ProductFieldType
 from vaybooks.bms.domain.inventory.rate_history import ProductRatePeriod
@@ -16,6 +17,7 @@ from vaybooks.bms.domain.inventory.repository import (
     ProductFieldDefinitionRepository,
     ProductUnitRepository,
     StockMovementRepository,
+    WarehouseRepository,
 )
 from vaybooks.bms.domain.inventory.services import InventoryDomainService
 from vaybooks.bms.domain.shared.enums import StockMovementType
@@ -30,6 +32,7 @@ class InventoryAppService:
         unit_repo: Optional[ProductUnitRepository] = None,
         field_def_repo: Optional[ProductFieldDefinitionRepository] = None,
         rate_history: Optional[ProductRateHistoryService] = None,
+        warehouse_repo: Optional[WarehouseRepository] = None,
     ):
         self._rate_history = rate_history
         self._domain = InventoryDomainService(
@@ -39,11 +42,13 @@ class InventoryAppService:
             unit_repo,
             field_def_repo,
             rate_history,
+            warehouse_repo,
         )
         self._product_repo = product_repo
         self._category_repo = category_repo
         self._unit_repo = unit_repo
         self._field_def_repo = field_def_repo
+        self._warehouse_repo = warehouse_repo
 
     def _hydrate_product(self, product: Optional[InventoryProduct]) -> Optional[InventoryProduct]:
         if not product:
@@ -133,6 +138,42 @@ class InventoryAppService:
     def delete_category(self, category_id: str) -> None:
         self._domain.delete_category(category_id)
 
+    def list_warehouses(self, active_only: bool = False) -> List[Warehouse]:
+        return self._domain.list_warehouses(active_only=active_only)
+
+    def search_warehouses(
+        self, query: str = "", *, active_only: bool = True, limit: int = 10
+    ) -> List[Warehouse]:
+        if not self._warehouse_repo:
+            return []
+        return self._warehouse_repo.search(query, active_only=active_only, limit=limit)
+
+    def get_warehouse(self, warehouse_id: str) -> Optional[Warehouse]:
+        return self._domain.get_warehouse(warehouse_id)
+
+    def create_warehouse(
+        self,
+        code: str,
+        name: str,
+        address: str = "",
+    ) -> Warehouse:
+        return self._domain.create_warehouse(code, name, address)
+
+    def update_warehouse(
+        self,
+        warehouse_id: str,
+        code: str,
+        name: str,
+        address: str = "",
+        is_active: bool = True,
+    ) -> Warehouse:
+        return self._domain.update_warehouse(
+            warehouse_id, code, name, address, is_active
+        )
+
+    def delete_warehouse(self, warehouse_id: str) -> None:
+        self._domain.delete_warehouse(warehouse_id)
+
     def count_products_in_category(self, category_id: str) -> int:
         return self._product_repo.count_by_category(category_id)
 
@@ -208,6 +249,8 @@ class InventoryAppService:
         pending_category_name: Optional[Union[str, List[str]]] = None,
         pending_unit_code: Optional[str] = None,
         last_purchase_rate: float = 0.0,
+        track_batch: bool = False,
+        track_serial: bool = False,
     ) -> InventoryProduct:
         ids = [category_ids] if isinstance(category_ids, str) else list(category_ids)
         ids = self._resolve_pending_category(ids, pending_category_name)
@@ -225,6 +268,8 @@ class InventoryAppService:
             gst_required=gst_required,
             specifications=specifications,
             custom_fields=custom_fields,
+            track_batch=track_batch,
+            track_serial=track_serial,
         )
         if float(last_purchase_rate or 0) > 0:
             product = self.set_product_cost_fields(
@@ -251,6 +296,8 @@ class InventoryAppService:
         pending_category_name: Optional[Union[str, List[str]]] = None,
         pending_unit_code: Optional[str] = None,
         last_purchase_rate: Optional[float] = None,
+        track_batch: Optional[bool] = None,
+        track_serial: Optional[bool] = None,
     ) -> InventoryProduct:
         ids = [category_ids] if isinstance(category_ids, str) else list(category_ids)
         ids = self._resolve_pending_category(ids, pending_category_name)
@@ -269,6 +316,8 @@ class InventoryAppService:
             gst_required=gst_required,
             specifications=specifications,
             custom_fields=custom_fields,
+            track_batch=track_batch,
+            track_serial=track_serial,
         )
         if last_purchase_rate is not None:
             product = self.set_product_cost_fields(

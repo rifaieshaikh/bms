@@ -132,7 +132,7 @@ def _history_dialog(services: dict) -> None:
         }
         for item in history
     ]
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
 
 def _render_table(page_rows, services):
@@ -153,7 +153,7 @@ def _render_table(page_rows, services):
                 "Source invoice": row.get("store_invoice_number") or "—",
             }
         )
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
     options = {
         f"{row.get('customer_name')} · {row.get('sku')} · "

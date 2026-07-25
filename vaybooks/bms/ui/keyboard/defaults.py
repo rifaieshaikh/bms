@@ -39,6 +39,7 @@ _PARENTS = [
     ParentShortcut("purchases_reports", "Purchases Reports", "Purchases", "alt+shift+r"),
     ParentShortcut("inventory_overview", "Inventory Overview", "Inventory", "alt+shift+i"),
     ParentShortcut("inventory_categories_list", "Categories", "Inventory", "ctrl+shift+c"),
+    ParentShortcut("inventory_warehouses_list", "Warehouses", "Inventory", "ctrl+shift+h"),
     ParentShortcut("inventory_products_list", "Products", "Inventory", "ctrl+shift+k"),
     ParentShortcut("inventory_stock_list", "Stock on Hand", "Inventory", "ctrl+shift+w"),
     ParentShortcut(

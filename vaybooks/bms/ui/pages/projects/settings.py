@@ -103,10 +103,10 @@ def _template_form(prefix: str, template=None) -> dict:
 def _add_template_dialog(projects_svc) -> None:
     data = _template_form("prj_tmpl_add")
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True):
+    if cols[0].button("Cancel", width="stretch"):
         st.session_state.pop(T_ADD, None)
         st.rerun()
-    if cols[1].button("Create template", type="primary", use_container_width=True):
+    if cols[1].button("Create template", type="primary", width="stretch"):
         try:
             projects_svc.create_template(
                 data["name"],
@@ -135,11 +135,11 @@ def _edit_template_dialog(projects_svc, template_id: str) -> None:
         st.info("System template — you can adjust structure; name stays unique.")
     data = _template_form("prj_tmpl_edit", template)
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True):
+    if cols[0].button("Cancel", width="stretch"):
         st.session_state.pop(T_EDIT, None)
         st.session_state.pop(T_EDIT_ID, None)
         st.rerun()
-    if cols[1].button("Save changes", type="primary", use_container_width=True):
+    if cols[1].button("Save changes", type="primary", width="stretch"):
         try:
             projects_svc.update_template(
                 template_id,
@@ -168,18 +168,18 @@ def _remove_template_dialog(projects_svc, template_id: str) -> None:
         return
     if template.is_system:
         st.error("System templates cannot be deleted.")
-        if st.button("Close", use_container_width=True):
+        if st.button("Close", width="stretch"):
             st.session_state.pop(T_REMOVE, None)
             st.session_state.pop(T_REMOVE_ID, None)
             st.rerun()
         return
     st.write(f"Remove template **{template.name}**? This cannot be undone.")
     cols = st.columns(2)
-    if cols[0].button("Cancel", use_container_width=True):
+    if cols[0].button("Cancel", width="stretch"):
         st.session_state.pop(T_REMOVE, None)
         st.session_state.pop(T_REMOVE_ID, None)
         st.rerun()
-    if cols[1].button("Remove", type="primary", use_container_width=True):
+    if cols[1].button("Remove", type="primary", width="stretch"):
         try:
             projects_svc.delete_template(template_id)
             st.session_state.pop(T_REMOVE, None)
@@ -236,7 +236,7 @@ def render(services: dict) -> None:
                 if top[1].button(
                     "Edit",
                     key=f"prj_tmpl_edit_{template.id}",
-                    use_container_width=True,
+                    width="stretch",
                 ):
                     st.session_state[T_EDIT] = True
                     st.session_state[T_EDIT_ID] = template.id
@@ -244,7 +244,7 @@ def render(services: dict) -> None:
                 if top[2].button(
                     "Remove",
                     key=f"prj_tmpl_rm_{template.id}",
-                    use_container_width=True,
+                    width="stretch",
                     disabled=bool(template.is_system),
                 ):
                     st.session_state[T_REMOVE] = True

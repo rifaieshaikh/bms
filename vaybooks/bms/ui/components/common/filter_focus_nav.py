@@ -1,29 +1,43 @@
-"""Dedicated arrow-key navigation for the Filters dialog.
+"""Shared Filters / Sort dialog keyboard navigation.
 
-Fixes Alternate phone → Payable balance radio → Apply / Clear all, and keeps
-focus inside the dialog (no jump back to the browser window).
+Behaviour (plan):
+- Tab / Shift+Tab: never intercepted.
+- Open select menus are fully native: arrows highlight, Enter picks the option
+  (single- and multi-select dropdowns alike).
+- Up / Down: move between dialog chain fields.
+- Enter on a closed dropdown / text field: Apply.
+- Left / Right inside a radiogroup (Sort direction): native Baseweb move+select.
+- Enter on a radio: select the focused option, then Apply on the next Enter.
+- Space: never intercepted (native radio select).
 """
 
 from __future__ import annotations
 
 import json
 
-import streamlit.components.v1 as components
+from vaybooks.bms.ui.html_iframe import inject_html
 
 
 def inject_filters_chain_nav(
     *,
     chain: list[str],
     apply_key: str,
-    clear_key: str,
-    radio_key: str | None,
+    clear_key: str | None = None,
+    radio_key: str | None = None,
+    radio_keys: list[str] | None = None,
 ) -> None:
-    """Install capture-phase arrow navigation for an open Filters dialog."""
+    """Install capture-phase keyboard handling for Filters / Sort dialogs."""
+    keys = [str(k) for k in (radio_keys or []) if k]
+    if not keys and radio_key:
+        keys = [str(radio_key)]
+    primary = keys[-1] if keys else (str(radio_key) if radio_key else "")
     payload = {
         "chain": [str(k) for k in chain if k],
         "applyKey": apply_key,
-        "clearKey": clear_key,
-        "radioKey": radio_key or "",
+        "clearKey": clear_key or "",
+        "radioKey": primary,
+        "radioKeys": keys,
+        "version": "field-nav-enter-v4",
     }
     data = json.dumps(payload).replace("</", "<\\/")
     html = f"""
@@ -34,7 +48,37 @@ def inject_filters_chain_nav(
   const win = window.parent || window;
   const doc = win.document || document;
   const FLAG = '__vayFiltersChainNav';
-  const HOLD = '__vayFiltersChainHold';
+  const STYLE_ID = '__vayFilterRadioFocusStyle';
+  const SNAP = '__vayDialogChoiceSnap';
+
+  if (!win[SNAP]) win[SNAP] = {{}};
+
+  function radioKeyList() {{
+    if (cfg.radioKeys && cfg.radioKeys.length) return cfg.radioKeys;
+    return cfg.radioKey ? [cfg.radioKey] : [];
+  }}
+
+  function ensureFocusStyles() {{
+    // Do NOT outline inputs / comboboxes / Baseweb select children. That rule
+    // leaked into every dialog and painted a thick blue bar on the focused
+    // search caret inside dropdowns (e.g. Create Purchase Order → Vendor).
+    // Only keep a visible ring for Sort-direction radios.
+    try {{
+      const old = doc.getElementById(STYLE_ID);
+      if (old) old.remove();
+      const style = doc.createElement('style');
+      style.id = STYLE_ID;
+      style.textContent = [
+        '[role="dialog"] [data-testid="stRadio"] label[data-baseweb="radio"]:focus-within,',
+        '[role="dialog"] [data-testid="stRadio"] input[type="radio"]:focus-visible {{',
+        '  outline: 2px solid #1c64f2 !important;',
+        '  outline-offset: 2px !important;',
+        '  box-shadow: 0 0 0 2px rgba(28, 100, 242, 0.35) !important;',
+        '}}'
+      ].join('\\n');
+      (doc.head || doc.documentElement).appendChild(style);
+    }} catch (e) {{}}
+  }}
 
   function dialogRoot() {{
     try {{ return doc.querySelector('[role="dialog"]') || doc; }}
@@ -67,47 +111,57 @@ def inject_filters_chain_nav(
     return out;
   }}
 
-  function inRadio() {{
-    if (!cfg.radioKey) return false;
-    const active = doc.activeElement;
-    if (classKeys(active).indexOf(cfg.radioKey) >= 0) return true;
-    const roots = rootsFor(cfg.radioKey);
-    for (let i = 0; i < roots.length; i++) {{
-      if (active && roots[i].contains(active)) return true;
-    }}
-    return false;
-  }}
-
   function activeChainKey() {{
     const path = classKeys(doc.activeElement);
     for (let i = 0; i < path.length; i++) {{
       if (cfg.chain.indexOf(path[i]) >= 0) return path[i];
     }}
-    if (cfg.radioKey && inRadio()) return cfg.radioKey;
     return null;
   }}
 
-  function holdFocus(el) {{
-    if (!el) return false;
+  function inRadio() {{
+    const active = doc.activeElement;
+    if (!active) return false;
+    const keys = radioKeyList();
+    const path = classKeys(active);
+    for (let i = 0; i < path.length; i++) {{
+      if (keys.indexOf(path[i]) >= 0) return true;
+    }}
+    const dialog = dialogRoot();
+    if (!dialog || !dialog.contains(active)) return false;
+    let n = active;
+    while (n && n !== dialog) {{
+      if (n.getAttribute && (
+        n.getAttribute('role') === 'radiogroup'
+        || n.getAttribute('data-testid') === 'stRadio'
+        || (n.tagName && n.tagName.toLowerCase() === 'input'
+            && String(n.type || '').toLowerCase() === 'radio')
+      )) return true;
+      n = n.parentElement;
+    }}
+    return false;
+  }}
+
+  function selectOpen(el) {{
+    let n = el;
+    while (n && n !== doc.body) {{
+      if (n.getAttribute && n.getAttribute('aria-expanded') === 'true') return true;
+      n = n.parentElement;
+    }}
+    // Baseweb renders the option list in a portal outside the input.
     try {{
-      if (win[HOLD]) {{ clearInterval(win[HOLD]); win[HOLD] = null; }}
+      const pop = doc.querySelector(
+        '[data-baseweb="popover"] [role="listbox"], [data-baseweb="menu"] [role="listbox"]'
+      );
+      if (pop && pop.offsetParent !== null) return true;
     }} catch (e) {{}}
-    const focusNow = function () {{
-      try {{ el.focus({{ preventScroll: true }}); }}
-      catch (e) {{ try {{ el.focus(); }} catch (e2) {{}} }}
-    }};
-    focusNow();
-    let n = 0;
-    win[HOLD] = setInterval(function () {{
-      const root = dialogRoot();
-      if (!root.contains(doc.activeElement)) focusNow();
-      else if (doc.activeElement !== el && !el.contains(doc.activeElement)) focusNow();
-      n += 1;
-      if (n >= 15) {{
-        try {{ clearInterval(win[HOLD]); }} catch (e) {{}}
-        win[HOLD] = null;
-      }}
-    }}, 40);
+    return false;
+  }}
+
+  function softFocus(el) {{
+    if (!el) return false;
+    try {{ el.focus({{ preventScroll: true }}); }}
+    catch (e) {{ try {{ el.focus(); }} catch (e2) {{}} }}
     return true;
   }}
 
@@ -115,278 +169,253 @@ def inject_filters_chain_nav(
     const roots = rootsFor(key);
     for (let i = 0; i < roots.length; i++) {{
       const btn = roots[i].querySelector('button');
-      if (btn) return holdFocus(btn);
+      if (btn) return softFocus(btn);
     }}
     const want = String(label || '').trim().toLowerCase();
     const buttons = dialogRoot().querySelectorAll('button');
     for (let i = 0; i < buttons.length; i++) {{
       if (String(buttons[i].textContent || '').trim().toLowerCase() === want) {{
-        return holdFocus(buttons[i]);
+        return softFocus(buttons[i]);
       }}
     }}
     return false;
   }}
 
-  function focusRadio(key) {{
+  function focusRadioGroup(key) {{
     const roots = rootsFor(key);
     for (let r = 0; r < roots.length; r++) {{
       const root = roots[r];
-      const checked = root.querySelector(
-        'input[type="radio"]:checked, [role="radio"][aria-checked="true"]'
-      );
-      const first = root.querySelector('input[type="radio"], [role="radio"]');
-      const group = root.querySelector('[role="radiogroup"], [data-testid="stRadio"]');
-      const label = root.querySelector('label');
-      const candidates = [checked, first, group, label];
-      for (let i = 0; i < candidates.length; i++) {{
-        const el = candidates[i];
-        if (!el) continue;
-        try {{ if (el.tabIndex < 0) el.tabIndex = 0; }} catch (e) {{}}
-        if (holdFocus(el)) return true;
-      }}
-      try {{
-        if (label) {{ label.click(); return true; }}
-        if (first) {{ first.click(); return true; }}
-      }} catch (e) {{}}
+      const checked = root.querySelector('input[type="radio"]:checked');
+      const first = root.querySelector('input[type="radio"]');
+      const el = checked || first;
+      if (el) return softFocus(el);
     }}
-    try {{
-      const boxes = dialogRoot().querySelectorAll('[data-testid="stRadio"]');
-      if (boxes.length) {{
-        const box = boxes[boxes.length - 1];
-        const el = box.querySelector(
-          'input[type="radio"]:checked, [role="radio"], input[type="radio"], label'
-        ) || box;
-        try {{ if (el.tabIndex < 0) el.tabIndex = 0; }} catch (e) {{}}
-        return holdFocus(el);
-      }}
-    }} catch (e) {{}}
     return false;
   }}
 
   function focusField(key) {{
     if (!key) return false;
-    if (key === cfg.radioKey) return focusRadio(key);
-    if (key === cfg.applyKey) return focusButton(key, 'Apply');
-    if (key === cfg.clearKey) return focusButton(key, 'Clear all');
+    if (key === cfg.applyKey) {{
+      return focusButton(key, 'Apply') || focusButton(key, 'Apply sort');
+    }}
+    if (cfg.clearKey && key === cfg.clearKey) {{
+      return focusButton(key, 'Clear all');
+    }}
+    if (radioKeyList().indexOf(key) >= 0) return focusRadioGroup(key);
     const roots = rootsFor(key);
     for (let i = 0; i < roots.length; i++) {{
       const root = roots[i];
       const el = root.querySelector(
-        'input:not([type="hidden"]), textarea, [role="combobox"], select, button'
+        'input:not([type="hidden"]):not([type="radio"]), textarea, [role="combobox"], select, button'
       );
-      if (el) return holdFocus(el);
+      if (el) return softFocus(el);
+      const radio = root.querySelector('input[type="radio"]:checked, input[type="radio"]');
+      if (radio) return softFocus(radio);
     }}
     return false;
   }}
 
-  function radioRoot() {{
-    const roots = rootsFor(cfg.radioKey);
-    if (roots.length) return roots[0];
-    const boxes = dialogRoot().querySelectorAll('[data-testid="stRadio"]');
-    return boxes.length ? boxes[boxes.length - 1] : null;
+  function moveChain(delta) {{
+    const key = activeChainKey();
+    if (!key) return false;
+    const idx = cfg.chain.indexOf(key);
+    if (idx < 0) return false;
+    const next = idx + delta;
+    if (next < 0 || next >= cfg.chain.length) return false;
+    return focusField(cfg.chain[next]);
   }}
 
-  function radioOptions() {{
-    const root = radioRoot();
-    if (!root) return [];
-    // Streamlit renders each choice as a <label> — clicking the label selects it.
-    let opts = Array.from(root.querySelectorAll('label'));
-    if (opts.length) return opts;
-    opts = Array.from(root.querySelectorAll('[role="radio"]'));
-    if (opts.length) return opts;
-    return Array.from(root.querySelectorAll('input[type="radio"]'));
-  }}
-
-  function selectRadioOption(el) {{
-    if (!el) return false;
-    try {{
-      // Always resolve to the label Streamlit binds to the widget value.
-      let label = el;
-      if (!(label.tagName && label.tagName.toLowerCase() === 'label')) {{
-        label = (el.closest && el.closest('label')) || el;
-      }}
-      const input = (label.matches && label.matches('input[type="radio"]'))
-        ? label
-        : (label.querySelector && label.querySelector('input[type="radio"]'));
-      const roleRadio = (label.getAttribute && label.getAttribute('role') === 'radio')
-        ? label
-        : (label.querySelector && label.querySelector('[role="radio"]'));
-
-      // Pause focus-hold so it cannot cancel the click.
-      try {{
-        if (win[HOLD]) {{ clearInterval(win[HOLD]); win[HOLD] = null; }}
-      }} catch (e) {{}}
-
-      if (input) {{
-        try {{
-          input.focus({{ preventScroll: true }});
-        }} catch (e) {{
-          try {{ input.focus(); }} catch (e2) {{}}
-        }}
-        input.checked = true;
-        // Native click() is required for React/Streamlit to commit the value.
-        input.click();
-        try {{
-          input.dispatchEvent(new Event('input', {{ bubbles: true }}));
-          input.dispatchEvent(new Event('change', {{ bubbles: true }}));
-        }} catch (e) {{}}
-      }}
-      if (roleRadio) {{
-        try {{ roleRadio.setAttribute('aria-checked', 'true'); }} catch (e) {{}}
-        try {{ roleRadio.click(); }} catch (e) {{}}
-      }}
-      try {{ label.click(); }} catch (e) {{}}
-
-      // Keep the chosen option focused and visually selected.
-      setTimeout(function () {{
-        holdFocus(label);
-      }}, 30);
-      return true;
-    }} catch (e) {{
-      return false;
+  function clickApply() {{
+    const roots = rootsFor(cfg.applyKey);
+    for (let i = 0; i < roots.length; i++) {{
+      const btn = roots[i].querySelector('button');
+      if (btn) {{ btn.click(); return true; }}
     }}
+    const labels = ['apply', 'apply sort'];
+    const buttons = dialogRoot().querySelectorAll('button');
+    for (let i = 0; i < buttons.length; i++) {{
+      const t = String(buttons[i].textContent || '').trim().toLowerCase();
+      if (labels.indexOf(t) >= 0) {{ buttons[i].click(); return true; }}
+    }}
+    return false;
   }}
 
-  // Track which option arrows highlighted (Enter commits this one).
-  let highlightedRadioIndex = -1;
-
-  function focusedRadioIndex(opts) {{
-    if (highlightedRadioIndex >= 0 && highlightedRadioIndex < opts.length) {{
-      return highlightedRadioIndex;
-    }}
+  function currentRadioValue() {{
     const active = doc.activeElement;
-    for (let i = 0; i < opts.length; i++) {{
-      const o = opts[i];
-      if (o === active || (o.contains && o.contains(active))) return i;
-      if (o.getAttribute && o.getAttribute('aria-checked') === 'true') return i;
-      const inp = o.querySelector && o.querySelector('input[type="radio"]');
-      if ((inp && inp.checked) || o.checked) return i;
+    if (!active) return '';
+    let input = null;
+    if (active.matches && active.matches('input[type="radio"]')) input = active;
+    else {{
+      const lab = active.closest && active.closest('label');
+      input = lab && lab.querySelector && lab.querySelector('input[type="radio"]');
     }}
-    return 0;
+    if (!input) {{
+      const group = active.closest && active.closest('[role="radiogroup"], [data-testid="stRadio"]');
+      input = group && group.querySelector('input[type="radio"]:checked');
+    }}
+    return input ? String(input.value) : '';
   }}
 
-  function moveRadioHighlight(delta) {{
-    const opts = radioOptions();
-    if (!opts.length) return false;
-    let i = focusedRadioIndex(opts);
-    i = (i + delta + opts.length) % opts.length;
-    highlightedRadioIndex = i;
-    // Select as you move so the chosen option is always displayed.
-    return selectRadioOption(opts[i]);
+  function selectFocusedRadio() {{
+    const active = doc.activeElement;
+    if (!active) return false;
+    try {{
+      let input = null;
+      let label = null;
+      if (active.matches && active.matches('input[type="radio"]')) {{
+        input = active;
+        label = active.closest && active.closest('label[data-baseweb="radio"], label');
+      }} else if (active.closest) {{
+        label = active.closest('label[data-baseweb="radio"], label');
+        input = label && label.querySelector && label.querySelector('input[type="radio"]');
+      }}
+      if (label) {{ label.click(); return true; }}
+      if (input) {{
+        input.checked = true;
+        input.click();
+        return true;
+      }}
+    }} catch (e) {{}}
+    return false;
   }}
 
-  function commitHighlightedRadio() {{
-    const opts = radioOptions();
-    if (!opts.length) return false;
-    const i = focusedRadioIndex(opts);
-    highlightedRadioIndex = i;
-    return selectRadioOption(opts[i]);
+  function widgetSnapKey() {{
+    return activeChainKey() || (inRadio() ? (radioKeyList()[0] || 'radio') : '');
+  }}
+
+  function readChoiceValue() {{
+    if (inRadio()) return currentRadioValue();
+    const active = doc.activeElement;
+    if (!active) return '';
+    // Closed Baseweb select / combobox: use visible value text.
+    const combo = active.closest && active.closest('[data-baseweb="select"], [role="combobox"]');
+    if (combo) {{
+      const val = combo.querySelector('[data-baseweb="select"] span, [aria-selected="true"], input');
+      if (val) return String(val.textContent || val.value || '').trim();
+    }}
+    if (active.tagName && active.tagName.toLowerCase() === 'input') {{
+      return String(active.value || '');
+    }}
+    return String(active.textContent || '').trim().slice(0, 120);
+  }}
+
+  function isTextish(el) {{
+    if (!el) return false;
+    const t = (el.tagName || '').toLowerCase();
+    const inputType = (el.type && String(el.type).toLowerCase()) || '';
+    if (t === 'textarea') return true;
+    if (t === 'input' && (
+      !inputType || inputType === 'text' || inputType === 'search'
+      || inputType === 'email' || inputType === 'tel' || inputType === 'url'
+      || inputType === 'password' || inputType === 'number'
+    )) return true;
+    return false;
+  }}
+
+  function isChoiceControl() {{
+    if (inRadio()) return true;
+    const active = doc.activeElement;
+    if (!active) return false;
+    if (active.closest && active.closest('[data-baseweb="select"], [role="combobox"], [data-testid="stSelectbox"]')) {{
+      return true;
+    }}
+    return false;
   }}
 
   function onKeyDown(ev) {{
+    if (ev.key === 'Tab') return;
+    if (ev.key === ' ') return;
     if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+
     const dialog = doc.querySelector('[role="dialog"]');
     if (!dialog) return;
+    const active = doc.activeElement;
+    if (active && !dialog.contains(active) && !inRadio()) return;
 
     const isDown = ev.key === 'ArrowDown';
     const isUp = ev.key === 'ArrowUp';
     const isLeft = ev.key === 'ArrowLeft';
     const isRight = ev.key === 'ArrowRight';
     const isEnter = ev.key === 'Enter';
-    if (!isDown && !isUp && !isLeft && !isRight && !isEnter) return;
 
-    const active = doc.activeElement;
-    if (active && !dialog.contains(active) && !inRadio()) return;
+    // Left/Right on radio: native Baseweb — do not preventDefault.
+    if ((isLeft || isRight) && inRadio()) return;
 
-    const key = activeChainKey();
-    const onRadio = !!(cfg.radioKey && (key === cfg.radioKey || inRadio()));
-    const idx = key ? cfg.chain.indexOf(key) : -1;
+    // Open dropdown menu: fully native (arrows highlight, Enter picks).
+    if (selectOpen(active)) return;
 
-    if (onRadio) {{
-      // Left/Right (and Up within the group): move between radio options.
-      // Stop other handlers so focus does not jump back to Alternate phone.
-      if (isEnter) {{
-        ev.preventDefault();
-        ev.stopPropagation();
-        try {{ ev.stopImmediatePropagation(); }} catch (e) {{}}
-        // Defer past keydown so Streamlit/React accepts the synthetic click.
-        setTimeout(function () {{ commitHighlightedRadio(); }}, 0);
-        return;
-      }}
-      if (isLeft || isRight) {{
-        ev.preventDefault();
-        ev.stopPropagation();
-        try {{ ev.stopImmediatePropagation(); }} catch (e) {{}}
-        const delta = isRight ? 1 : -1;
-        setTimeout(function () {{ moveRadioHighlight(delta); }}, 0);
-        return;
-      }}
-      if (isDown) {{
-        ev.preventDefault();
-        ev.stopPropagation();
-        try {{ ev.stopImmediatePropagation(); }} catch (e) {{}}
-        focusButton(cfg.applyKey, 'Apply');
-        return;
-      }}
-      if (isUp) {{
-        ev.preventDefault();
-        ev.stopPropagation();
-        try {{ ev.stopImmediatePropagation(); }} catch (e) {{}}
-        if (idx > 0) focusField(cfg.chain[idx - 1]);
-        return;
-      }}
-    }}
-
-    if (key === cfg.applyKey || key === cfg.clearKey) {{
-      if (isLeft && key === cfg.applyKey) {{
-        ev.preventDefault();
-        ev.stopPropagation();
-        try {{ ev.stopImmediatePropagation(); }} catch (e) {{}}
-        focusButton(cfg.clearKey, 'Clear all');
-        return;
-      }}
-      if (isRight && key === cfg.clearKey) {{
-        ev.preventDefault();
-        ev.stopPropagation();
-        try {{ ev.stopImmediatePropagation(); }} catch (e) {{}}
-        focusButton(cfg.applyKey, 'Apply');
-        return;
-      }}
-      if (isUp) {{
-        ev.preventDefault();
-        ev.stopPropagation();
-        try {{ ev.stopImmediatePropagation(); }} catch (e) {{}}
-        if (cfg.radioKey) focusRadio(cfg.radioKey);
-        else if (idx > 0) focusField(cfg.chain[idx - 1]);
-        return;
-      }}
-      if (isDown) {{
-        ev.preventDefault();
-        ev.stopPropagation();
-        try {{ ev.stopImmediatePropagation(); }} catch (e) {{}}
-        return;
-      }}
-    }}
-
-    if ((isDown || isUp) && idx >= 0) {{
-      let n = active;
-      let selectOpen = false;
-      while (n && n !== doc.body) {{
-        if (n.getAttribute && n.getAttribute('aria-expanded') === 'true') {{
-          selectOpen = true;
-          break;
-        }}
-        n = n.parentElement;
-      }}
-      if (selectOpen && key !== cfg.radioKey) return;
-
-      const nextIdx = isDown ? idx + 1 : idx - 1;
-      if (nextIdx < 0 || nextIdx >= cfg.chain.length) return;
+    // Up/Down move between chain fields (including when focus is on a radio).
+    if (isDown || isUp) {{
+      const key = activeChainKey();
+      if (!key && !inRadio()) return;
       ev.preventDefault();
       ev.stopPropagation();
       try {{ ev.stopImmediatePropagation(); }} catch (e) {{}}
-      focusField(cfg.chain[nextIdx]);
+      setTimeout(function () {{ moveChain(isDown ? 1 : -1); }}, 0);
+      return;
     }}
+
+    if (!isEnter) return;
+    if (ev.shiftKey) return;
+
+    // Apply / Clear buttons: native activation.
+    const key = activeChainKey();
+    if (key === cfg.applyKey || (cfg.clearKey && key === cfg.clearKey)) return;
+
+    // Radio (Sort direction): two-step Enter — select, then Apply.
+    if (inRadio()) {{
+      ev.preventDefault();
+      ev.stopPropagation();
+      try {{ ev.stopImmediatePropagation(); }} catch (e) {{}}
+      const snapKey = widgetSnapKey();
+      const now = readChoiceValue();
+      const prev = win[SNAP][snapKey];
+      setTimeout(function () {{
+        if (prev === undefined || prev !== now || !document.querySelector(
+          '[role="dialog"] input[type="radio"]:checked'
+        )) {{
+          selectFocusedRadio();
+          win[SNAP][snapKey] = currentRadioValue() || now;
+          return;
+        }}
+        // Already committed — Apply.
+        clickApply();
+      }}, 0);
+      return;
+    }}
+
+    // Closed dropdown: Enter applies (the menu was never opened).
+    if (isChoiceControl()) {{
+      ev.preventDefault();
+      ev.stopPropagation();
+      try {{ ev.stopImmediatePropagation(); }} catch (e) {{}}
+      setTimeout(function () {{ clickApply(); }}, 0);
+      return;
+    }}
+
+    // Text and other fields: Enter applies.
+    if (isTextish(active) || key) {{
+      ev.preventDefault();
+      ev.stopPropagation();
+      try {{ ev.stopImmediatePropagation(); }} catch (e) {{}}
+      setTimeout(function () {{ clickApply(); }}, 0);
+    }}
+  }}
+
+  // Snapshot choice values when focus enters a choice widget.
+  function onFocusIn(ev) {{
+    const dialog = doc.querySelector('[role="dialog"]');
+    if (!dialog || !dialog.contains(ev.target)) return;
+    const prevActive = doc.activeElement;
+    // Defer so activeElement is updated.
+    setTimeout(function () {{
+      if (!inRadio() && !isChoiceControl()) return;
+      const snapKey = widgetSnapKey();
+      if (!snapKey) return;
+      if (win[SNAP][snapKey] === undefined) {{
+        win[SNAP][snapKey] = readChoiceValue();
+      }}
+    }}, 0);
   }}
 
   try {{
@@ -404,15 +433,31 @@ def inject_filters_chain_nav(
       win.removeEventListener('keydown', win.__vayFilterLastFieldExit, true);
       win.__vayFilterLastFieldExit = null;
     }}
+    if (win.__vayFiltersChainHold) {{
+      try {{ clearInterval(win.__vayFiltersChainHold); }} catch (e) {{}}
+      win.__vayFiltersChainHold = null;
+    }}
+    if (win.__vayDialogChoiceFocusIn) {{
+      doc.removeEventListener('focusin', win.__vayDialogChoiceFocusIn, true);
+      win.__vayDialogChoiceFocusIn = null;
+    }}
   }} catch (e) {{}}
+
+  try {{
+    const old = doc.getElementById(STYLE_ID);
+    if (old) old.remove();
+  }} catch (e) {{}}
+  ensureFocusStyles();
   win[FLAG] = onKeyDown;
+  win.__vayDialogChoiceFocusIn = onFocusIn;
   win.addEventListener('keydown', onKeyDown, true);
   doc.addEventListener('keydown', onKeyDown, true);
+  doc.addEventListener('focusin', onFocusIn, true);
 }})();
 </script>
 </body></html>
 """
     try:
-        components.html(html, height=1, width=1)
+        inject_html(html, height=1, width=1)
     except Exception:
         pass

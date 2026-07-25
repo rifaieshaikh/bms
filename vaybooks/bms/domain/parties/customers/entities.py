@@ -49,6 +49,9 @@ class Customer:
     msme_number: str = ""
     legacy_address: str = ""
     notes: str = ""
+    is_blacklisted: bool = False
+    blacklist_reason: str = ""
+    blacklisted_at: Optional[datetime] = None
     segment_ids: List[str] = field(default_factory=list)
     segment_names: List[str] = field(default_factory=list)
     created_at: datetime = field(default_factory=utc_now)

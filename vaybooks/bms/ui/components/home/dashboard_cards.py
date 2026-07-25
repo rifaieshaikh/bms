@@ -45,7 +45,7 @@ def order_action_cards(
             if order_id and st.button(
                 "Open →",
                 key=f"{key_prefix}_{order_id}",
-                use_container_width=True,
+                width="stretch",
             ):
                 navigation.go_to_detail("order_detail", order_id)
 

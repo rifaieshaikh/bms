@@ -86,16 +86,16 @@ def _set_step(step: int) -> None:
 
 def _nav_row(step: int, *, can_next: bool = True) -> None:
     cols = st.columns(3)
-    if cols[0].button("Cancel", key=f"wiz_cancel_{step}", use_container_width=True):
+    if cols[0].button("Cancel", key=f"wiz_cancel_{step}", width="stretch"):
         st.session_state.pop(CREATE_DIALOG, None)
         st.session_state.pop(WIZARD_STEP, None)
         st.session_state.pop(WIZARD_DATA, None)
         st.rerun()
-    if step > 0 and cols[1].button("Back", key=f"wiz_back_{step}", use_container_width=True):
+    if step > 0 and cols[1].button("Back", key=f"wiz_back_{step}", width="stretch"):
         _set_step(step - 1)
         st.rerun()
     if can_next and cols[2].button(
-        "Next", type="primary", key=f"wiz_next_{step}", use_container_width=True
+        "Next", type="primary", key=f"wiz_next_{step}", width="stretch"
     ):
         _set_step(step + 1)
         st.rerun()
@@ -112,7 +112,7 @@ def _step_archetype(data: dict) -> None:
             if st.button(
                 f"{'✓ ' if selected else ''}{label}",
                 key=f"wiz_arch_{idx}",
-                use_container_width=True,
+                width="stretch",
                 type="primary" if selected else "secondary",
             ):
                 data["archetype"] = label
@@ -267,15 +267,15 @@ def _step_confirm(data: dict, services: dict) -> None:
         }
     )
     cols = st.columns(3)
-    if cols[0].button("Cancel", key="wiz_cancel_final", use_container_width=True):
+    if cols[0].button("Cancel", key="wiz_cancel_final", width="stretch"):
         st.session_state.pop(CREATE_DIALOG, None)
         st.session_state.pop(WIZARD_STEP, None)
         st.session_state.pop(WIZARD_DATA, None)
         st.rerun()
-    if cols[1].button("Back", key="wiz_back_final", use_container_width=True):
+    if cols[1].button("Back", key="wiz_back_final", width="stretch"):
         _set_step(6)
         st.rerun()
-    if cols[2].button("Create project", type="primary", key="wiz_confirm", use_container_width=True):
+    if cols[2].button("Create project", type="primary", key="wiz_confirm", width="stretch"):
         _create_from_wizard(data, services)
 
 

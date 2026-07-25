@@ -210,6 +210,7 @@ EXPENSE_DETAIL = ListSchema(
             "Expense source",
             F.SELECT,
             options=_enum_opts(ExpenseSource),
+            multi=False,
         ),
         FilterField(
             "search",
@@ -579,6 +580,7 @@ STOCK_ON_HAND = ListSchema(
             "Category",
             F.ENTITY_SELECT,
             options_loader="inventory_categories",
+            multi=False,
         ),
         FilterField("search", "Product / SKU", F.EXACT, placeholder="Contains…"),
         FilterField("min_qty", "Min qty", F.NUMBER_MIN, record_attr="qty"),
@@ -609,6 +611,7 @@ LOW_STOCK = ListSchema(
             "Category",
             F.ENTITY_SELECT,
             options_loader="inventory_categories",
+            multi=False,
         ),
         FilterField("threshold", "Low-stock threshold", F.NUMBER_MIN),
         FilterField(
@@ -643,18 +646,21 @@ STOCK_MOVEMENTS = ListSchema(
             "Product",
             F.ENTITY_SELECT,
             options_loader="inventory_products",
+            multi=False,
         ),
         FilterField(
             "category_id",
             "Category",
             F.ENTITY_SELECT,
             options_loader="inventory_categories",
+            multi=False,
         ),
         FilterField(
             "movement_type",
             "Movement type",
             F.SELECT,
             options=_enum_opts(StockMovementType),
+            multi=False,
         ),
     ],
     sort_options=[
@@ -935,6 +941,7 @@ INVENTORY_VALUATION = ListSchema(
             "Category",
             F.ENTITY_SELECT,
             options_loader="inventory_categories",
+            multi=False,
         ),
     ],
     sort_options=[
@@ -954,6 +961,7 @@ CATEGORY_STOCK_SUMMARY = ListSchema(
             "Category",
             F.ENTITY_SELECT,
             options_loader="inventory_categories",
+            multi=False,
         ),
         FilterField("search", "Product / SKU", F.EXACT, placeholder="Contains…"),
         FilterField(
@@ -989,6 +997,7 @@ DEAD_STOCK = ListSchema(
             "Category",
             F.ENTITY_SELECT,
             options_loader="inventory_categories",
+            multi=False,
         ),
         FilterField("min_qty", "Min qty on hand", F.NUMBER_MIN, record_attr="qty"),
         FilterField(
@@ -1023,6 +1032,7 @@ STOCK_MOVEMENT_SUMMARY = ListSchema(
             "Category",
             F.ENTITY_SELECT,
             options_loader="inventory_categories",
+            multi=False,
         ),
     ],
     sort_options=[
@@ -1044,6 +1054,7 @@ STOCK_MARGIN = ListSchema(
             "Category",
             F.ENTITY_SELECT,
             options_loader="inventory_categories",
+            multi=False,
         ),
         FilterField("search", "Product / SKU", F.EXACT, placeholder="Contains…"),
         FilterField("min_qty", "Min qty", F.NUMBER_MIN, record_attr="qty"),
@@ -1083,12 +1094,14 @@ OPENING_CLOSING_STOCK = ListSchema(
             "Category",
             F.ENTITY_SELECT,
             options_loader="inventory_categories",
+            multi=False,
         ),
         FilterField(
             "product_id",
             "Product",
             F.ENTITY_SELECT,
             options_loader="inventory_products",
+            multi=False,
         ),
         FilterField(
             "active_only",
@@ -1116,6 +1129,7 @@ HSN_STOCK_SUMMARY = ListSchema(
             "Category",
             F.ENTITY_SELECT,
             options_loader="inventory_categories",
+            multi=False,
         ),
         FilterField("search", "HSN / Product / SKU", F.EXACT, placeholder="Contains…"),
         FilterField("min_qty", "Min qty", F.NUMBER_MIN, record_attr="qty"),
@@ -1152,6 +1166,7 @@ FAST_MOVING_STOCK = ListSchema(
             "Category",
             F.ENTITY_SELECT,
             options_loader="inventory_categories",
+            multi=False,
         ),
         FilterField(
             "min_qty_out",
@@ -1179,6 +1194,7 @@ CUSTOMER_LATEST_PRICES = ListSchema(
             "Customer",
             F.ENTITY_SELECT,
             options_loader="customers",
+            multi=False,
         ),
         FilterField(
             "search",
@@ -1212,6 +1228,7 @@ INACTIVE_PRODUCTS_WITH_STOCK = ListSchema(
             "Category",
             F.ENTITY_SELECT,
             options_loader="inventory_categories",
+            multi=False,
         ),
         FilterField("min_qty", "Min qty", F.NUMBER_MIN, record_attr="qty"),
         FilterField("search", "Product / SKU", F.EXACT, placeholder="Contains…"),
@@ -1235,6 +1252,7 @@ PRODUCT_RATE_CARD = ListSchema(
             "Category",
             F.ENTITY_SELECT,
             options_loader="inventory_categories",
+            multi=False,
         ),
         FilterField("search", "Product / SKU / HSN", F.EXACT, placeholder="Contains…"),
         FilterField(

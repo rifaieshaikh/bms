@@ -144,9 +144,9 @@ def render(services: dict):
 
         test_col, save_col = st.columns(2)
         with test_col:
-            test_clicked = st.form_submit_button("Test Connection", use_container_width=True)
+            test_clicked = st.form_submit_button("Test Connection", width="stretch")
         with save_col:
-            save_clicked = st.form_submit_button("Save Settings", type="primary", use_container_width=True)
+            save_clicked = st.form_submit_button("Save Settings", type="primary", width="stretch")
 
     if test_clicked:
         ok, message = validate_mongo_connection(mongo_uri, db_name)

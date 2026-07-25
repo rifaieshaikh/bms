@@ -83,7 +83,7 @@ def _priced_document_card(row: dict, suffix: str) -> None:
             if edit_col.button(
                 "Edit",
                 key=f"{document_type}_edit_{suffix}_{row.get('id')}",
-                use_container_width=True,
+                width="stretch",
             ):
                 arm_priced_document_dialog(
                     document_type, document_id=row.get("id")
@@ -96,7 +96,7 @@ def _priced_document_card(row: dict, suffix: str) -> None:
             "View",
             key=f"{document_type}_view_{suffix}_{row.get('id')}",
             type="primary",
-            use_container_width=True,
+            width="stretch",
         ):
             navigation.go_to_detail(detail_key, row.get("id"))
 

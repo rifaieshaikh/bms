@@ -196,15 +196,15 @@ def _render_queues(reports) -> None:
 def _render_quick_actions() -> None:
     st.markdown("**Quick actions**")
     cols = st.columns(5)
-    if cols[0].button("Purchase Orders", use_container_width=True):
+    if cols[0].button("Purchase Orders", width="stretch"):
         navigation.go_to_list("purchase_orders_list")
-    if cols[1].button("Goods Receipt", use_container_width=True):
+    if cols[1].button("Goods Receipt", width="stretch"):
         navigation.go_to_list("goods_receipt_list")
-    if cols[2].button("Purchase Bills", use_container_width=True):
+    if cols[2].button("Purchase Bills", width="stretch"):
         navigation.go_to_list("purchases_list")
-    if cols[3].button("Returns", use_container_width=True):
+    if cols[3].button("Returns", width="stretch"):
         navigation.go_to_list("purchase_returns_list")
-    if cols[4].button("Reports", use_container_width=True):
+    if cols[4].button("Reports", width="stretch"):
         navigation.go_to_list("purchases_reports")
 
 

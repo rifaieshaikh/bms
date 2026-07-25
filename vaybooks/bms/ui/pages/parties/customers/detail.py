@@ -15,7 +15,7 @@ from vaybooks.bms.ui.components.sales.sales_order_dialog import (
     arm_so_dialog,
     open_so_dialog_if_armed,
 )
-from vaybooks.bms.ui.dialog_utils import register_armed_dialog
+from vaybooks.bms.ui.dialog_utils import make_dismiss_handler, register_armed_dialog
 from vaybooks.bms.ui.list_schemas import MEASUREMENTS, ORDERS, RECEIPTS
 from vaybooks.bms.ui.responsive import viewport_width
 from vaybooks.bms.ui.sales_list_schemas import (
@@ -30,6 +30,7 @@ from vaybooks.bms.ui.session_keys import filters_key
 from vaybooks.bms.ui.styles import panel, status_badge
 
 RECENT_ORDER_LIMIT = 5
+C_BLACKLIST = "customer_blacklist_dialog"
 
 
 def _fmt_date(value) -> str:
@@ -143,6 +144,37 @@ def _label_with_count(label: str, count) -> str:
     return f"{label} ({count})"
 
 
+@st.dialog("Blacklist Customer", on_dismiss=make_dismiss_handler(C_BLACKLIST))
+def _blacklist_customer_dialog(customer_service, customer_id: str):
+    customer = customer_service.get_customer_detail(customer_id)
+    if not customer:
+        st.error("Customer not found")
+        return
+    st.warning(
+        f"Blacklist **{customer.customer_name}**? "
+        "New sales orders, invoices, and receipts will be blocked."
+    )
+    reason = st.text_area(
+        "Reason",
+        key="cd_blacklist_reason",
+        placeholder="Optional reason for blacklisting",
+    )
+    cols = st.columns(2)
+    if cols[0].button("Confirm Blacklist", type="primary", width="stretch"):
+        from vaybooks.bms.domain.shared.exceptions import ValidationError
+
+        try:
+            customer_service.set_blacklisted(customer_id, True, reason)
+            st.session_state.pop(C_BLACKLIST, None)
+            st.success("Customer blacklisted")
+            st.rerun()
+        except ValidationError as exc:
+            st.error(str(exc))
+    if cols[1].button("Cancel", width="stretch"):
+        st.session_state.pop(C_BLACKLIST, None)
+        st.rerun()
+
+
 def _quick_actions_section(
     customer,
     *,
@@ -152,6 +184,15 @@ def _quick_actions_section(
     can_create_receipt: bool = True,
 ) -> None:
     """Compact create toolbar — separate from Related Transactions (view-only)."""
+    if getattr(customer, "is_blacklisted", False):
+        with st.container(key="cust_qa", border=True):
+            st.markdown("**Quick Actions**")
+            st.caption(
+                "New sales orders, invoices, and receipts are blocked "
+                "while this customer is blacklisted."
+            )
+        return
+
     width = viewport_width()
     desktop = width >= 700
 
@@ -418,9 +459,14 @@ def render(services: dict):
             st.error("Customer not found.")
             return
 
-        title_col, edit_col = st.columns([5, 1], vertical_alignment="center")
+        title_col, edit_col, bl_col = st.columns(
+            [4, 1.2, 1.2], vertical_alignment="center"
+        )
         with title_col:
             st.title(customer.customer_name)
+            if customer.is_blacklisted:
+                reason = customer.blacklist_reason or "no reason recorded"
+                st.error(f":material/block: Blacklisted — {reason}")
         with edit_col:
             if st.button(
                 ":material/edit: Edit Customer",
@@ -428,6 +474,22 @@ def render(services: dict):
             ):
                 _open_edit_customer(customer.id)
                 st.rerun()
+        with bl_col:
+            if customer.is_blacklisted:
+                if st.button(
+                    ":material/check_circle: Remove Blacklist",
+                    key="cd_unblacklist",
+                ):
+                    customer_service.set_blacklisted(customer.id, False)
+                    st.success("Blacklist removed")
+                    st.rerun()
+            else:
+                if st.button(
+                    ":material/block: Blacklist",
+                    key="cd_blacklist",
+                ):
+                    st.session_state[C_BLACKLIST] = customer.id
+                    st.rerun()
 
         with panel(f"cust_head_{customer.id}"):
             with st.container(border=True):
@@ -507,12 +569,16 @@ def render(services: dict):
 
         # No module-level create RBAC for sales/receipts yet — show when
         # the matching services exist (same gate as the list-page create buttons).
+        # Blacklisted customers cannot create new sales/receipt transactions.
+        not_blacklisted = not customer.is_blacklisted
         _quick_actions_section(
             customer,
             customer_account_id=customer_account_id,
-            can_create_sales_order=sales is not None,
-            can_create_invoice=sales is not None and accounting is not None,
-            can_create_receipt=accounting is not None,
+            can_create_sales_order=sales is not None and not_blacklisted,
+            can_create_invoice=sales is not None
+            and accounting is not None
+            and not_blacklisted,
+            can_create_receipt=accounting is not None and not_blacklisted,
         )
 
         counts: dict = {}
@@ -572,7 +638,15 @@ def render(services: dict):
         if st.session_state.get(C_EDIT):
             get_submit_map().setdefault(C_EDIT, SUBMIT_EDIT)
             register_armed_dialog(C_EDIT)
-            _edit_customer_dialog(customer_service, st.session_state[C_EDIT])
+            _edit_customer_dialog(
+                customer_service, st.session_state[C_EDIT], services
+            )
+
+        if st.session_state.get(C_BLACKLIST):
+            register_armed_dialog(C_BLACKLIST)
+            _blacklist_customer_dialog(
+                customer_service, st.session_state[C_BLACKLIST]
+            )
 
         open_so_dialog_if_armed(services)
         open_sales_record_dialog_if_armed(services)

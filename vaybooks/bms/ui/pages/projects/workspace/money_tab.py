@@ -244,7 +244,7 @@ def _render_invoices_receipts(services, project, billing_svc, report_svc, store_
                 st.subheader("Outstanding invoices")
                 st.dataframe(
                     pd.DataFrame(inv_rows),
-                    use_container_width=True,
+                    width="stretch",
                     hide_index=True,
                 )
         except Exception as exc:
@@ -388,7 +388,7 @@ def _render_advances_credits(services, project, billing_svc, report_svc, store_o
             ]
             if related:
                 st.subheader("Related vouchers")
-                st.dataframe(pd.DataFrame(related), use_container_width=True, hide_index=True)
+                st.dataframe(pd.DataFrame(related), width="stretch", hide_index=True)
         except Exception as exc:
             st.caption(str(exc))
 
@@ -455,7 +455,7 @@ def _render_retention(billing_svc, report_svc, project_id: str):
         H.empty_state("No retention entries.")
         return
 
-    st.dataframe(pd.DataFrame(retention_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(retention_rows), width="stretch", hide_index=True)
     for row in retention_rows:
         bal = float(row.get("outstanding_retention") or 0)
         entry_id = row.get("entry_id")
@@ -519,13 +519,13 @@ def _render_other(services, project, billing_svc, report_svc):
             write_offs = report_svc.write_offs(project.id)
             if write_offs:
                 st.subheader("Write-offs")
-                st.dataframe(pd.DataFrame(write_offs), use_container_width=True, hide_index=True)
+                st.dataframe(pd.DataFrame(write_offs), width="stretch", hide_index=True)
         except Exception as exc:
             st.caption(str(exc))
         try:
             transfers = report_svc.transfers(project.id)
             if transfers:
                 st.subheader("Cost transfers")
-                st.dataframe(pd.DataFrame(transfers), use_container_width=True, hide_index=True)
+                st.dataframe(pd.DataFrame(transfers), width="stretch", hide_index=True)
         except Exception as exc:
             st.caption(str(exc))

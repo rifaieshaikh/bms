@@ -50,6 +50,7 @@ from vaybooks.bms.ui.pages.sales.orders import list as sales_orders_mod
 from vaybooks.bms.ui.pages.sales import overview as sales_overview_mod
 from vaybooks.bms.ui.pages.sales import reports as sales_reports_mod
 from vaybooks.bms.ui.pages.inventory.categories import list as inventory_categories
+from vaybooks.bms.ui.pages.inventory.warehouses import list as inventory_warehouses
 from vaybooks.bms.ui.pages.inventory.customer_prices import list as inventory_customer_prices
 from vaybooks.bms.ui.pages.inventory.movements import list as inventory_movements
 from vaybooks.bms.ui.pages.inventory import overview as inventory_overview_mod
@@ -385,6 +386,10 @@ inventory_categories_page = st.Page(
     _page(inventory_categories), title="Categories", icon=":material/category:",
     url_path="inventory-categories",
 )
+inventory_warehouses_page = st.Page(
+    _page(inventory_warehouses), title="Warehouses", icon=":material/warehouse:",
+    url_path="inventory-warehouses",
+)
 inventory_products_page = st.Page(
     _page(inventory_products), title="Products", icon=":material/inventory:",
     url_path="inventory-products",
@@ -572,6 +577,7 @@ navigation.register("project_site_mobile", project_site_mobile_page)
 navigation.register("project_portal", project_portal_page)
 navigation.register("inventory_overview", inventory_overview_page)
 navigation.register("inventory_categories_list", inventory_categories_page)
+navigation.register("inventory_warehouses_list", inventory_warehouses_page)
 navigation.register("inventory_products_list", inventory_products_page)
 navigation.register("inventory_stock_list", inventory_stock_page)
 navigation.register("inventory_stock_ledger_list", inventory_stock_ledger_page)
@@ -638,6 +644,7 @@ page_groups = {
     "Inventory": [
         inventory_overview_page,
         inventory_categories_page,
+        inventory_warehouses_page,
         inventory_products_page,
         inventory_stock_page,
         inventory_stock_ledger_page,

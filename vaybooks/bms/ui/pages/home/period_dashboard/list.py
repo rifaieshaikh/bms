@@ -45,19 +45,19 @@ def _render_period_picker() -> tuple[date, date]:
         st.session_state[PERIOD_WIDGET_KEY] = default
 
     presets = st.columns(5)
-    if presets[0].button("Today", key="period_preset_today", use_container_width=True):
+    if presets[0].button("Today", key="period_preset_today", width="stretch"):
         st.session_state[PERIOD_WIDGET_KEY] = (today, today)
         st.rerun()
-    if presets[1].button("Last 7 days", key="period_preset_7d", use_container_width=True):
+    if presets[1].button("Last 7 days", key="period_preset_7d", width="stretch"):
         st.session_state[PERIOD_WIDGET_KEY] = (today - timedelta(days=6), today)
         st.rerun()
-    if presets[2].button("MTD", key="period_preset_mtd", use_container_width=True):
+    if presets[2].button("MTD", key="period_preset_mtd", width="stretch"):
         st.session_state[PERIOD_WIDGET_KEY] = (today.replace(day=1), today)
         st.rerun()
-    if presets[3].button("Last 30 days", key="period_preset_30d", use_container_width=True):
+    if presets[3].button("Last 30 days", key="period_preset_30d", width="stretch"):
         st.session_state[PERIOD_WIDGET_KEY] = (today - timedelta(days=29), today)
         st.rerun()
-    if presets[4].button("This quarter", key="period_preset_qtr", use_container_width=True):
+    if presets[4].button("This quarter", key="period_preset_qtr", width="stretch"):
         st.session_state[PERIOD_WIDGET_KEY] = (_quarter_start(today), today)
         st.rerun()
 

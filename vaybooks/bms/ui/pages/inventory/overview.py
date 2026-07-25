@@ -52,15 +52,15 @@ def _chart_or_caption(title: str, df: pd.DataFrame, chart_fn, empty_msg: str) ->
 def _render_quick_actions() -> None:
     st.markdown("**Quick actions**")
     cols = st.columns(5)
-    if cols[0].button("Products", use_container_width=True):
+    if cols[0].button("Products", width="stretch"):
         navigation.go_to_list("inventory_products_list")
-    if cols[1].button("Stock on Hand", use_container_width=True):
+    if cols[1].button("Stock on Hand", width="stretch"):
         navigation.go_to_list("inventory_stock_list")
-    if cols[2].button("Stock Ledger", use_container_width=True):
+    if cols[2].button("Stock Ledger", width="stretch"):
         navigation.go_to_list("inventory_stock_ledger_list")
-    if cols[3].button("Movements", use_container_width=True):
+    if cols[3].button("Movements", width="stretch"):
         navigation.go_to_list("inventory_movements_list")
-    if cols[4].button("Reports", use_container_width=True):
+    if cols[4].button("Reports", width="stretch"):
         navigation.go_to_list("inventory_reports")
 
 

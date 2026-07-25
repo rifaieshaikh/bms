@@ -43,6 +43,7 @@ from vaybooks.bms.infrastructure.repositories.inventory.mongo_inventory_reposito
     MongoProductCategoryRepository,
     MongoProductUnitRepository,
     MongoStockMovementRepository,
+    MongoWarehouseRepository,
 )
 from vaybooks.bms.infrastructure.repositories.inventory.mongo_product_rate_history_repository import (
     MongoProductRateHistoryRepository,
@@ -82,6 +83,7 @@ def _inventory_service(db: Database) -> InventoryAppService:
         MongoStockMovementRepository(db),
         MongoProductUnitRepository(db),
         rate_history=rate_history,
+        warehouse_repo=MongoWarehouseRepository(db),
     )
 
 

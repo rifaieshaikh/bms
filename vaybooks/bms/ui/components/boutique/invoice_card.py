@@ -111,14 +111,14 @@ def invoice_card(
                 file_name=f"{invoice.invoice_number}.pdf",
                 mime="application/pdf",
                 key=f"dl_inv_pdf_{invoice.id}",
-                use_container_width=True,
+                width="stretch",
             )
             col_idx += 1
         if edit and action_cols[col_idx].button(
             "Edit",
             key=edit.button_key,
             type="primary",
-            use_container_width=True,
+            width="stretch",
         ):
             if edit.before_edit:
                 edit.before_edit()

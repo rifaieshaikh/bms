@@ -72,7 +72,7 @@ def record_movement_dialog(services: dict) -> None:
 
     cols = st.columns(2)
     do_save = cols[0].button(
-        "Save", type="primary", use_container_width=True
+        "Save", type="primary", width="stretch"
     ) or consume_submit(SUBMIT_MOVEMENT)
     if do_save:
         try:
@@ -90,7 +90,7 @@ def record_movement_dialog(services: dict) -> None:
             st.rerun()
         except Exception as exc:
             st.error(str(exc))
-    if cols[1].button("Cancel", use_container_width=True):
+    if cols[1].button("Cancel", width="stretch"):
         st.session_state.pop(MOVEMENT_DIALOG, None)
         st.rerun()
 

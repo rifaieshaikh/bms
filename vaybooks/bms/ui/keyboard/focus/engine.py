@@ -5,8 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-import streamlit.components.v1 as components
-
+from vaybooks.bms.ui.html_iframe import inject_html
 from vaybooks.bms.ui.keyboard.focus.base import FocusConfig
 
 
@@ -698,57 +697,33 @@ def inject_focus_engine(config: FocusConfig) -> None:
     const onRadio = isFilterRadioTarget(ev.target)
       || isFilterRadioTarget(doc.activeElement);
 
-    // Payable-balance radio: Left/Right handled by filters chain nav.
-    // Do not steal those keys here (would jump back to Alternate phone).
-    if (linear && onRadio && (isLeft || isRight)) {{
-      return;
-    }}
-    if (linear && onRadio && isEnter
-        && !(ev.ctrlKey || ev.metaKey || ev.altKey || ev.shiftKey)) {{
-      // Chain nav owns Enter→select; skip Apply click.
-      return;
-    }}
-    if (linear && onRadio && isDown
-        && !(ev.ctrlKey || ev.metaKey || ev.altKey || ev.shiftKey)) {{
-      const pairRadio = linearButtonPair(c, r);
-      if (pairRadio.applyKey) {{
-        ev.preventDefault();
-        ev.stopPropagation();
-        try {{ ev.stopImmediatePropagation(); }} catch (e) {{}}
-        setTimeout(function () {{
-          moveToFilterAction(pairRadio.applyKey, 'Apply');
-        }}, 0);
-        return;
-      }}
-    }}
-    if (linear && onRadio && isUp
-        && !(ev.ctrlKey || ev.metaKey || ev.altKey || ev.shiftKey)) {{
-      // Fall through to linear retreat (previous field / Alternate phone).
+    // Filters/Sort dialogs: Tab never blocked. Left/Right on radio stay native.
+    // Up/Down field nav + two-step Enter are owned by inject_filters_chain_nav
+    // (capture + stopImmediatePropagation). Skip linear handling for those keys
+    // when the chain-nav listener is installed.
+    const isSpace = ev.key === ' ' || ev.key === 'Spacebar' || ev.code === 'Space';
+    if (linear && win.__vayFiltersChainNav) {{
+      if (isTab) return;
+      if (onRadio && (isLeft || isRight || isSpace)) return;
+      if (isUp || isDown || isEnter) return;
     }}
 
-    // From last non-radio filter field, Down → Apply, Left → Clear all.
-    if (linear && key && (isDown || isLeft) && !onRadio &&
-        !(ev.ctrlKey || ev.metaKey || ev.altKey || ev.shiftKey)) {{
-      const pairEarly = linearButtonPair(c, r);
-      const onLast = !!(
-        pairEarly.lastFieldKey && key === pairEarly.lastFieldKey
-      );
-      if (onLast && pairEarly.applyKey && pairEarly.clearKey) {{
-        ev.preventDefault();
-        ev.stopPropagation();
-        try {{ ev.stopImmediatePropagation(); }} catch (e) {{}}
-        const target = isDown ? pairEarly.applyKey : pairEarly.clearKey;
-        const label = isDown ? 'Apply' : 'Clear all';
-        setTimeout(function () {{ moveToFilterAction(target, label); }}, 0);
-        return;
-      }}
+    // Filter radios without chain nav: do not steal Left/Right/Space.
+    if (linear && onRadio
+        && (isLeft || isRight || isSpace)
+        && !(ev.ctrlKey || ev.metaKey || ev.altKey || ev.shiftKey)) {{
+      return;
+    }}
+
+    // Filters / sort (linear_apply): never block Tab or Shift+Tab.
+    if (linear && isTab) {{
+      return;
     }}
 
     if (linear) {{
-      if (!isEnter && !isRight && !isLeft && !isUp && !isDown && !isTab) return;
-      if ((isEnter || isRight || isLeft || isUp || isDown) &&
-          (ev.ctrlKey || ev.metaKey || ev.altKey || ev.shiftKey)) return;
-      if (isTab && (ev.ctrlKey || ev.metaKey || ev.altKey)) return;
+      // Tab already returned above. Arrows already returned above.
+      if (!isEnter) return;
+      if (ev.ctrlKey || ev.metaKey || ev.altKey || ev.shiftKey) return;
     }} else {{
       if (!isEnter && !isRight && !isLeft && !isUp && !isDown && !isDelete && !isTab) return;
       if (ev.ctrlKey || ev.metaKey || ev.altKey || (ev.shiftKey && !isTab)) return;
@@ -757,20 +732,8 @@ def inject_focus_engine(config: FocusConfig) -> None:
     const tag = (ev.target && ev.target.tagName) ? ev.target.tagName.toLowerCase() : '';
     if (tag === 'textarea') return;
 
-    // Open select lists normally keep arrows — except leaving the last filter
-    // field for Clear / Apply (handled above).
-    const pairPeek = linear ? linearButtonPair(c, r) : null;
-    const onLastFieldPeek = !!(
-      pairPeek
-      && key
-      && pairPeek.lastFieldKey
-      && key === pairPeek.lastFieldKey
-    );
-    const exitLastField = !!(
-      onLastFieldPeek && pairPeek.clearKey && pairPeek.applyKey
-      && (isDown || isLeft)
-    );
-    if (listOpen(ev.target) && !exitLastField) return;
+    // Open select lists normally keep arrows.
+    if (listOpen(ev.target) && !linear) return;
 
     if (!linear && (nodeInsideDataEditor(ev.target, c) ||
         nodeInsideDataEditor(doc.activeElement, c))) {{
@@ -820,10 +783,8 @@ def inject_focus_engine(config: FocusConfig) -> None:
       const pair = linearButtonPair(c, r);
       const applyKey = pair.applyKey;
       const clearKey = pair.clearKey;
-      const lastFieldIdx = pair.lastFieldIdx;
       const onClear = !!(clearKey && key === clearKey);
       const onApply = !!(applyKey && key === applyKey);
-      const onLastField = !!(pair.lastFieldKey && key === pair.lastFieldKey);
 
       if (isEnter) {{
         const t = (ev.target && ev.target.tagName)
@@ -831,9 +792,7 @@ def inject_focus_engine(config: FocusConfig) -> None:
         const inputType = (ev.target && ev.target.type)
           ? String(ev.target.type).toLowerCase() : '';
         if (inputType === 'radio' || onRadio) {{
-          ev.preventDefault();
-          ev.stopPropagation();
-          selectFilterRadioOption(doc.activeElement || ev.target);
+          // Chain nav owns Enter→select; do not apply filters.
           return;
         }}
         const textish = (
@@ -852,75 +811,10 @@ def inject_focus_engine(config: FocusConfig) -> None:
               && ev.target.getAttribute('contenteditable') === 'true')
         );
         if (textish) return;
-
-        ev.preventDefault();
-        ev.stopPropagation();
-        setTimeout(function () {{
-          if (applyKey) clickKey(applyKey);
-        }}, 0);
+        // Native button activation for Apply / Clear — do not force Apply
+        // from unrelated widgets (Segment select, etc.).
+        if (onApply || onClear) return;
         return;
-      }}
-
-      // Radio: Left/Right change options; Down/Up handled above / via chain.
-      if (onRadio && (isLeft || isRight)) {{
-        return;
-      }}
-      if (onRadio && isDown && applyKey) {{
-        ev.preventDefault();
-        ev.stopPropagation();
-        setTimeout(function () {{ moveToFilterAction(applyKey, 'Apply'); }}, 0);
-        return;
-      }}
-
-      // Never retreat "back" from the last non-radio filter field on Left/Down.
-      if (onLastField && !onRadio && (isDown || isLeft)) {{
-        ev.preventDefault();
-        ev.stopPropagation();
-        try {{ ev.stopImmediatePropagation(); }} catch (e) {{}}
-        if (clearKey && applyKey) {{
-          const target = isDown ? applyKey : clearKey;
-          const label = isDown ? 'Apply' : 'Clear all';
-          setTimeout(function () {{ moveToFilterAction(target, label); }}, 0);
-        }}
-        return;
-      }}
-
-      // Left/Right move between Clear and Apply; Up returns to last field.
-      if (clearKey && applyKey) {{
-        if ((onClear || onApply) && (isLeft || isRight || isUp || isDown)) {{
-          ev.preventDefault();
-          ev.stopPropagation();
-          try {{ ev.stopImmediatePropagation(); }} catch (e) {{}}
-          let target = '';
-          let label = '';
-          if (isUp && pair.lastFieldKey) {{
-            target = pair.lastFieldKey;
-          }} else if (isLeft && onApply) {{
-            target = clearKey;
-            label = 'Clear all';
-          }} else if (isRight && onClear) {{
-            target = applyKey;
-            label = 'Apply';
-          }} else if (isDown && onClear) {{
-            target = applyKey;
-            label = 'Apply';
-          }}
-          if (target) {{
-            setTimeout(function () {{ focusAction(target, label); }}, 0);
-          }}
-          return;
-        }}
-      }}
-
-      const forward = isDown || isRight || (isTab && !ev.shiftKey);
-      const backward = isUp || isLeft || (isTab && ev.shiftKey);
-      if (!forward && !backward) return;
-      ev.preventDefault();
-      ev.stopPropagation();
-      if (forward) {{
-        setTimeout(function () {{ advanceFrom(key, c); }}, 0);
-      }} else {{
-        setTimeout(function () {{ retreatFrom(key, c); }}, 0);
       }}
       return;
     }}
@@ -1076,7 +970,7 @@ def inject_focus_engine(config: FocusConfig) -> None:
     focus_to = payload["focusTo"]
     component_key = config.component_key
     try:
-        components.html(html, height=1, width=1)
+        inject_html(html, height=1, width=1)
     except Exception:
         try:
             from streamlit_js_eval import streamlit_js_eval

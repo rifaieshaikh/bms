@@ -43,7 +43,7 @@ def _render_history_tab(
             }
         )
     if rows:
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
     else:
         st.caption(f"No {title.lower()} recorded.")
 
@@ -163,12 +163,12 @@ def render(services: dict):
     if product.specifications:
         st.subheader("Specifications")
         spec_rows = [{"Name": k, "Value": v} for k, v in product.specifications.items()]
-        st.dataframe(pd.DataFrame(spec_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(spec_rows), width="stretch", hide_index=True)
 
     if product.custom_fields:
         st.subheader("Custom fields")
         cf_rows = [{"Field": k, "Value": v} for k, v in product.custom_fields.items()]
-        st.dataframe(pd.DataFrame(cf_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(cf_rows), width="stretch", hide_index=True)
 
     st.subheader("Purchase price history")
     st.caption(
@@ -210,7 +210,7 @@ def render(services: dict):
                     "Bill": row.vendor_bill_number or "—",
                 }
             )
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
     st.subheader("Stock ledger")
     ledger = inventory.get_product_ledger(product_id)
@@ -224,11 +224,11 @@ def render(services: dict):
             {
                 "Date": _fmt_date(entry.get("movement_date")),
                 "Type": entry.get("movement_type", ""),
-                "Qty In": entry.get("qty_in") or "",
-                "Qty Out": entry.get("qty_out") or "",
-                "Balance": entry.get("balance", ""),
+                "Qty In": entry.get("qty_in") or None,
+                "Qty Out": entry.get("qty_out") or None,
+                "Balance": entry.get("balance"),
                 "Reference": entry.get("reference_id") or entry.get("reference_type", ""),
                 "Notes": entry.get("notes", ""),
             }
         )
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)

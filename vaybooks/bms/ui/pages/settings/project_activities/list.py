@@ -189,7 +189,7 @@ def _activity_card(activity, index: int):
         if st.button(
             "Edit",
             key=f"edit_prj_act_btn_{index}_{activity.id}",
-            use_container_width=True,
+            width="stretch",
         ):
             st.session_state[PENDING_EDIT_PROJECT_ACTIVITY] = activity.id
 

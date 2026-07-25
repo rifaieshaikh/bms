@@ -79,11 +79,38 @@ def _committed_filters(schema: ListSchema) -> dict:
     return stored
 
 
-def _committed_sort(schema: ListSchema) -> dict:
+def _committed_sort(schema: ListSchema) -> list[dict]:
     key = sort_key(schema.entity_key)
-    if key not in st.session_state:
-        st.session_state[key] = F.default_sort(schema)
-    return st.session_state[key]
+    stored = st.session_state.get(key)
+    normalized = F.normalize_sort(schema, stored)
+    st.session_state[key] = normalized
+    return normalized
+
+
+def _sort_level_count_key(entity: str) -> str:
+    return f"{entity}_sort_level_count"
+
+
+def _sort_pending_key(entity: str) -> str:
+    return f"{entity}_sort_pending_levels"
+
+
+def _sort_field_wkey(entity: str, index: int) -> str:
+    return f"{entity}_sort_field_{index}"
+
+
+def _sort_dir_wkey(entity: str, index: int) -> str:
+    return f"{entity}_sort_dir_{index}"
+
+
+def _clear_sort_widgets(entity: str) -> None:
+    st.session_state.pop(f"{entity}_sort_field", None)
+    st.session_state.pop(f"{entity}_sort_dir", None)
+    st.session_state.pop(_sort_level_count_key(entity), None)
+    st.session_state.pop(_sort_pending_key(entity), None)
+    for i in range(F.MAX_SORT_LEVELS):
+        st.session_state.pop(_sort_field_wkey(entity, i), None)
+        st.session_state.pop(_sort_dir_wkey(entity, i), None)
 
 
 def _widget_key(entity: str, field_key: str) -> str:
@@ -122,36 +149,13 @@ def _count_active(schema: ListSchema, filters: dict) -> int:
     )
 
 
-def _is_compact_select_radio(fld, options: list) -> bool:
-    """Small SELECT lists use radio (not Baseweb combobox) for arrow nav."""
-    return (
-        fld.type == F.SELECT
-        and len(options) <= 4
-        and not fld.options_loader
-    )
-
-
-def _render_radio_select(fld, wkey: str, values: list, labels: dict) -> None:
-    st.radio(
-        fld.label,
-        values,
-        key=wkey,
-        format_func=lambda v, m=labels: m.get(v, str(v)),
-        horizontal=True,
-        help=fld.help or None,
-    )
-
-
-def _fill_deferred_radios(deferred: list) -> None:
-    """Mount radios into form placeholders from *outside* the form.
-
-    Streamlit batches widgets inside ``st.form`` until submit, so Enter/click
-    would not update Payable balance visually. Rendering into an ``st.empty``
-    reserved inside the form, from outside, keeps layout and commits state.
-    """
-    for slot, fld, wkey, values, labels in deferred:
-        with slot:
-            _render_radio_select(fld, wkey, values, labels)
+def _as_list(value) -> list:
+    """Normalize a stored filter value (scalar or list) to a list."""
+    if value is None or value == "":
+        return []
+    if isinstance(value, (list, tuple, set)):
+        return [v for v in value if v is not None]
+    return [value]
 
 
 def _render_filter_widgets(
@@ -160,18 +164,15 @@ def _render_filter_widgets(
     services,
     *,
     include_date_presets: bool = True,
-    defer_radios: bool = False,
-) -> tuple[list[str], list]:
-    """Render filter fields; return (focus-chain keys, deferred radio specs).
+) -> list[str]:
+    """Render filter fields and return the focus-chain widget keys.
 
-    When ``include_date_presets`` is False (inside ``st.form``), MTD / Last 30d
+    Filters use only dropdowns, text boxes and date pickers. When
+    ``include_date_presets`` is False (inside ``st.form``), MTD / Last 30d
     buttons are omitted — Streamlit disallows ordinary buttons inside forms.
-    When ``defer_radios`` is True, compact SELECT radios reserve an ``st.empty``
-    slot and are returned for mounting outside the form.
     """
     entity = schema.entity_key
     chain: list[str] = []
-    deferred: list = []
     for fld in schema.filter_fields:
         wkey = _widget_key(entity, fld.key)
         if fld.type in (F.EXACT, F.REGEX):
@@ -186,44 +187,44 @@ def _render_filter_widgets(
                 help=fld.help or None,
             )
             chain.append(wkey)
-        elif fld.type in (F.SELECT, F.ENTITY_SELECT):
+        elif fld.type in (F.SELECT, F.ENTITY_SELECT, F.MULTISELECT):
             options = _resolve_options(fld, services)
-            values = [None] + [v for v, _ in options]
+            values = [v for v, _ in options]
+            labels = {v: lbl for v, lbl in options}
             all_label = getattr(fld, "all_label", None) or F.ALL_LABEL
-            labels = {None: all_label, **{v: lbl for v, lbl in options}}
-            _seed(wkey, committed.get(fld.key))
-            if st.session_state.get(wkey) not in values:
-                st.session_state[wkey] = None
-            # Small SELECT lists use radio so ArrowDown is not trapped inside a
-            # Baseweb combobox (which steals focus and "goes back" on the last
-            # filter field). ENTITY_SELECT stays a searchable selectbox.
-            if _is_compact_select_radio(fld, options):
-                if defer_radios:
-                    deferred.append((st.empty(), fld, wkey, values, labels))
+            if F.is_multi_select(fld):
+                current = [v for v in _as_list(committed.get(fld.key)) if v in values]
+                _seed(wkey, current)
+                # Drop stale widget state (scalar from a previous single select,
+                # or options that no longer exist) before instantiating.
+                stored = st.session_state.get(wkey)
+                if not isinstance(stored, list):
+                    st.session_state[wkey] = current
                 else:
-                    _render_radio_select(fld, wkey, values, labels)
-            else:
-                st.selectbox(
+                    valid = [v for v in stored if v in values]
+                    if valid != stored:
+                        st.session_state[wkey] = valid
+                st.multiselect(
                     fld.label,
                     values,
                     key=wkey,
                     format_func=lambda v, m=labels: m.get(v, str(v)),
+                    placeholder=all_label,
                     help=fld.help or None,
                 )
-            chain.append(wkey)
-        elif fld.type == F.MULTISELECT:
-            options = _resolve_options(fld, services)
-            values = [v for v, _ in options]
-            labels = {v: lbl for v, lbl in options}
-            current = [v for v in (committed.get(fld.key) or []) if v in values]
-            _seed(wkey, current)
-            st.multiselect(
-                fld.label,
-                values,
-                key=wkey,
-                format_func=lambda v, m=labels: m.get(v, str(v)),
-                help=fld.help or None,
-            )
+            else:
+                single_values = [None] + values
+                single_labels = {None: all_label, **labels}
+                _seed(wkey, committed.get(fld.key))
+                if st.session_state.get(wkey) not in single_values:
+                    st.session_state[wkey] = None
+                st.selectbox(
+                    fld.label,
+                    single_values,
+                    key=wkey,
+                    format_func=lambda v, m=single_labels: m.get(v, str(v)),
+                    help=fld.help or None,
+                )
             chain.append(wkey)
         elif fld.type == F.DATE_RANGE:
             # Presets must run before date_input: Streamlit forbids writing a
@@ -260,7 +261,7 @@ def _render_filter_widgets(
             _seed(wkey, bool(committed.get(fld.key)))
             st.checkbox(fld.label, key=wkey, help=fld.help or None)
             chain.append(wkey)
-    return chain, deferred
+    return chain
 
 
 def _render_date_range_preset_buttons(
@@ -281,7 +282,7 @@ def _render_date_range_preset_buttons(
     chain: list[str] = []
     for col, (name, rang) in zip(cols, presets):
         pkey = f"{wkey}_{_preset_suffix(name)}"
-        if col.button(name, key=pkey, use_container_width=True):
+        if col.button(name, key=pkey, width="stretch"):
             st.session_state[wkey] = rang
             if entity and field_key:
                 fkey = filters_key(entity)
@@ -322,8 +323,8 @@ def _collect_filter_values(schema: ListSchema) -> dict:
         elif fld.type == F.DATE_RANGE:
             normalized = _normalize_date_range(value)
             result[fld.key] = normalized
-        elif fld.type == F.MULTISELECT:
-            result[fld.key] = list(value or [])
+        elif F.is_multi_select(fld):
+            result[fld.key] = _as_list(value)
         else:
             result[fld.key] = value
     return result
@@ -337,11 +338,6 @@ def _clear_widgets(schema: ListSchema) -> None:
         if fld.type == F.DATE_RANGE:
             for name, _ in _date_range_presets():
                 st.session_state.pop(f"{wkey}_{_preset_suffix(name)}", None)
-
-
-def _clear_sort_widgets(entity: str) -> None:
-    st.session_state.pop(f"{entity}_sort_field", None)
-    st.session_state.pop(f"{entity}_sort_dir", None)
 
 
 def _close_filters_dialog(entity: str) -> None:
@@ -421,38 +417,35 @@ def _filters_dialog(schema: ListSchema, services) -> None:
     last_field_key = None
     chain: list[str] = []
 
-    # enter_to_submit=False so Enter on Payable balance selects the radio
-    # instead of submitting the filter form. Compact radios are deferred out of
-    # the form (via st.empty slots) so selection commits and displays immediately.
+    # enter_to_submit=False so Enter inside an open dropdown picks an option
+    # instead of submitting the form; chain nav applies on Enter otherwise.
     with st.form(
         f"{entity}_filters_form",
         border=False,
         enter_to_submit=False,
     ):
-        field_chain, deferred_radios = _render_filter_widgets(
+        field_chain = _render_filter_widgets(
             schema,
             committed,
             services,
             include_date_presets=False,
-            defer_radios=True,
         )
         last_field_key = field_chain[-1] if field_chain else None
-        # Apply comes immediately after the last field so Down advances to Apply
-        # (not Clear). Clear stays reachable via Left from the last field.
-        chain = [*preset_chain, *field_chain, apply_key, clear_key]
+        # Native Tab order follows DOM: fields → Clear all → Apply.
+        # Clear is column 0 (left), Apply is column 1 (right).
+        chain = [*preset_chain, *field_chain, clear_key, apply_key]
         btns = st.columns(2)
+        clear_clicked = btns[0].form_submit_button(
+            "Clear all",
+            width="stretch",
+            key=clear_key,
+        )
         apply_clicked = btns[1].form_submit_button(
             "Apply",
             type="primary",
-            use_container_width=True,
+            width="stretch",
             key=apply_key,
         )
-        clear_clicked = btns[0].form_submit_button(
-            "Clear all",
-            use_container_width=True,
-            key=clear_key,
-        )
-    _fill_deferred_radios(deferred_radios)
 
     if consume_action("list.filters.apply"):
         apply_clicked = True
@@ -469,12 +462,12 @@ def _filters_dialog(schema: ListSchema, services) -> None:
         _close_filters_dialog(entity)
         st.rerun()
 
-    # Dedicated arrow nav first (wins capture): Alternate → radio → Apply/Clear.
+    # Dedicated arrow nav first (wins capture): Up/Down between fields, Enter
+    # applies unless a dropdown menu is open (then it picks the option).
     inject_filters_chain_nav(
         chain=chain,
         apply_key=apply_key,
         clear_key=clear_key,
-        radio_key=last_field_key,
     )
     _inject_linear_focus(
         chain,
@@ -487,6 +480,31 @@ def _filters_dialog(schema: ListSchema, services) -> None:
     )
 
 
+def _apply_pending_sort_levels(entity: str) -> None:
+    """Apply deferred sort-level edits before any sort widgets instantiate.
+
+    Streamlit forbids writing a widget key after that widget exists in the
+    current run. Remove/rebuild therefore stashes the new levels and we apply
+    them here on the next run.
+    """
+    pending_key = _sort_pending_key(entity)
+    pending = st.session_state.pop(pending_key, None)
+    if not isinstance(pending, list):
+        return
+    count_key = _sort_level_count_key(entity)
+    st.session_state[count_key] = max(1, min(len(pending), F.MAX_SORT_LEVELS))
+    for j, crit in enumerate(pending[: F.MAX_SORT_LEVELS]):
+        if not isinstance(crit, dict):
+            continue
+        st.session_state[_sort_field_wkey(entity, j)] = crit.get("key")
+        st.session_state[_sort_dir_wkey(entity, j)] = (
+            "Descending" if crit.get("desc", True) else "Ascending"
+        )
+    for j in range(len(pending), F.MAX_SORT_LEVELS):
+        st.session_state.pop(_sort_field_wkey(entity, j), None)
+        st.session_state.pop(_sort_dir_wkey(entity, j), None)
+
+
 @st.dialog("Sort", on_dismiss=_on_sort_dismiss)
 def _sort_dialog(schema: ListSchema) -> None:
     from vaybooks.bms.ui.keyboard.context import set_sort_ui_open
@@ -496,46 +514,155 @@ def _sort_dialog(schema: ListSchema) -> None:
     register_armed_dialog(flag)
     set_sort_ui_open(entity)
 
+    # Must run before any selectbox/radio with these keys is created.
+    _apply_pending_sort_levels(entity)
+
     sort_state = _committed_sort(schema)
     st.markdown("**Sort by**")
     sort_keys = [s.key for s in schema.sort_options]
     labels = {s.key: s.label for s in schema.sort_options}
-    cur_key = sort_state.get("key", schema.default_sort)
-    if cur_key not in sort_keys:
-        cur_key = schema.default_sort
-    field_wkey = f"{entity}_sort_field"
-    dir_wkey = f"{entity}_sort_dir"
-    apply_key = f"{entity}_apply_sort"
-    _seed(field_wkey, cur_key)
-    _seed(dir_wkey, "Descending" if sort_state.get("desc", True) else "Ascending")
-    # Migrate legacy direction labels from older sessions.
+    count_key = _sort_level_count_key(entity)
+    if count_key not in st.session_state:
+        st.session_state[count_key] = max(1, min(len(sort_state), F.MAX_SORT_LEVELS))
+    n_levels = int(st.session_state[count_key])
+    n_levels = max(1, min(n_levels, F.MAX_SORT_LEVELS, len(sort_keys) or 1))
+
     legacy_dir = {
         "Newest first": "Descending",
         "Oldest first": "Ascending",
     }
-    if st.session_state.get(dir_wkey) in legacy_dir:
-        st.session_state[dir_wkey] = legacy_dir[st.session_state[dir_wkey]]
-    st.selectbox(
-        "Field",
-        sort_keys,
-        key=field_wkey,
-        format_func=lambda k, m=labels: m.get(k, k),
+    # Seed widgets from committed multi-sort (or legacy single dict via normalize).
+    for i in range(n_levels):
+        crit = sort_state[i] if i < len(sort_state) else sort_state[0]
+        fk = _sort_field_wkey(entity, i)
+        dk = _sort_dir_wkey(entity, i)
+        seed_key = crit.get("key", schema.default_sort)
+        if seed_key not in sort_keys:
+            seed_key = schema.default_sort
+        _seed(fk, seed_key)
+        if st.session_state.get(fk) not in sort_keys:
+            st.session_state[fk] = seed_key
+        _seed(dk, "Descending" if crit.get("desc", True) else "Ascending")
+        if st.session_state.get(dk) in legacy_dir:
+            st.session_state[dk] = legacy_dir[st.session_state[dk]]
+
+    chain: list[str] = []
+    radio_keys: list[str] = []
+    used_fields: list[str] = []
+    for i in range(n_levels):
+        fk = _sort_field_wkey(entity, i)
+        dk = _sort_dir_wkey(entity, i)
+        # Exclude fields already chosen in earlier levels.
+        available = [k for k in sort_keys if k not in used_fields or k == st.session_state.get(fk)]
+        if not available:
+            available = list(sort_keys)
+        if st.session_state.get(fk) not in available:
+            st.session_state[fk] = available[0]
+        cols = st.columns([4, 3, 1] if i > 0 else [4, 4])
+        with cols[0]:
+            st.selectbox(
+                f"Field {i + 1}" if n_levels > 1 else "Field",
+                available,
+                key=fk,
+                format_func=lambda k, m=labels: m.get(k, k),
+            )
+        with cols[1]:
+            st.radio(
+                f"Direction {i + 1}" if n_levels > 1 else "Direction",
+                ["Ascending", "Descending"],
+                key=dk,
+                horizontal=True,
+            )
+        if i > 0:
+            with cols[2]:
+                if st.button("✕", key=f"{entity}_sort_remove_{i}", help="Remove level"):
+                    # Compact levels above i down — defer widget-key writes to
+                    # the next run (widgets for lower indexes already exist).
+                    remaining = []
+                    for j in range(n_levels):
+                        if j == i:
+                            continue
+                        remaining.append(
+                            {
+                                "key": st.session_state.get(_sort_field_wkey(entity, j)),
+                                "desc": st.session_state.get(_sort_dir_wkey(entity, j))
+                                == "Descending",
+                            }
+                        )
+                    st.session_state[_sort_pending_key(entity)] = remaining
+                    st.rerun()
+        used_fields.append(st.session_state.get(fk))
+        chain.extend([fk, dk])
+        radio_keys.append(dk)
+
+    can_add = (
+        n_levels < F.MAX_SORT_LEVELS
+        and n_levels < len(sort_keys)
+        and any(k not in used_fields for k in sort_keys)
     )
-    st.radio("Direction", ["Ascending", "Descending"], key=dir_wkey)
-    if st.button(
-        "Apply sort", type="primary", use_container_width=True, key=apply_key
-    ):
-        st.session_state[sort_key(entity)] = {
-            "key": st.session_state[field_wkey],
-            "desc": st.session_state[dir_wkey] == "Descending",
-        }
+    if can_add:
+        if st.button("Add sort level", key=f"{entity}_sort_add_level"):
+            # New level keys are not instantiated yet, but still defer via
+            # pending so seeding stays consistent with remove.
+            remaining = []
+            for j in range(n_levels):
+                remaining.append(
+                    {
+                        "key": st.session_state.get(_sort_field_wkey(entity, j)),
+                        "desc": st.session_state.get(_sort_dir_wkey(entity, j))
+                        == "Descending",
+                    }
+                )
+            unused = [k for k in sort_keys if k not in used_fields]
+            nxt = unused[0] if unused else sort_keys[0]
+            remaining.append({"key": nxt, "desc": True})
+            st.session_state[_sort_pending_key(entity)] = remaining
+            st.rerun()
+
+    apply_key = f"{entity}_apply_sort"
+    clear_key = f"{entity}_clear_sort"
+    btns = st.columns(2)
+    clear_clicked = btns[0].button(
+        "Clear sort", width="stretch", key=clear_key
+    )
+    apply_clicked = btns[1].button(
+        "Apply sort", type="primary", width="stretch", key=apply_key
+    )
+    chain.extend([clear_key, apply_key])
+
+    if apply_clicked:
+        rows = []
+        for i in range(int(st.session_state.get(count_key, 1))):
+            rows.append(
+                {
+                    "key": st.session_state.get(_sort_field_wkey(entity, i)),
+                    "desc": st.session_state.get(_sort_dir_wkey(entity, i))
+                    == "Descending",
+                }
+            )
+        st.session_state[sort_key(entity)] = F.normalize_sort(schema, rows)
+        _close_sort_dialog(entity)
+        st.rerun()
+    if clear_clicked:
+        st.session_state[sort_key(entity)] = F.default_sort(schema)
+        _clear_sort_widgets(entity)
+        st.session_state.pop(_sort_pending_key(entity), None)
         _close_sort_dialog(entity)
         st.rerun()
 
+    inject_filters_chain_nav(
+        chain=chain,
+        apply_key=apply_key,
+        clear_key=clear_key,
+        radio_keys=radio_keys,
+        radio_key=radio_keys[-1] if radio_keys else None,
+    )
     _inject_linear_focus(
-        [field_wkey, dir_wkey, apply_key],
+        chain,
         apply_key,
-        restore_key=field_wkey,
+        clear_key=clear_key,
+        last_field_key=radio_keys[-1] if radio_keys else None,
+        restore_key=_sort_field_wkey(entity, 0),
         component_key=f"focus_sort_{entity}",
         manager_id=f"sort_{entity}",
     )
@@ -556,7 +683,7 @@ def _render_chips(schema: ListSchema, committed: dict, services) -> None:
             if st.button(
                 f"✕ {label}",
                 key=f"{schema.entity_key}_chip_{fld.key}",
-                use_container_width=True,
+                width="stretch",
             ):
                 default = F.default_filters(schema)[fld.key]
                 committed[fld.key] = default
@@ -567,11 +694,11 @@ def _render_chips(schema: ListSchema, committed: dict, services) -> None:
 def _chip_label(fld: F.FilterField, value, services) -> str:
     if fld.type == F.DATE_RANGE and isinstance(value, (list, tuple)):
         return f"{fld.label}: {value[0]:%d %b} – {value[1]:%d %b}"
-    if fld.type in (F.SELECT, F.ENTITY_SELECT):
+    if fld.type in (F.SELECT, F.ENTITY_SELECT, F.MULTISELECT):
         labels = {v: lbl for v, lbl in _resolve_options(fld, services)}
-        return f"{fld.label}: {labels.get(value, value)}"
-    if fld.type == F.MULTISELECT:
-        return f"{fld.label}: {', '.join(str(v) for v in value)}"
+        chosen = _as_list(value)
+        text = ", ".join(str(labels.get(v, v)) for v in chosen)
+        return f"{fld.label}: {text}"
     if fld.type == F.CHECKBOX:
         return fld.label
     if fld.type == F.NUMBER_MIN:
@@ -656,7 +783,7 @@ def render_filter_sort_bar(
         )
         if st.button(
             flabel,
-            use_container_width=True,
+            width="stretch",
             help=f"{filter_help} · clear {clear_filters_help}",
             key=f"{entity}_filters_open_btn",
         ):
@@ -666,7 +793,7 @@ def render_filter_sort_bar(
     with mid_b:
         if st.button(
             ":material/sort:",
-            use_container_width=True,
+            width="stretch",
             help=f"{sort_help} · clear {clear_sort_help}",
             key=f"{entity}_sort_open_btn",
         ):
@@ -679,7 +806,7 @@ def render_filter_sort_bar(
             primary_clicked = st.button(
                 primary_label,
                 type="primary",
-                use_container_width=True,
+                width="stretch",
                 key=primary_key or f"{entity}_primary",
                 help=primary_help,
             )

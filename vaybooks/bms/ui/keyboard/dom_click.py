@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import streamlit.components.v1 as components
+from vaybooks.bms.ui.html_iframe import inject_html
 
 
 def click_popover_by_key(widget_key: str) -> None:
@@ -48,7 +48,7 @@ def click_popover_by_key(widget_key: str) -> None:
 </body></html>
 """
     try:
-        components.html(html, height=0, width=0)
+        inject_html(html, height=1, width=1)
     except Exception:
         try:
             from streamlit_js_eval import streamlit_js_eval

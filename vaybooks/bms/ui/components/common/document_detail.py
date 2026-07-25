@@ -95,7 +95,7 @@ def document_actions(
                     mime=action.get("mime") or "application/pdf",
                     key=f"{suffix}_{key}",
                     type=action.get("type", "secondary"),
-                    use_container_width=True,
+                    width="stretch",
                     disabled=bool(action.get("disabled")),
                 )
             else:
@@ -103,7 +103,7 @@ def document_actions(
                     action["label"],
                     key=f"{suffix}_{key}",
                     type=action.get("type", "secondary"),
-                    use_container_width=True,
+                    width="stretch",
                     disabled=bool(action.get("disabled")),
                 )
             clicked[key] = bool(pressed)
@@ -219,7 +219,7 @@ def line_items_table(
 
     st.dataframe(
         df,
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         column_config=column_config,
         key=f"doc_items_{suffix}",

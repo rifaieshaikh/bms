@@ -54,7 +54,7 @@ def render(services: dict):
         }
         for r in page_trial
     ]
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
     render_page_controls(
         page, total_pages, len(ordered),
         page_key="trial_balance_page", prev_key="trial_balance_prev",

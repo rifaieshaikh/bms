@@ -48,7 +48,7 @@ def _po_card(
         if st.button(
             view_label,
             key=f"po_view_{suffix}_{row.get('id')}",
-            use_container_width=view_full_width,
+            width="stretch" if view_full_width else "content",
         ):
             navigation.go_to_detail("purchase_order_detail", row.get("id"))
 

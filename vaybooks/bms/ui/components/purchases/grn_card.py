@@ -24,6 +24,7 @@ def _grn_row(grn) -> dict:
         "po_number": grn.po_number,
         "vendor_name": grn.vendor_name,
         "vendor_id": grn.vendor_id,
+        "warehouse_name": getattr(grn, "warehouse_name", "") or "",
         "receipt_date": grn.receipt_date,
         "status": grn.status.value if hasattr(grn.status, "value") else str(grn.status),
         "total_amount": round(total, 2),
@@ -36,9 +37,11 @@ def _grn_card(row: dict, suffix: str) -> None:
         st.caption(row.get("vendor_name") or "Vendor")
         if row.get("po_number"):
             st.caption(f"PO {row.get('po_number')}")
+        if row.get("warehouse_name"):
+            st.caption(f"Warehouse: {row.get('warehouse_name')}")
         st.caption(_fmt_date(row.get("receipt_date")))
         st.markdown(status_badge(row.get("status") or "Draft", compact=True), unsafe_allow_html=True)
-        if st.button("View", key=f"grn_view_{suffix}_{row.get('id')}", use_container_width=True):
+        if st.button("View", key=f"grn_view_{suffix}_{row.get('id')}", width="stretch"):
             navigation.go_to_detail("grn_detail", row.get("id"))
 
 

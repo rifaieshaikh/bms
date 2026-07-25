@@ -48,7 +48,7 @@ def render_migration_wizard(services: dict, entity_type: ImportEntityType) -> No
             file_name=f"vaybooks_{entity_type.value}_template.csv",
             mime="text/csv",
             key=_sk(entity_type, "dl_template"),
-            use_container_width=True,
+            width="stretch",
         )
 
     st.divider()
@@ -86,7 +86,7 @@ def render_migration_wizard(services: dict, entity_type: ImportEntityType) -> No
 
     st.success(f"Loaded {len(df)} rows · {len(source_cols)} columns")
     with st.expander("Preview source rows", expanded=False):
-        st.dataframe(df.head(20), use_container_width=True)
+        st.dataframe(df.head(20), width="stretch")
 
     st.divider()
     st.subheader("2. Map columns")
@@ -192,13 +192,13 @@ def render_migration_wizard(services: dict, entity_type: ImportEntityType) -> No
         f"Issues: **{len(preview.issues)}**"
     )
     if preview.sample_rows:
-        st.dataframe(pd.DataFrame(preview.sample_rows), use_container_width=True)
+        st.dataframe(pd.DataFrame(preview.sample_rows), width="stretch")
     if preview.issues:
         st.dataframe(
             pd.DataFrame(
                 [{"row": i.row, "severity": i.severity, "message": i.message} for i in preview.issues]
             ),
-            use_container_width=True,
+            width="stretch",
         )
 
     if not preview.can_import:
@@ -227,7 +227,7 @@ def render_migration_wizard(services: dict, entity_type: ImportEntityType) -> No
             pd.DataFrame(
                 [{"row": i.row, "severity": i.severity, "message": i.message} for i in result.issues]
             ),
-            use_container_width=True,
+            width="stretch",
         )
         st.download_button(
             "Download error report",

@@ -26,11 +26,11 @@ def _bill_lines_from_grn(grn) -> list[dict]:
             "item_type": CatalogItemType.PRODUCT.value,
             "item_id": line.product_id,
             "product_id": line.product_id,
-            "qty": line.qty_received,
+            "qty": line.qty_accepted,
             "rate": line.rate,
         }
         for line in grn.lines
-        if line.product_id and float(line.qty_received or 0) > 0
+        if line.product_id and float(line.qty_accepted or 0) > 0
     ]
 
 
@@ -69,38 +69,46 @@ def render(services: dict) -> None:
         caption_parts=[
             f"Vendor: {grn.vendor_name}",
             f"PO: {grn.po_number}" if grn.po_number else None,
+            f"Warehouse: {grn.warehouse_name}" if grn.warehouse_name else None,
             "Billed" if grn.voucher_id else None,
         ],
         left_facts=[
             ("Receipt date", format_document_date(grn.receipt_date)),
             ("Vendor", grn.vendor_name or "—"),
+            ("Warehouse", grn.warehouse_name or "—"),
         ],
         right_facts=right_facts,
         suffix=f"grn_{grn.id}",
     )
 
-    table_rows = [
-        {
-            "item_name": line.product_name or line.product_id or "—",
-            "product": line.product_name or line.product_id or "—",
-            "qty": line.qty_received,
-            "rate": line.rate,
-            "total": line.line_total,
-            "line_total": line.line_total,
-            "description": f"Unit cost ₹{line.unit_cost:,.2f}"
-            + (
-                f" · landed extra ₹{line.landed_cost_extra:,.2f}"
-                if line.landed_cost_extra
-                else ""
-            ),
-        }
-        for line in grn.lines
-    ]
-    # Put unit cost into name caption via secondary — keep table clean
-    for row, line in zip(table_rows, grn.lines):
-        row["item_name"] = (
-            f"{line.product_name or line.product_id}"
-            f" (unit ₹{line.unit_cost:,.2f})"
+    table_rows = []
+    for line in grn.lines:
+        short = ""
+        desc_parts = [
+            f"Accepted {line.qty_accepted:g}",
+            f"Damaged {line.qty_damaged:g}",
+            f"Rejected {line.qty_rejected:g}",
+            f"Unit ₹{line.unit_cost:,.2f}",
+        ]
+        if line.landed_cost_extra:
+            desc_parts.append(f"Landed extra ₹{line.landed_cost_extra:,.2f}")
+        if line.batch_number:
+            desc_parts.append(f"Batch {line.batch_number}")
+        if line.serial_numbers:
+            desc_parts.append(f"Serials {', '.join(line.serial_numbers)}")
+        table_rows.append(
+            {
+                "item_name": (
+                    f"{line.product_name or line.product_id}"
+                    f" (recv {line.qty_received:g})"
+                ),
+                "product": line.product_name or line.product_id or "—",
+                "qty": line.qty_accepted,
+                "rate": line.rate,
+                "total": line.line_total,
+                "line_total": line.line_total,
+                "description": " · ".join(desc_parts) + short,
+            }
         )
 
     line_items_table(

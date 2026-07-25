@@ -163,20 +163,34 @@ class MongoGoodsReceiptRepository:
             "product_id": line.product_id,
             "product_name": line.product_name,
             "qty_received": line.qty_received,
+            "qty_accepted": line.qty_accepted,
+            "qty_damaged": line.qty_damaged,
+            "qty_rejected": line.qty_rejected,
             "rate": line.rate,
             "landed_cost_extra": line.landed_cost_extra,
             "purchase_order_line_id": line.purchase_order_line_id,
+            "batch_number": line.batch_number,
+            "serial_numbers": list(line.serial_numbers or []),
         }
 
     def _line_from_doc(self, doc: dict) -> GoodsReceiptLine:
+        qty_received = float(doc.get("qty_received") or 0)
+        qty_accepted = doc.get("qty_accepted")
+        if qty_accepted is None:
+            qty_accepted = qty_received
         return GoodsReceiptLine(
             id=doc.get("id", ""),
             product_id=doc.get("product_id", ""),
             product_name=doc.get("product_name", ""),
-            qty_received=float(doc.get("qty_received") or 0),
+            qty_received=qty_received,
+            qty_accepted=float(qty_accepted or 0),
+            qty_damaged=float(doc.get("qty_damaged") or 0),
+            qty_rejected=float(doc.get("qty_rejected") or 0),
             rate=float(doc.get("rate") or 0),
             landed_cost_extra=float(doc.get("landed_cost_extra") or 0),
             purchase_order_line_id=doc.get("purchase_order_line_id", ""),
+            batch_number=str(doc.get("batch_number") or ""),
+            serial_numbers=[str(s) for s in (doc.get("serial_numbers") or []) if s],
         )
 
     def _to_doc(self, grn: GoodsReceipt) -> dict:
@@ -188,6 +202,8 @@ class MongoGoodsReceiptRepository:
             "po_number": grn.po_number,
             "vendor_id": grn.vendor_id,
             "vendor_name": grn.vendor_name,
+            "warehouse_id": grn.warehouse_id,
+            "warehouse_name": grn.warehouse_name,
             "receipt_date": rd.isoformat() if isinstance(rd, date) else rd,
             "status": _enum_value(grn.status),
             "lines": [self._line_to_doc(line) for line in grn.lines],
@@ -211,6 +227,8 @@ class MongoGoodsReceiptRepository:
             po_number=doc.get("po_number", ""),
             vendor_id=doc["vendor_id"],
             vendor_name=doc.get("vendor_name", ""),
+            warehouse_id=str(doc.get("warehouse_id") or ""),
+            warehouse_name=str(doc.get("warehouse_name") or ""),
             receipt_date=rd,
             status=GoodsReceiptStatus(doc.get("status", GoodsReceiptStatus.DRAFT.value)),
             lines=[self._line_from_doc(line) for line in doc.get("lines", [])],

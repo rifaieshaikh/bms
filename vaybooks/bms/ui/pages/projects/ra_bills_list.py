@@ -103,7 +103,7 @@ def render(services: dict) -> None:
             for r in rows
         ]
     )
-    st.dataframe(display, use_container_width=True, hide_index=True)
+    st.dataframe(display, width="stretch", hide_index=True)
 
     if project_id:
         if st.button("Open project workspace", key="prj_ra_open_ws"):

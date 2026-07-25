@@ -280,9 +280,9 @@ def sales_record_dialog(services: dict) -> None:
 
     cols = st.columns(2)
     do_save = cols[0].button(
-        "Save", type="primary", use_container_width=True, key=save_key
+        "Save", type="primary", width="stretch", key=save_key
     ) or consume_submit(SALES_RECORD_SUBMIT_KEY)
-    if cols[1].button("Cancel", use_container_width=True, key=cancel_key):
+    if cols[1].button("Cancel", width="stretch", key=cancel_key):
         _clear_dialog_session()
         st.rerun()
 

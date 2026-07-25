@@ -186,7 +186,7 @@ def _render_item_print(services, order, item, key_prefix):
             mime="application/pdf",
             key=f"item_pdf_{key_prefix}",
             icon=":material/print:",
-            use_container_width=True,
+            width="stretch",
         )
     except Exception as exc:
         st.caption(f"Print unavailable: {exc}")
@@ -218,7 +218,7 @@ def _render_item_edit_inline(services, order, item, key_prefix):
             key=f"edit_etd_{key_prefix}",
         )
         cols[3].markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-        if cols[3].button("Save", key=f"save_item_{key_prefix}", use_container_width=True):
+        if cols[3].button("Save", key=f"save_item_{key_prefix}", width="stretch"):
             try:
                 order_service.update_customization_item(
                     order.id, item.item_id, bill_number, description,
@@ -262,14 +262,14 @@ def _add_activity_dialog(services: dict, order_id: str, item_id: str, flag_key: 
     options = {c.activity_name: c.id for c in available}
     selected_name = st.selectbox("Select activity to add", list(options.keys()))
     cols = st.columns(2)
-    if cols[0].button("Add", type="primary", use_container_width=True):
+    if cols[0].button("Add", type="primary", width="stretch"):
         try:
             order_service.add_activity_to_item(order_id, item_id, options[selected_name])
             st.session_state.pop(flag_key, None)
             st.rerun()
         except Exception as exc:
             st.error(str(exc))
-    if cols[1].button("Cancel", use_container_width=True):
+    if cols[1].button("Cancel", width="stretch"):
         st.session_state.pop(flag_key, None)
         st.rerun()
 
@@ -282,14 +282,14 @@ def _remove_activity_dialog(services: dict, order_id: str, order_activity_id: st
     name = activity.activity_name if activity else "this activity"
     st.warning(f"Are you sure you want to remove **{name}**? This cannot be undone.")
     cols = st.columns(2)
-    if cols[0].button("Yes, Remove", type="primary", use_container_width=True):
+    if cols[0].button("Yes, Remove", type="primary", width="stretch"):
         try:
             order_service.remove_activity_from_item(order_id, order_activity_id)
             st.session_state.pop(flag_key, None)
             st.rerun()
         except Exception as exc:
             st.error(str(exc))
-    if cols[1].button("Cancel", use_container_width=True):
+    if cols[1].button("Cancel", width="stretch"):
         st.session_state.pop(flag_key, None)
         st.rerun()
 
@@ -312,13 +312,13 @@ def _complete_activity_body(services, order, item, activity, key_prefix, flag_ke
         cols = st.columns(2)
         if cols[0].button(
             "Record Task", key=f"cmpl_rectime_{key_prefix}", type="primary",
-            use_container_width=True,
+            width="stretch",
         ):
             st.session_state.pop(flag_key, None)
             st.session_state[f"section_{key_prefix}"] = "Tasks"
             st.rerun()
         if cols[1].button(
-            "Close", key=f"cmpl_notime_close_{key_prefix}", use_container_width=True
+            "Close", key=f"cmpl_notime_close_{key_prefix}", width="stretch"
         ):
             st.session_state.pop(flag_key, None)
             st.rerun()
@@ -334,7 +334,7 @@ def _complete_activity_body(services, order, item, activity, key_prefix, flag_ke
         )
         cols = st.columns(2)
         if cols[0].button(
-            "Mark Completed", key=f"cmpl_done_{key_prefix}", type="primary", use_container_width=True
+            "Mark Completed", key=f"cmpl_done_{key_prefix}", type="primary", width="stretch"
         ):
             try:
                 services["orders"].complete_activity(
@@ -344,7 +344,7 @@ def _complete_activity_body(services, order, item, activity, key_prefix, flag_ke
                 st.rerun()
             except Exception as exc:
                 st.error(str(exc))
-        if cols[1].button("Cancel", key=f"cmpl_cancel_{key_prefix}", use_container_width=True):
+        if cols[1].button("Cancel", key=f"cmpl_cancel_{key_prefix}", width="stretch"):
             st.session_state.pop(flag_key, None)
             st.rerun()
         return
@@ -368,7 +368,7 @@ def _complete_activity_body(services, order, item, activity, key_prefix, flag_ke
 
     cols = st.columns(2)
     if cols[0].button(
-        "Save Expense & Complete", key=f"cmpl_save_{key_prefix}", type="primary", use_container_width=True
+        "Save Expense & Complete", key=f"cmpl_save_{key_prefix}", type="primary", width="stretch"
     ):
         if rate <= 0:
             st.error("Price must be a positive value")
@@ -390,7 +390,7 @@ def _complete_activity_body(services, order, item, activity, key_prefix, flag_ke
                 st.rerun()
             except Exception as exc:
                 st.error(str(exc))
-    if cols[1].button("Cancel", key=f"cmpl_cancel_{key_prefix}", use_container_width=True):
+    if cols[1].button("Cancel", key=f"cmpl_cancel_{key_prefix}", width="stretch"):
         st.session_state.pop(flag_key, None)
         st.rerun()
 
@@ -418,7 +418,7 @@ def _change_status_body(services, order, activity, key_prefix, flag_key):
     )
     new_status = st.selectbox("New status", selectable, key=f"chg_sel_{key_prefix}")
     cols = st.columns(2)
-    if cols[0].button("Update Status", key=f"chg_save_{key_prefix}", type="primary", use_container_width=True):
+    if cols[0].button("Update Status", key=f"chg_save_{key_prefix}", type="primary", width="stretch"):
         try:
             services["orders"].update_activity_status(
                 order.id, activity.order_activity_id, new_status
@@ -427,7 +427,7 @@ def _change_status_body(services, order, activity, key_prefix, flag_key):
             st.rerun()
         except Exception as exc:
             st.error(str(exc))
-    if cols[1].button("Cancel", key=f"chg_cancel_{key_prefix}", use_container_width=True):
+    if cols[1].button("Cancel", key=f"chg_cancel_{key_prefix}", width="stretch"):
         st.session_state.pop(flag_key, None)
         st.rerun()
 
@@ -456,7 +456,7 @@ def _render_activity_card(services, order, item, activity, key_prefix, allow_dia
 
         if is_completed:
             st.success(COMPLETED_ACTIVITY_STATUS)
-            if st.button("Change Status", key=f"chg_btn_{suffix}", use_container_width=True):
+            if st.button("Change Status", key=f"chg_btn_{suffix}", width="stretch"):
                 clear_all_dialog_flags()
                 flag = _change_status_flag_key(key_prefix)
                 st.session_state[flag] = activity.order_activity_id
@@ -494,7 +494,7 @@ def _render_activity_card(services, order, item, activity, key_prefix, allow_dia
             btns = st.columns(3)
         else:
             btns = st.columns(2)
-        if btns[0].button("Complete", key=f"comp_{suffix}", type="primary", use_container_width=True):
+        if btns[0].button("Complete", key=f"comp_{suffix}", type="primary", width="stretch"):
             clear_all_dialog_flags()
             flag = _complete_flag_key(key_prefix)
             st.session_state[flag] = activity.order_activity_id
@@ -503,7 +503,7 @@ def _render_activity_card(services, order, item, activity, key_prefix, allow_dia
         if not is_locked:
             skip_col = 1 if activity.is_required else None
             if skip_col is not None and btns[skip_col].button(
-                "Skip", key=f"skip_{suffix}", use_container_width=True
+                "Skip", key=f"skip_{suffix}", width="stretch"
             ):
                 try:
                     order_service.skip_activity(activity.order_activity_id, "Staff")
@@ -514,7 +514,7 @@ def _render_activity_card(services, order, item, activity, key_prefix, allow_dia
                 except Exception as exc:
                     st.error(str(exc))
             rem_col = 2 if activity.is_required else 1
-            if btns[rem_col].button("Remove", key=f"rem_{suffix}", use_container_width=True):
+            if btns[rem_col].button("Remove", key=f"rem_{suffix}", width="stretch"):
                 if allow_dialogs:
                     clear_all_dialog_flags()
                     flag = _remove_flag_key(key_prefix)
@@ -711,7 +711,7 @@ def _render_time_management(services, order, item, key_prefix, allow_dialogs):
             if entry.notes:
                 st.caption(entry.notes)
             acts = st.columns(2)
-            if acts[0].button("Edit", key=f"edit_time_{entry.id}", use_container_width=True):
+            if acts[0].button("Edit", key=f"edit_time_{entry.id}", width="stretch"):
                 if allow_dialogs:
                     clear_all_dialog_flags()
                     flag = _time_flag_key(key_prefix)
@@ -720,7 +720,7 @@ def _render_time_management(services, order, item, key_prefix, allow_dialogs):
                 else:
                     st.session_state[f"inline_time_{key_prefix}"] = entry.id
                 st.rerun()
-            if acts[1].button("Delete", key=f"del_time_{entry.id}", use_container_width=True):
+            if acts[1].button("Delete", key=f"del_time_{entry.id}", width="stretch"):
                 try:
                     time_service.delete_time_entry(entry.id)
                     st.rerun()
@@ -807,13 +807,13 @@ def _expense_dialog(services, order_id, item_id, key_prefix):
     expense = None if target in (None, "new") else services["expenses"].get_expense(target)
     data = _expense_form_fields(_item_activities(order, item), f"dlg_{key_prefix}", expense)
     cols = st.columns(2)
-    if cols[0].button("Save", type="primary", use_container_width=True):
+    if cols[0].button("Save", type="primary", width="stretch"):
         try:
             if _save_expense(services, order, item, data, expense, flag_key):
                 st.rerun()
         except Exception as exc:
             st.error(str(exc))
-    if cols[1].button("Cancel", use_container_width=True):
+    if cols[1].button("Cancel", width="stretch"):
         st.session_state.pop(flag_key, None)
         st.rerun()
 
@@ -880,7 +880,7 @@ def _render_expense_management(services, order, item, key_prefix, allow_dialogs)
             if expense.notes:
                 st.caption(expense.notes)
             acts = st.columns(2)
-            if acts[0].button("Edit", key=f"edit_exp_{expense.id}", use_container_width=True):
+            if acts[0].button("Edit", key=f"edit_exp_{expense.id}", width="stretch"):
                 if allow_dialogs:
                     clear_all_dialog_flags()
                     flag = _expense_flag_key(key_prefix)
@@ -889,7 +889,7 @@ def _render_expense_management(services, order, item, key_prefix, allow_dialogs)
                 else:
                     st.session_state[f"inline_exp_{key_prefix}"] = expense.id
                 st.rerun()
-            if acts[1].button("Delete", key=f"del_exp_{expense.id}", use_container_width=True):
+            if acts[1].button("Delete", key=f"del_exp_{expense.id}", width="stretch"):
                 try:
                     expense_service.delete_expense(expense.id)
                     st.rerun()

@@ -30,7 +30,7 @@ GRN_OVER_CONFIRM_KEY = f"{GRN_DIALOG}_over_confirm"
 def arm_grn_dialog(po_id: str | None = None) -> None:
     reset_dialog_state(GRN_DIALOG)
     st.session_state[GRN_DIALOG] = "new"
-    st.session_state[GRN_FOCUS_KEY] = f"{GRN_DIALOG}_date"
+    st.session_state[GRN_FOCUS_KEY] = f"{GRN_DIALOG}_warehouse"
     if po_id:
         st.session_state[f"{GRN_DIALOG}_po_id"] = po_id
 
@@ -48,6 +48,7 @@ def _submit_grn(
     receipt_date,
     lines: list[dict],
     po_id: str | None,
+    warehouse_id: str,
     freight: float,
     duty: float,
     other: float,
@@ -58,6 +59,7 @@ def _submit_grn(
         receipt_date=receipt_date,
         lines=lines,
         purchase_order_id=po_id,
+        warehouse_id=warehouse_id,
         freight=freight,
         duty=duty,
         other=other,
@@ -68,12 +70,24 @@ def _submit_grn(
     st.rerun()
 
 
+def _warehouse_options(inventory) -> tuple[list[str], dict[str, str]]:
+    warehouses = inventory.list_warehouses(active_only=True)
+    labels: list[str] = []
+    mapping: dict[str, str] = {}
+    for wh in warehouses:
+        label = f"{wh.code} — {wh.name}"
+        labels.append(label)
+        mapping[label] = wh.id
+    return labels, mapping
+
+
 @st.dialog("Receive Goods (GRN)", width="large", on_dismiss=make_dismiss_handler(GRN_DIALOG))
 def grn_dialog(services: dict) -> None:
     if st.session_state.get(GRN_DIALOG) != "new":
         return
 
     purchases = services["purchases"]
+    inventory = services["inventory"]
     open_pos = [
         po
         for po in purchases.list_purchase_orders()
@@ -130,20 +144,45 @@ def grn_dialog(services: dict) -> None:
         )
         return
 
+    warehouse_key = f"{GRN_DIALOG}_warehouse"
     date_key = f"{GRN_DIALOG}_date"
     freight_key = f"{GRN_DIALOG}_freight"
     duty_key = f"{GRN_DIALOG}_duty"
     other_key = f"{GRN_DIALOG}_other"
     confirm_key = f"{GRN_DIALOG}_confirm"
 
+    wh_labels, wh_map = _warehouse_options(inventory)
+    if not wh_labels:
+        st.error("Add a warehouse under Inventory → Warehouses before receiving goods.")
+        if st.button("Close", key=f"{GRN_DIALOG}_close_wh"):
+            _clear()
+            st.rerun()
+        return
+    ensure_selectbox_option(warehouse_key, wh_labels)
+    wh_label = st.selectbox("Warehouse", wh_labels, key=warehouse_key)
+    warehouse_id = wh_map.get(wh_label, "")
+
     receipt_date = st.date_input("Receipt date", value=date.today(), key=date_key)
     freight = st.number_input("Freight", min_value=0.0, value=0.0, key=freight_key)
     duty = st.number_input("Duty", min_value=0.0, value=0.0, key=duty_key)
     other = st.number_input("Other", min_value=0.0, value=0.0, key=other_key)
 
+    product_flags: dict[str, dict[str, bool]] = {}
+    for pl in po.lines or []:
+        pid = getattr(pl, "product_id", None)
+        if not pid:
+            continue
+        product = inventory.get_product(str(pid))
+        product_flags[str(pid)] = {
+            "track_batch": bool(getattr(product, "track_batch", False)) if product else False,
+            "track_serial": bool(getattr(product, "track_serial", False)) if product else False,
+        }
+
     st.markdown("**Receive quantities**")
     lines, overages = render_grn_receive_table(
-        key_prefix=GRN_DIALOG, po_lines=list(po.lines or [])
+        key_prefix=GRN_DIALOG,
+        po_lines=list(po.lines or []),
+        product_flags=product_flags,
     )
 
     awaiting_over_confirm = bool(st.session_state.get(GRN_OVER_CONFIRM_KEY))
@@ -162,7 +201,7 @@ def grn_dialog(services: dict) -> None:
         back_key = f"{GRN_DIALOG}_over_back"
         btn_cols = st.columns(2)
         if btn_cols[0].button(
-            "Proceed anyway", type="primary", use_container_width=True, key=proceed_key
+            "Proceed anyway", type="primary", width="stretch", key=proceed_key
         ):
             try:
                 st.session_state.pop(GRN_OVER_CONFIRM_KEY, None)
@@ -172,6 +211,7 @@ def grn_dialog(services: dict) -> None:
                     receipt_date=receipt_date,
                     lines=lines,
                     po_id=po_id,
+                    warehouse_id=warehouse_id,
                     freight=freight,
                     duty=duty,
                     other=other,
@@ -179,7 +219,7 @@ def grn_dialog(services: dict) -> None:
                 )
             except Exception as exc:
                 st.error(str(exc))
-        if btn_cols[1].button("Back", use_container_width=True, key=back_key):
+        if btn_cols[1].button("Back", width="stretch", key=back_key):
             st.session_state.pop(GRN_OVER_CONFIRM_KEY, None)
             st.rerun()
 
@@ -199,7 +239,15 @@ def grn_dialog(services: dict) -> None:
     qty_columns = grn_table_focus_columns(GRN_DIALOG)
     restore = st.session_state.pop(GRN_FOCUS_KEY, None)
     get_strategy(GRN_DIALOG).inject(
-        chain=[date_key, freight_key, duty_key, other_key, *qty_chain, confirm_key],
+        chain=[
+            warehouse_key,
+            date_key,
+            freight_key,
+            duty_key,
+            other_key,
+            *qty_chain,
+            confirm_key,
+        ],
         restore_key=restore,
         columns=qty_columns,
         above_first=other_key,
@@ -209,6 +257,8 @@ def grn_dialog(services: dict) -> None:
 
     if do_confirm:
         try:
+            if not warehouse_id:
+                raise ValueError("Select a warehouse")
             if not lines:
                 raise ValueError("Enter at least one received quantity")
             if overages:
@@ -220,6 +270,7 @@ def grn_dialog(services: dict) -> None:
                 receipt_date=receipt_date,
                 lines=lines,
                 po_id=po_id,
+                warehouse_id=warehouse_id,
                 freight=freight,
                 duty=duty,
                 other=other,

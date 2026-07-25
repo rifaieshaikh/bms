@@ -58,7 +58,7 @@ def _measurement_card(services: dict, record, index: int) -> None:
             "View / Edit",
             key=f"measurement_edit_{index}_{record.id}",
             type="primary",
-            use_container_width=True,
+            width="stretch",
         ):
             navigation.go_to_detail("measurement_detail", record.id)
 
@@ -172,7 +172,7 @@ def render_measurement_detail(services: dict) -> None:
             f"**Customer:** {customer.customer_name}"
             + (f" · {customer.phone_number}" if customer.phone_number else "")
         )
-        if header[1].button("Open customer", use_container_width=True):
+        if header[1].button("Open customer", width="stretch"):
             navigation.go_to_detail("customer_detail", customer.id)
             return
 

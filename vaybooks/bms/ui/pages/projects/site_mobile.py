@@ -52,7 +52,7 @@ def render(services: dict) -> None:
     device_id = st.text_input("Device id", value="site-phone", key="site_mob_device")
 
     cols = st.columns(2)
-    if cols[0].button("Save offline draft", type="primary", use_container_width=True):
+    if cols[0].button("Save offline draft", type="primary", width="stretch"):
         if offline is None:
             st.error("Offline draft service is not configured.")
         else:
@@ -82,7 +82,7 @@ def render(services: dict) -> None:
             f"**{draft.section}** · {state} · device={draft.device_id or '—'}"
         )
         if not draft.synced and row[1].button(
-            "Sync", key=f"site_mob_sync_{draft.id}", use_container_width=True
+            "Sync", key=f"site_mob_sync_{draft.id}", width="stretch"
         ):
             try:
                 offline.sync_draft(draft.id)

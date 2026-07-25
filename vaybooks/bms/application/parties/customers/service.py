@@ -5,6 +5,8 @@ from vaybooks.bms.domain.finance.accounting.services import AccountingDomainServ
 from vaybooks.bms.domain.parties.customers.entities import Customer, CustomerInput
 from vaybooks.bms.domain.parties.customers.repository import CustomerRepository
 from vaybooks.bms.domain.parties.customers.services import CustomerDomainService
+from vaybooks.bms.domain.shared.date_utils import utc_now
+from vaybooks.bms.domain.shared.exceptions import ValidationError
 
 if TYPE_CHECKING:
     from vaybooks.bms.application.parties.segments.service import PartySegmentAppService
@@ -45,6 +47,18 @@ class CustomerAppService:
         account_name = CustomerDomainService.build_account_name(customer)
         self._accounting_domain.sync_customer_account(customer.id, account_name)
         return customer
+
+    def set_blacklisted(
+        self, customer_id: str, blacklisted: bool, reason: str = ""
+    ) -> Customer:
+        customer = self._customer_repo.find_by_id(customer_id)
+        if not customer:
+            raise ValidationError("Customer not found")
+        customer.is_blacklisted = blacklisted
+        customer.blacklist_reason = reason.strip() if blacklisted else ""
+        customer.blacklisted_at = utc_now() if blacklisted else None
+        customer.updated_at = utc_now()
+        return self._customer_repo.save(customer)
 
     def find_or_create_customer(
         self,

@@ -107,6 +107,13 @@ def test_filter_token_includes_sort():
     assert "__sort=customer_name:asc" in token
 
 
+def test_normalize_sort_legacy_and_list():
+    assert F.normalize_sort(ls.CUSTOMERS, {"key": "created_at", "desc": True}) == [
+        {"key": "created_at", "desc": True}
+    ]
+    assert isinstance(F.default_sort(ls.CUSTOMERS), list)
+
+
 def test_checkbox_filter_only_when_true():
     recs = [
         SimpleNamespace(name="A", active=True, created_at=datetime(2026, 1, 1)),

@@ -35,7 +35,7 @@ def _so_card(row: dict, suffix: str) -> None:
         st.caption(_fmt_date(row.get("order_date")))
         st.markdown(status_badge(row.get("status") or "Draft", compact=True), unsafe_allow_html=True)
         st.caption(f"₹{float(row.get('total_amount') or 0):,.0f}")
-        if st.button("View", key=f"so_view_{suffix}_{row.get('id')}", use_container_width=True):
+        if st.button("View", key=f"so_view_{suffix}_{row.get('id')}", width="stretch"):
             navigation.go_to_detail("sales_order_detail", row.get("id"))
 
 

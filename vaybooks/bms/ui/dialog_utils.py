@@ -47,6 +47,7 @@ DIALOG_FLAG_PREFIXES = (
     "vendor_pay_dialog",
     "customer_add_dialog",
     "customer_edit_dialog",
+    "customer_blacklist_dialog",
     "inv_category_add_dialog",
     "inv_category_edit_dialog",
     "inv_product_add_dialog",

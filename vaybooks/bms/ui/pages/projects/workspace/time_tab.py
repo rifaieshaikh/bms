@@ -204,7 +204,7 @@ def render_time(services: dict, project) -> None:
 
     st.dataframe(
         pd.DataFrame(rows).drop(columns=["_id"]),
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
     st.caption(

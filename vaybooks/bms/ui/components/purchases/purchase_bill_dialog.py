@@ -185,9 +185,9 @@ def purchase_bill_dialog(services: dict) -> None:
 
     save_cols = st.columns(2)
     do_save = save_cols[0].button(
-        "Save", type="primary", use_container_width=True, key=save_key
+        "Save", type="primary", width="stretch", key=save_key
     )
-    if save_cols[1].button("Cancel", use_container_width=True, key=cancel_key):
+    if save_cols[1].button("Cancel", width="stretch", key=cancel_key):
         _clear_dialog()
         st.rerun()
 

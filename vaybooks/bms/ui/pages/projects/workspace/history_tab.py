@@ -32,4 +32,4 @@ def render_history(services: dict, project) -> None:
         }
         for e in entries
     ]
-    st.dataframe(rows, use_container_width=True, hide_index=True)
+    st.dataframe(rows, width="stretch", hide_index=True)

@@ -109,7 +109,7 @@ def _service_card(service, account_names: dict, index: int):
         if st.button(
             "Edit",
             key=f"edit_svc_btn_{index}_{service.id}",
-            use_container_width=True,
+            width="stretch",
         ):
             st.session_state[PENDING_EDIT_SERVICE] = service.id
 

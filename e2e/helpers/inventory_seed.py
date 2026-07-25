@@ -13,6 +13,7 @@ from vaybooks.bms.infrastructure.repositories.inventory.mongo_inventory_reposito
     MongoProductCategoryRepository,
     MongoProductUnitRepository,
     MongoStockMovementRepository,
+    MongoWarehouseRepository,
 )
 
 BMS_ROOT = Path(__file__).resolve().parents[2]
@@ -53,6 +54,7 @@ def _inventory_service() -> InventoryAppService:
         MongoInventoryProductRepository(db),
         MongoStockMovementRepository(db),
         MongoProductUnitRepository(db),
+        warehouse_repo=MongoWarehouseRepository(db),
     )
 
 

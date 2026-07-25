@@ -35,6 +35,7 @@ from vaybooks.bms.infrastructure.repositories.inventory.mongo_inventory_reposito
     MongoProductFieldDefinitionRepository,
     MongoProductUnitRepository,
     MongoStockMovementRepository,
+    MongoWarehouseRepository,
 )
 from vaybooks.bms.infrastructure.repositories.inventory.mongo_product_rate_history_repository import (
     MongoProductRateHistoryRepository,
@@ -119,6 +120,7 @@ def _services():
         MongoProductUnitRepository(db),
         MongoProductFieldDefinitionRepository(db),
         rate_history,
+        MongoWarehouseRepository(db),
     )
     sales = SalesAppService(
         MongoSalesOrderRepository(db),

@@ -42,6 +42,23 @@ class ProductCategory:
 
 
 @dataclass
+class Warehouse:
+    name: str
+    code: str
+    id: str = field(default_factory=lambda: uuid4().hex)
+    address: str = ""
+    is_active: bool = True
+    created_at: datetime = field(default_factory=utc_now)
+    updated_at: datetime = field(default_factory=utc_now)
+
+    def update(self, **kwargs) -> None:
+        for key, value in kwargs.items():
+            if hasattr(self, key) and value is not None:
+                setattr(self, key, value)
+        self.updated_at = utc_now()
+
+
+@dataclass
 class InventoryProduct:
     sku: str
     name: str
@@ -62,6 +79,8 @@ class InventoryProduct:
     last_purchase_rate: float = 0.0
     opening_qty: float = 0.0
     current_qty: float = 0.0
+    track_batch: bool = False
+    track_serial: bool = False
     is_active: bool = True
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
@@ -117,5 +136,6 @@ class StockMovement:
     id: str = field(default_factory=lambda: uuid4().hex)
     reference_type: StockReferenceType = StockReferenceType.MANUAL
     reference_id: Optional[str] = None
+    warehouse_id: Optional[str] = None
     notes: str = ""
     created_at: datetime = field(default_factory=utc_now)

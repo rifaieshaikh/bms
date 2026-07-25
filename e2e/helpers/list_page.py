@@ -172,9 +172,13 @@ def clear_filters(page: Page) -> None:
 
 def apply_sort(page: Page, field_label: str, direction: str) -> None:
     open_sort_popover(page)
-    page.get_by_label("Field").click()
+    # Single-level dialog labels the selectbox "Field"; multi-level uses "Field 1".
+    field = page.get_by_label("Field", exact=True)
+    if field.count() == 0:
+        field = page.get_by_label("Field 1", exact=True)
+    field.first.click()
     page.get_by_role("option", name=field_label).click()
-    page.get_by_text(direction, exact=True).click()
+    page.get_by_text(direction, exact=True).first.click()
     page.get_by_role("button", name="Apply sort").click()
     wait_for_rerun(page)
     close_popovers(page)
