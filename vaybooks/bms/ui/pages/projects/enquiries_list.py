@@ -134,7 +134,10 @@ def render(services: dict) -> None:
         _create_enquiry_dialog(services)
     render_list(
         ENQUIRIES,
-        services,
+        services=services,
         load_fn=_load_enquiries,
-        render_page_fn=_render_cards,
+        card_renderer=_render_cards,
+        count_label="enquiries",
+        empty_text="No enquiries found.",
+        page_key_nav="project_enquiries",
     )
