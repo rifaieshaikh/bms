@@ -16,7 +16,7 @@ def _project_options(services: dict) -> dict[str, str]:
     except Exception:
         return {}
     return {
-        f"{p.project_number} — {p.name}": p.id
+        f"{p.project_number} â€” {p.name}": p.id
         for p in projects
     }
 
@@ -50,7 +50,7 @@ def _load_measurements(services: dict, project_id: str | None):
                 {
                     "project_id": pid,
                     "project": (
-                        f"{project.project_number} — {project.name}"
+                        f"{project.project_number} â€” {project.name}"
                         if project
                         else pid[:8]
                     ),
@@ -58,7 +58,7 @@ def _load_measurements(services: dict, project_id: str | None):
                     "quantity": m.quantity,
                     "cumulative": m.cumulative_quantity,
                     "status": m.status.value if hasattr(m.status, "value") else m.status,
-                    "ra_bill_id": (m.ra_bill_id or "")[:12] or "—",
+                    "ra_bill_id": (m.ra_bill_id or "")[:12] or "â€”",
                     "eligible": not bool((m.ra_bill_id or "").strip())
                     and str(getattr(m.status, "value", m.status))
                     in (
@@ -83,7 +83,7 @@ def render(services: dict) -> None:
 
     rows = _load_measurements(services, project_id)
     eligible = sum(1 for r in rows if r.get("eligible"))
-    billed = sum(1 for r in rows if r.get("ra_bill_id") not in ("", "—"))
+    billed = sum(1 for r in rows if r.get("ra_bill_id") not in ("", "â€”"))
     metric_grid(
         [
             ("Measurements", str(len(rows))),

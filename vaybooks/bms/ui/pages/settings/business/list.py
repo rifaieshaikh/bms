@@ -88,3 +88,31 @@ def render(services: dict):
                 st.rerun()
             except Exception as exc:
                 st.error(str(exc))
+
+    st.divider()
+    st.subheader("Enabled modules")
+    st.caption(
+        "Controls which product modules appear in the left panel "
+        "(combined with plan, feature flags, and role permissions)."
+    )
+    from vaybooks.bms.domain.entitlements.catalog import ALL_MODULES, MODULE_LABELS
+
+    plans_svc = services.get("plans")
+    if plans_svc is None:
+        st.info("Plans service is not available.")
+        return
+    ent = plans_svc.get_org_entitlement()
+    with st.form("enabled_modules_form"):
+        selected_modules = st.multiselect(
+            "Modules",
+            options=list(ALL_MODULES),
+            default=[m for m in ent.enabled_modules if m in ALL_MODULES],
+            format_func=lambda m: MODULE_LABELS.get(m, m),
+        )
+        if st.form_submit_button("Save modules", type="primary"):
+            try:
+                plans_svc.set_enabled_modules(selected_modules)
+                st.success("Enabled modules updated.")
+                st.rerun()
+            except Exception as exc:
+                st.error(str(exc))

@@ -204,8 +204,19 @@ from vaybooks.bms.infrastructure.repositories.projects.mongo_project_recognition
     MongoProjectRecognitionRepository,
 )
 from vaybooks.bms.infrastructure.repositories.projects.mongo_app_user_repository import (
-    MongoAppUserRepository,
     MongoProjectMembershipRepository,
+)
+from vaybooks.bms.infrastructure.repositories.identity.mongo_user_repository import (
+    MongoRoleRepository,
+    MongoUserRepository,
+)
+from vaybooks.bms.infrastructure.repositories.identity.mongo_access_audit_repository import (
+    MongoAccessAuditRepository,
+)
+from vaybooks.bms.infrastructure.repositories.entitlements.mongo_entitlement_repository import (
+    MongoFeatureFlagRepository,
+    MongoOrgEntitlementRepository,
+    MongoPlanRepository,
 )
 from vaybooks.bms.infrastructure.repositories.projects.mongo_project_audit_repository import (
     MongoProjectAuditRepository,
@@ -234,6 +245,13 @@ from vaybooks.bms.application.projects.notifications.service import (
 )
 from vaybooks.bms.application.projects.access.service import ProjectAccessPolicy
 from vaybooks.bms.application.projects.audit.service import ProjectAuditAppService
+from vaybooks.bms.application.identity.service import RoleAppService, UserAppService
+from vaybooks.bms.application.identity.audit import AccessAuditAppService
+from vaybooks.bms.application.entitlements.authorization import AuthorizationService
+from vaybooks.bms.application.entitlements.service import (
+    FeatureFlagAppService,
+    PlanAppService,
+)
 from vaybooks.bms.application.projects.quality.service import (
     ProjectQualityConfigAppService,
 )
@@ -371,9 +389,52 @@ def get_services():
     project_offline_draft_repo = MongoProjectOfflineDraftRepository(db)
     project_portal_token_repo = MongoProjectPortalTokenRepository(db)
     project_quality_config_repo = MongoProjectQualityConfigRepository(db)
-    app_user_repo = MongoAppUserRepository(db)
     project_membership_repo = MongoProjectMembershipRepository(db)
     project_audit_repo = MongoProjectAuditRepository(db)
+    user_repo = MongoUserRepository(db)
+    role_repo = MongoRoleRepository(db)
+    feature_flag_repo = MongoFeatureFlagRepository(db)
+    plan_repo = MongoPlanRepository(db)
+    org_entitlement_repo = MongoOrgEntitlementRepository(db)
+
+    authorization = AuthorizationService(
+        user_repo=user_repo,
+        role_repo=role_repo,
+        plan_repo=plan_repo,
+        flag_repo=feature_flag_repo,
+        org_entitlement_repo=org_entitlement_repo,
+        membership_repo=project_membership_repo,
+    )
+
+    def _session_actor() -> tuple[str, str]:
+        from vaybooks.bms.ui.auth.session import current_user_id, current_user_name
+
+        return current_user_id(), current_user_name()
+
+    access_audit_repo = MongoAccessAuditRepository(db)
+    access_audit_service = AccessAuditAppService(
+        access_audit_repo,
+        actor_resolver=_session_actor,
+        async_write=True,
+    )
+    user_service = UserAppService(
+        user_repo,
+        role_repo=role_repo,
+        authorization=authorization,
+        audit=access_audit_service,
+    )
+    role_service = RoleAppService(
+        role_repo, authorization=authorization, audit=access_audit_service
+    )
+    feature_flag_service = FeatureFlagAppService(
+        feature_flag_repo, authorization=authorization, audit=access_audit_service
+    )
+    plan_service = PlanAppService(
+        plan_repo,
+        org_entitlement_repo,
+        authorization=authorization,
+        audit=access_audit_service,
+    )
 
     accounting_service = AccountingAppService(account_repo, voucher_repo, counter_repo)
     party_segment_service = PartySegmentAppService(party_segment_repo)
@@ -526,8 +587,9 @@ def get_services():
     )
     project_access = ProjectAccessPolicy(
         maker_checker_enabled=True,
-        user_repo=app_user_repo,
+        user_repo=user_repo,
         membership_repo=project_membership_repo,
+        authorization=authorization,
     )
     project_audit_service = ProjectAuditAppService(project_audit_repo)
     project_enquiry_service = ProjectEnquiryAppService(
@@ -684,6 +746,12 @@ def get_services():
         ),
         "project_access": project_access,
         "project_audit": project_audit_service,
+        "authorization": authorization,
+        "users": user_service,
+        "roles": role_service,
+        "feature_flags": feature_flag_service,
+        "plans": plan_service,
+        "access_audit": access_audit_service,
         "reports_projects": reports_projects,
         "reports_business": reports_business,
         "reports_profitability": reports_profitability,

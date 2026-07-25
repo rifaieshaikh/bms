@@ -87,6 +87,11 @@ DIALOG_FLAG_PREFIXES = (
     "prj_dpr_add_dialog",
     "list_filters_dialog_",
     "list_sort_dialog_",
+    "signin_dialog_open",
+    "access_user_",
+    "access_role_",
+    "access_plan_",
+    "access_flag_",
 )
 
 _ARMED_FLAGS = "_armed_dialog_flags"

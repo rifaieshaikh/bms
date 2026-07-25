@@ -75,12 +75,22 @@ from vaybooks.bms.ui.pages.system.updates import list as system_updates
 from vaybooks.bms.ui.pages.settings.business import list as business_settings
 from vaybooks.bms.ui.pages.settings.print import list as print_settings
 from vaybooks.bms.ui.pages.settings.keyboard import list as keyboard_shortcuts
-from vaybooks.bms.ui.pages.migration import (
-    categories as migration_categories,
-    customers as migration_customers,
-    products as migration_products,
-    vendors as migration_vendors,
+from vaybooks.bms.ui.pages.access.users import list as users_settings
+from vaybooks.bms.ui.pages.access.roles import list as roles_settings
+from vaybooks.bms.ui.pages.access.permissions import list as permissions_settings
+from vaybooks.bms.ui.pages.access.audit_logs import list as audit_logs
+from vaybooks.bms.ui.pages.access.feature_flags import list as feature_flags_settings
+from vaybooks.bms.ui.pages.access.plans import list as plans_settings
+from vaybooks.bms.ui.auth.session import (
+    can_see_page,
+    is_authenticated,
+    sync_entitlement_cache,
+    try_restore_session,
 )
+from vaybooks.bms.ui.auth.dialogs import open_sign_in_dialog_if_needed
+from vaybooks.bms.ui.components.common.app_header import render_app_header
+from vaybooks.bms.ui.auth.guard import require_page_access
+from vaybooks.bms.ui.pages.migration import hub as data_migration
 from vaybooks.bms.ui.keyboard.resolve import resolve_pressed_shortcuts
 from vaybooks.bms.ui.keyboard.defaults import ensure_defaults_loaded
 from vaybooks.bms.ui.pages.finance.accounting_invoices import list as accounting_invoices
@@ -112,18 +122,22 @@ st.set_page_config(
     page_title="VayBooks",
     page_icon="👗",
     layout="wide",
-    initial_sidebar_state="auto",
+    initial_sidebar_state="expanded",
 )
 
 inject_global_css()
 ensure_defaults_loaded(force=True)
 
 
-def _page(module):
+def _page(module, *, url_path: str = "", require_auth: bool = True):
     """Wrap a page module so st.navigation can call it."""
 
     def render_page():
-        module.render(get_services())
+        services = get_services()
+        if require_auth and url_path:
+            if not require_page_access(services, url_path):
+                return
+        module.render(services)
 
     render_page.__name__ = module.__name__.rsplit(".", 1)[-1]
     return render_page
@@ -131,374 +145,386 @@ def _page(module):
 
 # --- Visible routes (rendered in the sidebar) --------------------------------
 dashboard_page = st.Page(
-    _page(dashboard), title="Dashboard", icon=":material/dashboard:",
+    _page(dashboard, url_path="dashboard"), title="Dashboard", icon=":material/dashboard:",
     url_path="dashboard", default=True,
 )
 customers_page = st.Page(
-    _page(customers), title="Customers", icon=":material/group:", url_path="customers",
+    _page(customers, url_path="customers"), title="Customers", icon=":material/group:", url_path="customers",
 )
 vendors_page = st.Page(
-    _page(vendors), title="Vendors", icon=":material/local_shipping:",
+    _page(vendors, url_path="vendors"), title="Vendors", icon=":material/local_shipping:",
     url_path="vendors",
 )
 boutique_overview_page = st.Page(
-    _page(boutique_overview_mod), title="Overview",
+    _page(boutique_overview_mod, url_path="boutique-overview"), title="Overview",
     icon=":material/dashboard:", url_path="boutique-overview",
 )
 orders_list_page = st.Page(
-    _page(customization_orders_list), title="Customization Orders",
+    _page(customization_orders_list, url_path="customizationOrders"), title="Customization Orders",
     icon=":material/shopping_bag:", url_path="customizationOrders",
 )
 items_page = st.Page(
-    _page(customization_items), title="Customization Items",
+    _page(customization_items, url_path="customizationItems"), title="Customization Items",
     icon=":material/inventory_2:", url_path="customizationItems",
 )
 measurements_page = st.Page(
-    _page(measurements), title="Measurements",
+    _page(measurements, url_path="measurements"), title="Measurements",
     icon=":material/straighten:", url_path="measurements",
 )
 time_page = st.Page(
-    _page(time_tracking), title="Tasks", icon=":material/schedule:",
+    _page(time_tracking, url_path="time"), title="Tasks", icon=":material/schedule:",
     url_path="time",
 )
 calendar_page = st.Page(
-    _page(boutique_calendar), title="Calendar", icon=":material/calendar_month:",
+    _page(boutique_calendar, url_path="calendar"), title="Calendar", icon=":material/calendar_month:",
     url_path="calendar",
 )
 boutique_reports_page = st.Page(
-    _page(boutique_reports_mod), title="Reports", icon=":material/analytics:",
+    _page(boutique_reports_mod, url_path="boutique-reports"), title="Reports", icon=":material/analytics:",
     url_path="boutique-reports",
 )
 accounts_page = st.Page(
-    _page(accounts), title="Accounts", icon=":material/account_balance:",
+    _page(accounts, url_path="accounts"), title="Accounts", icon=":material/account_balance:",
     url_path="accounts",
 )
 finance_overview_page = st.Page(
-    _page(finance_overview_mod),
+    _page(finance_overview_mod, url_path="finance-overview"),
     title="Overview",
     icon=":material/dashboard:",
     url_path="finance-overview",
 )
 vouchers_page = st.Page(
-    _page(finance_vouchers), title="Vouchers", icon=":material/receipt_long:",
+    _page(finance_vouchers, url_path="vouchers"), title="Vouchers", icon=":material/receipt_long:",
     url_path="vouchers",
 )
 receipts_page = st.Page(
-    _page(finance_receipts), title="Receipts", icon=":material/payments:",
+    _page(finance_receipts, url_path="receipts"), title="Receipts", icon=":material/payments:",
     url_path="receipts",
 )
 payments_page = st.Page(
-    _page(finance_payments), title="Payments", icon=":material/send_money:",
+    _page(finance_payments, url_path="payments"), title="Payments", icon=":material/send_money:",
     url_path="payments",
 )
 credit_notes_page = st.Page(
-    _page(finance_credit_notes), title="Credit Notes", icon=":material/credit_card:",
+    _page(finance_credit_notes, url_path="credit-notes"), title="Credit Notes", icon=":material/credit_card:",
     url_path="credit-notes",
 )
 debit_notes_page = st.Page(
-    _page(finance_debit_notes), title="Debit Notes", icon=":material/receipt:",
+    _page(finance_debit_notes, url_path="debit-notes"), title="Debit Notes", icon=":material/receipt:",
     url_path="debit-notes",
 )
 accounting_invoices_page = st.Page(
-    _page(accounting_invoices), title="Accounting Invoices",
+    _page(accounting_invoices, url_path="accounting-invoices"), title="Accounting Invoices",
     icon=":material/request_quote:", url_path="accounting-invoices",
 )
 journal_page = st.Page(
-    _page(finance_journal), title="Journal", icon=":material/menu_book:",
+    _page(finance_journal, url_path="journal"), title="Journal", icon=":material/menu_book:",
     url_path="journal",
 )
 trial_balance_page = st.Page(
-    _page(trial_balance), title="Trial Balance", icon=":material/balance:",
+    _page(trial_balance, url_path="trial-balance"), title="Trial Balance", icon=":material/balance:",
     url_path="trial-balance",
 )
 mtd_page = st.Page(
-    _page(mtd_dashboard), title="Period Dashboard", icon=":material/calendar_month:",
+    _page(mtd_dashboard, url_path="mtd-dashboard"), title="Period Dashboard", icon=":material/calendar_month:",
     url_path="mtd-dashboard",
 )
 sales_overview_page = st.Page(
-    _page(sales_overview_mod),
+    _page(sales_overview_mod, url_path="sales-overview"),
     title="Overview",
     icon=":material/dashboard:",
     url_path="sales-overview",
 )
 sales_estimates_page = st.Page(
-    _page(sales_estimates_mod), title="Estimates", icon=":material/request_quote:",
+    _page(sales_estimates_mod, url_path="estimates"), title="Estimates", icon=":material/request_quote:",
     url_path="estimates",
 )
 sales_quotations_page = st.Page(
-    _page(sales_quotations_mod), title="Quotations", icon=":material/description:",
+    _page(sales_quotations_mod, url_path="quotations"), title="Quotations", icon=":material/description:",
     url_path="quotations",
 )
 sales_orders_page = st.Page(
-    _page(sales_orders_mod), title="Sales Orders", icon=":material/assignment:",
+    _page(sales_orders_mod, url_path="sales-orders"), title="Sales Orders", icon=":material/assignment:",
     url_path="sales-orders",
 )
 sales_delivery_notes_page = st.Page(
-    _page(sales_delivery_notes_mod), title="Delivery Notes", icon=":material/local_shipping:",
+    _page(sales_delivery_notes_mod, url_path="delivery-notes"), title="Delivery Notes", icon=":material/local_shipping:",
     url_path="delivery-notes",
 )
 sales_invoices_page = st.Page(
-    _page(sales_invoices_mod), title="Sales Invoices", icon=":material/point_of_sale:",
+    _page(sales_invoices_mod, url_path="sales"), title="Sales Invoices", icon=":material/point_of_sale:",
     url_path="sales",
 )
 sales_returns_page = st.Page(
-    _page(sales_returns_mod), title="Sales Returns", icon=":material/undo:",
+    _page(sales_returns_mod, url_path="sales-returns"), title="Sales Returns", icon=":material/undo:",
     url_path="sales-returns",
 )
 sales_reports_page = st.Page(
-    _page(sales_reports_mod),
+    _page(sales_reports_mod, url_path="sales-reports"),
     title="Reports",
     icon=":material/analytics:",
     url_path="sales-reports",
 )
 purchases_overview_page = st.Page(
-    _page(purchases_overview_mod),
+    _page(purchases_overview_mod, url_path="purchases-overview"),
     title="Overview",
     icon=":material/dashboard:",
     url_path="purchases-overview",
 )
 purchase_orders_page = st.Page(
-    _page(purchase_orders_mod), title="Purchase Orders", icon=":material/shopping_cart:",
+    _page(purchase_orders_mod, url_path="purchase-orders"), title="Purchase Orders", icon=":material/shopping_cart:",
     url_path="purchase-orders",
 )
 purchase_grn_page = st.Page(
-    _page(purchase_goods_receipt_mod), title="Goods Receipt", icon=":material/inventory:",
+    _page(purchase_goods_receipt_mod, url_path="goods-receipt"), title="Goods Receipt", icon=":material/inventory:",
     url_path="goods-receipt",
 )
 purchase_bills_page = st.Page(
-    _page(purchase_bills_mod), title="Purchase Bills", icon=":material/receipt:",
+    _page(purchase_bills_mod, url_path="purchases"), title="Purchase Bills", icon=":material/receipt:",
     url_path="purchases",
 )
 purchase_returns_page = st.Page(
-    _page(purchase_returns_mod), title="Returns", icon=":material/undo:",
+    _page(purchase_returns_mod, url_path="purchase-returns"), title="Returns", icon=":material/undo:",
     url_path="purchase-returns",
 )
 purchases_reports_page = st.Page(
-    _page(purchases_reports_mod),
+    _page(purchases_reports_mod, url_path="purchases-reports"),
     title="Reports",
     icon=":material/analytics:",
     url_path="purchases-reports",
 )
 reports_page = st.Page(
-    _page(reports), title="Reports", icon=":material/analytics:", url_path="reports",
+    _page(reports, url_path="reports"), title="Reports", icon=":material/analytics:", url_path="reports",
 )
 export_page = st.Page(
-    _page(export_backup), title="Export / Backup", icon=":material/download:",
+    _page(export_backup, url_path="export-backup"), title="Export / Backup", icon=":material/download:",
     url_path="export-backup",
 )
-migration_categories_page = st.Page(
-    _page(migration_categories), title="Categories", icon=":material/upload_file:",
-    url_path="migration-categories",
-)
-migration_products_page = st.Page(
-    _page(migration_products), title="Products", icon=":material/upload_file:",
-    url_path="migration-products",
-)
-migration_customers_page = st.Page(
-    _page(migration_customers), title="Customers", icon=":material/upload_file:",
-    url_path="migration-customers",
-)
-migration_vendors_page = st.Page(
-    _page(migration_vendors), title="Vendors", icon=":material/upload_file:",
-    url_path="migration-vendors",
+data_migration_page = st.Page(
+    _page(data_migration, url_path="data-migration"), title="Data Migration", icon=":material/upload_file:",
+    url_path="data-migration",
 )
 activities_page = st.Page(
-    _page(activities), title="Customization Activities", icon=":material/checklist:",
+    _page(activities, url_path="customization-activities"), title="Customization Activities", icon=":material/checklist:",
     url_path="customization-activities",
 )
 project_activities_page = st.Page(
-    _page(project_activities_mod), title="Project Activities", icon=":material/checklist:",
+    _page(project_activities_mod, url_path="project-activities"), title="Project Activities", icon=":material/checklist:",
     url_path="project-activities",
 )
 measurement_specs_page = st.Page(
-    _page(measurement_specs), title="Measurement Specs", icon=":material/straighten:",
+    _page(measurement_specs, url_path="measurement-specs"), title="Measurement Specs", icon=":material/straighten:",
     url_path="measurement-specs",
 )
 order_workspace_page = st.Page(
-    _page(order_workspace), title="Order Workspace", icon=":material/edit_note:",
+    _page(order_workspace, url_path="order-workspace"), title="Order Workspace", icon=":material/edit_note:",
     url_path="order-workspace",
 )
 services_page = st.Page(
-    _page(vendor_services), title="Service Configuration", icon=":material/category:",
+    _page(vendor_services, url_path="services"), title="Service Configuration", icon=":material/category:",
     url_path="services",
 )
 workers_page = st.Page(
-    _page(workers), title="Employees", icon=":material/badge:", url_path="employees",
+    _page(workers, url_path="employees"), title="Employees", icon=":material/badge:", url_path="employees",
 )
 party_segments_page = st.Page(
-    _page(party_segments), title="Segments", icon=":material/label:",
+    _page(party_segments, url_path="party-segments"), title="Segments", icon=":material/label:",
     url_path="party-segments",
 )
 projects_dashboard_page = st.Page(
-    _page(projects_dashboard_mod), title="Overview", icon=":material/dashboard:",
+    _page(projects_dashboard_mod, url_path="projects-dashboard"), title="Overview", icon=":material/dashboard:",
     url_path="projects-dashboard",
 )
 projects_list_page = st.Page(
-    _page(projects_list_mod), title="Projects", icon=":material/apartment:",
+    _page(projects_list_mod, url_path="projects"), title="Projects", icon=":material/apartment:",
     url_path="projects",
 )
 project_enquiries_list_page = st.Page(
-    _page(project_enquiries_list_mod), title="Enquiries",
+    _page(project_enquiries_list_mod, url_path="project-enquiries"), title="Enquiries",
     icon=":material/contact_mail:", url_path="project-enquiries",
 )
 project_measurements_list_page = st.Page(
-    _page(project_measurements_list_mod), title="Measurements",
+    _page(project_measurements_list_mod, url_path="project-measurements"), title="Measurements",
     icon=":material/straighten:", url_path="project-measurements",
 )
 project_ra_bills_list_page = st.Page(
-    _page(project_ra_bills_list_mod), title="RA Bills",
+    _page(project_ra_bills_list_mod, url_path="project-ra-bills"), title="RA Bills",
     icon=":material/receipt_long:", url_path="project-ra-bills",
 )
 project_enquiry_workspace_page = st.Page(
-    _page(project_enquiry_workspace_mod), title="Enquiry Workspace",
+    _page(project_enquiry_workspace_mod, url_path="project-enquiry-workspace"), title="Enquiry Workspace",
     icon=":material/edit_note:", url_path="project-enquiry-workspace",
 )
 projects_reports_page = st.Page(
-    _page(projects_reports_mod), title="Reports", icon=":material/analytics:",
+    _page(projects_reports_mod, url_path="projects-reports"), title="Reports", icon=":material/analytics:",
     url_path="projects-reports",
 )
 projects_settings_page = st.Page(
-    _page(projects_settings_mod), title="Settings", icon=":material/settings:",
+    _page(projects_settings_mod, url_path="projects-settings"), title="Settings", icon=":material/settings:",
     url_path="projects-settings",
 )
 project_workspace_page = st.Page(
-    _page(project_workspace_mod), title="Project Workspace", icon=":material/edit_note:",
+    _page(project_workspace_mod, url_path="project-workspace"), title="Project Workspace", icon=":material/edit_note:",
     url_path="project-workspace",
 )
 project_detail_page = st.Page(
-    _page(project_detail_mod), title="Project Detail", url_path="project-detail",
+    _page(project_detail_mod, url_path="project-detail"), title="Project Detail", url_path="project-detail",
 )
 project_site_mobile_page = st.Page(
-    _page(project_site_mobile_mod),
+    _page(project_site_mobile_mod, url_path="project-site-mobile"),
     title="Site Mobile",
     url_path="project-site-mobile",
 )
 project_portal_page = st.Page(
-    _page(project_portal_mod), title="Project Portal", url_path="project-portal",
+    _page(project_portal_mod, url_path="project-portal"), title="Project Portal", url_path="project-portal",
 )
 inventory_overview_page = st.Page(
-    _page(inventory_overview_mod),
+    _page(inventory_overview_mod, url_path="inventory-overview"),
     title="Overview",
     icon=":material/analytics:",
     url_path="inventory-overview",
 )
 inventory_categories_page = st.Page(
-    _page(inventory_categories), title="Categories", icon=":material/category:",
+    _page(inventory_categories, url_path="inventory-categories"), title="Categories", icon=":material/category:",
     url_path="inventory-categories",
 )
 inventory_warehouses_page = st.Page(
-    _page(inventory_warehouses), title="Warehouses", icon=":material/warehouse:",
+    _page(inventory_warehouses, url_path="inventory-warehouses"), title="Warehouses", icon=":material/warehouse:",
     url_path="inventory-warehouses",
 )
 inventory_products_page = st.Page(
-    _page(inventory_products), title="Products", icon=":material/inventory:",
+    _page(inventory_products, url_path="inventory-products"), title="Products", icon=":material/inventory:",
     url_path="inventory-products",
 )
 inventory_stock_page = st.Page(
-    _page(inventory_stock_on_hand), title="Stock on Hand",
+    _page(inventory_stock_on_hand, url_path="inventory-stock"), title="Stock on Hand",
     icon=":material/warehouse:", url_path="inventory-stock",
 )
 inventory_stock_ledger_page = st.Page(
-    _page(inventory_stock_ledger), title="Stock Ledger",
+    _page(inventory_stock_ledger, url_path="inventory-stock-ledger"), title="Stock Ledger",
     icon=":material/receipt_long:", url_path="inventory-stock-ledger",
 )
 inventory_movements_page = st.Page(
-    _page(inventory_movements), title="Movements", icon=":material/swap_horiz:",
+    _page(inventory_movements, url_path="inventory-movements"), title="Movements", icon=":material/swap_horiz:",
     url_path="inventory-movements",
 )
 inventory_customer_prices_page = st.Page(
-    _page(inventory_customer_prices), title="Customer Prices",
+    _page(inventory_customer_prices, url_path="inventory-customer-prices"), title="Customer Prices",
     icon=":material/sell:", url_path="inventory-customer-prices",
 )
 inventory_reports_page = st.Page(
-    _page(inventory_reports_mod),
+    _page(inventory_reports_mod, url_path="inventory-reports"),
     title="Reports",
     icon=":material/assessment:",
     url_path="inventory-reports",
 )
 purchase_order_detail_page = st.Page(
-    _page(purchase_order_detail_mod), title="PO Detail", url_path="purchase-order-detail",
+    _page(purchase_order_detail_mod, url_path="purchase-order-detail"), title="PO Detail", url_path="purchase-order-detail",
 )
 purchase_grn_detail_page = st.Page(
-    _page(purchase_grn_detail_mod), title="GRN Detail", url_path="grn-detail",
+    _page(purchase_grn_detail_mod, url_path="grn-detail"), title="GRN Detail", url_path="grn-detail",
 )
 purchase_detail_page = st.Page(
-    _page(purchase_bill_detail_mod), title="Purchase Detail", url_path="purchase-detail",
+    _page(purchase_bill_detail_mod, url_path="purchase-detail"), title="Purchase Detail", url_path="purchase-detail",
 )
 purchase_return_detail_page = st.Page(
-    _page(purchase_return_detail_mod),
+    _page(purchase_return_detail_mod, url_path="purchase-return-detail"),
     title="Purchase Return Detail",
     url_path="purchase-return-detail",
 )
 
 system_settings_page = st.Page(
-    _page(system_settings), title="System", icon=":material/settings:",
+    _page(system_settings, url_path="system-settings"), title="System", icon=":material/settings:",
     url_path="system-settings",
 )
 business_settings_page = st.Page(
-    _page(business_settings), title="Business", icon=":material/store:",
+    _page(business_settings, url_path="business-settings"), title="Business", icon=":material/store:",
     url_path="business-settings",
 )
 print_settings_page = st.Page(
-    _page(print_settings), title="Print Settings", icon=":material/print:",
+    _page(print_settings, url_path="print-settings"), title="Print Settings", icon=":material/print:",
     url_path="print-settings",
 )
 keyboard_shortcuts_page = st.Page(
-    _page(keyboard_shortcuts), title="Keyboard Shortcuts",
+    _page(keyboard_shortcuts, url_path="keyboard-shortcuts"), title="Keyboard Shortcuts",
     icon=":material/keyboard:", url_path="keyboard-shortcuts",
 )
+users_settings_page = st.Page(
+    _page(users_settings, url_path="users-settings"), title="Users",
+    icon=":material/manage_accounts:", url_path="users-settings",
+)
+roles_settings_page = st.Page(
+    _page(roles_settings, url_path="roles-settings"), title="Roles",
+    icon=":material/badge:", url_path="roles-settings",
+)
+permissions_settings_page = st.Page(
+    _page(permissions_settings, url_path="permissions-settings"), title="Permissions",
+    icon=":material/lock_person:", url_path="permissions-settings",
+)
+audit_logs_page = st.Page(
+    _page(audit_logs, url_path="audit-logs"), title="Audit Logs",
+    icon=":material/history:", url_path="audit-logs",
+)
+feature_flags_settings_page = st.Page(
+    _page(feature_flags_settings, url_path="feature-flags-settings"), title="Feature Flags",
+    icon=":material/toggle_on:", url_path="feature-flags-settings",
+)
+plans_settings_page = st.Page(
+    _page(plans_settings, url_path="plans-settings"), title="Plans",
+    icon=":material/workspace_premium:", url_path="plans-settings",
+)
 system_updates_page = st.Page(
-    _page(system_updates), title="Updates", icon=":material/system_update:",
+    _page(system_updates, url_path="system-updates"), title="Updates", icon=":material/system_update:",
     url_path="system-updates",
 )
 system_logs_page = st.Page(
-    _page(system_logs), title="Logs", icon=":material/article:",
+    _page(system_logs, url_path="system-logs"), title="Logs", icon=":material/article:",
     url_path="system-logs",
 )
 
 # --- Hidden detail routes (deep-linkable, not in sidebar) --------------------
 order_detail_page = st.Page(
-    _page(customization_order_detail), title="Order Detail", url_path="order-detail",
+    _page(customization_order_detail, url_path="order-detail"), title="Order Detail", url_path="order-detail",
 )
 item_detail_page = st.Page(
-    _page(customization_item_detail), title="Item Detail", url_path="item-detail",
+    _page(customization_item_detail, url_path="item-detail"), title="Item Detail", url_path="item-detail",
 )
 measurement_detail_page = st.Page(
-    _page(measurement_detail), title="Measurement Detail",
+    _page(measurement_detail, url_path="measurement-detail"), title="Measurement Detail",
     url_path="measurement-detail",
 )
 customer_detail_page = st.Page(
-    _page(customer_detail), title="Customer Detail", url_path="customer-detail",
+    _page(customer_detail, url_path="customer-detail"), title="Customer Detail", url_path="customer-detail",
 )
 vendor_detail_page = st.Page(
-    _page(vendor_detail), title="Vendor Detail", url_path="vendor-detail",
+    _page(vendor_detail, url_path="vendor-detail"), title="Vendor Detail", url_path="vendor-detail",
 )
 account_detail_page = st.Page(
-    _page(account_detail), title="Account Detail", url_path="account-detail",
+    _page(account_detail, url_path="account-detail"), title="Account Detail", url_path="account-detail",
 )
 sales_detail_page = st.Page(
-    _page(sales_detail), title="Sale Detail", url_path="sales-detail",
+    _page(sales_detail, url_path="sales-detail"), title="Sale Detail", url_path="sales-detail",
 )
 sales_order_detail_page = st.Page(
-    _page(sales_order_detail_mod), title="SO Detail", url_path="sales-order-detail",
+    _page(sales_order_detail_mod, url_path="sales-order-detail"), title="SO Detail", url_path="sales-order-detail",
 )
 sales_estimate_detail_page = st.Page(
-    _page(sales_estimate_detail_mod), title="Estimate Detail",
+    _page(sales_estimate_detail_mod, url_path="estimate-detail"), title="Estimate Detail",
     url_path="estimate-detail",
 )
 sales_quotation_detail_page = st.Page(
-    _page(sales_quotation_detail_mod), title="Quotation Detail",
+    _page(sales_quotation_detail_mod, url_path="quotation-detail"), title="Quotation Detail",
     url_path="quotation-detail",
 )
 sales_delivery_note_detail_page = st.Page(
-    _page(sales_delivery_note_detail_mod), title="DN Detail", url_path="delivery-note-detail",
+    _page(sales_delivery_note_detail_mod, url_path="delivery-note-detail"), title="DN Detail", url_path="delivery-note-detail",
 )
 sales_return_detail_page = st.Page(
-    _page(sales_return_detail_mod), title="Sales Return Detail",
+    _page(sales_return_detail_mod, url_path="sales-return-detail"), title="Sales Return Detail",
     url_path="sales-return-detail",
 )
 inventory_product_detail_page = st.Page(
-    _page(inventory_product_detail), title="Product Detail",
+    _page(inventory_product_detail, url_path="inventory-product-detail"), title="Product Detail",
     url_path="inventory-product-detail",
 )
 
@@ -589,13 +615,16 @@ navigation.register("export_backup", export_page)
 navigation.register("business_settings", business_settings_page)
 navigation.register("print_settings", print_settings_page)
 navigation.register("keyboard_shortcuts", keyboard_shortcuts_page)
+navigation.register("users_settings", users_settings_page)
+navigation.register("roles_settings", roles_settings_page)
+navigation.register("permissions_settings", permissions_settings_page)
+navigation.register("audit_logs", audit_logs_page)
+navigation.register("feature_flags_settings", feature_flags_settings_page)
+navigation.register("plans_settings", plans_settings_page)
 navigation.register("system_settings", system_settings_page)
 navigation.register("system_updates", system_updates_page)
 navigation.register("system_logs", system_logs_page)
-navigation.register("migration_categories", migration_categories_page)
-navigation.register("migration_products", migration_products_page)
-navigation.register("migration_customers", migration_customers_page)
-navigation.register("migration_vendors", migration_vendors_page)
+navigation.register("data_migration", data_migration_page)
 
 page_groups = {
     "": [dashboard_page, mtd_page],
@@ -667,10 +696,15 @@ page_groups = {
         export_page,
     ],
     "Migration": [
-        migration_categories_page,
-        migration_products_page,
-        migration_customers_page,
-        migration_vendors_page,
+        data_migration_page,
+    ],
+    "Access": [
+        users_settings_page,
+        roles_settings_page,
+        permissions_settings_page,
+        audit_logs_page,
+        plans_settings_page,
+        feature_flags_settings_page,
     ],
     "Settings": [
         business_settings_page,
@@ -717,24 +751,56 @@ hidden_pages = [
 ]
 
 # All pages must be registered with st.navigation for routing to work.
-nav_pages = {group: list(pages) for group, pages in page_groups.items()}
-nav_pages["_hidden"] = hidden_pages
+_services = get_services()
+try_restore_session(_services)
+sync_entitlement_cache(_services)
 
-# Hide the built-in menu (Streamlit pins it to the very top of the sidebar) and
-# draw our own below the branding so "VayBooks" sits on top.
-nav = st.navigation(nav_pages, position="hidden")
+if not is_authenticated():
+    with st.sidebar:
+        st.markdown("## VayBooks")
+        st.divider()
+        st.caption("Sign in to continue")
+        st.caption(f"v{__version__}")
+    st.markdown("## Welcome to VayBooks")
+    st.caption("Please sign in to continue.")
+    if st.button("Sign in", type="primary"):
+        st.session_state["signin_dialog_open"] = True
+    open_sign_in_dialog_if_needed(_services)
+else:
+    # Settings routes stay registered with st.navigation (deep links keep
+    # working) but are surfaced from the header instead of the sidebar.
+    visible_groups = {}
+    for group, pages in page_groups.items():
+        if group == "Settings":
+            continue
+        visible = [
+            p
+            for p in pages
+            if can_see_page(_services, getattr(p, "url_path", "") or "")
+        ]
+        if visible:
+            visible_groups[group] = visible
 
-with st.sidebar:
-    st.markdown("## VayBooks")
-    st.divider()
-    for header, pages in page_groups.items():
-        if header:
-            st.caption(header)
-        for page in pages:
-            st.page_link(page)
-    st.divider()
-    st.caption(f"v{__version__}")
+    nav_pages = {group: list(pages) for group, pages in page_groups.items()}
+    nav_pages["_hidden"] = list(hidden_pages)
 
-# Parents navigate here; action chords only set session flags for page render.
-resolve_pressed_shortcuts()
-nav.run()
+    # Hide the built-in menu (Streamlit pins it to the very top of the sidebar) and
+    # draw our own below the branding so "VayBooks" sits on top.
+    nav = st.navigation(nav_pages, position="hidden")
+
+    with st.sidebar:
+        st.markdown("## VayBooks")
+        st.divider()
+        for header, pages in visible_groups.items():
+            if header:
+                st.caption(header)
+            for page in pages:
+                st.page_link(page)
+        st.divider()
+        st.caption(f"v{__version__}")
+
+    render_app_header(_services, settings_pages=page_groups["Settings"])
+
+    # Parents navigate here; action chords only set session flags for page render.
+    resolve_pressed_shortcuts()
+    nav.run()

@@ -94,6 +94,7 @@ class ProjectMembership:
     project_id: str
     user_id: str
     role: ProjectAppRole
+    role_id: str = ""
     id: str = field(default_factory=lambda: uuid4().hex)
     created_at: datetime = field(default_factory=utc_now)
 

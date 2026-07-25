@@ -1,69 +1,60 @@
-"""Session identity helpers for Streamlit project UI."""
+"""Session identity helpers for Streamlit project UI (delegates to app auth)."""
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Union
 
 import streamlit as st
 
+from vaybooks.bms.domain.identity.entities import User
 from vaybooks.bms.domain.projects.access import AppUser
-from vaybooks.bms.domain.shared.enums import ProjectAppRole
+from vaybooks.bms.ui.auth import session as auth_session
 
-SESSION_USER_ID = "project_session_user_id"
-SESSION_USER_NAME = "project_session_user_name"
-SESSION_VIEW_COST = "project_session_view_internal_cost"
+SESSION_USER_ID = auth_session.LEGACY_USER_ID
+SESSION_USER_NAME = auth_session.LEGACY_USER_NAME
+SESSION_VIEW_COST = auth_session.LEGACY_VIEW_COST
+
+UserLike = Union[User, AppUser, None]
 
 
 def current_actor_name() -> str:
-    return (st.session_state.get(SESSION_USER_NAME) or "system").strip() or "system"
+    return auth_session.current_user_name() or "system"
 
 
 def current_actor_id() -> str:
-    return (st.session_state.get(SESSION_USER_ID) or "").strip()
+    return auth_session.current_user_id()
 
 
 def can_view_internal_cost(services: dict, project_id: str = "") -> bool:
     if SESSION_VIEW_COST in st.session_state:
         return bool(st.session_state[SESSION_VIEW_COST])
-    policy = services.get("project_access")
-    user = get_session_user(services)
-    if policy is None:
-        return True
-    return policy.can_view_internal_cost(user, project_id)
+    return auth_session.can_permission(
+        services, "projects.cost.view_internal", project_id=project_id
+    )
 
 
-def get_session_user(services: dict) -> Optional[AppUser]:
-    policy = services.get("project_access")
-    user_id = current_actor_id()
-    if policy and user_id:
-        return policy.get_user(user_id)
-    return None
+def get_session_user(services: dict) -> Optional[User]:
+    return auth_session.get_current_user(services)
 
 
-def ensure_default_session_user(services: dict) -> AppUser | None:
-    """Bootstrap Owner user into session when access service is available."""
-    policy = services.get("project_access")
-    if policy is None:
-        st.session_state.setdefault(SESSION_USER_NAME, "system")
-        st.session_state.setdefault(SESSION_VIEW_COST, True)
-        return None
-    if current_actor_id():
-        return get_session_user(services)
-    try:
-        user = policy.ensure_user(
-            "admin",
-            display_name="Administrator",
-            roles=[ProjectAppRole.OWNER],
-        )
-    except Exception:
-        st.session_state[SESSION_USER_NAME] = "system"
-        st.session_state[SESSION_VIEW_COST] = True
-        return None
-    set_session_user(user, services, project_id="")
-    return user
+def ensure_default_session_user(services: dict) -> User | None:
+    """Return the logged-in user; do not auto-login."""
+    return auth_session.get_current_user(services)
 
 
-def set_session_user(user: AppUser, services: dict, project_id: str = "") -> None:
+def set_session_user(user: UserLike, services: dict, project_id: str = "") -> None:
+    if user is None:
+        return
+    if isinstance(user, User):
+        auth_session.login_user(user, services)
+        return
+    # Legacy AppUser → load or synthesize User
+    users = services.get("users")
+    if users:
+        found = users.get_user(user.id) or users.get_by_username(user.username)
+        if found:
+            auth_session.login_user(found, services)
+            return
     st.session_state[SESSION_USER_ID] = user.id
     st.session_state[SESSION_USER_NAME] = user.display_name or user.username
     policy = services.get("project_access")
@@ -71,5 +62,3 @@ def set_session_user(user: AppUser, services: dict, project_id: str = "") -> Non
         st.session_state[SESSION_VIEW_COST] = policy.can_view_internal_cost(
             user, project_id
         )
-    else:
-        st.session_state[SESSION_VIEW_COST] = user.view_internal_cost

@@ -152,6 +152,114 @@ def inject_global_css() -> None:
           .z-badge.plum   { background:#F3E4EB; color:#7B2D4E; border-color:#EAD0DB; }
           .z-badge.gold   { background:#F7EFD9; color:#8A6D1F; border-color:#EBDDB4; }
 
+          /* ---- Streamlit chrome: keep expand arrow, drop visual chrome ------ */
+          /* CRITICAL: stExpandSidebarButton is a CHILD of stToolbar. Hiding the
+             toolbar with display:none also removes the only way to reopen a
+             collapsed sidebar. Never display:none the toolbar. */
+          header[data-testid="stHeader"] {
+            background: transparent !important;
+            box-shadow: none !important;
+          }
+          div[data-testid="stDecoration"] {
+            display: none !important;
+          }
+          /* Hide deploy / overflow toolbar chrome, but keep the expand control. */
+          header[data-testid="stHeader"] [data-testid="stMainMenu"],
+          header[data-testid="stHeader"] [data-testid="stToolbarActions"],
+          header[data-testid="stHeader"] [data-testid="stAppDeployButton"],
+          header[data-testid="stHeader"] .stDeployButton {
+            display: none !important;
+          }
+          /* When the sidebar is collapsed, pin the expand arrow above our bar. */
+          [data-testid="stExpandSidebarButton"] {
+            display: inline-flex !important;
+            visibility: visible !important;
+            pointer-events: auto !important;
+            position: fixed !important;
+            top: 0.45rem !important;
+            left: 0.45rem !important;
+            z-index: 10050 !important;
+            background: #FBF8F6 !important;
+            border: 1px solid var(--z-line) !important;
+            border-radius: 8px !important;
+            box-shadow: 0 1px 4px rgba(42, 30, 36, 0.1) !important;
+            width: 2.25rem !important;
+            height: 2.25rem !important;
+            align-items: center !important;
+            justify-content: center !important;
+          }
+          /* Keep the in-sidebar collapse arrow clickable above page chrome. */
+          [data-testid="stSidebarCollapseButton"] {
+            position: relative;
+            z-index: 10050;
+            pointer-events: auto !important;
+          }
+          /* Drop the large top padding Streamlit keeps for its own header. */
+          section.main > div.block-container,
+          div[data-testid="stMainBlockContainer"].block-container,
+          .block-container {
+            padding-top: 0 !important;
+          }
+
+          /* ---- Global top header (keyed container: zheader) --------------- */
+          div[class*="st-key-zheader"] {
+            position: sticky;
+            top: 0;
+            z-index: 999;
+            background: #FBF8F6;
+            border-bottom: 1px solid var(--z-line);
+            box-shadow: 0 1px 4px rgba(42, 30, 36, 0.06);
+            margin: 0 -1.5rem 0.85rem -1.5rem;
+            padding: 0.4rem 1.25rem;
+          }
+          /* Kill Streamlit's default vertical gaps inside the header bar. */
+          div[class*="st-key-zheader"] div[data-testid="stVerticalBlock"] {
+            gap: 0 !important;
+          }
+          div[class*="st-key-zheader"] [data-testid="stElementContainer"],
+          div[class*="st-key-zheader"] [data-testid="element-container"] {
+            margin-top: 0 !important;
+            margin-bottom: 0 !important;
+          }
+          div[class*="st-key-zheader"] .z-header-brand,
+          div[class*="st-key-zheader"] p {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--z-plum);
+            letter-spacing: 0.01em;
+            line-height: 1.2;
+            margin: 0 !important;
+            white-space: nowrap;
+          }
+          div[class*="st-key-zheader"] div[data-testid="stPopover"] > div > button,
+          div[class*="st-key-zheader"] div[data-testid="stPopover"] button {
+            border-radius: 8px;
+            border-color: var(--z-line);
+            background: var(--z-card);
+            min-height: 2rem;
+            height: 2rem;
+            padding: 0.2rem 0.65rem;
+            white-space: nowrap;
+          }
+          /* Right-align the control cluster: columns size to their content and
+             the brand column absorbs the leftover space. */
+          div[class*="st-key-zheader"] div[data-testid="stColumn"] {
+            flex: 0 0 auto !important;
+            width: auto !important;
+            min-width: 0 !important;
+          }
+          div[class*="st-key-zheader"] div[data-testid="stColumn"]:first-child {
+            flex: 1 1 auto !important;
+          }
+          div[class*="st-key-zheader"] div[data-testid="stPopover"] > div > button:hover {
+            border-color: var(--z-plum);
+            color: var(--z-plum);
+          }
+          div[class*="st-key-zheader"] div[data-testid="stHorizontalBlock"] {
+            gap: 0.35rem;
+            align-items: center;
+          }
+
           /* ---- Sidebar polish -------------------------------------------- */
           section[data-testid="stSidebar"] {
             background: linear-gradient(180deg, #FBF8F6 0%, #F3ECEF 100%);
@@ -206,6 +314,13 @@ def inject_global_css() -> None:
             .block-container {
               padding-left: 0.75rem;
               padding-right: 0.75rem;
+              padding-top: 0 !important;
+            }
+            div[class*="st-key-zheader"] {
+              margin-left: -0.75rem;
+              margin-right: -0.75rem;
+              padding-left: 0.85rem;
+              padding-right: 0.85rem;
             }
           }
         </style>

@@ -69,6 +69,7 @@ class MongoProjectMembershipRepository:
             "project_id": m.project_id,
             "user_id": m.user_id,
             "role": m.role.value,
+            "role_id": m.role_id or "",
             "created_at": m.created_at,
         }
 
@@ -78,6 +79,7 @@ class MongoProjectMembershipRepository:
             project_id=doc["project_id"],
             user_id=doc["user_id"],
             role=ProjectAppRole(doc.get("role", ProjectAppRole.PROJECT_MANAGER.value)),
+            role_id=doc.get("role_id") or "",
             created_at=doc.get("created_at", datetime.utcnow()),
         )
 
