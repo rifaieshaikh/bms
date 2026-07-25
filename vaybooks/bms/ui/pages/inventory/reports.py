@@ -19,6 +19,7 @@ from vaybooks.bms.ui.report_schemas import INVENTORY_REPORT_TYPES, SCHEMA_BY_REP
 
 _REPORT_LOADERS = {
     "Stock on Hand": "stock_on_hand_report",
+    "Stock by Location": "stock_by_location_report",
     "Low Stock Alert": "low_stock_report",
     "Stock Movements": "stock_movements_report",
     "Inventory Valuation": "inventory_valuation_report",

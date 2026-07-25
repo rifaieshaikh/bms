@@ -7,6 +7,7 @@ from datetime import date
 import streamlit as st
 
 from vaybooks.bms.domain.shared.enums import StockMovementType
+from vaybooks.bms.ui.auth.session import require_specific_location
 from vaybooks.bms.ui.dialog_utils import make_dismiss_handler, register_armed_dialog
 from vaybooks.bms.ui.keyboard.dialog_actions import consume_submit, open_dialog
 from vaybooks.bms.ui.keyboard.wired import mark_wired
@@ -78,12 +79,14 @@ def record_movement_dialog(services: dict) -> None:
         try:
             if qty <= 0:
                 raise ValueError("Quantity must be positive")
+            location_id = require_specific_location(services)
             inventory.record_manual_movement(
                 prod_opts[product_name],
                 type_opts[movement_label],
                 qty,
                 movement_date,
                 notes.strip(),
+                location_id=location_id,
             )
             st.session_state.pop(MOVEMENT_DIALOG, None)
             st.success("Movement recorded")

@@ -13,6 +13,7 @@ from vaybooks.bms.ui.components.common.customer_identity_selector import (
     resolve_customer_identity,
 )
 from vaybooks.bms.ui.components.common.dialog_state import reset_dialog_state
+from vaybooks.bms.ui.auth.session import require_specific_location
 from vaybooks.bms.ui.components.sales.sales_lines_entry_table import (
     entry_table_focus_chain,
     entry_table_focus_columns,
@@ -162,6 +163,7 @@ def sales_order_dialog(services: dict) -> None:
         try:
             if gst_errors:
                 raise ValueError(gst_errors[0])
+            location_id = require_specific_location(services)
             so_lines = [
                 {
                     "product_id": row.get("product_id") or "",
@@ -185,6 +187,7 @@ def sales_order_dialog(services: dict) -> None:
                 lines=so_lines,
                 notes=notes,
                 status=SalesOrderStatus.CONFIRMED,
+                location_id=location_id,
             )
             _clear()
             st.rerun()

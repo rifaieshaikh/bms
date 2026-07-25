@@ -97,6 +97,7 @@ def _so_edit_dialog(services: dict) -> None:
     edit_notes = st.text_area(
         "Notes", value=order.notes, key=f"{SO_EDIT_DIALOG}_notes"
     )
+    location_id = order.location_id
     initial_lines = [
         {
             "product_id": line.product_id,
@@ -194,6 +195,7 @@ def _so_edit_dialog(services: dict) -> None:
                 custom_values=custom_values,
                 bank_account_id=bank_id,
                 terms_and_conditions=terms,
+                location_id=location_id,
             )
             _clear_prefix(SO_EDIT_DIALOG)
             st.session_state.pop(SO_EDIT_SUBMIT_KEY, None)

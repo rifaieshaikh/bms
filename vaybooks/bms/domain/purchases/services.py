@@ -179,19 +179,22 @@ class PurchaseDomainService:
         lines: List[dict],
         purchase_order_id: Optional[str] = None,
         po_number: str = "",
-        warehouse_id: str = "",
-        warehouse_name: str = "",
+        location_id: str = "",
+        location_name: str = "",
         freight: float = 0.0,
         duty: float = 0.0,
         other: float = 0.0,
         notes: str = "",
         allow_over_receive: bool = False,
+        warehouse_id: str = "",
+        warehouse_name: str = "",
     ) -> GoodsReceipt:
         if not lines:
             raise ValidationError("At least one receipt line is required")
-        warehouse_id = (warehouse_id or "").strip()
-        if not warehouse_id:
-            raise ValidationError("Warehouse is required")
+        location_id = (location_id or warehouse_id or "").strip()
+        location_name = (location_name or warehouse_name or "").strip()
+        if not location_id:
+            raise ValidationError("Location is required")
         po: Optional[PurchaseOrder] = None
         if purchase_order_id:
             po = self._po_repo.find_by_id(purchase_order_id)
@@ -283,8 +286,8 @@ class PurchaseDomainService:
             receipt_date=receipt_date,
             purchase_order_id=purchase_order_id,
             po_number=po_number,
-            warehouse_id=warehouse_id,
-            warehouse_name=(warehouse_name or "").strip(),
+            location_id=location_id,
+            location_name=location_name,
             lines=grn_lines,
             freight=round(max(freight, 0.0), 2),
             duty=round(max(duty, 0.0), 2),
@@ -387,7 +390,7 @@ class PurchaseDomainService:
                 "qty": line.qty_accepted,
                 "rate": line.unit_cost,
                 "description": line.product_name or "GRN receive",
-                "warehouse_id": grn.warehouse_id or None,
+                "location_id": grn.location_id or None,
             }
             for line in grn.lines
             if line.qty_accepted > 0

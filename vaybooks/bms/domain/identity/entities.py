@@ -33,6 +33,8 @@ class User:
     display_name: str = ""
     password_hash: str = ""
     role_ids: List[str] = field(default_factory=list)
+    # Empty = unrestricted (all locations). Non-empty = only these location ids.
+    location_ids: List[str] = field(default_factory=list)
     active: bool = True
     id: str = field(default_factory=lambda: uuid4().hex)
     created_at: datetime = field(default_factory=utc_now)

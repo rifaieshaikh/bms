@@ -386,20 +386,21 @@ class PurchaseAppService:
         receipt_date: date,
         lines: list[dict],
         purchase_order_id: Optional[str] = None,
-        warehouse_id: str = "",
+        location_id: str = "",
         freight: float = 0.0,
         duty: float = 0.0,
         other: float = 0.0,
         notes: str = "",
         confirm: bool = True,
         allow_over_receive: bool = False,
+        warehouse_id: str = "",
     ) -> GoodsReceipt:
-        warehouse_id = (warehouse_id or "").strip()
-        if not warehouse_id:
-            raise ValueError("Warehouse is required")
-        warehouse = self._inventory.get_warehouse(warehouse_id)
-        if not warehouse or not warehouse.is_active:
-            raise ValueError("Warehouse not found or inactive")
+        location_id = (location_id or warehouse_id or "").strip()
+        if not location_id:
+            raise ValueError("Location is required")
+        location = self._inventory.get_location(location_id)
+        if not location or not location.is_active:
+            raise ValueError("Location not found or inactive")
         po_number = ""
         if purchase_order_id:
             po = self._po_repo.find_by_id(purchase_order_id)
@@ -425,8 +426,8 @@ class PurchaseAppService:
             lines=enriched_lines,
             purchase_order_id=purchase_order_id,
             po_number=po_number,
-            warehouse_id=warehouse.id,
-            warehouse_name=warehouse.name,
+            location_id=location.id,
+            location_name=location.name,
             freight=freight,
             duty=duty,
             other=other,

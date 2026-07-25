@@ -174,6 +174,7 @@ def _edit_dialog(services: dict) -> None:
         value=sales_return.restock_items,
         key=f"{SALES_RETURN_EDIT_DIALOG}_restock",
     )
+    location_id = sales_return.location_id
 
     options = ["Customer credit", "Cash / bank refund"]
     option_index = (
@@ -277,6 +278,7 @@ def _edit_dialog(services: dict) -> None:
                 refund_account_id=refund_account_id,
                 restock_items=restock_items,
                 attachments=attachments,
+                location_id=location_id,
             )
             _clear()
             st.rerun()

@@ -40,10 +40,12 @@ from vaybooks.bms.infrastructure.repositories.parties.mongo_customer_repository 
 )
 from vaybooks.bms.infrastructure.repositories.inventory.mongo_inventory_repository import (
     MongoInventoryProductRepository,
+    MongoLocationRepository,
     MongoProductCategoryRepository,
     MongoProductUnitRepository,
+    MongoStockBalanceRepository,
     MongoStockMovementRepository,
-    MongoWarehouseRepository,
+    MongoStockTransferRepository,
 )
 from vaybooks.bms.infrastructure.repositories.inventory.mongo_product_rate_history_repository import (
     MongoProductRateHistoryRepository,
@@ -83,12 +85,32 @@ def _inventory_service(db: Database) -> InventoryAppService:
         MongoStockMovementRepository(db),
         MongoProductUnitRepository(db),
         rate_history=rate_history,
-        warehouse_repo=MongoWarehouseRepository(db),
+        location_repo=MongoLocationRepository(db),
+        balance_repo=MongoStockBalanceRepository(db),
+        transfer_repo=MongoStockTransferRepository(db),
     )
 
 
 def _ensure_unit(inventory: InventoryAppService, code: str, label: str) -> str:
     return inventory.find_or_create_unit(code, label).id
+
+
+def _ensure_default_locations(inventory: InventoryAppService) -> str:
+    """Ensure a Main warehouse (and optional store) exist; return main location id."""
+    from vaybooks.bms.domain.shared.enums import LocationType
+
+    existing = {loc.code: loc for loc in inventory.list_locations(active_only=False)}
+    if "MAIN" not in existing:
+        main = inventory.create_location(
+            "MAIN", "Main Warehouse", location_type=LocationType.WAREHOUSE
+        )
+    else:
+        main = existing["MAIN"]
+    if "STORE1" not in existing:
+        inventory.create_location(
+            "STORE1", "Retail Store", location_type=LocationType.RETAIL_STORE
+        )
+    return main.id
 
 
 def _ensure_category(
@@ -247,6 +269,8 @@ def seed_products_for_profile(db: Database, profile_key: str, count: int) -> Non
     for code, label in DEMO_UNITS:
         unit_ids[code] = _ensure_unit(inventory, code, label)
 
+    opening_location_id = _ensure_default_locations(inventory)
+
     # Ensure category tree exists for product assignment
     seed_categories_for_profile(db, profile_key, max(count, 20))
 
@@ -301,6 +325,7 @@ def seed_products_for_profile(db: Database, profile_key: str, count: int) -> Non
                 mrp=row["mrp"],
                 gst_rate=row["gst_rate"],
                 gst_required=False,
+                location_id=opening_location_id,
             )
         except ValidationError as exc:
             logger.warning("Skip seed product %s: %s", row["sku"], exc)

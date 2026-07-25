@@ -94,9 +94,8 @@ def test_reports_page_renders_category_tabs():
     at.run(timeout=15)
     assert not at.exception
     page_text = _page_text(at).lower()
+    assert "business insights" in page_text
     assert "profitability" in page_text
-    assert "operations" in page_text
-    assert "inventory" in page_text
 
 
 def test_reports_page_shows_aggregated_mph_marker():

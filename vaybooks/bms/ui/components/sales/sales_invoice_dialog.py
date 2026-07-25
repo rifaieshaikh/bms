@@ -23,6 +23,7 @@ from vaybooks.bms.ui.components.sales.sales_line_ui import (
     tax_summary_from_previews,
 )
 from vaybooks.bms.ui.components.common.dialog_state import reset_dialog_state
+from vaybooks.bms.ui.auth.session import require_specific_location
 from vaybooks.bms.ui.components.sales.sales_lines_entry_table import (
     entry_table_focus_chain,
     entry_table_focus_columns,
@@ -152,7 +153,6 @@ def sales_record_dialog(services: dict) -> None:
         index=_index_of(store_opts, default_store),
         key=f"{SALES_RECORD_DIALOG}_store",
     )
-
     products = inventory_service.list_products(active_only=True) if inventory_service else []
     if not products:
         st.error("Add inventory products first.")
@@ -314,6 +314,9 @@ def sales_record_dialog(services: dict) -> None:
                 raise ValueError(gst_errors[0])
             if not line_items:
                 raise ValueError("Add at least one product line")
+            location_id = require_specific_location(services)
+            for item in line_items:
+                item["location_id"] = location_id
             if net_due <= 0:
                 raise ValueError("Invoice net amount must be positive")
             if received < 0:

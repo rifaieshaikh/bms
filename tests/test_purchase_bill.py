@@ -269,7 +269,9 @@ def test_purchase_editor_resolves_sku_name_and_service_aliases():
 
     assert product_lookup["sku-1"] is product
     assert product_lookup["cotton"] is product
-    assert product_lookup["sku-1 — cotton"] is product
+    assert product_lookup["sku-1 cotton"] is product
+    assert product_lookup["cotton sku-1"] is product
+    assert any("sku-1" in key and "cotton" in key and "₹" in key for key in product_lookup)
     assert service_lookup["stitching"] is service
 
 

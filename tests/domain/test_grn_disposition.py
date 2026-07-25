@@ -39,9 +39,9 @@ def _service_with_po(product_id: str = "p1", qty_ordered: float = 10.0):
     return service, po
 
 
-def test_create_grn_requires_warehouse():
+def test_create_grn_requires_location():
     service, po = _service_with_po()
-    with pytest.raises(ValidationError, match="Warehouse is required"):
+    with pytest.raises(ValidationError, match="Location is required"):
         service.create_grn(
             grn_number="GRN-1",
             vendor_id="v1",
@@ -60,8 +60,8 @@ def test_create_grn_validates_disposition_sum():
             vendor_id="v1",
             vendor_name="Vendor",
             receipt_date=date.today(),
-            warehouse_id="wh1",
-            warehouse_name="Main",
+            location_id="wh1",
+            location_name="Main",
             lines=[
                 {
                     "product_id": "p1",
@@ -84,8 +84,8 @@ def test_create_grn_requires_batch_when_tracked():
             vendor_id="v1",
             vendor_name="Vendor",
             receipt_date=date.today(),
-            warehouse_id="wh1",
-            warehouse_name="Main",
+            location_id="wh1",
+            location_name="Main",
             lines=[
                 {
                     "product_id": "p1",
@@ -107,8 +107,8 @@ def test_create_grn_requires_serial_count_when_tracked():
             vendor_id="v1",
             vendor_name="Vendor",
             receipt_date=date.today(),
-            warehouse_id="wh1",
-            warehouse_name="Main",
+            location_id="wh1",
+            location_name="Main",
             lines=[
                 {
                     "product_id": "p1",
@@ -123,15 +123,15 @@ def test_create_grn_requires_serial_count_when_tracked():
         )
 
 
-def test_create_grn_stock_lines_use_accepted_and_warehouse():
+def test_create_grn_stock_lines_use_accepted_and_location():
     service, po = _service_with_po()
     grn = service.create_grn(
         grn_number="GRN-1",
         vendor_id="v1",
         vendor_name="Vendor",
         receipt_date=date.today(),
-        warehouse_id="wh1",
-        warehouse_name="Main",
+        location_id="wh1",
+        location_name="Main",
         lines=[
             {
                 "product_id": "p1",
@@ -147,4 +147,6 @@ def test_create_grn_stock_lines_use_accepted_and_warehouse():
     stock_lines = service.grn_to_stock_lines(grn)
     assert len(stock_lines) == 1
     assert stock_lines[0]["qty"] == 4
-    assert stock_lines[0]["warehouse_id"] == "wh1"
+    assert stock_lines[0]["location_id"] == "wh1"
+    assert grn.location_id == "wh1"
+    assert grn.warehouse_id == "wh1"  # alias

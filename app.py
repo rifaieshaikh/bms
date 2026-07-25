@@ -59,6 +59,9 @@ from vaybooks.bms.ui.pages.inventory.products import list as inventory_products
 from vaybooks.bms.ui.pages.inventory import reports as inventory_reports_mod
 from vaybooks.bms.ui.pages.inventory.stock_ledger import list as inventory_stock_ledger
 from vaybooks.bms.ui.pages.inventory.stock_on_hand import list as inventory_stock_on_hand
+from vaybooks.bms.ui.pages.inventory.transfers import list as inventory_transfers
+from vaybooks.bms.ui.pages.inventory.transfers import detail as inventory_transfer_detail
+from vaybooks.bms.ui.pages.settings.locations import list as settings_locations
 from vaybooks.bms.ui.pages.purchases.bills import list as purchase_bills_mod
 from vaybooks.bms.ui.pages.purchases.goods_receipt import list as purchase_goods_receipt_mod
 from vaybooks.bms.ui.pages.purchases.goods_receipt import detail as purchase_grn_detail_mod
@@ -412,6 +415,18 @@ inventory_customer_prices_page = st.Page(
     _page(inventory_customer_prices, url_path="inventory-customer-prices"), title="Customer Prices",
     icon=":material/sell:", url_path="inventory-customer-prices",
 )
+inventory_transfers_page = st.Page(
+    _page(inventory_transfers, url_path="inventory-transfers"), title="Transfers",
+    icon=":material/sync_alt:", url_path="inventory-transfers",
+)
+inventory_transfer_detail_page = st.Page(
+    _page(inventory_transfer_detail, url_path="inventory-transfer-detail"), title="Transfer Detail",
+    url_path="inventory-transfer-detail",
+)
+settings_locations_page = st.Page(
+    _page(settings_locations, url_path="settings-locations"), title="Locations",
+    icon=":material/store:", url_path="settings-locations",
+)
 inventory_reports_page = st.Page(
     _page(inventory_reports_mod, url_path="inventory-reports"),
     title="Reports",
@@ -609,8 +624,11 @@ navigation.register("inventory_stock_list", inventory_stock_page)
 navigation.register("inventory_stock_ledger_list", inventory_stock_ledger_page)
 navigation.register("inventory_movements_list", inventory_movements_page)
 navigation.register("inventory_customer_prices_list", inventory_customer_prices_page)
+navigation.register("inventory_transfers_list", inventory_transfers_page)
+navigation.register("inventory_transfer_detail", inventory_transfer_detail_page)
 navigation.register("inventory_reports", inventory_reports_page)
 navigation.register("inventory_product_detail", inventory_product_detail_page)
+navigation.register("settings_locations_list", settings_locations_page)
 navigation.register("export_backup", export_page)
 navigation.register("business_settings", business_settings_page)
 navigation.register("print_settings", print_settings_page)
@@ -673,11 +691,11 @@ page_groups = {
     "Inventory": [
         inventory_overview_page,
         inventory_categories_page,
-        inventory_warehouses_page,
         inventory_products_page,
         inventory_stock_page,
         inventory_stock_ledger_page,
         inventory_movements_page,
+        inventory_transfers_page,
         inventory_customer_prices_page,
         inventory_reports_page,
     ],
@@ -708,6 +726,7 @@ page_groups = {
     ],
     "Settings": [
         business_settings_page,
+        settings_locations_page,
         print_settings_page,
         keyboard_shortcuts_page,
         activities_page,
@@ -744,6 +763,8 @@ hidden_pages = [
     sales_delivery_note_detail_page,
     sales_return_detail_page,
     inventory_product_detail_page,
+    inventory_transfer_detail_page,
+    inventory_warehouses_page,
     purchase_order_detail_page,
     purchase_grn_detail_page,
     purchase_detail_page,

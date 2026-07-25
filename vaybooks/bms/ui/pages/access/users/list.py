@@ -4,6 +4,11 @@ from __future__ import annotations
 
 import streamlit as st
 
+from vaybooks.bms.domain.identity.entities import User
+from vaybooks.bms.domain.identity.location_access import (
+    is_admin_user,
+    is_multi_location_user,
+)
 from vaybooks.bms.domain.shared.exceptions import ValidationError
 from vaybooks.bms.ui.auth.guard import require_page_access
 from vaybooks.bms.ui.components.common.list_view import render_list
@@ -30,6 +35,22 @@ def _role_options(roles):
 def _role_names(user, role_labels: dict) -> str:
     names = [role_labels.get(rid, rid) for rid in (user.role_ids or [])]
     return ", ".join(names) if names else "—"
+
+
+def _validate_location_assignment(role_ids: list[str], location_ids: list[str]) -> None:
+    candidate = User(username="_assignment_check", role_ids=role_ids)
+    if is_admin_user(candidate):
+        return
+    if is_multi_location_user(candidate):
+        if not location_ids:
+            raise ValidationError(
+                "Assign at least one accessible location to this user"
+            )
+        return
+    if len(location_ids) != 1:
+        raise ValidationError(
+            "This role requires exactly one accessible location"
+        )
 
 
 def _match_active(user, _value) -> bool:
@@ -60,9 +81,25 @@ USERS = ListSchema(
 )
 
 
+def _location_options(services: dict):
+    inventory = services.get("inventory")
+    if inventory is None:
+        return [], {}
+    try:
+        locations = inventory.list_locations(active_only=False)
+    except Exception:
+        return [], {}
+    labels = {
+        loc.id: f"{loc.code} — {loc.name} ({getattr(loc.location_type, 'value', loc.location_type)})"
+        for loc in locations
+    }
+    return [loc.id for loc in locations], labels
+
+
 @st.dialog("Add User")
 def _add_user_dialog(services: dict, roles) -> None:
     role_ids, labels = _role_options(roles)
+    location_ids, location_labels = _location_options(services)
     with st.form("access_user_add_form"):
         username = st.text_input("Username")
         display_name = st.text_input("Display name")
@@ -70,13 +107,21 @@ def _add_user_dialog(services: dict, roles) -> None:
         selected = st.multiselect(
             "Roles", options=role_ids, format_func=lambda rid: labels.get(rid, rid)
         )
+        selected_locations = st.multiselect(
+            "Accessible locations",
+            options=location_ids,
+            format_func=lambda lid: location_labels.get(lid, lid),
+            help="Leave empty for all locations. Used to limit location pickers on sales.",
+        )
         if st.form_submit_button("Create user", type="primary"):
             try:
+                _validate_location_assignment(selected, selected_locations)
                 services["users"].create_user(
                     username=username,
                     display_name=display_name,
                     password=password,
                     role_ids=selected,
+                    location_ids=selected_locations,
                 )
                 st.rerun()
             except ValidationError as exc:
@@ -86,6 +131,7 @@ def _add_user_dialog(services: dict, roles) -> None:
 @st.dialog("Edit User", on_dismiss=make_dismiss_handler(EDIT_FLAG))
 def _edit_user_dialog(services: dict, user, roles) -> None:
     role_ids, labels = _role_options(roles)
+    location_ids, location_labels = _location_options(services)
     with st.form("access_user_edit_form"):
         st.text_input("Username", value=user.username, disabled=True)
         display_name = st.text_input("Display name", value=user.display_name)
@@ -95,13 +141,24 @@ def _edit_user_dialog(services: dict, user, roles) -> None:
             default=[rid for rid in user.role_ids if rid in role_ids],
             format_func=lambda rid: labels.get(rid, rid),
         )
+        selected_locations = st.multiselect(
+            "Accessible locations",
+            options=location_ids,
+            default=[
+                lid for lid in (user.location_ids or []) if lid in location_ids
+            ],
+            format_func=lambda lid: location_labels.get(lid, lid),
+            help="Leave empty for all locations. Used to limit location pickers on sales.",
+        )
         active = st.checkbox("Active", value=user.active)
         if st.form_submit_button("Save", type="primary"):
             try:
+                _validate_location_assignment(selected, selected_locations)
                 services["users"].update_user(
                     user.id,
                     display_name=display_name,
                     role_ids=selected,
+                    location_ids=selected_locations,
                     active=active,
                 )
                 clear_dialog_flags(EDIT_FLAG)
@@ -157,6 +214,10 @@ def _user_card(user, role_labels: dict, index: int) -> None:
         )
         st.markdown(badge, unsafe_allow_html=True)
         st.caption(_role_names(user, role_labels))
+        loc_count = len(getattr(user, "location_ids", None) or [])
+        st.caption(
+            f"{loc_count} location(s)" if loc_count else "All locations"
+        )
 
         b1, b2 = st.columns(2)
         if b1.button(

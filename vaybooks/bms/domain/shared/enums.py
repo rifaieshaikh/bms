@@ -131,6 +131,18 @@ class GoodsReceiptStatus(str, Enum):
     CANCELLED = "Cancelled"
 
 
+class LocationType(str, Enum):
+    WAREHOUSE = "Warehouse"
+    RETAIL_STORE = "Retail Store"
+
+
+class StockTransferStatus(str, Enum):
+    DRAFT = "Draft"
+    DISPATCHED = "Dispatched"
+    RECEIVED = "Received"
+    CANCELLED = "Cancelled"
+
+
 class StockMovementType(str, Enum):
     RECEIVE = "Receive"
     ISSUE = "Issue"
@@ -140,6 +152,8 @@ class StockMovementType(str, Enum):
     PURCHASE_RECEIVE = "Purchase Receive"
     PURCHASE_RETURN = "Purchase Return"
     SALES_RETURN = "Sales Return"
+    TRANSFER_OUT = "Transfer Out"
+    TRANSFER_IN = "Transfer In"
 
 
 class StockReferenceType(str, Enum):
@@ -150,6 +164,7 @@ class StockReferenceType(str, Enum):
     GRN = "GRN"
     DELIVERY_NOTE = "Delivery Note"
     SALES_RETURN = "Sales Return"
+    STOCK_TRANSFER = "Stock Transfer"
 
 
 class PartyRegistrationType(str, Enum):

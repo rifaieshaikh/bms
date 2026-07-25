@@ -39,7 +39,6 @@ _PARENTS = [
     ParentShortcut("purchases_reports", "Purchases Reports", "Purchases", "alt+shift+r"),
     ParentShortcut("inventory_overview", "Inventory Overview", "Inventory", "alt+shift+i"),
     ParentShortcut("inventory_categories_list", "Categories", "Inventory", "ctrl+shift+c"),
-    ParentShortcut("inventory_warehouses_list", "Warehouses", "Inventory", "ctrl+shift+h"),
     ParentShortcut("inventory_products_list", "Products", "Inventory", "ctrl+shift+k"),
     ParentShortcut("inventory_stock_list", "Stock on Hand", "Inventory", "ctrl+shift+w"),
     ParentShortcut(
@@ -52,6 +51,7 @@ _PARENTS = [
         "Inventory",
         "ctrl+shift+y",
     ),
+    ParentShortcut("inventory_transfers_list", "Transfers", "Inventory", "ctrl+alt+t"),
     ParentShortcut("inventory_reports", "Inventory Reports", "Inventory", "alt+shift+v"),
     ParentShortcut("finance_overview", "Finance Overview", "Finance", "alt+shift+f"),
     ParentShortcut("accounts_list", "Accounts", "Finance", "ctrl+a"),
@@ -67,6 +67,7 @@ _PARENTS = [
     ParentShortcut("export_backup", "Export / Backup", "Finance", "ctrl+shift+e"),
     ParentShortcut("data_migration", "Data Migration", "Migration", "ctrl+alt+1"),
     ParentShortcut("business_settings", "Business", "Settings", "ctrl+,"),
+    ParentShortcut("settings_locations_list", "Locations", "Settings", "ctrl+shift+h"),
     ParentShortcut("customization_activities_list", "Customization Activities", "Settings", "ctrl+shift+y"),
     ParentShortcut("services_list", "Service Configuration", "Settings", "ctrl+shift+f"),
     ParentShortcut("keyboard_shortcuts", "Keyboard Shortcuts", "Settings", "ctrl+/"),

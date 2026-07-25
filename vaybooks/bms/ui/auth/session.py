@@ -16,6 +16,7 @@ SESSION_USER_ID = "auth_user_id"
 SESSION_USER_NAME = "auth_user_name"
 SESSION_EFFECTIVE_KEYS = "auth_effective_keys"
 SESSION_ENTITLEMENT_VERSION = "auth_entitlement_version"
+SESSION_WORKING_LOCATION_ID = "auth_working_location_id"
 _RESTORE_ATTEMPTED = "_auth_restore_attempted"
 
 # Legacy project session keys (kept in sync for audit callers)
@@ -62,6 +63,9 @@ def login_user(user: User, services: dict, *, persist: bool = True) -> None:
     st.session_state[SESSION_USER_NAME] = user.display_name or user.username
     st.session_state[SESSION_EFFECTIVE_KEYS] = keys
     st.session_state[SESSION_ENTITLEMENT_VERSION] = version
+    # Force the working location to be re-derived for the new user.
+    st.session_state.pop(SESSION_WORKING_LOCATION_ID, None)
+    st.session_state.pop("header_working_location_radio", None)
     # Keep project audit helpers working
     st.session_state[LEGACY_USER_ID] = user.id
     st.session_state[LEGACY_USER_NAME] = user.display_name or user.username
@@ -85,11 +89,13 @@ def logout_user() -> None:
         SESSION_USER_NAME,
         SESSION_EFFECTIVE_KEYS,
         SESSION_ENTITLEMENT_VERSION,
+        SESSION_WORKING_LOCATION_ID,
         LEGACY_USER_ID,
         LEGACY_USER_NAME,
         LEGACY_VIEW_COST,
     ):
         st.session_state.pop(key, None)
+    st.session_state.pop("header_working_location_radio", None)
     st.session_state[_RESTORE_ATTEMPTED] = True
     try:
         from vaybooks.bms.ui.auth.persist import clear_auth_cookie
@@ -214,3 +220,73 @@ def can_see_page(services: dict, url_path: str) -> bool:
     if not perm:
         return True
     return perm in _cached_keys(services)
+
+
+# ---------------------------------------------------------------------------
+# Working location (header context for sales / purchase / inventory creates)
+# ---------------------------------------------------------------------------
+
+
+def get_working_location_id() -> str:
+    """Raw session value: ALL_LOCATIONS, a location id, or "" when unset."""
+    return (st.session_state.get(SESSION_WORKING_LOCATION_ID) or "").strip()
+
+
+def set_working_location_id(location_id: str) -> None:
+    st.session_state[SESSION_WORKING_LOCATION_ID] = (location_id or "").strip()
+
+
+def ensure_working_location(services: dict) -> str:
+    """Initialize / revalidate the header working location for the current user.
+
+    Returns the effective working-location value (``ALL_LOCATIONS`` or an id).
+    Must be called before reading the working location on a page render.
+    """
+    from vaybooks.bms.domain.identity.location_access import (
+        ALL_LOCATIONS,
+        can_select_all,
+        default_working_location_id,
+    )
+
+    user = get_current_user(services)
+    inventory = services.get("inventory")
+    locations = _accessible_locations(user, inventory)
+    valid_ids = {loc.id for loc in locations}
+
+    current = get_working_location_id()
+    is_valid = current == ALL_LOCATIONS and can_select_all(user, locations)
+    is_valid = is_valid or (current in valid_ids)
+
+    if not is_valid:
+        current = default_working_location_id(user, locations)
+        set_working_location_id(current)
+    return current
+
+
+def current_working_location_id(services: dict) -> str:
+    """Effective working location after ensuring it is initialized/valid."""
+    return ensure_working_location(services)
+
+
+def require_specific_location(services: dict) -> str:
+    """Return the active location id, or raise when header is "All"/unset.
+
+    Use at sales/purchase/inventory create entry points so documents are always
+    stamped with a concrete location.
+    """
+    from vaybooks.bms.domain.identity.location_access import ALL_LOCATIONS
+    from vaybooks.bms.domain.shared.exceptions import ValidationError
+
+    location_id = ensure_working_location(services)
+    if not location_id or location_id == ALL_LOCATIONS:
+        raise ValidationError(
+            "Select a specific location in the header before creating "
+            "sales, purchase, or inventory documents."
+        )
+    return location_id
+
+
+def _accessible_locations(user, inventory) -> list:
+    from vaybooks.bms.domain.identity.location_access import accessible_locations
+
+    return accessible_locations(user, inventory)

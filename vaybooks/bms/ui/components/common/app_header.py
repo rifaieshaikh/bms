@@ -136,6 +136,80 @@ def _render_settings(
         _render_menu_section("Migration", migration)
 
 
+def _render_location_switcher(services: dict) -> None:
+    """Header control for the active working location (sales/purchase/inventory)."""
+    from vaybooks.bms.domain.identity.location_access import (
+        ALL_LOCATIONS,
+        can_select_all,
+    )
+    from vaybooks.bms.ui.auth.session import (
+        current_working_location_id,
+        get_current_user,
+        set_working_location_id,
+    )
+
+    inventory = services.get("inventory")
+    if inventory is None:
+        return
+
+    user = get_current_user(services)
+    locations = _accessible_locations(user, inventory)
+    if not locations:
+        with st.popover(_ICON_LABEL, icon=":material/location_off:"):
+            st.caption("No locations assigned to your account.")
+            st.caption("Ask an admin to assign locations under Access -> Users.")
+        return
+
+    current = current_working_location_id(services)
+    allow_all = can_select_all(user, locations)
+
+    label_by_id: dict[str, str] = {loc.id: f"{loc.code} - {loc.name}" for loc in locations}
+    options: list[str] = []
+    if allow_all:
+        options.append(ALL_LOCATIONS)
+    options.extend(loc.id for loc in locations)
+
+    def _fmt(value: str) -> str:
+        if value == ALL_LOCATIONS:
+            return "All locations"
+        return label_by_id.get(value, value)
+
+    # Single fixed location: show as a static caption, no switcher.
+    if len(options) == 1:
+        with st.popover(_ICON_LABEL, icon=":material/location_on:"):
+            st.markdown("**Working location**")
+            st.caption(_fmt(options[0]))
+        return
+
+    with st.popover(_ICON_LABEL, icon=":material/location_on:"):
+        st.markdown("**Working location**")
+        try:
+            index = options.index(current)
+        except ValueError:
+            index = 0
+        selected = st.radio(
+            "Working location",
+            options,
+            index=index,
+            format_func=_fmt,
+            key="header_working_location_radio",
+            label_visibility="collapsed",
+        )
+        if selected != current:
+            set_working_location_id(selected)
+            st.rerun()
+        if selected == ALL_LOCATIONS:
+            st.caption(
+                "All is view-only. Pick a specific location to create documents."
+            )
+
+
+def _accessible_locations(user, inventory) -> list:
+    from vaybooks.bms.domain.identity.location_access import accessible_locations
+
+    return accessible_locations(user, inventory)
+
+
 def _render_account(services: dict) -> None:
     from vaybooks.bms.ui.auth.dialogs import sign_out_dialog
 
@@ -170,7 +244,9 @@ def render_app_header(
             )
         with c_actions:
             with st.container(key="zh_actions"):
-                c_notif, c_settings, c_account = st.columns(3, gap="small")
+                c_loc, c_notif, c_settings, c_account = st.columns(4, gap="small")
+                with c_loc:
+                    _render_location_switcher(services)
                 with c_notif:
                     _render_notifications(services)
                 with c_settings:

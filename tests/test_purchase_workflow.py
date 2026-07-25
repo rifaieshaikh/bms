@@ -241,6 +241,8 @@ def test_po_to_grn_to_bill_flow():
     assert updated_po.status == PurchaseOrderStatus.PARTIALLY_RECEIVED
     assert updated_po.lines[0].qty_received == 4
     assert inventory.get_product(product.id).current_qty == 3
+    assert inventory.get_stock_balance(product.id, warehouse.id) == 3.0
+    assert grn.location_id == warehouse.id
     assert grn.warehouse_id == warehouse.id
     assert grn.lines[0].qty_accepted == 3
 

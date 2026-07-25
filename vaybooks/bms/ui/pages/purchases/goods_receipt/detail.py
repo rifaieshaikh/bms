@@ -69,13 +69,13 @@ def render(services: dict) -> None:
         caption_parts=[
             f"Vendor: {grn.vendor_name}",
             f"PO: {grn.po_number}" if grn.po_number else None,
-            f"Warehouse: {grn.warehouse_name}" if grn.warehouse_name else None,
+            f"Warehouse: {grn.location_name}" if grn.location_name else None,
             "Billed" if grn.voucher_id else None,
         ],
         left_facts=[
             ("Receipt date", format_document_date(grn.receipt_date)),
             ("Vendor", grn.vendor_name or "—"),
-            ("Warehouse", grn.warehouse_name or "—"),
+            ("Warehouse", grn.location_name or "—"),
         ],
         right_facts=right_facts,
         suffix=f"grn_{grn.id}",

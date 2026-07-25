@@ -10,10 +10,12 @@ from vaybooks.bms.application.inventory.service import InventoryAppService
 from vaybooks.bms.infrastructure.db.connection import get_database_from_uri
 from vaybooks.bms.infrastructure.repositories.inventory.mongo_inventory_repository import (
     MongoInventoryProductRepository,
+    MongoLocationRepository,
     MongoProductCategoryRepository,
     MongoProductUnitRepository,
+    MongoStockBalanceRepository,
     MongoStockMovementRepository,
-    MongoWarehouseRepository,
+    MongoStockTransferRepository,
 )
 
 BMS_ROOT = Path(__file__).resolve().parents[2]
@@ -54,7 +56,9 @@ def _inventory_service() -> InventoryAppService:
         MongoInventoryProductRepository(db),
         MongoStockMovementRepository(db),
         MongoProductUnitRepository(db),
-        warehouse_repo=MongoWarehouseRepository(db),
+        location_repo=MongoLocationRepository(db),
+        balance_repo=MongoStockBalanceRepository(db),
+        transfer_repo=MongoStockTransferRepository(db),
     )
 
 

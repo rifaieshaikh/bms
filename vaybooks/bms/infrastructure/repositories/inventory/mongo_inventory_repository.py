@@ -5,16 +5,25 @@ from pymongo.database import Database
 
 from vaybooks.bms.domain.inventory.entities import (
     InventoryProduct,
+    Location,
     ProductCategory,
     ProductUnit,
+    StockBalance,
     StockMovement,
+    StockTransfer,
+    StockTransferLine,
     Warehouse,
 )
 from vaybooks.bms.domain.inventory.field_definitions import (
     ProductFieldDefinition,
     ProductFieldType,
 )
-from vaybooks.bms.domain.shared.enums import StockMovementType, StockReferenceType
+from vaybooks.bms.domain.shared.enums import (
+    LocationType,
+    StockMovementType,
+    StockReferenceType,
+    StockTransferStatus,
+)
 
 
 def _enum_value(value):
@@ -167,60 +176,83 @@ class MongoProductCategoryRepository:
         self._collection.delete_one({"_id": category_id})
 
 
-class MongoWarehouseRepository:
+class MongoLocationRepository:
     def __init__(self, db: Database):
         self._collection = db.warehouses
 
-    def _to_doc(self, warehouse: Warehouse) -> dict:
+    def _to_doc(self, location: Location) -> dict:
+        loc_type = location.location_type
         return {
-            "_id": warehouse.id,
-            "code": warehouse.code,
-            "name": warehouse.name,
-            "address": warehouse.address,
-            "is_active": warehouse.is_active,
-            "created_at": warehouse.created_at,
-            "updated_at": warehouse.updated_at,
+            "_id": location.id,
+            "code": location.code,
+            "name": location.name,
+            "location_type": _enum_value(loc_type),
+            "address": location.address,
+            "is_active": location.is_active,
+            "created_at": location.created_at,
+            "updated_at": location.updated_at,
         }
 
-    def _from_doc(self, doc: dict) -> Warehouse:
-        return Warehouse(
+    def _from_doc(self, doc: dict) -> Location:
+        raw_type = doc.get("location_type") or LocationType.WAREHOUSE.value
+        try:
+            location_type = LocationType(raw_type)
+        except ValueError:
+            location_type = LocationType.WAREHOUSE
+        return Location(
             id=doc["_id"],
             code=doc["code"],
             name=doc["name"],
+            location_type=location_type,
             address=doc.get("address", ""),
             is_active=doc.get("is_active", True),
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
         )
 
-    def save(self, warehouse: Warehouse) -> Warehouse:
+    def save(self, location: Location) -> Location:
         self._collection.replace_one(
-            {"_id": warehouse.id}, self._to_doc(warehouse), upsert=True
+            {"_id": location.id}, self._to_doc(location), upsert=True
         )
-        return warehouse
+        return location
 
-    def find_by_id(self, warehouse_id: str) -> Optional[Warehouse]:
-        doc = self._collection.find_one({"_id": warehouse_id})
+    def find_by_id(self, location_id: str) -> Optional[Location]:
+        doc = self._collection.find_one({"_id": location_id})
         return self._from_doc(doc) if doc else None
 
-    def find_by_code(self, code: str) -> Optional[Warehouse]:
+    def find_by_code(self, code: str) -> Optional[Location]:
         doc = self._collection.find_one({"code": (code or "").strip().upper()})
         return self._from_doc(doc) if doc else None
 
-    def list_all(self, active_only: bool = True) -> List[Warehouse]:
-        query = {"is_active": True} if active_only else {}
+    def list_all(
+        self,
+        active_only: bool = True,
+        location_type: Optional[LocationType] = None,
+    ) -> List[Location]:
+        query: dict = {}
+        if active_only:
+            query["is_active"] = True
+        if location_type is not None:
+            query["location_type"] = _enum_value(location_type)
         return [
             self._from_doc(d)
             for d in self._collection.find(query).sort("code", 1)
         ]
 
     def search(
-        self, query: str, *, active_only: bool = True, limit: int = 25
-    ) -> List[Warehouse]:
+        self,
+        query: str,
+        *,
+        active_only: bool = True,
+        limit: int = 25,
+        location_type: Optional[LocationType] = None,
+    ) -> List[Location]:
         limit = max(1, min(int(limit or 25), 50))
         filters: dict = {}
         if active_only:
             filters["is_active"] = True
+        if location_type is not None:
+            filters["location_type"] = _enum_value(location_type)
         text = (query or "").strip()
         if text:
             regex = {"$regex": text, "$options": "i"}
@@ -228,8 +260,12 @@ class MongoWarehouseRepository:
         cursor = self._collection.find(filters).sort("code", 1).limit(limit)
         return [self._from_doc(d) for d in cursor]
 
-    def delete(self, warehouse_id: str) -> None:
-        self._collection.delete_one({"_id": warehouse_id})
+    def delete(self, location_id: str) -> None:
+        self._collection.delete_one({"_id": location_id})
+
+
+# Back-compat alias
+MongoWarehouseRepository = MongoLocationRepository
 
 
 class MongoProductFieldDefinitionRepository:
@@ -425,6 +461,7 @@ class MongoStockMovementRepository:
         md = movement.movement_date
         if isinstance(md, datetime):
             md = md.date()
+        location_id = movement.location_id
         return {
             "_id": movement.id,
             "product_id": movement.product_id,
@@ -433,7 +470,8 @@ class MongoStockMovementRepository:
             "movement_date": md.isoformat() if isinstance(md, date) else md,
             "reference_type": _enum_value(movement.reference_type),
             "reference_id": movement.reference_id,
-            "warehouse_id": movement.warehouse_id,
+            "location_id": location_id,
+            "warehouse_id": location_id,
             "notes": movement.notes,
             "created_at": movement.created_at,
         }
@@ -442,6 +480,7 @@ class MongoStockMovementRepository:
         md = doc.get("movement_date")
         if isinstance(md, str):
             md = date.fromisoformat(md)
+        location_id = doc.get("location_id") or doc.get("warehouse_id")
         return StockMovement(
             id=doc["_id"],
             product_id=doc["product_id"],
@@ -450,7 +489,7 @@ class MongoStockMovementRepository:
             movement_date=md,
             reference_type=StockReferenceType(doc.get("reference_type", "Manual")),
             reference_id=doc.get("reference_id"),
-            warehouse_id=doc.get("warehouse_id"),
+            location_id=location_id,
             notes=doc.get("notes", ""),
             created_at=doc.get("created_at", datetime.utcnow()),
         )
@@ -478,5 +517,152 @@ class MongoStockMovementRepository:
             for d in self._collection.find({"reference_id": reference_id})
         ]
 
+    def list_by_location(self, location_id: str) -> List[StockMovement]:
+        if not location_id:
+            return []
+        return [
+            self._from_doc(d)
+            for d in self._collection.find(
+                {
+                    "$or": [
+                        {"location_id": location_id},
+                        {"warehouse_id": location_id},
+                    ]
+                }
+            )
+        ]
+
     def delete(self, movement_id: str) -> None:
         self._collection.delete_one({"_id": movement_id})
+
+
+class MongoStockBalanceRepository:
+    def __init__(self, db: Database):
+        self._collection = db.stock_balances
+
+    def _to_doc(self, balance: StockBalance) -> dict:
+        return {
+            "_id": balance.id,
+            "product_id": balance.product_id,
+            "location_id": balance.location_id,
+            "qty": balance.qty,
+            "updated_at": balance.updated_at,
+        }
+
+    def _from_doc(self, doc: dict) -> StockBalance:
+        return StockBalance(
+            id=doc["_id"],
+            product_id=doc["product_id"],
+            location_id=doc["location_id"],
+            qty=float(doc.get("qty") or 0),
+            updated_at=doc.get("updated_at", datetime.utcnow()),
+        )
+
+    def save(self, balance: StockBalance) -> StockBalance:
+        self._collection.replace_one(
+            {"_id": balance.id}, self._to_doc(balance), upsert=True
+        )
+        return balance
+
+    def get(self, product_id: str, location_id: str) -> Optional[StockBalance]:
+        doc = self._collection.find_one(
+            {"product_id": product_id, "location_id": location_id}
+        )
+        return self._from_doc(doc) if doc else None
+
+    def list_by_product(self, product_id: str) -> List[StockBalance]:
+        return [
+            self._from_doc(d)
+            for d in self._collection.find({"product_id": product_id})
+        ]
+
+    def list_by_location(self, location_id: str) -> List[StockBalance]:
+        return [
+            self._from_doc(d)
+            for d in self._collection.find({"location_id": location_id})
+        ]
+
+    def list_all(self) -> List[StockBalance]:
+        return [self._from_doc(d) for d in self._collection.find()]
+
+    def delete(self, balance_id: str) -> None:
+        self._collection.delete_one({"_id": balance_id})
+
+
+class MongoStockTransferRepository:
+    def __init__(self, db: Database):
+        self._collection = db.stock_transfers
+
+    def _line_to_doc(self, line: StockTransferLine) -> dict:
+        return {
+            "id": line.id,
+            "product_id": line.product_id,
+            "product_name": line.product_name,
+            "qty": line.qty,
+        }
+
+    def _line_from_doc(self, doc: dict) -> StockTransferLine:
+        return StockTransferLine(
+            id=doc.get("id", ""),
+            product_id=doc.get("product_id", ""),
+            product_name=doc.get("product_name", ""),
+            qty=float(doc.get("qty") or 0),
+        )
+
+    def _to_doc(self, transfer: StockTransfer) -> dict:
+        td = transfer.transfer_date
+        return {
+            "_id": transfer.id,
+            "transfer_number": transfer.transfer_number,
+            "from_location_id": transfer.from_location_id,
+            "from_location_name": transfer.from_location_name,
+            "to_location_id": transfer.to_location_id,
+            "to_location_name": transfer.to_location_name,
+            "transfer_date": td.isoformat() if isinstance(td, date) else td,
+            "status": _enum_value(transfer.status),
+            "lines": [self._line_to_doc(line) for line in transfer.lines],
+            "notes": transfer.notes,
+            "created_at": transfer.created_at,
+            "updated_at": transfer.updated_at,
+        }
+
+    def _from_doc(self, doc: dict) -> StockTransfer:
+        td = doc.get("transfer_date")
+        if isinstance(td, str):
+            td = date.fromisoformat(td)
+        return StockTransfer(
+            id=doc["_id"],
+            transfer_number=doc["transfer_number"],
+            from_location_id=doc.get("from_location_id", ""),
+            from_location_name=doc.get("from_location_name", ""),
+            to_location_id=doc.get("to_location_id", ""),
+            to_location_name=doc.get("to_location_name", ""),
+            transfer_date=td,
+            status=StockTransferStatus(
+                doc.get("status", StockTransferStatus.DRAFT.value)
+            ),
+            lines=[self._line_from_doc(line) for line in doc.get("lines", [])],
+            notes=doc.get("notes", ""),
+            created_at=doc.get("created_at", datetime.utcnow()),
+            updated_at=doc.get("updated_at", datetime.utcnow()),
+        )
+
+    def save(self, transfer: StockTransfer) -> StockTransfer:
+        self._collection.replace_one(
+            {"_id": transfer.id}, self._to_doc(transfer), upsert=True
+        )
+        return transfer
+
+    def find_by_id(self, transfer_id: str) -> Optional[StockTransfer]:
+        doc = self._collection.find_one({"_id": transfer_id})
+        return self._from_doc(doc) if doc else None
+
+    def find_by_number(self, transfer_number: str) -> Optional[StockTransfer]:
+        doc = self._collection.find_one({"transfer_number": transfer_number})
+        return self._from_doc(doc) if doc else None
+
+    def list_all(self) -> List[StockTransfer]:
+        return [self._from_doc(d) for d in self._collection.find()]
+
+    def delete(self, transfer_id: str) -> None:
+        self._collection.delete_one({"_id": transfer_id})

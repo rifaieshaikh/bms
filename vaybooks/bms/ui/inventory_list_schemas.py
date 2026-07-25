@@ -5,7 +5,12 @@ from __future__ import annotations
 import re
 from datetime import date
 
-from vaybooks.bms.domain.shared.enums import StockMovementType, StockReferenceType
+from vaybooks.bms.domain.shared.enums import (
+    LocationType,
+    StockMovementType,
+    StockReferenceType,
+    StockTransferStatus,
+)
 from vaybooks.bms.ui import filtering as F
 from vaybooks.bms.ui.filtering import FilterField, ListSchema, SortOption
 from vaybooks.bms.ui.pagination import CARD_PAGE_SIZE, VOUCHER_PAGE_SIZE
@@ -33,6 +38,31 @@ def _match_inv_category_active(category, _value) -> bool:
 
 def _match_inv_warehouse_active(warehouse, _value) -> bool:
     return bool(getattr(warehouse, "is_active", False))
+
+
+def _match_location_active(location, _value) -> bool:
+    return bool(getattr(location, "is_active", False))
+
+
+def _match_location_type(location, value) -> bool:
+    loc_type = getattr(location, "location_type", None)
+    return getattr(loc_type, "value", loc_type) == value
+
+
+def _match_stock_ledger_location(row, value) -> bool:
+    return row.get("location_id") == value
+
+
+def _match_transfer_status(transfer, value) -> bool:
+    status = getattr(transfer, "status", None)
+    return getattr(status, "value", status) == value
+
+
+def _match_transfer_location(transfer, value) -> bool:
+    return (
+        getattr(transfer, "from_location_id", None) == value
+        or getattr(transfer, "to_location_id", None) == value
+    )
 
 
 def _match_inv_product_active(product, _value) -> bool:
@@ -135,6 +165,35 @@ INVENTORY_WAREHOUSES = ListSchema(
     page_size=CARD_PAGE_SIZE,
 )
 
+# Locations now live under Settings → Locations (warehouses/list.py redirects here).
+SETTINGS_LOCATIONS = ListSchema(
+    entity_key="settings_locations",
+    title="Locations",
+    filter_fields=[
+        FilterField("code", "Code", F.REGEX),
+        FilterField("name", "Name", F.REGEX),
+        FilterField("address", "Address", F.REGEX),
+        FilterField(
+            "location_type",
+            "Type",
+            F.SELECT,
+            options=_enum_opts(LocationType),
+            multi=False,
+            match=_match_location_type,
+        ),
+        FilterField("active_only", "Active only", F.CHECKBOX,
+                    match=_match_location_active),
+    ],
+    sort_options=[
+        SortOption("created_at", "Created"),
+        SortOption("code", "Code"),
+        SortOption("name", "Name"),
+        SortOption("location_type", "Type"),
+    ],
+    default_sort="code",
+    page_size=CARD_PAGE_SIZE,
+)
+
 INVENTORY_PRODUCTS = ListSchema(
     entity_key="inventory_products",
     title="Inventory Products",
@@ -202,6 +261,10 @@ INVENTORY_STOCK_LEDGER = ListSchema(
         FilterField("reference_type", "Reference type", F.SELECT,
                     options=_enum_opts(StockReferenceType),
                     match=_match_stock_ledger_reference),
+        FilterField("location_id", "Location", F.ENTITY_SELECT,
+                    options_loader="inventory_locations",
+                    multi=False,
+                    match=_match_stock_ledger_location),
     ],
     sort_options=[
         SortOption("movement_date", "Date"),
@@ -226,6 +289,10 @@ INVENTORY_MOVEMENTS = ListSchema(
         FilterField("movement_type", "Movement type", F.SELECT,
                     options=_enum_opts(StockMovementType),
                     match=lambda row, v: row.get("movement_type") == v),
+        FilterField("location_id", "Location", F.ENTITY_SELECT,
+                    options_loader="inventory_locations",
+                    multi=False,
+                    match=_match_stock_ledger_location),
     ],
     sort_options=[
         SortOption("movement_date", "Date"),
@@ -265,16 +332,51 @@ INVENTORY_CUSTOMER_PRICES = ListSchema(
     page_size=VOUCHER_PAGE_SIZE,
 )
 
+INVENTORY_TRANSFERS = ListSchema(
+    entity_key="inventory_transfers",
+    title="Stock Transfers",
+    filter_fields=[
+        FilterField("transfer_number", "Transfer #", F.REGEX),
+        FilterField("transfer_date", "Transfer date", F.DATE_RANGE),
+        FilterField(
+            "status",
+            "Status",
+            F.SELECT,
+            options=_enum_opts(StockTransferStatus),
+            multi=False,
+            match=_match_transfer_status,
+        ),
+        FilterField(
+            "location_id",
+            "Location (from/to)",
+            F.ENTITY_SELECT,
+            options_loader="inventory_locations",
+            multi=False,
+            match=_match_transfer_location,
+        ),
+    ],
+    sort_options=[
+        SortOption("created_at", "Created"),
+        SortOption("transfer_date", "Transfer date"),
+        SortOption("transfer_number", "Transfer #"),
+        SortOption("status", "Status"),
+    ],
+    default_sort="created_at",
+    page_size=CARD_PAGE_SIZE,
+)
+
 INVENTORY_SCHEMAS = {
     s.entity_key: s
     for s in [
         INVENTORY_OVERVIEW,
         INVENTORY_CATEGORIES,
         INVENTORY_WAREHOUSES,
+        SETTINGS_LOCATIONS,
         INVENTORY_PRODUCTS,
         INVENTORY_STOCK,
         INVENTORY_STOCK_LEDGER,
         INVENTORY_MOVEMENTS,
         INVENTORY_CUSTOMER_PRICES,
+        INVENTORY_TRANSFERS,
     ]
 }

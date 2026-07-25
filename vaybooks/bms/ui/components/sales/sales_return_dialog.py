@@ -16,6 +16,7 @@ from vaybooks.bms.ui.components.common.customer_identity_selector import (
     render_customer_identity_selector,
     resolve_customer_identity,
 )
+from vaybooks.bms.ui.auth.session import require_specific_location
 from vaybooks.bms.ui.components.sales.sales_lines_entry_table import (
     entry_table_focus_chain,
     entry_table_focus_columns,
@@ -208,7 +209,6 @@ def sales_return_dialog(services: dict) -> None:
         value=True,
         key=f"{SALES_RETURN_DIALOG}_restock",
     )
-
     refund_option = st.selectbox(
         "Refund option",
         ["Customer credit", "Cash / bank refund"],
@@ -269,6 +269,7 @@ def sales_return_dialog(services: dict) -> None:
                 raise ValueError("Add at least one return line")
             if not return_reason.strip():
                 raise ValueError("Return reason is required")
+            location_id = require_specific_location(services)
             customer = resolve_customer_identity(customers, customer_selection)
             attachments = []
             for uploaded in uploaded_files or []:
@@ -295,6 +296,7 @@ def sales_return_dialog(services: dict) -> None:
                 refund_option=refund_option,
                 restock_items=restock_items,
                 attachments=attachments,
+                location_id=location_id,
             )
             _clear()
             st.rerun()

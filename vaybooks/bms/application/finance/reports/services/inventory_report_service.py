@@ -13,6 +13,7 @@ from vaybooks.bms.application.report_filters import (
     FastMovingStockFilter,
     LowStockFilter,
     OpeningClosingStockFilter,
+    StockByLocationFilter,
     StockMovementsFilter,
     StockOnHandFilter,
 )
@@ -54,6 +55,18 @@ class InventoryReportService:
     def __init__(self, inventory: InventoryAppService, sales=None):
         self._inventory = inventory
         self._sales = sales
+
+    def _qty_for(self, product, location_id: str = "") -> float:
+        """Product qty, optionally scoped to a single location's stock balance."""
+        if not location_id:
+            return product.current_qty
+        return self._inventory.get_stock_balance(product.id, location_id)
+
+    def _ledger_rows(self, location_id: str = "") -> list[dict]:
+        rows = self._inventory.get_stock_ledger()
+        if not location_id:
+            return rows
+        return [row for row in rows if row.get("location_id") == location_id]
 
     def health_summary(self) -> dict:
         products = self._inventory.list_products(active_only=False)
@@ -116,13 +129,15 @@ class InventoryReportService:
 
     def stock_on_hand_report(self, filters: StockOnHandFilter) -> list[dict]:
         products = self._inventory.list_products(active_only=False)
+        location_id = getattr(filters, "location_id", "") or ""
         rows = []
         for product in products:
             if filters.active_only and not product.is_active:
                 continue
             if filters.category_id and product.category_id != filters.category_id:
                 continue
-            if filters.min_qty is not None and product.current_qty < filters.min_qty:
+            qty = self._qty_for(product, location_id)
+            if filters.min_qty is not None and qty < filters.min_qty:
                 continue
             if filters.search:
                 needle = filters.search.lower()
@@ -134,11 +149,11 @@ class InventoryReportService:
                     "sku": product.sku,
                     "product_name": product.name,
                     "category": product.category_name,
-                    "qty": product.current_qty,
+                    "qty": qty,
                     "unit": product.unit,
                     "selling_rate": product.selling_rate,
-                    "stock_value": round(product.current_qty * product.selling_rate, 2),
-                    "stock_status": _stock_status(product.current_qty),
+                    "stock_value": round(qty * product.selling_rate, 2),
+                    "stock_status": _stock_status(qty),
                     "is_active": "Yes" if product.is_active else "No",
                 }
             )
@@ -172,8 +187,9 @@ class InventoryReportService:
     def stock_movements_report(self, filters: StockMovementsFilter) -> list[dict]:
         start = filters.date_range.start
         end = filters.date_range.end
+        location_id = getattr(filters, "location_id", "") or ""
         rows = []
-        for row in self._inventory.get_stock_ledger():
+        for row in self._ledger_rows(location_id):
             md = _movement_date(row.get("movement_date"))
             if md is None or md < start or md > end:
                 continue
@@ -192,6 +208,7 @@ class InventoryReportService:
                     "movement_type": row.get("movement_type", ""),
                     "qty_in": row.get("qty_in") or None,
                     "qty_out": row.get("qty_out") or None,
+                    "location": row.get("location_name", ""),
                     "reference": row.get("reference_id")
                     or row.get("reference_type", ""),
                     "notes": row.get("notes", ""),
@@ -201,6 +218,7 @@ class InventoryReportService:
 
     def inventory_valuation_report(self, filters: StockOnHandFilter) -> list[dict]:
         products = self._inventory.list_products(active_only=filters.active_only)
+        location_id = getattr(filters, "location_id", "") or ""
         rows = []
         for product in products:
             if filters.category_id and product.category_id != filters.category_id:
@@ -210,22 +228,22 @@ class InventoryReportService:
                 hay = f"{product.sku} {product.name} {product.category_name}".lower()
                 if needle not in hay:
                     continue
+            qty = self._qty_for(product, location_id)
             rows.append(
                 {
                     "sku": product.sku,
                     "product_name": product.name,
                     "category": product.category_name,
-                    "qty": product.current_qty,
+                    "qty": qty,
                     "weighted_avg_cost": product.weighted_avg_cost,
-                    "valuation": round(
-                        product.current_qty * product.weighted_avg_cost, 2
-                    ),
+                    "valuation": round(qty * product.weighted_avg_cost, 2),
                 }
             )
         return rows
 
     def category_stock_summary_report(self, filters: StockOnHandFilter) -> list[dict]:
         products = self._inventory.list_products(active_only=False)
+        location_id = getattr(filters, "location_id", "") or ""
         buckets: dict[str, dict] = {}
         for product in products:
             if filters.active_only and not product.is_active:
@@ -237,6 +255,7 @@ class InventoryReportService:
                 hay = f"{product.sku} {product.name} {product.category_name}".lower()
                 if needle not in hay:
                     continue
+            qty = self._qty_for(product, location_id)
             key = product.category_id or ""
             label = (product.category_name or "").strip() or "(uncategorized)"
             bucket = buckets.get(key)
@@ -250,20 +269,21 @@ class InventoryReportService:
                 }
                 buckets[key] = bucket
             bucket["product_count"] += 1
-            bucket["qty"] = round(bucket["qty"] + product.current_qty, 2)
+            bucket["qty"] = round(bucket["qty"] + qty, 2)
             bucket["stock_value"] = round(
-                bucket["stock_value"] + product.current_qty * product.selling_rate, 2
+                bucket["stock_value"] + qty * product.selling_rate, 2
             )
             bucket["valuation"] = round(
-                bucket["valuation"] + product.current_qty * product.weighted_avg_cost, 2
+                bucket["valuation"] + qty * product.weighted_avg_cost, 2
             )
         return sorted(buckets.values(), key=lambda r: r["category"].lower())
 
     def dead_stock_report(self, filters: DeadStockFilter) -> list[dict]:
         start = filters.date_range.start
         end = filters.date_range.end
+        location_id = getattr(filters, "location_id", "") or ""
         qty_out_by_product: dict[str, float] = defaultdict(float)
-        for row in self._inventory.get_stock_ledger():
+        for row in self._ledger_rows(location_id):
             md = _movement_date(row.get("movement_date"))
             if md is None or md < start or md > end:
                 continue
@@ -280,7 +300,8 @@ class InventoryReportService:
         for product in self._inventory.list_products(active_only=True):
             if filters.category_id and product.category_id != filters.category_id:
                 continue
-            if product.current_qty <= min_qty:
+            qty = self._qty_for(product, location_id)
+            if qty <= min_qty:
                 continue
             moved_out = qty_out_by_product.get(product.id, 0.0)
             if moved_out > max_qty_out:
@@ -290,15 +311,11 @@ class InventoryReportService:
                     "sku": product.sku,
                     "product_name": product.name,
                     "category": product.category_name,
-                    "qty": product.current_qty,
+                    "qty": qty,
                     "unit": product.unit,
                     "qty_out_in_period": moved_out,
-                    "stock_value": round(
-                        product.current_qty * product.selling_rate, 2
-                    ),
-                    "valuation": round(
-                        product.current_qty * product.weighted_avg_cost, 2
-                    ),
+                    "stock_value": round(qty * product.selling_rate, 2),
+                    "valuation": round(qty * product.weighted_avg_cost, 2),
                 }
             )
         return sorted(rows, key=lambda r: (r["qty_out_in_period"], r["product_name"]))
@@ -308,8 +325,9 @@ class InventoryReportService:
     ) -> list[dict]:
         start = filters.date_range.start
         end = filters.date_range.end
+        location_id = getattr(filters, "location_id", "") or ""
         buckets: dict[str, dict] = {}
-        for row in self._inventory.get_stock_ledger():
+        for row in self._ledger_rows(location_id):
             md = _movement_date(row.get("movement_date"))
             if md is None or md < start or md > end:
                 continue
@@ -336,13 +354,15 @@ class InventoryReportService:
 
     def stock_margin_report(self, filters: StockOnHandFilter) -> list[dict]:
         products = self._inventory.list_products(active_only=False)
+        location_id = getattr(filters, "location_id", "") or ""
         rows = []
         for product in products:
             if filters.active_only and not product.is_active:
                 continue
             if filters.category_id and product.category_id != filters.category_id:
                 continue
-            if filters.min_qty is not None and product.current_qty < filters.min_qty:
+            qty = self._qty_for(product, location_id)
+            if filters.min_qty is not None and qty < filters.min_qty:
                 continue
             if filters.search:
                 needle = filters.search.lower()
@@ -355,11 +375,11 @@ class InventoryReportService:
                     "sku": product.sku,
                     "product_name": product.name,
                     "category": product.category_name,
-                    "qty": product.current_qty,
+                    "qty": qty,
                     "weighted_avg_cost": product.weighted_avg_cost,
                     "selling_rate": product.selling_rate,
                     "unit_margin": unit_margin,
-                    "stock_margin": round(unit_margin * product.current_qty, 2),
+                    "stock_margin": round(unit_margin * qty, 2),
                 }
             )
         return rows
@@ -369,6 +389,7 @@ class InventoryReportService:
     ) -> list[dict]:
         start = filters.date_range.start
         end = filters.date_range.end
+        location_id = getattr(filters, "location_id", "") or ""
         products = {
             p.id: p
             for p in self._inventory.list_products(active_only=False)
@@ -380,7 +401,7 @@ class InventoryReportService:
         qty_in: dict[str, float] = defaultdict(float)
         qty_out: dict[str, float] = defaultdict(float)
 
-        for row in self._inventory.get_stock_ledger():
+        for row in self._ledger_rows(location_id):
             pid = row.get("product_id") or ""
             if pid not in products:
                 continue
@@ -401,8 +422,9 @@ class InventoryReportService:
             in_qty = qty_in.get(pid, 0.0)
             out_qty = qty_out.get(pid, 0.0)
             close_qty = round(open_qty + in_qty - out_qty, 2)
+            current_qty = self._qty_for(product, location_id)
             if open_qty == 0 and in_qty == 0 and out_qty == 0 and close_qty == 0:
-                if product.current_qty == 0:
+                if current_qty == 0:
                     continue
             rows.append(
                 {
@@ -414,8 +436,8 @@ class InventoryReportService:
                     "qty_in": in_qty,
                     "qty_out": out_qty,
                     "closing_qty": close_qty,
-                    "current_qty": product.current_qty,
-                    "variance": round(close_qty - product.current_qty, 2),
+                    "current_qty": current_qty,
+                    "variance": round(close_qty - current_qty, 2),
                     "opening_value": round(open_qty * product.weighted_avg_cost, 2),
                     "closing_value": round(close_qty * product.weighted_avg_cost, 2),
                 }
@@ -424,13 +446,15 @@ class InventoryReportService:
 
     def hsn_stock_summary_report(self, filters: StockOnHandFilter) -> list[dict]:
         products = self._inventory.list_products(active_only=False)
+        location_id = getattr(filters, "location_id", "") or ""
         buckets: dict[str, dict] = {}
         for product in products:
             if filters.active_only and not product.is_active:
                 continue
             if filters.category_id and product.category_id != filters.category_id:
                 continue
-            if filters.min_qty is not None and product.current_qty < filters.min_qty:
+            qty = self._qty_for(product, location_id)
+            if filters.min_qty is not None and qty < filters.min_qty:
                 continue
             hsn = (product.hsn_sac or "").strip() or "(blank)"
             if filters.search:
@@ -451,12 +475,12 @@ class InventoryReportService:
                 }
                 buckets[hsn] = bucket
             bucket["product_count"] += 1
-            bucket["qty"] = round(bucket["qty"] + product.current_qty, 2)
+            bucket["qty"] = round(bucket["qty"] + qty, 2)
             bucket["stock_value"] = round(
-                bucket["stock_value"] + product.current_qty * product.selling_rate, 2
+                bucket["stock_value"] + qty * product.selling_rate, 2
             )
             bucket["valuation"] = round(
-                bucket["valuation"] + product.current_qty * product.weighted_avg_cost, 2
+                bucket["valuation"] + qty * product.weighted_avg_cost, 2
             )
             bucket["_gst_rates"].add(gst)
 
@@ -475,8 +499,9 @@ class InventoryReportService:
     ) -> list[dict]:
         start = filters.date_range.start
         end = filters.date_range.end
+        location_id = getattr(filters, "location_id", "") or ""
         qty_out_by_product: dict[str, float] = defaultdict(float)
-        for row in self._inventory.get_stock_ledger():
+        for row in self._ledger_rows(location_id):
             md = _movement_date(row.get("movement_date"))
             if md is None or md < start or md > end:
                 continue
@@ -495,20 +520,17 @@ class InventoryReportService:
             moved_out = qty_out_by_product.get(product.id, 0.0)
             if moved_out <= min_qty_out:
                 continue
+            qty = self._qty_for(product, location_id)
             rows.append(
                 {
                     "sku": product.sku,
                     "product_name": product.name,
                     "category": product.category_name,
-                    "qty": product.current_qty,
+                    "qty": qty,
                     "unit": product.unit,
                     "qty_out_in_period": moved_out,
-                    "stock_value": round(
-                        product.current_qty * product.selling_rate, 2
-                    ),
-                    "valuation": round(
-                        product.current_qty * product.weighted_avg_cost, 2
-                    ),
+                    "stock_value": round(qty * product.selling_rate, 2),
+                    "valuation": round(qty * product.weighted_avg_cost, 2),
                 }
             )
         return sorted(
@@ -601,13 +623,15 @@ class InventoryReportService:
         self, filters: StockOnHandFilter
     ) -> list[dict]:
         min_qty = float(filters.min_qty or 0)
+        location_id = getattr(filters, "location_id", "") or ""
         rows = []
         for product in self._inventory.list_products(active_only=False):
             if product.is_active:
                 continue
             if filters.category_id and product.category_id != filters.category_id:
                 continue
-            if product.current_qty <= min_qty:
+            qty = self._qty_for(product, location_id)
+            if qty <= min_qty:
                 continue
             if filters.search:
                 needle = filters.search.lower()
@@ -619,15 +643,11 @@ class InventoryReportService:
                     "sku": product.sku,
                     "product_name": product.name,
                     "category": product.category_name,
-                    "qty": product.current_qty,
+                    "qty": qty,
                     "unit": product.unit,
                     "selling_rate": product.selling_rate,
-                    "stock_value": round(
-                        product.current_qty * product.selling_rate, 2
-                    ),
-                    "valuation": round(
-                        product.current_qty * product.weighted_avg_cost, 2
-                    ),
+                    "stock_value": round(qty * product.selling_rate, 2),
+                    "valuation": round(qty * product.weighted_avg_cost, 2),
                     "is_active": "No",
                 }
             )
@@ -664,3 +684,32 @@ class InventoryReportService:
                 }
             )
         return sorted(rows, key=lambda r: (r["sku"] or "", r["product_name"] or ""))
+
+    def stock_by_location_report(
+        self, filters: StockByLocationFilter
+    ) -> list[dict]:
+        rows = self._inventory.on_hand_by_location()
+        if filters.location_id:
+            rows = [r for r in rows if r.get("location_id") == filters.location_id]
+        if filters.category_id:
+            products = {
+                p.id: p.category_id
+                for p in self._inventory.list_products(active_only=False)
+            }
+            rows = [
+                r
+                for r in rows
+                if products.get(r.get("product_id")) == filters.category_id
+            ]
+        if filters.search:
+            needle = filters.search.lower()
+            rows = [
+                r
+                for r in rows
+                if needle
+                in f"{r.get('sku', '')} {r.get('product_name', '')} {r.get('location_name', '')}".lower()
+            ]
+        return sorted(
+            rows,
+            key=lambda r: (r.get("product_name") or "", r.get("location_name") or ""),
+        )

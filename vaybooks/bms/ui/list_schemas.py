@@ -105,6 +105,16 @@ def _inventory_products(services):
     ]
 
 
+def _inventory_locations(services):
+    inventory = services.get("inventory")
+    if inventory is None:
+        return []
+    return [
+        (loc.id, f"{loc.code} — {loc.name}")
+        for loc in inventory.list_locations(active_only=False)
+    ]
+
+
 def _party_segments(services):
     segments = services.get("party_segments")
     if segments is None:
@@ -144,6 +154,7 @@ OPTION_LOADERS = {
     "services_by_id": _services_by_id,
     "inventory_categories": _inventory_categories,
     "inventory_products": _inventory_products,
+    "inventory_locations": _inventory_locations,
     "party_segments": _party_segments,
     "customer_segments": _customer_segments,
     "vendor_segments": _vendor_segments,

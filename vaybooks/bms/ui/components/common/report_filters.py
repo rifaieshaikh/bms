@@ -29,6 +29,7 @@ from vaybooks.bms.application.report_filters import (
     OverdueFilter,
     PeriodSummaryFilter,
     PurchasesByVendorFilter,
+    StockByLocationFilter,
     StockMovementsFilter,
     StockOnHandFilter,
     TimeTrackingFilter,
@@ -226,6 +227,7 @@ def build_stock_on_hand_filter(filters: dict) -> StockOnHandFilter:
         active_only=bool(filters.get("active_only")),
         min_qty=_optional_min(filters.get("min_qty")),
         search=_text(filters.get("search")),
+        location_id=_single(filters.get("location_id")) or "",
     )
 
 
@@ -244,6 +246,7 @@ def build_stock_movements_filter(filters: dict) -> StockMovementsFilter:
         product_id=_single(filters.get("product_id")) or "",
         category_id=_single(filters.get("category_id")) or "",
         movement_type=(_single(filters.get("movement_type")) or "").strip(),
+        location_id=_single(filters.get("location_id")) or "",
     )
 
 
@@ -253,6 +256,7 @@ def build_dead_stock_filter(filters: dict) -> DeadStockFilter:
         category_id=_single(filters.get("category_id")) or "",
         min_qty=_optional_min(filters.get("min_qty")) or 0.0,
         max_qty_out=_optional_min(filters.get("max_qty_out")) or 0.0,
+        location_id=_single(filters.get("location_id")) or "",
     )
 
 
@@ -262,6 +266,7 @@ def build_opening_closing_stock_filter(filters: dict) -> OpeningClosingStockFilt
         category_id=_single(filters.get("category_id")) or "",
         product_id=_single(filters.get("product_id")) or "",
         active_only=bool(filters.get("active_only")),
+        location_id=_single(filters.get("location_id")) or "",
     )
 
 
@@ -270,6 +275,15 @@ def build_fast_moving_stock_filter(filters: dict) -> FastMovingStockFilter:
         date_range=_date_range(filters),
         category_id=_single(filters.get("category_id")) or "",
         min_qty_out=_optional_min(filters.get("min_qty_out")) or 0.0,
+        location_id=_single(filters.get("location_id")) or "",
+    )
+
+
+def build_stock_by_location_filter(filters: dict) -> StockByLocationFilter:
+    return StockByLocationFilter(
+        location_id=_single(filters.get("location_id")) or "",
+        category_id=_single(filters.get("category_id")) or "",
+        search=_text(filters.get("search")),
     )
 
 
@@ -329,6 +343,7 @@ _BUILDERS = {
     "report_customer_latest_prices": build_customer_latest_prices_filter,
     "report_inactive_products_with_stock": build_stock_on_hand_filter,
     "report_product_rate_card": build_stock_on_hand_filter,
+    "report_stock_by_location": build_stock_by_location_filter,
     "report_po_pipeline": build_empty_report_filter,
     "report_grn_pending": build_empty_report_filter,
     "report_purchases_by_vendor": build_purchases_by_vendor_filter,

@@ -70,6 +70,8 @@ class SalesDomainService:
         notes: str = "",
         status: SalesOrderStatus = SalesOrderStatus.DRAFT,
         supply_type: str = "",
+        location_id: str = "",
+        location_name: str = "",
     ) -> SalesOrder:
         if not customer_id:
             raise ValidationError("Customer is required")
@@ -99,6 +101,8 @@ class SalesDomainService:
             notes=notes.strip(),
             status=status,
             supply_type=supply_type,
+            location_id=(location_id or "").strip(),
+            location_name=(location_name or "").strip(),
         )
         return self._so_repo.save(order)
 
@@ -113,6 +117,8 @@ class SalesDomainService:
         notes: str = "",
         status: Optional[SalesOrderStatus] = None,
         supply_type: Optional[str] = None,
+        location_id: Optional[str] = None,
+        location_name: Optional[str] = None,
     ) -> SalesOrder:
         order = self._so_repo.find_by_id(order_id)
         if not order:
@@ -177,6 +183,10 @@ class SalesDomainService:
         )
         if supply_type is not None:
             order.supply_type = supply_type
+        if location_id is not None:
+            order.location_id = (location_id or "").strip()
+        if location_name is not None:
+            order.location_name = (location_name or "").strip()
         if status is not None:
             order.status = status
         self._refresh_so_status(order)
@@ -208,6 +218,8 @@ class SalesDomainService:
         sales_order_id: Optional[str] = None,
         so_number: str = "",
         notes: str = "",
+        location_id: str = "",
+        location_name: str = "",
     ) -> DeliveryNote:
         if not lines:
             raise ValidationError("At least one delivery line is required")
@@ -255,6 +267,8 @@ class SalesDomainService:
             lines=dn_lines,
             notes=notes.strip(),
             status=DeliveryNoteStatus.DRAFT,
+            location_id=(location_id or "").strip(),
+            location_name=(location_name or "").strip(),
         )
         return self._dn_repo.save(dn)
 
@@ -287,6 +301,8 @@ class SalesDomainService:
         lines: List[dict],
         notes: str = "",
         document_content: Optional[DocumentContentSnapshot] = None,
+        location_id: Optional[str] = None,
+        location_name: Optional[str] = None,
     ) -> DeliveryNote:
         dn = self._dn_repo.find_by_id(dn_id)
         if not dn:
@@ -302,6 +318,10 @@ class SalesDomainService:
             sales_order_id=dn.sales_order_id,
             so_number=dn.so_number,
             notes=notes,
+            location_id=location_id if location_id is not None else dn.location_id,
+            location_name=(
+                location_name if location_name is not None else dn.location_name
+            ),
         )
         self._dn_repo.delete(replacement.id)
         replacement.id = dn.id
@@ -335,6 +355,8 @@ class SalesDomainService:
         refund_account_id: Optional[str] = None,
         restock_items: bool = True,
         attachments: Optional[List[dict]] = None,
+        location_id: str = "",
+        location_name: str = "",
     ) -> SalesReturn:
         ret_lines = self._sales_return_lines(lines)
         sales_return = SalesReturn(
@@ -354,6 +376,8 @@ class SalesDomainService:
             status=SalesReturnStatus.PENDING,
             restock_items=bool(restock_items),
             attachments=list(attachments or []),
+            location_id=(location_id or "").strip(),
+            location_name=(location_name or "").strip(),
         )
         return self._return_repo.save(sales_return)
 
@@ -374,6 +398,8 @@ class SalesDomainService:
         refund_account_id: Optional[str] = None,
         restock_items: bool = True,
         attachments: Optional[List[dict]] = None,
+        location_id: Optional[str] = None,
+        location_name: Optional[str] = None,
     ) -> SalesReturn:
         current = self._return_repo.find_by_id(return_id)
         if not current:
@@ -397,6 +423,10 @@ class SalesDomainService:
         )
         current.source_invoice_id = source_invoice_id
         current.refund_account_id = refund_account_id
+        if location_id is not None:
+            current.location_id = (location_id or "").strip()
+        if location_name is not None:
+            current.location_name = (location_name or "").strip()
         return self._return_repo.save(current)
 
     @staticmethod
@@ -471,6 +501,7 @@ class SalesDomainService:
                 "product_id": line.product_id,
                 "qty": line.qty_delivered,
                 "description": line.product_name or "Delivery",
+                "location_id": dn.location_id or None,
             }
             for line in dn.lines
         ]

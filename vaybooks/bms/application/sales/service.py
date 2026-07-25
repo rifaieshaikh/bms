@@ -615,9 +615,11 @@ class SalesAppService:
         custom_values: Optional[dict] = None,
         bank_account_id: Optional[str] = None,
         terms_and_conditions: Optional[str] = None,
+        location_id: str = "",
     ) -> SalesOrder:
         enriched, supply_type = self._enrich_so_lines(customer_id, lines)
         so_number = self._counter_repo.next("so_number")
+        location_name = self._location_name(location_id)
         order = self._domain.create_sales_order(
             so_number=so_number,
             customer_id=customer_id,
@@ -628,6 +630,8 @@ class SalesAppService:
             notes=notes,
             status=status,
             supply_type=supply_type,
+            location_id=location_id,
+            location_name=location_name,
         )
         order.document_content = self.build_document_content(
             "sales_order",
@@ -649,8 +653,12 @@ class SalesAppService:
         custom_values: Optional[dict] = None,
         bank_account_id: Optional[str] = None,
         terms_and_conditions: Optional[str] = None,
+        location_id: Optional[str] = None,
     ) -> SalesOrder:
         enriched, supply_type = self._enrich_so_lines(customer_id, lines)
+        location_name = (
+            self._location_name(location_id) if location_id is not None else None
+        )
         order = self._domain.update_sales_order(
             order_id,
             customer_id,
@@ -661,6 +669,8 @@ class SalesAppService:
             notes,
             status,
             supply_type=supply_type,
+            location_id=location_id,
+            location_name=location_name,
         )
         order.document_content = self.build_document_content(
             "sales_order",
@@ -692,11 +702,15 @@ class SalesAppService:
         confirm: bool = True,
         custom_values: Optional[dict] = None,
         terms_and_conditions: Optional[str] = None,
+        location_id: str = "",
     ) -> DeliveryNote:
         so_number = ""
+        so_location_id = ""
         if sales_order_id:
             so = self._so_repo.find_by_id(sales_order_id)
             so_number = so.so_number if so else ""
+            so_location_id = so.location_id if so else ""
+        location_id = location_id or so_location_id
         dn_number = self._counter_repo.next("dn_number")
         dn = self._domain.create_delivery_note(
             dn_number=dn_number,
@@ -707,6 +721,8 @@ class SalesAppService:
             sales_order_id=sales_order_id,
             so_number=so_number,
             notes=notes,
+            location_id=location_id,
+            location_name=self._location_name(location_id),
         )
         dn.document_content = self.build_document_content(
             "delivery_note",
@@ -739,7 +755,11 @@ class SalesAppService:
         notes: str = "",
         custom_values: Optional[dict] = None,
         terms_and_conditions: Optional[str] = None,
+        location_id: Optional[str] = None,
     ) -> DeliveryNote:
+        location_name = (
+            self._location_name(location_id) if location_id is not None else None
+        )
         return self._domain.update_delivery_note(
             dn_id,
             delivery_date=delivery_date,
@@ -750,6 +770,8 @@ class SalesAppService:
                 custom_values=custom_values,
                 terms_and_conditions=terms_and_conditions,
             ),
+            location_id=location_id,
+            location_name=location_name,
         )
 
     def create_sales_invoice(
@@ -989,6 +1011,7 @@ class SalesAppService:
         refund_option: str = "Customer credit",
         restock_items: bool = True,
         attachments: Optional[list[dict]] = None,
+        location_id: str = "",
     ) -> SalesReturn:
         customer_account = self._accounting.get_customer_account(customer_id)
         if not customer_account:
@@ -1079,6 +1102,8 @@ class SalesAppService:
             refund_account_id=refund_account_id,
             restock_items=restock_items,
             attachments=attachments,
+            location_id=location_id,
+            location_name=self._location_name(location_id),
         )
         return sales_return
 
@@ -1165,6 +1190,7 @@ class SalesAppService:
                     "product_id": line.product_id,
                     "qty": line.qty,
                     "description": line.product_name or "Return",
+                    "location_id": sales_return.location_id or None,
                 }
                 for line in sales_return.lines
             ]
@@ -1210,6 +1236,7 @@ class SalesAppService:
         refund_account_id: Optional[str] = None,
         restock_items: bool = True,
         attachments: Optional[list[dict]] = None,
+        location_id: Optional[str] = None,
     ) -> SalesReturn:
         customer_account = self._accounting.get_customer_account(customer_id)
         if not customer_account:
@@ -1276,6 +1303,9 @@ class SalesAppService:
                     raise ValueError(
                         f"Return quantity exceeds invoiced quantity for {product_id}"
                     )
+        location_name = (
+            self._location_name(location_id) if location_id is not None else None
+        )
         return self._domain.update_sales_return(
             return_id,
             customer_id=customer_id,
@@ -1291,6 +1321,8 @@ class SalesAppService:
             refund_account_id=refund_account_id,
             restock_items=restock_items,
             attachments=attachments,
+            location_id=location_id,
+            location_name=location_name,
         )
 
     def update_sales_return_details(
@@ -1584,6 +1616,12 @@ class SalesAppService:
                     effective_date=effective,
                 )
             )
+
+    def _location_name(self, location_id: Optional[str]) -> str:
+        if not location_id:
+            return ""
+        location = self._inventory.get_location(location_id)
+        return location.name if location else ""
 
     def _customer_name(self, customer_id: str) -> str:
         if not self._customer_service or not customer_id:

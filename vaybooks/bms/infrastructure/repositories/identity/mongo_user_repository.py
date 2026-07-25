@@ -20,6 +20,7 @@ class MongoUserRepository:
             "display_name": user.display_name,
             "password_hash": user.password_hash,
             "role_ids": list(user.role_ids or []),
+            "location_ids": list(user.location_ids or []),
             "active": user.active,
             "created_at": user.created_at,
             "updated_at": user.updated_at,
@@ -32,6 +33,11 @@ class MongoUserRepository:
             display_name=doc.get("display_name", ""),
             password_hash=doc.get("password_hash", ""),
             role_ids=list(doc.get("role_ids") or []),
+            location_ids=[
+                str(lid).strip()
+                for lid in (doc.get("location_ids") or [])
+                if str(lid).strip()
+            ],
             active=bool(doc.get("active", True)),
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),

@@ -88,8 +88,8 @@ class GoodsReceipt:
     purchase_order_id: Optional[str] = None
     po_number: str = ""
     vendor_name: str = ""
-    warehouse_id: str = ""
-    warehouse_name: str = ""
+    location_id: str = ""
+    location_name: str = ""
     status: GoodsReceiptStatus = GoodsReceiptStatus.DRAFT
     freight: float = 0.0
     duty: float = 0.0
@@ -102,6 +102,22 @@ class GoodsReceipt:
     @property
     def total_landed_extras(self) -> float:
         return round(self.freight + self.duty + self.other, 2)
+
+    @property
+    def warehouse_id(self) -> str:
+        return self.location_id
+
+    @warehouse_id.setter
+    def warehouse_id(self, value: str) -> None:
+        self.location_id = value
+
+    @property
+    def warehouse_name(self) -> str:
+        return self.location_name
+
+    @warehouse_name.setter
+    def warehouse_name(self, value: str) -> None:
+        self.location_name = value
 
     def update(self, **kwargs) -> None:
         for key, value in kwargs.items():

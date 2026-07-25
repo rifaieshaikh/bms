@@ -26,6 +26,8 @@ BUSINESS_COLLECTIONS = (
     "warehouses",
     "inventory_products",
     "stock_movements",
+    "stock_balances",
+    "stock_transfers",
     "purchase_orders",
     "goods_receipts",
     "purchase_returns",

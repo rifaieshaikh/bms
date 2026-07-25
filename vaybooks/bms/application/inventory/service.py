@@ -4,8 +4,11 @@ from typing import Any, Dict, List, Optional, Union
 from vaybooks.bms.domain.inventory.category_tree import build_category_path
 from vaybooks.bms.domain.inventory.entities import (
     InventoryProduct,
+    Location,
     ProductCategory,
     ProductUnit,
+    StockBalance,
+    StockTransfer,
     Warehouse,
 )
 from vaybooks.bms.domain.inventory.field_definitions import ProductFieldDefinition, ProductFieldType
@@ -13,14 +16,17 @@ from vaybooks.bms.domain.inventory.rate_history import ProductRatePeriod
 from vaybooks.bms.domain.inventory.rate_history_service import ProductRateHistoryService
 from vaybooks.bms.domain.inventory.repository import (
     InventoryProductRepository,
+    LocationRepository,
     ProductCategoryRepository,
     ProductFieldDefinitionRepository,
     ProductUnitRepository,
+    StockBalanceRepository,
     StockMovementRepository,
+    StockTransferRepository,
     WarehouseRepository,
 )
 from vaybooks.bms.domain.inventory.services import InventoryDomainService
-from vaybooks.bms.domain.shared.enums import StockMovementType
+from vaybooks.bms.domain.shared.enums import LocationType, StockMovementType
 
 
 class InventoryAppService:
@@ -33,8 +39,14 @@ class InventoryAppService:
         field_def_repo: Optional[ProductFieldDefinitionRepository] = None,
         rate_history: Optional[ProductRateHistoryService] = None,
         warehouse_repo: Optional[WarehouseRepository] = None,
+        location_repo: Optional[LocationRepository] = None,
+        balance_repo: Optional[StockBalanceRepository] = None,
+        transfer_repo: Optional[StockTransferRepository] = None,
     ):
         self._rate_history = rate_history
+        self._location_repo = location_repo or warehouse_repo
+        self._balance_repo = balance_repo
+        self._transfer_repo = transfer_repo
         self._domain = InventoryDomainService(
             category_repo,
             product_repo,
@@ -42,13 +54,16 @@ class InventoryAppService:
             unit_repo,
             field_def_repo,
             rate_history,
-            warehouse_repo,
+            warehouse_repo=warehouse_repo,
+            location_repo=self._location_repo,
+            balance_repo=balance_repo,
+            transfer_repo=transfer_repo,
         )
         self._product_repo = product_repo
         self._category_repo = category_repo
         self._unit_repo = unit_repo
         self._field_def_repo = field_def_repo
-        self._warehouse_repo = warehouse_repo
+        self._warehouse_repo = self._location_repo
 
     def _hydrate_product(self, product: Optional[InventoryProduct]) -> Optional[InventoryProduct]:
         if not product:
@@ -138,6 +153,58 @@ class InventoryAppService:
     def delete_category(self, category_id: str) -> None:
         self._domain.delete_category(category_id)
 
+    def list_locations(
+        self,
+        active_only: bool = False,
+        location_type: Optional[LocationType] = None,
+    ) -> List[Location]:
+        return self._domain.list_locations(
+            active_only=active_only, location_type=location_type
+        )
+
+    def search_locations(
+        self,
+        query: str = "",
+        *,
+        active_only: bool = True,
+        limit: int = 10,
+        location_type: Optional[LocationType] = None,
+    ) -> List[Location]:
+        if not self._location_repo:
+            return []
+        return self._location_repo.search(
+            query, active_only=active_only, limit=limit, location_type=location_type
+        )
+
+    def get_location(self, location_id: str) -> Optional[Location]:
+        return self._domain.get_location(location_id)
+
+    def create_location(
+        self,
+        code: str,
+        name: str,
+        address: str = "",
+        location_type: LocationType = LocationType.WAREHOUSE,
+    ) -> Location:
+        return self._domain.create_location(code, name, address, location_type=location_type)
+
+    def update_location(
+        self,
+        location_id: str,
+        code: str,
+        name: str,
+        address: str = "",
+        is_active: bool = True,
+        location_type: Optional[LocationType] = None,
+    ) -> Location:
+        return self._domain.update_location(
+            location_id, code, name, address, is_active, location_type=location_type
+        )
+
+    def delete_location(self, location_id: str) -> None:
+        self._domain.delete_location(location_id)
+
+    # Back-compat warehouse aliases
     def list_warehouses(self, active_only: bool = False) -> List[Warehouse]:
         return self._domain.list_warehouses(active_only=active_only)
 
@@ -251,6 +318,7 @@ class InventoryAppService:
         last_purchase_rate: float = 0.0,
         track_batch: bool = False,
         track_serial: bool = False,
+        location_id: str = "",
     ) -> InventoryProduct:
         ids = [category_ids] if isinstance(category_ids, str) else list(category_ids)
         ids = self._resolve_pending_category(ids, pending_category_name)
@@ -270,6 +338,7 @@ class InventoryAppService:
             custom_fields=custom_fields,
             track_batch=track_batch,
             track_serial=track_serial,
+            location_id=location_id,
         )
         if float(last_purchase_rate or 0) > 0:
             product = self.set_product_cost_fields(
@@ -406,9 +475,10 @@ class InventoryAppService:
         qty: float,
         movement_date: date,
         notes: str = "",
+        location_id: Optional[str] = None,
     ):
         return self._domain.record_manual_movement(
-            product_id, movement_type, qty, movement_date, notes
+            product_id, movement_type, qty, movement_date, notes, location_id=location_id
         )
 
     def get_product_ledger(self, product_id: str) -> List[dict[str, Any]]:
@@ -466,3 +536,48 @@ class InventoryAppService:
 
     def reverse_movements_by_reference(self, reference_id: str) -> None:
         self._domain.reverse_movements_by_reference(reference_id)
+
+    def get_stock_balance(self, product_id: str, location_id: str) -> float:
+        return self._domain.get_stock_balance(product_id, location_id)
+
+    def list_balances_by_product(self, product_id: str) -> List[StockBalance]:
+        return self._domain.list_balances_by_product(product_id)
+
+    def list_balances_by_location(self, location_id: str) -> List[StockBalance]:
+        return self._domain.list_balances_by_location(location_id)
+
+    def on_hand_by_location(self) -> List[dict[str, Any]]:
+        return self._domain.on_hand_by_location()
+
+    def create_stock_transfer(
+        self,
+        transfer_number: str,
+        from_location_id: str,
+        to_location_id: str,
+        transfer_date: date,
+        lines: list[dict],
+        notes: str = "",
+    ) -> StockTransfer:
+        return self._domain.create_stock_transfer(
+            transfer_number,
+            from_location_id,
+            to_location_id,
+            transfer_date,
+            lines,
+            notes,
+        )
+
+    def dispatch_stock_transfer(self, transfer_id: str) -> StockTransfer:
+        return self._domain.dispatch_stock_transfer(transfer_id)
+
+    def receive_stock_transfer(self, transfer_id: str) -> StockTransfer:
+        return self._domain.receive_stock_transfer(transfer_id)
+
+    def cancel_stock_transfer(self, transfer_id: str) -> StockTransfer:
+        return self._domain.cancel_stock_transfer(transfer_id)
+
+    def list_stock_transfers(self) -> List[StockTransfer]:
+        return self._domain.list_stock_transfers()
+
+    def get_stock_transfer(self, transfer_id: str) -> Optional[StockTransfer]:
+        return self._domain.get_stock_transfer(transfer_id)

@@ -4,7 +4,12 @@ from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from vaybooks.bms.domain.shared.date_utils import utc_now
-from vaybooks.bms.domain.shared.enums import StockMovementType, StockReferenceType
+from vaybooks.bms.domain.shared.enums import (
+    LocationType,
+    StockMovementType,
+    StockReferenceType,
+    StockTransferStatus,
+)
 from vaybooks.bms.domain.shared.item_tax import ItemTaxProfile
 
 
@@ -42,12 +47,56 @@ class ProductCategory:
 
 
 @dataclass
-class Warehouse:
+class Location:
     name: str
     code: str
     id: str = field(default_factory=lambda: uuid4().hex)
+    location_type: LocationType = LocationType.WAREHOUSE
     address: str = ""
     is_active: bool = True
+    created_at: datetime = field(default_factory=utc_now)
+    updated_at: datetime = field(default_factory=utc_now)
+
+    def update(self, **kwargs) -> None:
+        for key, value in kwargs.items():
+            if hasattr(self, key) and value is not None:
+                setattr(self, key, value)
+        self.updated_at = utc_now()
+
+
+# Back-compat alias during cutover
+Warehouse = Location
+
+
+@dataclass
+class StockBalance:
+    product_id: str
+    location_id: str
+    qty: float = 0.0
+    id: str = field(default_factory=lambda: uuid4().hex)
+    updated_at: datetime = field(default_factory=utc_now)
+
+
+@dataclass
+class StockTransferLine:
+    product_id: str
+    qty: float
+    id: str = field(default_factory=lambda: uuid4().hex)
+    product_name: str = ""
+
+
+@dataclass
+class StockTransfer:
+    transfer_number: str
+    from_location_id: str
+    to_location_id: str
+    transfer_date: date
+    lines: List[StockTransferLine]
+    id: str = field(default_factory=lambda: uuid4().hex)
+    from_location_name: str = ""
+    to_location_name: str = ""
+    status: StockTransferStatus = StockTransferStatus.DRAFT
+    notes: str = ""
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
 
@@ -136,6 +185,14 @@ class StockMovement:
     id: str = field(default_factory=lambda: uuid4().hex)
     reference_type: StockReferenceType = StockReferenceType.MANUAL
     reference_id: Optional[str] = None
-    warehouse_id: Optional[str] = None
+    location_id: Optional[str] = None
     notes: str = ""
     created_at: datetime = field(default_factory=utc_now)
+
+    @property
+    def warehouse_id(self) -> Optional[str]:
+        return self.location_id
+
+    @warehouse_id.setter
+    def warehouse_id(self, value: Optional[str]) -> None:
+        self.location_id = value

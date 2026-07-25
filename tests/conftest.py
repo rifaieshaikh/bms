@@ -486,45 +486,121 @@ class FakeProductCategoryRepository:
         self._store.pop(category_id, None)
 
 
-class FakeWarehouseRepository:
+class FakeLocationRepository:
     def __init__(self):
         self._store: Dict[str, object] = {}
 
-    def save(self, warehouse):
-        self._store[warehouse.id] = warehouse
-        return warehouse
+    def save(self, location):
+        self._store[location.id] = location
+        return location
 
-    def find_by_id(self, warehouse_id: str):
-        return self._store.get(warehouse_id)
+    def find_by_id(self, location_id: str):
+        return self._store.get(location_id)
 
     def find_by_code(self, code: str):
         code = (code or "").strip().upper()
-        for warehouse in self._store.values():
-            if warehouse.code == code:
-                return warehouse
+        for location in self._store.values():
+            if location.code == code:
+                return location
         return None
 
-    def list_all(self, active_only: bool = True):
+    def list_all(self, active_only: bool = True, location_type=None):
+        items = list(self._store.values())
         if active_only:
-            return [w for w in self._store.values() if w.is_active]
-        return list(self._store.values())
+            items = [loc for loc in items if loc.is_active]
+        if location_type is not None:
+            items = [
+                loc
+                for loc in items
+                if getattr(loc, "location_type", None) == location_type
+            ]
+        return items
 
-    def search(self, query: str, *, active_only: bool = True, limit: int = 25):
+    def search(
+        self,
+        query: str,
+        *,
+        active_only: bool = True,
+        limit: int = 25,
+        location_type=None,
+    ):
         text = (query or "").strip().lower()
-        items = self.list_all(active_only=active_only)
+        items = self.list_all(active_only=active_only, location_type=location_type)
         if text:
             items = [
-                w
-                for w in items
-                if text in w.code.lower()
-                or text in w.name.lower()
-                or text in (w.address or "").lower()
+                loc
+                for loc in items
+                if text in loc.code.lower()
+                or text in loc.name.lower()
+                or text in (loc.address or "").lower()
             ]
-        items = sorted(items, key=lambda w: w.code.lower())
+        items = sorted(items, key=lambda loc: loc.code.lower())
         return items[: max(1, min(int(limit or 25), 50))]
 
-    def delete(self, warehouse_id: str) -> None:
-        self._store.pop(warehouse_id, None)
+    def delete(self, location_id: str) -> None:
+        self._store.pop(location_id, None)
+
+
+# Back-compat alias
+FakeWarehouseRepository = FakeLocationRepository
+
+
+class FakeStockBalanceRepository:
+    def __init__(self):
+        self._store: Dict[str, object] = {}
+
+    def _key(self, product_id: str, location_id: str) -> str:
+        return f"{product_id}:{location_id}"
+
+    def save(self, balance):
+        key = self._key(balance.product_id, balance.location_id)
+        existing = self._store.get(key)
+        if existing and existing.id != balance.id:
+            balance.id = existing.id
+        self._store[key] = balance
+        return balance
+
+    def get(self, product_id: str, location_id: str):
+        return self._store.get(self._key(product_id, location_id))
+
+    def list_by_product(self, product_id: str):
+        return [b for b in self._store.values() if b.product_id == product_id]
+
+    def list_by_location(self, location_id: str):
+        return [b for b in self._store.values() if b.location_id == location_id]
+
+    def list_all(self):
+        return list(self._store.values())
+
+    def delete(self, balance_id: str) -> None:
+        for key, bal in list(self._store.items()):
+            if bal.id == balance_id:
+                self._store.pop(key, None)
+                return
+
+
+class FakeStockTransferRepository:
+    def __init__(self):
+        self._store: Dict[str, object] = {}
+
+    def save(self, transfer):
+        self._store[transfer.id] = transfer
+        return transfer
+
+    def find_by_id(self, transfer_id: str):
+        return self._store.get(transfer_id)
+
+    def find_by_number(self, transfer_number: str):
+        for transfer in self._store.values():
+            if transfer.transfer_number == transfer_number:
+                return transfer
+        return None
+
+    def list_all(self):
+        return list(self._store.values())
+
+    def delete(self, transfer_id: str) -> None:
+        self._store.pop(transfer_id, None)
 
 
 class FakeProductUnitRepository:
@@ -649,6 +725,14 @@ class FakeStockMovementRepository:
             m for m in self._store.values() if m.reference_id == reference_id
         ]
 
+    def list_by_location(self, location_id: str):
+        return [
+            m
+            for m in self._store.values()
+            if getattr(m, "location_id", None) == location_id
+            or getattr(m, "warehouse_id", None) == location_id
+        ]
+
     def delete(self, movement_id: str) -> None:
         self._store.pop(movement_id, None)
 
@@ -668,10 +752,13 @@ def make_inventory_app_service():
         FakeStockMovementRepository(),
         FakeProductUnitRepository(),
         rate_history=rate_history,
-        warehouse_repo=FakeWarehouseRepository(),
+        location_repo=FakeLocationRepository(),
+        balance_repo=FakeStockBalanceRepository(),
+        transfer_repo=FakeStockTransferRepository(),
     )
     service.find_or_create_unit("pcs", "Pieces")
-    return _ensure_test_product_defaults(service)
+    service.create_location("TEST-LOC", "Test Location")
+    return _ensure_test_location_defaults(_ensure_test_product_defaults(service))
 
 
 def create_test_product(service, sku: str, name: str, category_ids, **kwargs):
@@ -702,7 +789,70 @@ def _ensure_test_product_defaults(service):
             kwargs.setdefault("mrp", 200.0)
         if "gst_rate" not in kwargs:
             kwargs["gst_rate"] = 5.0
+        if float(kwargs.get("opening_qty") or 0) > 0 and not kwargs.get("location_id"):
+            locations = service.list_locations(active_only=True)
+            if locations:
+                kwargs["location_id"] = locations[0].id
         return original_create(*args, **kwargs)
 
     service.create_product = create_product_with_defaults
+    return service
+
+
+def _ensure_test_location_defaults(service):
+    """Back-compat for tests that predate mandatory working locations."""
+
+    def location_id():
+        locations = service.list_locations(active_only=True)
+        return locations[0].id if locations else ""
+
+    def with_location(lines):
+        return [
+            (
+                dict(line, location_id=location_id())
+                if line.get("product_id")
+                and not (line.get("location_id") or line.get("warehouse_id"))
+                else dict(line)
+            )
+            for line in lines
+        ]
+
+    for method_name in (
+        "apply_sales_movements",
+        "apply_sales_return",
+        "apply_purchase_return",
+        "apply_delivery_note_issue",
+    ):
+        original = getattr(service, method_name)
+
+        def wrapped(*args, _original=original, **kwargs):
+            if len(args) >= 2:
+                args = (args[0], with_location(args[1]), *args[2:])
+            elif "lines" in kwargs:
+                kwargs["lines"] = with_location(kwargs["lines"])
+            elif "line_items" in kwargs:
+                kwargs["line_items"] = with_location(kwargs["line_items"])
+            return _original(*args, **kwargs)
+
+        setattr(service, method_name, wrapped)
+
+    original_receive = service.apply_purchase_receive
+
+    def purchase_receive_with_location(*args, **kwargs):
+        if args:
+            args = (with_location(args[0]), *args[1:])
+        elif "lines" in kwargs:
+            kwargs["lines"] = with_location(kwargs["lines"])
+        return original_receive(*args, **kwargs)
+
+    service.apply_purchase_receive = purchase_receive_with_location
+
+    original_manual = service.record_manual_movement
+
+    def record_manual_with_location(*args, **kwargs):
+        if len(args) < 6 and not kwargs.get("location_id"):
+            kwargs["location_id"] = location_id()
+        return original_manual(*args, **kwargs)
+
+    service.record_manual_movement = record_manual_with_location
     return service

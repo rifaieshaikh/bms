@@ -10,6 +10,7 @@ from vaybooks.bms.ui.components.common.dialog_state import (
     ensure_selectbox_option,
     reset_dialog_state,
 )
+from vaybooks.bms.ui.auth.session import require_specific_location
 from vaybooks.bms.ui.dialog_utils import make_dismiss_handler, register_armed_dialog
 from vaybooks.bms.ui.keyboard.dialog_actions import consume_submit, open_dialog
 from vaybooks.bms.ui.keyboard.focus.registry import get_strategy
@@ -46,6 +47,7 @@ def delivery_note_dialog(services: dict) -> None:
 
     sales = services["sales"]
     customers = services["customers"]
+    inventory = services.get("inventory")
     open_orders = [
         so
         for so in sales.list_sales_orders()
@@ -148,12 +150,14 @@ def delivery_note_dialog(services: dict) -> None:
                 raise ValueError("Select a sales order")
             if not lines:
                 raise ValueError("Enter at least one delivered quantity")
+            location_id = require_specific_location(services)
             sales.create_delivery_note(
                 customer_id=customer_id,
                 delivery_date=delivery_date,
                 lines=lines,
                 sales_order_id=so_id,
                 confirm=True,
+                location_id=location_id,
             )
             _clear()
             st.rerun()

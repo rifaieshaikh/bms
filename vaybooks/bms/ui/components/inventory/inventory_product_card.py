@@ -44,9 +44,18 @@ def inventory_product_card(
     *,
     key_prefix: str,
     show_qty: bool = True,
+    qty_override: float | None = None,
+    breakdown_caption: str = "",
 ) -> tuple[bool, bool]:
-    """Render a product card. Returns (view_clicked, edit_clicked)."""
-    qty = float(getattr(product, "current_qty", 0) or 0)
+    """Render a product card. Returns (view_clicked, edit_clicked).
+
+    ``qty_override`` shows a location-scoped quantity instead of the product's
+    aggregate ``current_qty`` (e.g. when a Stock on Hand location filter is active).
+    ``breakdown_caption`` optionally renders a per-location qty summary line.
+    """
+    qty = float(
+        qty_override if qty_override is not None else getattr(product, "current_qty", 0) or 0
+    )
     unit = getattr(product, "unit", "pcs") or "pcs"
     rate = float(getattr(product, "selling_rate", 0) or 0)
     qty_color = _OUT_COLOR if qty <= 0 else (_LOW_COLOR if qty <= LOW_STOCK_THRESHOLD else _STOCK_COLOR)
@@ -65,6 +74,8 @@ def inventory_product_card(
             )
             st.markdown(_stock_badge(qty), unsafe_allow_html=True)
         st.caption(f"Rate ₹{rate:,.0f}")
+        if breakdown_caption:
+            st.caption(breakdown_caption)
         cols = st.columns(2)
         view = cols[0].button(
             "View",
@@ -117,6 +128,37 @@ def inventory_warehouse_card(warehouse) -> bool:
         return st.button(
             "Edit",
             key=f"edit_inv_wh_btn_{warehouse.id}",
+            width="stretch",
+        )
+
+
+def inventory_location_card(location) -> bool:
+    """Render a location card (warehouse or retail store). Returns True if edit was clicked."""
+    loc_type = getattr(location, "location_type", None)
+    type_label = getattr(loc_type, "value", loc_type) or "Warehouse"
+    type_color = "blue" if type_label == "Retail Store" else "gray"
+    with st.container(border=True):
+        st.markdown(
+            f'<p class="z-card-title">{location.name}</p>',
+            unsafe_allow_html=True,
+        )
+        st.caption(location.code)
+        badge_cols = st.columns(2)
+        with badge_cols[0]:
+            st.markdown(_status_badge(location.is_active), unsafe_allow_html=True)
+        with badge_cols[1]:
+            st.markdown(
+                status_badge(type_label, type_color, compact=True),
+                unsafe_allow_html=True,
+            )
+        if location.address:
+            addr = location.address.strip()
+            if len(addr) > 72:
+                addr = addr[:69] + "…"
+            st.caption(addr)
+        return st.button(
+            "Edit",
+            key=f"edit_settings_loc_btn_{location.id}",
             width="stretch",
         )
 

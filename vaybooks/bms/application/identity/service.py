@@ -56,6 +56,7 @@ class UserAppService:
         display_name: str = "",
         password: str,
         role_ids: Optional[List[str]] = None,
+        location_ids: Optional[List[str]] = None,
         active: bool = True,
     ) -> User:
         username = (username or "").strip()
@@ -67,15 +68,19 @@ class UserAppService:
             raise ValidationError("Password must be at least 4 characters")
         roles = list(role_ids or [])
         self._validate_role_ids(roles)
+        locs = self._normalize_location_ids(location_ids)
         user = User(
             username=username,
             display_name=(display_name or username).strip(),
             password_hash=hash_password(password),
             role_ids=roles,
+            location_ids=locs,
             active=active,
         )
         saved = self._user_repo.save(user)
-        self._record("user.create", saved, {"role_ids": roles})
+        self._record(
+            "user.create", saved, {"role_ids": roles, "location_ids": locs}
+        )
         return saved
 
     def update_user(
@@ -84,6 +89,7 @@ class UserAppService:
         *,
         display_name: Optional[str] = None,
         role_ids: Optional[List[str]] = None,
+        location_ids: Optional[List[str]] = None,
         active: Optional[bool] = None,
     ) -> User:
         user = self._user_repo.find_by_id(user_id)
@@ -95,6 +101,8 @@ class UserAppService:
         if role_ids is not None:
             self._validate_role_ids(role_ids)
             user.role_ids = list(role_ids)
+        if location_ids is not None:
+            user.location_ids = self._normalize_location_ids(location_ids)
         if active is not None:
             if not active and self._is_last_active_owner(user):
                 raise ValidationError("Cannot deactivate the last active Owner")
@@ -105,7 +113,14 @@ class UserAppService:
                 "user.deactivate" if not active else "user.activate", saved
             )
         else:
-            self._record("user.update", saved, {"role_ids": saved.role_ids})
+            self._record(
+                "user.update",
+                saved,
+                {
+                    "role_ids": saved.role_ids,
+                    "location_ids": saved.location_ids,
+                },
+            )
         return saved
 
     def set_password(self, user_id: str, password: str) -> User:
@@ -118,6 +133,19 @@ class UserAppService:
         saved = self._user_repo.save(user)
         self._record("user.password_reset", saved)
         return saved
+
+    @staticmethod
+    def _normalize_location_ids(location_ids: Optional[List[str]]) -> List[str]:
+        if not location_ids:
+            return []
+        seen: set[str] = set()
+        out: List[str] = []
+        for raw in location_ids:
+            lid = str(raw or "").strip()
+            if lid and lid not in seen:
+                seen.add(lid)
+                out.append(lid)
+        return out
 
     def _validate_role_ids(self, role_ids: List[str]) -> None:
         if not self._role_repo:

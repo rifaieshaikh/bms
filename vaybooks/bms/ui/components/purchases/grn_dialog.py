@@ -10,6 +10,7 @@ from vaybooks.bms.ui.components.common.dialog_state import (
     ensure_selectbox_option,
     reset_dialog_state,
 )
+from vaybooks.bms.ui.auth.session import require_specific_location
 from vaybooks.bms.ui.components.purchases.grn_receive_table import (
     grn_table_focus_chain,
     grn_table_focus_columns,
@@ -48,7 +49,7 @@ def _submit_grn(
     receipt_date,
     lines: list[dict],
     po_id: str | None,
-    warehouse_id: str,
+    location_id: str,
     freight: float,
     duty: float,
     other: float,
@@ -59,7 +60,7 @@ def _submit_grn(
         receipt_date=receipt_date,
         lines=lines,
         purchase_order_id=po_id,
-        warehouse_id=warehouse_id,
+        location_id=location_id,
         freight=freight,
         duty=duty,
         other=other,
@@ -68,17 +69,6 @@ def _submit_grn(
     )
     _clear()
     st.rerun()
-
-
-def _warehouse_options(inventory) -> tuple[list[str], dict[str, str]]:
-    warehouses = inventory.list_warehouses(active_only=True)
-    labels: list[str] = []
-    mapping: dict[str, str] = {}
-    for wh in warehouses:
-        label = f"{wh.code} — {wh.name}"
-        labels.append(label)
-        mapping[label] = wh.id
-    return labels, mapping
 
 
 @st.dialog("Receive Goods (GRN)", width="large", on_dismiss=make_dismiss_handler(GRN_DIALOG))
@@ -144,24 +134,18 @@ def grn_dialog(services: dict) -> None:
         )
         return
 
-    warehouse_key = f"{GRN_DIALOG}_warehouse"
     date_key = f"{GRN_DIALOG}_date"
     freight_key = f"{GRN_DIALOG}_freight"
     duty_key = f"{GRN_DIALOG}_duty"
     other_key = f"{GRN_DIALOG}_other"
     confirm_key = f"{GRN_DIALOG}_confirm"
 
-    wh_labels, wh_map = _warehouse_options(inventory)
-    if not wh_labels:
-        st.error("Add a warehouse under Inventory → Warehouses before receiving goods.")
+    if not inventory.list_locations(active_only=True):
+        st.error("Add a location under Settings → Locations before receiving goods.")
         if st.button("Close", key=f"{GRN_DIALOG}_close_wh"):
             _clear()
             st.rerun()
         return
-    ensure_selectbox_option(warehouse_key, wh_labels)
-    wh_label = st.selectbox("Warehouse", wh_labels, key=warehouse_key)
-    warehouse_id = wh_map.get(wh_label, "")
-
     receipt_date = st.date_input("Receipt date", value=date.today(), key=date_key)
     freight = st.number_input("Freight", min_value=0.0, value=0.0, key=freight_key)
     duty = st.number_input("Duty", min_value=0.0, value=0.0, key=duty_key)
@@ -205,13 +189,14 @@ def grn_dialog(services: dict) -> None:
         ):
             try:
                 st.session_state.pop(GRN_OVER_CONFIRM_KEY, None)
+                location_id = require_specific_location(services)
                 _submit_grn(
                     purchases=purchases,
                     vendor_id=vendor_id,
                     receipt_date=receipt_date,
                     lines=lines,
                     po_id=po_id,
-                    warehouse_id=warehouse_id,
+                    location_id=location_id,
                     freight=freight,
                     duty=duty,
                     other=other,
@@ -240,7 +225,6 @@ def grn_dialog(services: dict) -> None:
     restore = st.session_state.pop(GRN_FOCUS_KEY, None)
     get_strategy(GRN_DIALOG).inject(
         chain=[
-            warehouse_key,
             date_key,
             freight_key,
             duty_key,
@@ -257,10 +241,9 @@ def grn_dialog(services: dict) -> None:
 
     if do_confirm:
         try:
-            if not warehouse_id:
-                raise ValueError("Select a warehouse")
             if not lines:
                 raise ValueError("Enter at least one received quantity")
+            location_id = require_specific_location(services)
             if overages:
                 st.session_state[GRN_OVER_CONFIRM_KEY] = True
                 st.rerun()
@@ -270,7 +253,7 @@ def grn_dialog(services: dict) -> None:
                 receipt_date=receipt_date,
                 lines=lines,
                 po_id=po_id,
-                warehouse_id=warehouse_id,
+                location_id=location_id,
                 freight=freight,
                 duty=duty,
                 other=other,

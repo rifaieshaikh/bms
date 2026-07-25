@@ -152,6 +152,7 @@ class StockOnHandFilter:
     active_only: bool = True
     min_qty: Optional[float] = None
     search: str = ""
+    location_id: str = ""
 
 
 @dataclass
@@ -167,6 +168,7 @@ class StockMovementsFilter:
     product_id: str = ""
     category_id: str = ""
     movement_type: str = ""
+    location_id: str = ""
 
 
 @dataclass
@@ -175,6 +177,7 @@ class DeadStockFilter:
     category_id: str = ""
     min_qty: float = 0.0
     max_qty_out: float = 0.0
+    location_id: str = ""
 
 
 @dataclass
@@ -183,6 +186,7 @@ class OpeningClosingStockFilter:
     category_id: str = ""
     product_id: str = ""
     active_only: bool = True
+    location_id: str = ""
 
 
 @dataclass
@@ -190,6 +194,7 @@ class FastMovingStockFilter:
     date_range: DateRange
     category_id: str = ""
     min_qty_out: float = 0.0
+    location_id: str = ""
 
 
 @dataclass
@@ -202,3 +207,10 @@ class CustomerLatestPricesFilter:
 @dataclass
 class PurchasesByVendorFilter:
     date_range: DateRange | None = None
+
+
+@dataclass
+class StockByLocationFilter:
+    location_id: str = ""
+    category_id: str = ""
+    search: str = ""

@@ -8,9 +8,13 @@ from vaybooks.bms.domain.inventory.category_tree import (
 )
 from vaybooks.bms.domain.inventory.entities import (
     InventoryProduct,
+    Location,
     ProductCategory,
     ProductUnit,
+    StockBalance,
     StockMovement,
+    StockTransfer,
+    StockTransferLine,
     Warehouse,
 )
 from vaybooks.bms.domain.inventory.field_definitions import (
@@ -21,15 +25,24 @@ from vaybooks.bms.domain.inventory.field_definitions import (
 )
 from vaybooks.bms.domain.inventory.repository import (
     InventoryProductRepository,
+    LocationRepository,
     ProductCategoryRepository,
     ProductFieldDefinitionRepository,
     ProductUnitRepository,
+    StockBalanceRepository,
     StockMovementRepository,
+    StockTransferRepository,
     WarehouseRepository,
 )
 from vaybooks.bms.domain.inventory.rate_history_service import ProductRateHistoryService
 from vaybooks.bms.domain.inventory.units import default_unit_label, normalize_unit_code
-from vaybooks.bms.domain.shared.enums import StockMovementType, StockReferenceType
+from vaybooks.bms.domain.shared.date_utils import utc_now
+from vaybooks.bms.domain.shared.enums import (
+    LocationType,
+    StockMovementType,
+    StockReferenceType,
+    StockTransferStatus,
+)
 from vaybooks.bms.domain.shared.exceptions import ValidationError
 
 INFLOW_TYPES = frozenset(
@@ -38,6 +51,7 @@ INFLOW_TYPES = frozenset(
         StockMovementType.ADJUST_IN,
         StockMovementType.PURCHASE_RECEIVE,
         StockMovementType.SALES_RETURN,
+        StockMovementType.TRANSFER_IN,
     }
 )
 
@@ -69,6 +83,9 @@ class InventoryDomainService:
         field_def_repo: Optional[ProductFieldDefinitionRepository] = None,
         rate_history: Optional[ProductRateHistoryService] = None,
         warehouse_repo: Optional[WarehouseRepository] = None,
+        location_repo: Optional[LocationRepository] = None,
+        balance_repo: Optional[StockBalanceRepository] = None,
+        transfer_repo: Optional[StockTransferRepository] = None,
     ):
         self._category_repo = category_repo
         self._product_repo = product_repo
@@ -76,7 +93,10 @@ class InventoryDomainService:
         self._unit_repo = unit_repo
         self._field_def_repo = field_def_repo
         self._rate_history = rate_history
-        self._warehouse_repo = warehouse_repo
+        self._location_repo = location_repo or warehouse_repo
+        self._warehouse_repo = self._location_repo
+        self._balance_repo = balance_repo
+        self._transfer_repo = transfer_repo
 
     def _categories_by_id(self) -> Dict[str, ProductCategory]:
         return {c.id: c for c in self._category_repo.list_all(active_only=False)}
@@ -200,38 +220,103 @@ class InventoryDomainService:
             raise ValidationError("Cannot delete a category that has products")
         self._category_repo.delete(category_id)
 
-    def list_warehouses(self, active_only: bool = True) -> List[Warehouse]:
-        if not self._warehouse_repo:
+    def list_locations(
+        self,
+        active_only: bool = True,
+        location_type: Optional[LocationType] = None,
+    ) -> List[Location]:
+        if not self._location_repo:
             return []
-        return self._warehouse_repo.list_all(active_only=active_only)
+        return self._location_repo.list_all(
+            active_only=active_only, location_type=location_type
+        )
+
+    def get_location(self, location_id: str) -> Optional[Location]:
+        if not self._location_repo or not location_id:
+            return None
+        return self._location_repo.find_by_id(location_id)
+
+    def create_location(
+        self,
+        code: str,
+        name: str,
+        address: str = "",
+        location_type: LocationType = LocationType.WAREHOUSE,
+    ) -> Location:
+        if not self._location_repo:
+            raise ValidationError("Location repository not configured")
+        code = (code or "").strip().upper()
+        name = (name or "").strip()
+        if not code:
+            raise ValidationError("Location code is required")
+        if not name:
+            raise ValidationError("Location name is required")
+        if self._location_repo.find_by_code(code):
+            raise ValidationError("A location with this code already exists")
+        location = Location(
+            code=code,
+            name=name,
+            address=(address or "").strip(),
+            location_type=location_type or LocationType.WAREHOUSE,
+        )
+        return self._location_repo.save(location)
+
+    def update_location(
+        self,
+        location_id: str,
+        code: str,
+        name: str,
+        address: str = "",
+        is_active: bool = True,
+        location_type: Optional[LocationType] = None,
+    ) -> Location:
+        if not self._location_repo:
+            raise ValidationError("Location repository not configured")
+        location = self._location_repo.find_by_id(location_id)
+        if not location:
+            raise ValidationError("Location not found")
+        code = (code or "").strip().upper()
+        name = (name or "").strip()
+        if not code:
+            raise ValidationError("Location code is required")
+        if not name:
+            raise ValidationError("Location name is required")
+        existing = self._location_repo.find_by_code(code)
+        if existing and existing.id != location_id:
+            raise ValidationError("A location with this code already exists")
+        updates = {
+            "code": code,
+            "name": name,
+            "address": (address or "").strip(),
+            "is_active": is_active,
+        }
+        if location_type is not None:
+            updates["location_type"] = location_type
+        location.update(**updates)
+        return self._location_repo.save(location)
+
+    def delete_location(self, location_id: str) -> None:
+        if not self._location_repo:
+            raise ValidationError("Location repository not configured")
+        location = self._location_repo.find_by_id(location_id)
+        if not location:
+            raise ValidationError("Location not found")
+        self._location_repo.delete(location_id)
+
+    def list_warehouses(self, active_only: bool = True) -> List[Warehouse]:
+        return self.list_locations(active_only=active_only)
 
     def get_warehouse(self, warehouse_id: str) -> Optional[Warehouse]:
-        if not self._warehouse_repo or not warehouse_id:
-            return None
-        return self._warehouse_repo.find_by_id(warehouse_id)
+        return self.get_location(warehouse_id)
 
     def create_warehouse(
         self,
         code: str,
         name: str,
         address: str = "",
+        location_type: LocationType = LocationType.WAREHOUSE,
     ) -> Warehouse:
-        if not self._warehouse_repo:
-            raise ValidationError("Warehouse repository not configured")
-        code = (code or "").strip().upper()
-        name = (name or "").strip()
-        if not code:
-            raise ValidationError("Warehouse code is required")
-        if not name:
-            raise ValidationError("Warehouse name is required")
-        if self._warehouse_repo.find_by_code(code):
-            raise ValidationError("A warehouse with this code already exists")
-        warehouse = Warehouse(
-            code=code,
-            name=name,
-            address=(address or "").strip(),
-        )
-        return self._warehouse_repo.save(warehouse)
+        return self.create_location(code, name, address, location_type=location_type)
 
     def update_warehouse(
         self,
@@ -240,36 +325,19 @@ class InventoryDomainService:
         name: str,
         address: str = "",
         is_active: bool = True,
+        location_type: Optional[LocationType] = None,
     ) -> Warehouse:
-        if not self._warehouse_repo:
-            raise ValidationError("Warehouse repository not configured")
-        warehouse = self._warehouse_repo.find_by_id(warehouse_id)
-        if not warehouse:
-            raise ValidationError("Warehouse not found")
-        code = (code or "").strip().upper()
-        name = (name or "").strip()
-        if not code:
-            raise ValidationError("Warehouse code is required")
-        if not name:
-            raise ValidationError("Warehouse name is required")
-        existing = self._warehouse_repo.find_by_code(code)
-        if existing and existing.id != warehouse_id:
-            raise ValidationError("A warehouse with this code already exists")
-        warehouse.update(
-            code=code,
-            name=name,
-            address=(address or "").strip(),
-            is_active=is_active,
+        return self.update_location(
+            warehouse_id,
+            code,
+            name,
+            address,
+            is_active,
+            location_type=location_type,
         )
-        return self._warehouse_repo.save(warehouse)
 
     def delete_warehouse(self, warehouse_id: str) -> None:
-        if not self._warehouse_repo:
-            raise ValidationError("Warehouse repository not configured")
-        warehouse = self._warehouse_repo.find_by_id(warehouse_id)
-        if not warehouse:
-            raise ValidationError("Warehouse not found")
-        self._warehouse_repo.delete(warehouse_id)
+        self.delete_location(warehouse_id)
 
     def list_field_definitions(self, active_only: bool = False) -> List[ProductFieldDefinition]:
         if not self._field_def_repo:
@@ -360,6 +428,7 @@ class InventoryDomainService:
         custom_fields: Optional[Dict[str, Any]] = None,
         track_batch: bool = False,
         track_serial: bool = False,
+        location_id: str = "",
     ) -> InventoryProduct:
         sku = sku.strip()
         name = name.strip()
@@ -387,6 +456,9 @@ class InventoryDomainService:
             field_values = validate_custom_field_values(
                 definitions, field_values, resolved_ids
             )
+        opening_location_id = (location_id or "").strip()
+        if opening_qty > 0 and not opening_location_id:
+            raise ValidationError("Location is required for opening stock")
         product = InventoryProduct(
             sku=sku,
             name=name,
@@ -423,6 +495,7 @@ class InventoryDomainService:
                 StockReferenceType.MANUAL,
                 None,
                 "Opening stock",
+                location_id=opening_location_id,
             )
         return saved
 
@@ -526,10 +599,12 @@ class InventoryDomainService:
         qty: float,
         movement_date: date,
         notes: str = "",
+        location_id: Optional[str] = None,
     ) -> StockMovement:
         product = self._product_repo.find_by_id(product_id)
         if not product:
             raise ValidationError("Product not found")
+        loc = (location_id or "").strip() or None
         return self._record_movement(
             product,
             movement_type,
@@ -538,6 +613,7 @@ class InventoryDomainService:
             StockReferenceType.MANUAL,
             None,
             notes,
+            location_id=loc,
         )
 
     def record_sale_movements(
@@ -559,6 +635,10 @@ class InventoryDomainService:
             qty = float(line.get("qty") or line.get("qty_delivered") or 0)
             if qty <= 0:
                 continue
+            loc = (
+                str(line.get("location_id") or line.get("warehouse_id") or "").strip()
+                or None
+            )
             movement = self._record_movement(
                 product,
                 StockMovementType.SALE,
@@ -567,6 +647,7 @@ class InventoryDomainService:
                 reference_type,
                 reference_id,
                 (line.get("description") or "").strip() or "Sale",
+                location_id=loc,
             )
             recorded.append(movement)
         return recorded
@@ -602,6 +683,10 @@ class InventoryDomainService:
             qty = float(line.get("qty") or 0)
             if qty <= 0:
                 continue
+            loc = (
+                str(line.get("location_id") or line.get("warehouse_id") or "").strip()
+                or None
+            )
             movement = self._record_movement(
                 product,
                 StockMovementType.SALES_RETURN,
@@ -610,6 +695,7 @@ class InventoryDomainService:
                 StockReferenceType.SALES_RETURN,
                 return_id,
                 (line.get("description") or "").strip() or "Sales return",
+                location_id=loc,
             )
             recorded.append(movement)
         return recorded
@@ -641,7 +727,10 @@ class InventoryDomainService:
                 reference_type,
                 reference_id,
                 (line.get("description") or "").strip() or "Purchase receive",
-                warehouse_id=str(line.get("warehouse_id") or "") or None,
+                location_id=str(
+                    line.get("location_id") or line.get("warehouse_id") or ""
+                )
+                or None,
             )
             recorded.append(movement)
         return recorded
@@ -672,6 +761,10 @@ class InventoryDomainService:
                 StockReferenceType.PURCHASE_RETURN,
                 return_id,
                 (line.get("description") or "").strip() or "Purchase return",
+                location_id=str(
+                    line.get("location_id") or line.get("warehouse_id") or ""
+                )
+                or None,
             )
             recorded.append(movement)
         return recorded
@@ -717,10 +810,89 @@ class InventoryDomainService:
                         f"Cannot reverse receive for {product.name}: insufficient stock"
                     )
                 product.current_qty = round(product.current_qty - qty, 2)
+                self._apply_balance_delta(
+                    product.id, movement.location_id, -qty
+                )
             else:
                 product.current_qty = round(product.current_qty + qty, 2)
+                self._apply_balance_delta(
+                    product.id, movement.location_id, qty
+                )
             self._product_repo.save(product)
             self._movement_repo.delete(movement.id)
+
+    def get_stock_balance(
+        self, product_id: str, location_id: str
+    ) -> float:
+        if not self._balance_repo or not product_id or not location_id:
+            return 0.0
+        bal = self._balance_repo.get(product_id, location_id)
+        return float(bal.qty) if bal else 0.0
+
+    def list_balances_by_product(self, product_id: str) -> List[StockBalance]:
+        if not self._balance_repo or not product_id:
+            return []
+        return self._balance_repo.list_by_product(product_id)
+
+    def list_balances_by_location(self, location_id: str) -> List[StockBalance]:
+        if not self._balance_repo or not location_id:
+            return []
+        return self._balance_repo.list_by_location(location_id)
+
+    def on_hand_by_location(self) -> list[dict[str, Any]]:
+        if not self._balance_repo:
+            return []
+        products = {p.id: p for p in self._product_repo.list_all(active_only=False)}
+        locations = {
+            loc.id: loc for loc in self.list_locations(active_only=False)
+        }
+        rows: list[dict[str, Any]] = []
+        for bal in self._balance_repo.list_all():
+            product = products.get(bal.product_id)
+            location = locations.get(bal.location_id)
+            if not product:
+                continue
+            rows.append(
+                {
+                    "product_id": bal.product_id,
+                    "product_name": product.name,
+                    "sku": product.sku,
+                    "location_id": bal.location_id,
+                    "location_name": location.name if location else "Unassigned",
+                    "location_type": (
+                        location.location_type.value if location else ""
+                    ),
+                    "qty": bal.qty,
+                    "unit": product.unit,
+                    "stock_value": round(
+                        bal.qty * float(product.selling_rate or 0), 2
+                    ),
+                    "valuation": round(
+                        bal.qty * float(product.weighted_avg_cost or 0), 2
+                    ),
+                }
+            )
+        return rows
+
+    def _apply_balance_delta(
+        self,
+        product_id: str,
+        location_id: Optional[str],
+        delta: float,
+    ) -> None:
+        if not self._balance_repo or not location_id or abs(delta) < 0.0001:
+            return
+        bal = self._balance_repo.get(product_id, location_id)
+        if bal:
+            bal.qty = round(bal.qty + delta, 2)
+            bal.updated_at = utc_now()
+        else:
+            bal = StockBalance(
+                product_id=product_id,
+                location_id=location_id,
+                qty=round(delta, 2),
+            )
+        self._balance_repo.save(bal)
 
     def get_product_ledger(self, product_id: str) -> list[dict[str, Any]]:
         product = self._product_repo.find_by_id(product_id)
@@ -740,6 +912,9 @@ class InventoryDomainService:
 
     def get_stock_ledger(self) -> list[dict[str, Any]]:
         products = {p.id: p for p in self._product_repo.list_all(active_only=False)}
+        locations = {
+            loc.id: loc for loc in self.list_locations(active_only=False)
+        }
         movements = sorted(self._movement_repo.list_all(), key=_movement_sort_key)
         rows: list[dict[str, Any]] = []
         for movement in movements:
@@ -748,7 +923,12 @@ class InventoryDomainService:
                 continue
             qty_in = movement_qty_in(movement.movement_type, movement.qty)
             qty_out = movement_qty_out(movement.movement_type, movement.qty)
-            rows.append(self._ledger_row(movement, product, qty_in, qty_out, None))
+            row = self._ledger_row(movement, product, qty_in, qty_out, None)
+            loc = locations.get(movement.location_id or "")
+            row["location_name"] = loc.name if loc else (
+                "Unassigned" if not movement.location_id else movement.location_id
+            )
+            rows.append(row)
         return rows
 
     def _record_movement(
@@ -760,6 +940,7 @@ class InventoryDomainService:
         reference_type: StockReferenceType,
         reference_id: Optional[str],
         notes: str,
+        location_id: Optional[str] = None,
         warehouse_id: Optional[str] = None,
     ) -> StockMovement:
         qty = round(float(qty), 2)
@@ -770,10 +951,15 @@ class InventoryDomainService:
             StockMovementType.ADJUST_OUT,
             StockMovementType.SALE,
             StockMovementType.PURCHASE_RETURN,
+            StockMovementType.TRANSFER_OUT,
         }:
             raise ValidationError("Unsupported movement type")
+        loc = (location_id or warehouse_id or "").strip() or None
+        if not loc:
+            raise ValidationError("Location is required for stock movements")
         if movement_type in INFLOW_TYPES:
             product.current_qty = round(product.current_qty + qty, 2)
+            self._apply_balance_delta(product.id, loc, qty)
         else:
             if product.current_qty < qty - 0.001:
                 raise ValidationError(
@@ -781,6 +967,7 @@ class InventoryDomainService:
                     f"(available {product.current_qty:g}, need {qty:g})"
                 )
             product.current_qty = round(product.current_qty - qty, 2)
+            self._apply_balance_delta(product.id, loc, -qty)
         self._product_repo.save(product)
         movement = StockMovement(
             product_id=product.id,
@@ -789,7 +976,7 @@ class InventoryDomainService:
             movement_date=movement_date,
             reference_type=reference_type,
             reference_id=reference_id,
-            warehouse_id=(warehouse_id or None),
+            location_id=loc,
             notes=notes,
         )
         return self._movement_repo.save(movement)
@@ -818,8 +1005,135 @@ class InventoryDomainService:
             "qty_out": qty_out,
             "reference_type": movement.reference_type.value,
             "reference_id": movement.reference_id or "",
+            "location_id": movement.location_id or "",
             "notes": movement.notes,
         }
         if balance is not None:
             row["balance"] = balance
         return row
+
+    def create_stock_transfer(
+        self,
+        transfer_number: str,
+        from_location_id: str,
+        to_location_id: str,
+        transfer_date: date,
+        lines: list[dict],
+        notes: str = "",
+    ) -> StockTransfer:
+        if not self._transfer_repo:
+            raise ValidationError("Transfer repository not configured")
+        from_loc = self.get_location(from_location_id)
+        to_loc = self.get_location(to_location_id)
+        if not from_loc or not from_loc.is_active:
+            raise ValidationError("Source location not found or inactive")
+        if not to_loc or not to_loc.is_active:
+            raise ValidationError("Destination location not found or inactive")
+        if from_location_id == to_location_id:
+            raise ValidationError("Source and destination must differ")
+        if not lines:
+            raise ValidationError("At least one transfer line is required")
+        transfer_lines: List[StockTransferLine] = []
+        for raw in lines:
+            qty = float(raw.get("qty") or 0)
+            if qty <= 0:
+                raise ValidationError("Transfer quantity must be positive")
+            transfer_lines.append(
+                StockTransferLine(
+                    product_id=str(raw.get("product_id") or ""),
+                    product_name=(raw.get("product_name") or "").strip(),
+                    qty=round(qty, 2),
+                )
+            )
+        transfer = StockTransfer(
+            transfer_number=transfer_number,
+            from_location_id=from_loc.id,
+            from_location_name=from_loc.name,
+            to_location_id=to_loc.id,
+            to_location_name=to_loc.name,
+            transfer_date=transfer_date,
+            lines=transfer_lines,
+            notes=(notes or "").strip(),
+            status=StockTransferStatus.DRAFT,
+        )
+        return self._transfer_repo.save(transfer)
+
+    def dispatch_stock_transfer(self, transfer_id: str) -> StockTransfer:
+        if not self._transfer_repo:
+            raise ValidationError("Transfer repository not configured")
+        transfer = self._transfer_repo.find_by_id(transfer_id)
+        if not transfer:
+            raise ValidationError("Stock transfer not found")
+        if transfer.status != StockTransferStatus.DRAFT:
+            raise ValidationError("Only draft transfers can be dispatched")
+        for line in transfer.lines:
+            product = self._product_repo.find_by_id(line.product_id)
+            if not product:
+                raise ValidationError(
+                    f"Product not found for transfer line {line.product_name or line.product_id}"
+                )
+            self._record_movement(
+                product,
+                StockMovementType.TRANSFER_OUT,
+                line.qty,
+                transfer.transfer_date,
+                StockReferenceType.STOCK_TRANSFER,
+                transfer.id,
+                f"Transfer out to {transfer.to_location_name}",
+                location_id=transfer.from_location_id,
+            )
+        transfer.status = StockTransferStatus.DISPATCHED
+        transfer.updated_at = utc_now()
+        return self._transfer_repo.save(transfer)
+
+    def receive_stock_transfer(self, transfer_id: str) -> StockTransfer:
+        if not self._transfer_repo:
+            raise ValidationError("Transfer repository not configured")
+        transfer = self._transfer_repo.find_by_id(transfer_id)
+        if not transfer:
+            raise ValidationError("Stock transfer not found")
+        if transfer.status != StockTransferStatus.DISPATCHED:
+            raise ValidationError("Only dispatched transfers can be received")
+        for line in transfer.lines:
+            product = self._product_repo.find_by_id(line.product_id)
+            if not product:
+                raise ValidationError(
+                    f"Product not found for transfer line {line.product_name or line.product_id}"
+                )
+            self._record_movement(
+                product,
+                StockMovementType.TRANSFER_IN,
+                line.qty,
+                transfer.transfer_date,
+                StockReferenceType.STOCK_TRANSFER,
+                transfer.id,
+                f"Transfer in from {transfer.from_location_name}",
+                location_id=transfer.to_location_id,
+            )
+        transfer.status = StockTransferStatus.RECEIVED
+        transfer.updated_at = utc_now()
+        return self._transfer_repo.save(transfer)
+
+    def cancel_stock_transfer(self, transfer_id: str) -> StockTransfer:
+        if not self._transfer_repo:
+            raise ValidationError("Transfer repository not configured")
+        transfer = self._transfer_repo.find_by_id(transfer_id)
+        if not transfer:
+            raise ValidationError("Stock transfer not found")
+        if transfer.status == StockTransferStatus.RECEIVED:
+            raise ValidationError("Cannot cancel a received transfer")
+        if transfer.status == StockTransferStatus.DISPATCHED:
+            self.reverse_movements_by_reference(transfer.id)
+        transfer.status = StockTransferStatus.CANCELLED
+        transfer.updated_at = utc_now()
+        return self._transfer_repo.save(transfer)
+
+    def list_stock_transfers(self) -> List[StockTransfer]:
+        if not self._transfer_repo:
+            return []
+        return self._transfer_repo.list_all()
+
+    def get_stock_transfer(self, transfer_id: str) -> Optional[StockTransfer]:
+        if not self._transfer_repo or not transfer_id:
+            return None
+        return self._transfer_repo.find_by_id(transfer_id)

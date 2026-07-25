@@ -582,6 +582,13 @@ STOCK_ON_HAND = ListSchema(
             options_loader="inventory_categories",
             multi=False,
         ),
+        FilterField(
+            "location_id",
+            "Location",
+            F.ENTITY_SELECT,
+            options_loader="inventory_locations",
+            multi=False,
+        ),
         FilterField("search", "Product / SKU", F.EXACT, placeholder="Contains…"),
         FilterField("min_qty", "Min qty", F.NUMBER_MIN, record_attr="qty"),
         FilterField(
@@ -660,6 +667,13 @@ STOCK_MOVEMENTS = ListSchema(
             "Movement type",
             F.SELECT,
             options=_enum_opts(StockMovementType),
+            multi=False,
+        ),
+        FilterField(
+            "location_id",
+            "Location",
+            F.ENTITY_SELECT,
+            options_loader="inventory_locations",
             multi=False,
         ),
     ],
@@ -943,6 +957,13 @@ INVENTORY_VALUATION = ListSchema(
             options_loader="inventory_categories",
             multi=False,
         ),
+        FilterField(
+            "location_id",
+            "Location",
+            F.ENTITY_SELECT,
+            options_loader="inventory_locations",
+            multi=False,
+        ),
     ],
     sort_options=[
         SortOption("valuation", "Valuation"),
@@ -961,6 +982,13 @@ CATEGORY_STOCK_SUMMARY = ListSchema(
             "Category",
             F.ENTITY_SELECT,
             options_loader="inventory_categories",
+            multi=False,
+        ),
+        FilterField(
+            "location_id",
+            "Location",
+            F.ENTITY_SELECT,
+            options_loader="inventory_locations",
             multi=False,
         ),
         FilterField("search", "Product / SKU", F.EXACT, placeholder="Contains…"),
@@ -1006,6 +1034,13 @@ DEAD_STOCK = ListSchema(
             F.NUMBER_MIN,
             record_attr="qty_out_in_period",
         ),
+        FilterField(
+            "location_id",
+            "Location",
+            F.ENTITY_SELECT,
+            options_loader="inventory_locations",
+            multi=False,
+        ),
     ],
     sort_options=[
         SortOption("qty_out_in_period", "Qty out in period"),
@@ -1034,6 +1069,13 @@ STOCK_MOVEMENT_SUMMARY = ListSchema(
             options_loader="inventory_categories",
             multi=False,
         ),
+        FilterField(
+            "location_id",
+            "Location",
+            F.ENTITY_SELECT,
+            options_loader="inventory_locations",
+            multi=False,
+        ),
     ],
     sort_options=[
         SortOption("movement_type", "Movement type"),
@@ -1054,6 +1096,13 @@ STOCK_MARGIN = ListSchema(
             "Category",
             F.ENTITY_SELECT,
             options_loader="inventory_categories",
+            multi=False,
+        ),
+        FilterField(
+            "location_id",
+            "Location",
+            F.ENTITY_SELECT,
+            options_loader="inventory_locations",
             multi=False,
         ),
         FilterField("search", "Product / SKU", F.EXACT, placeholder="Contains…"),
@@ -1104,6 +1153,13 @@ OPENING_CLOSING_STOCK = ListSchema(
             multi=False,
         ),
         FilterField(
+            "location_id",
+            "Location",
+            F.ENTITY_SELECT,
+            options_loader="inventory_locations",
+            multi=False,
+        ),
+        FilterField(
             "active_only",
             "Active only",
             F.CHECKBOX,
@@ -1129,6 +1185,13 @@ HSN_STOCK_SUMMARY = ListSchema(
             "Category",
             F.ENTITY_SELECT,
             options_loader="inventory_categories",
+            multi=False,
+        ),
+        FilterField(
+            "location_id",
+            "Location",
+            F.ENTITY_SELECT,
+            options_loader="inventory_locations",
             multi=False,
         ),
         FilterField("search", "HSN / Product / SKU", F.EXACT, placeholder="Contains…"),
@@ -1173,6 +1236,13 @@ FAST_MOVING_STOCK = ListSchema(
             "Min qty out in period",
             F.NUMBER_MIN,
             record_attr="qty_out_in_period",
+        ),
+        FilterField(
+            "location_id",
+            "Location",
+            F.ENTITY_SELECT,
+            options_loader="inventory_locations",
+            multi=False,
         ),
     ],
     sort_options=[
@@ -1230,6 +1300,13 @@ INACTIVE_PRODUCTS_WITH_STOCK = ListSchema(
             options_loader="inventory_categories",
             multi=False,
         ),
+        FilterField(
+            "location_id",
+            "Location",
+            F.ENTITY_SELECT,
+            options_loader="inventory_locations",
+            multi=False,
+        ),
         FilterField("min_qty", "Min qty", F.NUMBER_MIN, record_attr="qty"),
         FilterField("search", "Product / SKU", F.EXACT, placeholder="Contains…"),
     ],
@@ -1269,6 +1346,37 @@ PRODUCT_RATE_CARD = ListSchema(
         SortOption("category", "Category"),
     ],
     default_sort="sku",
+    page_size=REPORT_PAGE_SIZE,
+)
+
+STOCK_BY_LOCATION = ListSchema(
+    entity_key="report_stock_by_location",
+    title="Stock by Location",
+    filter_fields=[
+        FilterField(
+            "location_id",
+            "Location",
+            F.ENTITY_SELECT,
+            options_loader="inventory_locations",
+            multi=False,
+        ),
+        FilterField(
+            "category_id",
+            "Category",
+            F.ENTITY_SELECT,
+            options_loader="inventory_categories",
+            multi=False,
+        ),
+        FilterField("search", "Product / SKU / Location", F.EXACT, placeholder="Contains…"),
+    ],
+    sort_options=[
+        SortOption("qty", "Qty"),
+        SortOption("stock_value", "Stock value"),
+        SortOption("valuation", "Valuation"),
+        SortOption("product_name", "Product name"),
+        SortOption("location_name", "Location"),
+    ],
+    default_sort="qty",
     page_size=REPORT_PAGE_SIZE,
 )
 
@@ -1325,6 +1433,7 @@ PURCHASE_MODULE_REPORT_TYPES = [
 # Inventory reports live only under Inventory → Reports (not Finance).
 INVENTORY_REPORT_TYPES = [
     "Stock on Hand",
+    "Stock by Location",
     "Low Stock Alert",
     "Stock Movements",
     "Inventory Valuation",
@@ -1364,6 +1473,7 @@ SCHEMA_BY_REPORT_TYPE = {
     "Labor vs MPH": LABOR_VS_MPH,
     "Customer Order History": CUSTOMER_HISTORY,
     "Stock on Hand": STOCK_ON_HAND,
+    "Stock by Location": STOCK_BY_LOCATION,
     "Low Stock Alert": LOW_STOCK,
     "Stock Movements": STOCK_MOVEMENTS,
     "Inventory Valuation": INVENTORY_VALUATION,

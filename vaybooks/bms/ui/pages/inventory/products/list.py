@@ -1,6 +1,7 @@
 import streamlit as st
 
 from vaybooks.bms.ui import navigation
+from vaybooks.bms.ui.auth.session import require_specific_location
 from vaybooks.bms.ui.components.inventory.inventory_product_card import inventory_product_card
 from vaybooks.bms.ui.components.common.list_view import render_list
 from vaybooks.bms.ui.components.inventory.product_form import clear_product_form_state, render_product_form
@@ -41,6 +42,11 @@ def _open_edit_product(product_id: str) -> None:
 def _create_product(services, payload: dict) -> None:
     inventory = services["inventory"]
     try:
+        location_id = (
+            require_specific_location(services)
+            if float(payload.get("opening_qty") or 0) > 0
+            else ""
+        )
         created = inventory.create_product(
             payload["sku"],
             payload["name"],
@@ -58,6 +64,7 @@ def _create_product(services, payload: dict) -> None:
             pending_unit_code=payload.get("pending_unit_code"),
             track_batch=bool(payload.get("track_batch")),
             track_serial=bool(payload.get("track_serial")),
+            location_id=location_id,
         )
         inventory.set_product_cost_fields(
             created.id,

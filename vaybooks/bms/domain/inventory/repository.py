@@ -1,13 +1,17 @@
-from typing import Any, List, Optional, Protocol
+from typing import List, Optional, Protocol
 
 from vaybooks.bms.domain.inventory.entities import (
     InventoryProduct,
+    Location,
     ProductCategory,
     ProductUnit,
+    StockBalance,
     StockMovement,
+    StockTransfer,
     Warehouse,
 )
 from vaybooks.bms.domain.inventory.field_definitions import ProductFieldDefinition
+from vaybooks.bms.domain.shared.enums import LocationType
 
 
 class ProductUnitRepository(Protocol):
@@ -50,20 +54,33 @@ class ProductCategoryRepository(Protocol):
     def delete(self, category_id: str) -> None: ...
 
 
-class WarehouseRepository(Protocol):
-    def save(self, warehouse: Warehouse) -> Warehouse: ...
+class LocationRepository(Protocol):
+    def save(self, location: Location) -> Location: ...
 
-    def find_by_id(self, warehouse_id: str) -> Optional[Warehouse]: ...
+    def find_by_id(self, location_id: str) -> Optional[Location]: ...
 
-    def find_by_code(self, code: str) -> Optional[Warehouse]: ...
+    def find_by_code(self, code: str) -> Optional[Location]: ...
 
-    def list_all(self, active_only: bool = True) -> List[Warehouse]: ...
+    def list_all(
+        self,
+        active_only: bool = True,
+        location_type: Optional[LocationType] = None,
+    ) -> List[Location]: ...
 
     def search(
-        self, query: str, *, active_only: bool = True, limit: int = 25
-    ) -> List[Warehouse]: ...
+        self,
+        query: str,
+        *,
+        active_only: bool = True,
+        limit: int = 25,
+        location_type: Optional[LocationType] = None,
+    ) -> List[Location]: ...
 
-    def delete(self, warehouse_id: str) -> None: ...
+    def delete(self, location_id: str) -> None: ...
+
+
+# Back-compat alias
+WarehouseRepository = LocationRepository
 
 
 class InventoryProductRepository(Protocol):
@@ -105,4 +122,32 @@ class StockMovementRepository(Protocol):
 
     def list_by_reference(self, reference_id: str) -> List[StockMovement]: ...
 
+    def list_by_location(self, location_id: str) -> List[StockMovement]: ...
+
     def delete(self, movement_id: str) -> None: ...
+
+
+class StockBalanceRepository(Protocol):
+    def save(self, balance: StockBalance) -> StockBalance: ...
+
+    def get(self, product_id: str, location_id: str) -> Optional[StockBalance]: ...
+
+    def list_by_product(self, product_id: str) -> List[StockBalance]: ...
+
+    def list_by_location(self, location_id: str) -> List[StockBalance]: ...
+
+    def list_all(self) -> List[StockBalance]: ...
+
+    def delete(self, balance_id: str) -> None: ...
+
+
+class StockTransferRepository(Protocol):
+    def save(self, transfer: StockTransfer) -> StockTransfer: ...
+
+    def find_by_id(self, transfer_id: str) -> Optional[StockTransfer]: ...
+
+    def find_by_number(self, transfer_number: str) -> Optional[StockTransfer]: ...
+
+    def list_all(self) -> List[StockTransfer]: ...
+
+    def delete(self, transfer_id: str) -> None: ...

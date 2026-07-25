@@ -69,6 +69,7 @@ def _dn_edit_dialog(services: dict) -> None:
         value=dn.delivery_date,
         key=date_key,
     )
+    location_id = dn.location_id
     edit_notes = st.text_area(
         "Notes", value=dn.notes, key=f"{DN_EDIT_DIALOG}_notes"
     )
@@ -133,6 +134,7 @@ def _dn_edit_dialog(services: dict) -> None:
                 notes=edit_notes,
                 custom_values=custom_values,
                 terms_and_conditions=terms,
+                location_id=location_id,
             )
             _clear_prefix(DN_EDIT_DIALOG)
             st.session_state.pop(DN_EDIT_SUBMIT_KEY, None)

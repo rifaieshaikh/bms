@@ -431,6 +431,8 @@ STATUS_BADGE_COLORS = {
     "Confirmed": "blue",
     "Partially Delivered": "orange",
     "Closed": "gray",
+    "Dispatched": "orange",
+    "Received": "green",
 }
 
 

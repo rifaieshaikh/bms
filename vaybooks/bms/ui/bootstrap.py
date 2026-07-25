@@ -99,10 +99,13 @@ from vaybooks.bms.infrastructure.repositories.boutique.mongo_order_repository im
 from vaybooks.bms.infrastructure.repositories.finance.mongo_report_repository import MongoReportRepository
 from vaybooks.bms.infrastructure.repositories.inventory.mongo_inventory_repository import (
     MongoInventoryProductRepository,
+    MongoLocationRepository,
     MongoProductCategoryRepository,
     MongoProductFieldDefinitionRepository,
     MongoProductUnitRepository,
+    MongoStockBalanceRepository,
     MongoStockMovementRepository,
+    MongoStockTransferRepository,
     MongoWarehouseRepository,
 )
 from vaybooks.bms.infrastructure.repositories.migration.mongo_import_mapping_profile_repository import (
@@ -336,6 +339,9 @@ def get_services():
     inventory_product_repo = MongoInventoryProductRepository(db)
     stock_movement_repo = MongoStockMovementRepository(db)
     warehouse_repo = MongoWarehouseRepository(db)
+    location_repo = MongoLocationRepository(db)
+    stock_balance_repo = MongoStockBalanceRepository(db)
+    stock_transfer_repo = MongoStockTransferRepository(db)
     po_repo = MongoPurchaseOrderRepository(db)
     grn_repo = MongoGoodsReceiptRepository(db)
     purchase_return_repo = MongoPurchaseReturnRepository(db)
@@ -463,6 +469,9 @@ def get_services():
         field_def_repo,
         rate_history,
         warehouse_repo,
+        location_repo=location_repo,
+        balance_repo=stock_balance_repo,
+        transfer_repo=stock_transfer_repo,
     )
     migration_service = MigrationAppService(
         mapping_profile_repo,

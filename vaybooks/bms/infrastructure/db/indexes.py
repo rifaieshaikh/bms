@@ -133,8 +133,21 @@ def ensure_indexes(db):
     _create_index(db.stock_movements, "movement_type")
     _create_index(db.stock_movements, "reference_id")
     _create_index(db.stock_movements, "warehouse_id")
+    _create_index(db.stock_movements, "location_id")
     _create_index(db.warehouses, "code", unique=True)
     _create_index(db.warehouses, "name")
+    _create_index(db.warehouses, "location_type")
+
+    _create_index(
+        db.stock_balances, [("product_id", 1), ("location_id", 1)], unique=True
+    )
+    _create_index(db.stock_balances, "location_id")
+
+    _create_index(db.stock_transfers, "transfer_number", unique=True)
+    _create_index(db.stock_transfers, "from_location_id")
+    _create_index(db.stock_transfers, "to_location_id")
+    _create_index(db.stock_transfers, "status")
+    _create_index(db.stock_transfers, "transfer_date")
 
     _create_index(db.purchase_orders, "po_number", unique=True)
     _create_index(db.purchase_orders, "vendor_id")
@@ -147,6 +160,7 @@ def ensure_indexes(db):
     _create_index(db.goods_receipts, "vendor_id")
     _create_index(db.goods_receipts, "receipt_date")
     _create_index(db.goods_receipts, "warehouse_id")
+    _create_index(db.goods_receipts, "location_id")
 
     _create_index(db.purchase_returns, "return_number", unique=True)
     _create_index(db.purchase_returns, "vendor_id")
@@ -156,15 +170,18 @@ def ensure_indexes(db):
     _create_index(db.sales_orders, "customer_id")
     _create_index(db.sales_orders, "order_date")
     _create_index(db.sales_orders, "status")
+    _create_index(db.sales_orders, "location_id")
 
     _create_index(db.delivery_notes, "dn_number", unique=True)
     _create_index(db.delivery_notes, "sales_order_id")
     _create_index(db.delivery_notes, "customer_id")
     _create_index(db.delivery_notes, "delivery_date")
+    _create_index(db.delivery_notes, "location_id")
 
     _create_index(db.sales_returns, "return_number", unique=True)
     _create_index(db.sales_returns, "customer_id")
     _create_index(db.sales_returns, "return_date")
+    _create_index(db.sales_returns, "location_id")
 
     _create_index(db.estimates, "estimate_number", unique=True)
     _create_index(db.estimates, "customer_id")

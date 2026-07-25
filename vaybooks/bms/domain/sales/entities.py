@@ -60,6 +60,8 @@ class SalesOrder:
     status: SalesOrderStatus = SalesOrderStatus.DRAFT
     notes: str = ""
     supply_type: str = ""
+    location_id: str = ""
+    location_name: str = ""
     document_content: DocumentContentSnapshot = field(
         default_factory=DocumentContentSnapshot
     )
@@ -121,6 +123,8 @@ class DeliveryNote:
     status: DeliveryNoteStatus = DeliveryNoteStatus.DRAFT
     notes: str = ""
     voucher_id: Optional[str] = None
+    location_id: str = ""
+    location_name: str = ""
     document_content: DocumentContentSnapshot = field(
         default_factory=DocumentContentSnapshot
     )
@@ -176,6 +180,8 @@ class SalesReturn:
     goods_received_at: Optional[datetime] = None
     refund_processed_at: Optional[datetime] = None
     closed_at: Optional[datetime] = None
+    location_id: str = ""
+    location_name: str = ""
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
 

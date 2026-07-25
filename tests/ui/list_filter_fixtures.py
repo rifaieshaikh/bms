@@ -215,6 +215,24 @@ def _payments():
     ]
 
 
+def _credit_notes():
+    dr = VoucherLine(account_id="sales", account_name="Sales", debit_amount=150.0)
+    cr = VoucherLine(account_id="a2", account_name="Customer", credit_amount=150.0)
+    return [
+        _voucher("CN001", VoucherType.CREDIT_NOTE, _dt(2026, 7, 1), "Credit A", [dr, cr]),
+        _voucher("CN002", VoucherType.CREDIT_NOTE, _dt(2026, 7, 5), "Credit B", [dr, cr]),
+    ]
+
+
+def _debit_notes():
+    dr = VoucherLine(account_id="a2", account_name="Customer", debit_amount=175.0)
+    cr = VoucherLine(account_id="sales", account_name="Sales", credit_amount=175.0)
+    return [
+        _voucher("DN001", VoucherType.DEBIT_NOTE, _dt(2026, 7, 1), "Debit A", [dr, cr]),
+        _voucher("DN002", VoucherType.DEBIT_NOTE, _dt(2026, 7, 5), "Debit B", [dr, cr]),
+    ]
+
+
 def _accounting_invoices():
     dr = VoucherLine(account_id="a2", account_name="Customer", debit_amount=400.0)
     cr = VoucherLine(account_id="sales", account_name="Sales", credit_amount=400.0)
@@ -370,6 +388,50 @@ def _inventory_stock_ledger():
     ]
 
 
+def _inventory_movements():
+    return [
+        {
+            "movement_date": date(2026, 7, 1),
+            "product_id": "p1",
+            "product_name": "Cotton",
+            "category_id": "cat1",
+            "movement_type": StockMovementType.RECEIVE.value,
+            "location_id": "loc1",
+        },
+        {
+            "movement_date": date(2026, 7, 5),
+            "product_id": "p2",
+            "product_name": "Silk",
+            "category_id": "cat2",
+            "movement_type": StockMovementType.ISSUE.value,
+            "location_id": "loc2",
+        },
+    ]
+
+
+def _inventory_customer_prices():
+    return [
+        SimpleNamespace(
+            customer_id="c1",
+            customer_name="Alpha Customer",
+            product_id="p1",
+            sku="SKU-1",
+            product_name="Cotton",
+            effective_date=date(2026, 7, 1),
+            rate=100.0,
+        ),
+        SimpleNamespace(
+            customer_id="c2",
+            customer_name="Beta Customer",
+            product_id="p2",
+            sku="SKU-2",
+            product_name="Silk",
+            effective_date=date(2026, 7, 5),
+            rate=200.0,
+        ),
+    ]
+
+
 FIXTURES = {
     "orders": _orders(),
     "items": _items(),
@@ -380,6 +442,8 @@ FIXTURES = {
     "vouchers": _vouchers(),
     "receipts": _receipts(),
     "payments": _payments(),
+    "credit_notes": _credit_notes(),
+    "debit_notes": _debit_notes(),
     "accounting_invoices": _accounting_invoices(),
     "store_sales": _store_sales(),
     "journal": _journal(),
@@ -407,10 +471,14 @@ FIXTURES = {
         ),
     ],
     "services": _services(),
+    # Overview uses a default MTD date filter; empty list keeps empty-filters green.
+    "inventory_overview": [],
     "inventory_categories": _inventory_categories(),
     "inventory_products": _inventory_products(),
     "inventory_stock": _inventory_stock(),
     "inventory_stock_ledger": _inventory_stock_ledger(),
+    "inventory_movements": _inventory_movements(),
+    "inventory_customer_prices": _inventory_customer_prices(),
 }
 
 # (entity_key, field_key, value, expected_count)
