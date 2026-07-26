@@ -344,3 +344,63 @@ def test_po_create_ignores_service_identity_for_product_only_lines():
     assert len(po.lines) == 1
     assert po.lines[0].product_id == product.id
     assert not hasattr(po.lines[0], "item_type") or True
+
+
+def test_cannot_create_po_for_discontinued_product():
+    import pytest
+    from vaybooks.bms.domain.shared.exceptions import ValidationError
+
+    purchases, inventory, product, expense, _vendor_acct, _cash, _wh = _purchase_stack()
+    inventory.discontinue_product(product.id)
+    with pytest.raises(ValidationError, match="discontinued"):
+        purchases.create_purchase_order(
+            vendor_id="v1",
+            order_date=date.today(),
+            lines=[
+                {
+                    "product_id": product.id,
+                    "product_name": product.name,
+                    "qty_ordered": 2,
+                    "rate": 40,
+                    "expense_account_id": expense.id,
+                }
+            ],
+        )
+
+
+def test_cannot_update_po_to_add_discontinued_product():
+    import pytest
+    from vaybooks.bms.domain.shared.exceptions import ValidationError
+
+    purchases, inventory, product, expense, _vendor_acct, _cash, _wh = _purchase_stack()
+    category = inventory.create_category("Trim")
+    other = inventory.create_product("SKU-2", "Zipper", category.id)
+    po = purchases.create_purchase_order(
+        vendor_id="v1",
+        order_date=date.today(),
+        lines=[
+            {
+                "product_id": product.id,
+                "product_name": product.name,
+                "qty_ordered": 2,
+                "rate": 40,
+                "expense_account_id": expense.id,
+            }
+        ],
+    )
+    inventory.discontinue_product(other.id)
+    with pytest.raises(ValidationError, match="discontinued"):
+        purchases.update_purchase_order(
+            po.id,
+            vendor_id="v1",
+            order_date=date.today(),
+            lines=[
+                {
+                    "product_id": other.id,
+                    "product_name": other.name,
+                    "qty_ordered": 1,
+                    "rate": 10,
+                    "expense_account_id": expense.id,
+                }
+            ],
+        )

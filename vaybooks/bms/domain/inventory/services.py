@@ -561,6 +561,16 @@ class InventoryDomainService:
                 field_values = validate_custom_field_values(
                     definitions, field_values, resolved_ids
                 )
+        was_active = bool(product.is_active)
+        has_stock = float(product.current_qty or 0) > 0.001 or any(
+            float(bal.qty or 0) > 0.001
+            for bal in self.list_balances_by_product(product_id)
+        )
+        if not is_active and (was_active or has_stock):
+            self._clear_stock_on_discontinue(product)
+            product = self._product_repo.find_by_id(product_id)
+            if not product:
+                raise ValidationError("Product not found")
         product.update(
             sku=sku,
             name=name,
@@ -591,6 +601,92 @@ class InventoryDomainService:
             )
         self._rate_history.hydrate_active_values(saved.id, saved)
         return self._product_repo.save(saved)
+
+    def discontinue_product(self, product_id: str) -> InventoryProduct:
+        """Deactivate a product and clear remaining stock with ADJUST_OUT movements."""
+        product = self._product_repo.find_by_id(product_id)
+        if not product:
+            raise ValidationError("Product not found")
+        if not product.is_active and float(product.current_qty or 0) <= 0.001:
+            return product
+        self._clear_stock_on_discontinue(product)
+        product = self._product_repo.find_by_id(product_id)
+        if not product:
+            raise ValidationError("Product not found")
+        product.update(is_active=False)
+        return self._product_repo.save(product)
+
+    def _fallback_location_id_for_clear(self, product_id: str) -> Optional[str]:
+        balances = self.list_balances_by_product(product_id)
+        if balances:
+            return balances[0].location_id
+        for active_only in (True, False):
+            locations = self.list_locations(active_only=active_only)
+            if locations:
+                return locations[0].id
+        return None
+
+    def _clear_stock_on_discontinue(self, product: InventoryProduct) -> InventoryProduct:
+        """Zero on-hand qty via ADJUST_OUT per location; leave an audit trail."""
+        product_id = product.id
+        notes = "Stock cleared on discontinue"
+        md = date.today()
+        balances = [
+            bal
+            for bal in self.list_balances_by_product(product_id)
+            if float(bal.qty or 0) > 0.001
+        ]
+        for bal in balances:
+            product = self._product_repo.find_by_id(product_id)
+            if not product:
+                raise ValidationError("Product not found")
+            available = min(
+                float(bal.qty or 0),
+                self.get_stock_balance(product_id, bal.location_id),
+                float(product.current_qty or 0),
+            )
+            qty = round(available, 2)
+            if qty <= 0.001:
+                continue
+            self._record_movement(
+                product,
+                StockMovementType.ADJUST_OUT,
+                qty,
+                md,
+                StockReferenceType.MANUAL,
+                None,
+                notes,
+                location_id=bal.location_id,
+            )
+
+        product = self._product_repo.find_by_id(product_id)
+        if not product:
+            raise ValidationError("Product not found")
+        residual = round(float(product.current_qty or 0), 2)
+        if residual > 0.001:
+            loc_id = self._fallback_location_id_for_clear(product_id)
+            if not loc_id:
+                raise ValidationError(
+                    "Cannot discontinue: stock remains but no location is available "
+                    "to clear it"
+                )
+            loc_qty = self.get_stock_balance(product_id, loc_id)
+            if loc_qty + 0.001 < residual:
+                self._apply_balance_delta(product_id, loc_id, residual - loc_qty)
+            self._record_movement(
+                product,
+                StockMovementType.ADJUST_OUT,
+                residual,
+                md,
+                StockReferenceType.MANUAL,
+                None,
+                notes,
+                location_id=loc_id,
+            )
+            product = self._product_repo.find_by_id(product_id)
+            if not product:
+                raise ValidationError("Product not found")
+        return product
 
     def record_manual_movement(
         self,

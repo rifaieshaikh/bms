@@ -394,6 +394,10 @@ class InventoryAppService:
             )
         return self._hydrate_product(product)
 
+    def discontinue_product(self, product_id: str) -> InventoryProduct:
+        """Deactivate product and clear remaining stock (ADJUST_OUT per location)."""
+        return self._hydrate_product(self._domain.discontinue_product(product_id))
+
     def _resolve_pending_category(
         self,
         category_ids: List[str],

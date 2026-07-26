@@ -136,6 +136,10 @@ def render_product_form(
             "Active",
             value=existing.is_active if existing else True,
             key=f"{key_prefix}_active",
+            help=(
+                "Uncheck to discontinue. Remaining stock is cleared with adjust-out "
+                "movements, and the product cannot be added to purchase orders."
+            ),
         )
 
     st.markdown("**Tracking**")

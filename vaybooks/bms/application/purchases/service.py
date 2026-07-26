@@ -30,6 +30,7 @@ from vaybooks.bms.domain.shared.enums import (
     StockReferenceType,
     VoucherType,
 )
+from vaybooks.bms.domain.shared.exceptions import ValidationError
 from vaybooks.bms.infrastructure.repositories.finance.mongo_counter_repository import (
     MongoCounterRepository,
 )
@@ -323,6 +324,24 @@ class PurchaseAppService:
                 pass
         return counts
 
+    def _assert_po_products_orderable(self, lines: list[dict]) -> None:
+        for raw in lines:
+            product_id = str(raw.get("product_id") or "").strip()
+            if not product_id:
+                raise ValidationError("Product is required on each purchase order line")
+            product = self._inventory.get_product(product_id) if self._inventory else None
+            if not product:
+                raise ValidationError("Product not found for purchase order line")
+            if not getattr(product, "is_active", True):
+                label = (
+                    getattr(product, "name", None)
+                    or getattr(product, "sku", None)
+                    or product_id
+                )
+                raise ValidationError(
+                    f"Cannot order discontinued product: {label}"
+                )
+
     def create_purchase_order(
         self,
         vendor_id: str,
@@ -333,6 +352,7 @@ class PurchaseAppService:
         status: PurchaseOrderStatus = PurchaseOrderStatus.DRAFT,
         project_id: str = "",
     ) -> PurchaseOrder:
+        self._assert_po_products_orderable(lines)
         vendor_name = self._vendor_name(vendor_id)
         po_number = self._counter_repo.next("po_number")
         return self._domain.create_purchase_order(
@@ -357,6 +377,7 @@ class PurchaseAppService:
         notes: str = "",
         status: Optional[PurchaseOrderStatus] = None,
     ) -> PurchaseOrder:
+        self._assert_po_products_orderable(lines)
         return self._domain.update_purchase_order(
             order_id,
             vendor_id,

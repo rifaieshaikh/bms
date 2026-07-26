@@ -120,7 +120,7 @@ def render(services: dict):
                     ("MRP", f"₹{product.active_mrp:,.2f}"),
                     ("HSN", product.hsn_sac or "—"),
                     ("GST", f"{product.active_gst_rate:g}%"),
-                    ("Status", "Active" if product.is_active else "Inactive"),
+                    ("Status", "Active" if product.is_active else "Discontinued"),
                 ],
                 suffix=f"inv_prod_{product.id}",
             )

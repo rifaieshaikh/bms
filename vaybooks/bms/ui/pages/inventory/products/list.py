@@ -24,6 +24,7 @@ ADD_FORM_PREFIX = "inv_add_product"
 EDIT_FORM_PREFIX = "inv_edit_product"
 SUBMIT_ADD = "submit_inv_product_add"
 SUBMIT_EDIT = "submit_inv_product_edit"
+PENDING_DISCONTINUE = "inv_product_discontinue_pending"
 
 
 def _open_add_product() -> None:
@@ -35,6 +36,7 @@ def _open_add_product() -> None:
 
 def _open_edit_product(product_id: str) -> None:
     clear_all_dialog_flags()
+    st.session_state.pop(PENDING_DISCONTINUE, None)
     open_dialog(P_EDIT, submit_key=SUBMIT_EDIT, value=product_id, clear_others=False)
     mark_wired("inventory.product.save", "dialog.save", "list.edit_nth.1")
 
@@ -106,7 +108,11 @@ def _update_product(services, product_id: str, payload: dict) -> None:
         )
         clear_product_form_state(f"{EDIT_FORM_PREFIX}_{product_id}")
         st.session_state.pop(P_EDIT, None)
-        st.success("Product updated")
+        st.session_state.pop(PENDING_DISCONTINUE, None)
+        if not payload.get("is_active", True):
+            st.success("Product discontinued; stock cleared")
+        else:
+            st.success("Product updated")
         st.rerun()
     except Exception as exc:
         st.error(str(exc))
@@ -141,6 +147,31 @@ def _edit_product_dialog(services, product_id: str):
         return
 
     st.caption(f"Current stock: {product.current_qty:g} {product.unit}")
+    pending = st.session_state.get(PENDING_DISCONTINUE)
+    if (
+        isinstance(pending, dict)
+        and pending.get("product_id") == product_id
+    ):
+        qty = float(pending.get("stock_qty") or 0)
+        st.warning(
+            f"Discontinuing **{product.name}** will clear **{qty:g} {product.unit}** "
+            "from stock and block future purchase orders."
+        )
+        cols = st.columns(2)
+        if cols[0].button(
+            "Confirm discontinue & clear stock",
+            type="primary",
+            key=f"inv_discontinue_confirm_{product_id}",
+        ):
+            payload = pending.get("payload") or {}
+            st.session_state.pop(PENDING_DISCONTINUE, None)
+            _update_product(services, product_id, payload)
+            return
+        if cols[1].button("Cancel", key=f"inv_discontinue_cancel_{product_id}"):
+            st.session_state.pop(PENDING_DISCONTINUE, None)
+            st.rerun()
+        return
+
     force = consume_submit(SUBMIT_EDIT)
     payload = render_product_form(
         inventory=inventory,
@@ -152,6 +183,16 @@ def _edit_product_dialog(services, product_id: str):
         force_submit=force,
     )
     if payload:
+        deactivating = bool(product.is_active) and not bool(payload.get("is_active"))
+        stock_qty = float(product.current_qty or 0)
+        if deactivating and stock_qty > 0.001:
+            st.session_state[PENDING_DISCONTINUE] = {
+                "product_id": product_id,
+                "payload": payload,
+                "stock_qty": stock_qty,
+            }
+            st.rerun()
+            return
         _update_product(services, product_id, payload)
 
 
