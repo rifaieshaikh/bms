@@ -392,11 +392,27 @@ CUSTOMER_OUTSTANDING = ListSchema(
     entity_key="report_customer_outstanding",
     title="Customer Outstanding",
     filter_fields=[
+        FilterField(
+            "as_of",
+            "As of",
+            F.DATE,
+            default=_today,
+            help="Age open invoices from invoice date through this date.",
+        ),
+        FilterField(
+            "bucket_days",
+            "Aging buckets (days)",
+            F.EXACT,
+            default="30, 60, 90",
+            placeholder="e.g. 30, 60, 90",
+            help="Comma-separated day cutoffs. Example: 30, 60, 90 → 0-30 / 31-60 / 61-90 / 90+.",
+        ),
         FilterField("min_balance", "Min balance due (₹)", F.NUMBER_MIN),
         FilterField("search", "Customer", F.EXACT, placeholder="Name contains…"),
     ],
     sort_options=[
         SortOption("balance_due", "Balance due"),
+        SortOption("oldest_days", "Oldest days"),
         SortOption("customer_name", "Customer"),
     ],
     default_sort="balance_due",

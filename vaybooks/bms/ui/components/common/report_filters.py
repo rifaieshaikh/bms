@@ -170,10 +170,28 @@ def build_top_customers_filter(filters: dict) -> TopCustomersFilter:
     )
 
 
+def _parse_bucket_days(value: Any) -> list[int]:
+    from vaybooks.bms.application.finance.reports.services.aging import (
+        normalize_aging_bucket_days,
+    )
+
+    return normalize_aging_bucket_days(_single(value) if value not in (None, "") else None)
+
+
+def _as_of_date(filters: dict, key: str = "as_of") -> date:
+    raw = filters.get(key)
+    if isinstance(raw, date):
+        return raw
+    today = date.today()
+    return today
+
+
 def build_outstanding_filter(filters: dict) -> OutstandingFilter:
     return OutstandingFilter(
         min_balance=_optional_min(filters.get("min_balance")),
         search=_text(filters.get("search")),
+        as_of_date=_as_of_date(filters),
+        bucket_days=_parse_bucket_days(filters.get("bucket_days")),
     )
 
 

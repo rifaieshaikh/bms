@@ -114,14 +114,68 @@ class BusinessInsightsReportService:
         return rows
 
     def customer_outstanding_report(self, filters: OutstandingFilter) -> list:
+        from vaybooks.bms.application.finance.reports.services.aging import (
+            allocate_balance_to_aging_buckets,
+            normalize_aging_bucket_days,
+        )
+        from vaybooks.bms.domain.finance.accounting.sales_parsing import (
+            sales_row_from_voucher,
+        )
+        from vaybooks.bms.domain.shared.enums import VoucherType
+        from vaybooks.bms.infrastructure.db.bson_utils import as_date
+
+        cutoffs = normalize_aging_bucket_days(filters.bucket_days)
+        as_of = filters.as_of_date or date.today()
         customer_map = {
             c.id: c.customer_name for c in self._customers.list_all_customers()
         }
+
+        discount_id = None
+        get_discount = getattr(self._accounting, "get_discount_account", None)
+        if callable(get_discount):
+            discount = get_discount()
+            discount_id = discount.id if discount else None
+
+        open_by_account: dict[str, list[dict]] = {}
+        list_types = getattr(self._accounting, "list_vouchers_by_types", None)
+        vouchers = []
+        if callable(list_types):
+            vouchers = list_types(
+                [VoucherType.SALES_INVOICE, VoucherType.CUSTOMIZATION_INVOICE]
+            ) or []
+        else:
+            list_one = getattr(self._accounting, "list_vouchers_by_type", None)
+            if callable(list_one):
+                vouchers = list(list_one(VoucherType.SALES_INVOICE) or [])
+                vouchers.extend(list_one(VoucherType.CUSTOMIZATION_INVOICE) or [])
+
+        for voucher in vouchers:
+            vtype = getattr(voucher, "voucher_type", None)
+            if vtype == VoucherType.SALES_INVOICE:
+                try:
+                    row = sales_row_from_voucher(voucher, discount_id)
+                except Exception:
+                    continue
+                account_id = row.get("customer_account_id")
+                outstanding = float(row.get("outstanding") or 0)
+                inv_date = as_date(row.get("sale_date"))
+            elif vtype == VoucherType.CUSTOMIZATION_INVOICE:
+                account_id, outstanding, inv_date = self._customization_open_face(
+                    voucher
+                )
+            else:
+                continue
+            if not account_id or outstanding <= 0 or inv_date is None:
+                continue
+            open_by_account.setdefault(account_id, []).append(
+                {"invoice_date": inv_date, "outstanding": outstanding}
+            )
+
         rows = []
         for acc in self._accounting.list_accounts(active_only=False):
             if not acc.linked_customer_id:
                 continue
-            balance = acc.current_balance
+            balance = float(acc.current_balance or 0)
             if balance <= 0:
                 continue
             if filters.min_balance is not None and balance < filters.min_balance:
@@ -131,16 +185,59 @@ class BusinessInsightsReportService:
             )
             if filters.search and filters.search not in customer_name.lower():
                 continue
-            rows.append(
-                {
-                    "account_id": acc.id,
-                    "customer_id": acc.linked_customer_id,
-                    "customer_name": customer_name,
-                    "account_name": acc.account_name,
-                    "balance_due": round(balance, 2),
-                }
+            buckets, oldest_days = allocate_balance_to_aging_buckets(
+                balance,
+                open_by_account.get(acc.id, []),
+                as_of=as_of,
+                cutoffs=cutoffs,
             )
+            row = {
+                "account_id": acc.id,
+                "customer_id": acc.linked_customer_id,
+                "customer_name": customer_name,
+                "account_name": acc.account_name,
+                "balance_due": round(balance, 2),
+                "oldest_days": oldest_days,
+                "as_of": as_of,
+            }
+            row.update(buckets)
+            rows.append(row)
         return rows
+
+    @staticmethod
+    def _customization_open_face(voucher) -> tuple[str | None, float, date | None]:
+        """Net customer AR on a customization invoice voucher."""
+        from vaybooks.bms.infrastructure.db.bson_utils import as_date
+
+        by_account: dict[str, float] = {}
+        for line in getattr(voucher, "lines", None) or []:
+            account_id = getattr(line, "account_id", None) or (
+                line.get("account_id") if isinstance(line, dict) else None
+            )
+            if not account_id:
+                continue
+            debit = float(
+                getattr(line, "debit_amount", 0)
+                if not isinstance(line, dict)
+                else (line.get("debit_amount") or 0)
+            )
+            credit = float(
+                getattr(line, "credit_amount", 0)
+                if not isinstance(line, dict)
+                else (line.get("credit_amount") or 0)
+            )
+            by_account[account_id] = round(
+                by_account.get(account_id, 0.0) + debit - credit, 2
+            )
+        # Customer line is the positive net receivable on the voucher.
+        account_id = None
+        outstanding = 0.0
+        for acc_id, net in by_account.items():
+            if net > outstanding:
+                account_id = acc_id
+                outstanding = net
+        inv_date = as_date(getattr(voucher, "voucher_date", None))
+        return account_id, outstanding, inv_date
 
     def vendor_payables_report(self, filters: OutstandingFilter) -> list:
         vendor_map = {v.id: v.vendor_name for v in self._vendors.list_all_vendors()}

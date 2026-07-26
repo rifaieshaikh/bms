@@ -98,6 +98,9 @@ class TopCustomersFilter:
 class OutstandingFilter:
     min_balance: Optional[float] = None
     search: str = ""
+    as_of_date: date = field(default_factory=date.today)
+    # Ascending day cutoffs, e.g. [30, 60, 90] → 0-30 / 31-60 / 61-90 / 90+.
+    bucket_days: list[int] = field(default_factory=lambda: [30, 60, 90])
 
 
 @dataclass
