@@ -68,7 +68,7 @@ def render_location_selectbox(
                 "Ask an admin to assign locations under Access → Users."
             )
         else:
-            st.warning("No locations configured. Add one under Settings → Locations.")
+            st.warning("No locations configured. Add one under Business → Locations.")
         if required:
             return ""
         if not labels:

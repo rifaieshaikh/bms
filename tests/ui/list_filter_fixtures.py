@@ -298,6 +298,35 @@ def _project_activities():
     return _activities()
 
 
+def _store_activities():
+    return _activities()
+
+
+def _store_time_entries():
+    return [
+        SimpleNamespace(
+            work_date=date(2026, 7, 1),
+            worker_name="Asha",
+            activity_name="Billing",
+            location_id="loc1",
+            duration_minutes=120,
+            labour_cost=400.0,
+            status="Created",
+            created_at=_dt(2026, 7, 1),
+        ),
+        SimpleNamespace(
+            work_date=date(2026, 7, 5),
+            worker_name="Ravi",
+            activity_name="Packing",
+            location_id="loc2",
+            duration_minutes=60,
+            labour_cost=150.0,
+            status="Completed",
+            created_at=_dt(2026, 7, 5),
+        ),
+    ]
+
+
 def _services():
     return [
         SimpleNamespace(
@@ -450,6 +479,8 @@ FIXTURES = {
     "trial_balance": _trial_balance(),
     "activities": _activities(),
     "project_activities": _project_activities(),
+    "store_activities": _store_activities(),
+    "store_time": _store_time_entries(),
     "measurements": [
         SimpleNamespace(
             measurement_number="M-001",
@@ -520,6 +551,13 @@ FILTER_POSITIVE = [
     ("activities", "activity_name", "Stitching", 1),
     ("activities", "active_only", True, 1),
     ("activities", "time_tracking", "yes", 1),
+    ("store_activities", "activity_name", "Stitching", 1),
+    ("store_activities", "active_only", True, 1),
+    ("store_activities", "time_tracking", "yes", 1),
+    ("store_time", "worker_name", "Asha", 1),
+    ("store_time", "activity_name", "Billing", 1),
+    ("store_time", "location_id", "loc1", 1),
+    ("store_time", "status", "Completed", 1),
     ("services", "service_name", "Dry Cleaning", 1),
     ("services", "active_only", True, 1),
     ("inventory_categories", "name", "Fabric", 1),

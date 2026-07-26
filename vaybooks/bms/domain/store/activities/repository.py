@@ -1,0 +1,13 @@
+from typing import List, Optional, Protocol
+
+from vaybooks.bms.domain.store.activities.entities import StoreActivityConfig
+
+
+class StoreActivityRepository(Protocol):
+    def save(self, activity: StoreActivityConfig) -> StoreActivityConfig: ...
+
+    def find_by_id(self, activity_id: str) -> Optional[StoreActivityConfig]: ...
+
+    def find_by_name(self, name: str) -> Optional[StoreActivityConfig]: ...
+
+    def list_all(self, active_only: bool = True) -> List[StoreActivityConfig]: ...

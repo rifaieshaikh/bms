@@ -141,7 +141,7 @@ def grn_dialog(services: dict) -> None:
     confirm_key = f"{GRN_DIALOG}_confirm"
 
     if not inventory.list_locations(active_only=True):
-        st.error("Add a location under Settings → Locations before receiving goods.")
+        st.error("Add a location under Business → Locations before receiving goods.")
         if st.button("Close", key=f"{GRN_DIALOG}_close_wh"):
             _clear()
             st.rerun()

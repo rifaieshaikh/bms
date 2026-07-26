@@ -180,8 +180,7 @@ def test_visible_pages_filters_access_and_migration(monkeypatch):
 
 
 def test_settings_popover_renders_sectioned_links(monkeypatch):
-    settings = [SimpleNamespace(url_path="business-settings")]
-    access = [SimpleNamespace(url_path="users-settings")]
+    settings = [SimpleNamespace(url_path="print-settings")]
     migration = [SimpleNamespace(url_path="data-migration")]
     monkeypatch.setattr(app_header, "can_see_page", lambda services, url: True)
     with patch.object(app_header, "st") as mock_st:
@@ -189,7 +188,6 @@ def test_settings_popover_renders_sectioned_links(monkeypatch):
         app_header._render_settings(
             {},
             settings_pages=settings,
-            access_pages=access,
             migration_pages=migration,
         )
         headings = [
@@ -197,9 +195,46 @@ def test_settings_popover_renders_sectioned_links(monkeypatch):
             for call in mock_st.markdown.call_args_list
             if call.args
         ]
-        assert headings == ["**Settings**", "**Access**", "**Migration**"]
+        assert headings == ["**Settings**", "**Migration**"]
+        assert mock_st.page_link.call_count == 2
+        assert mock_st.divider.call_count == 1
+
+
+def test_business_popover_lists_pages(monkeypatch):
+    pages = [
+        SimpleNamespace(url_path="business-settings"),
+        SimpleNamespace(url_path="settings-locations"),
+        SimpleNamespace(url_path="store-time"),
+    ]
+    monkeypatch.setattr(app_header, "can_see_page", lambda services, url: True)
+    with patch.object(app_header, "st") as mock_st:
+        mock_st.session_state = {}
+        app_header._render_business({}, business_pages=pages)
+        headings = [
+            call.args[0]
+            for call in mock_st.markdown.call_args_list
+            if call.args
+        ]
+        assert headings == ["**Business**"]
         assert mock_st.page_link.call_count == 3
-        assert mock_st.divider.call_count == 2
+
+
+def test_access_popover_lists_pages(monkeypatch):
+    pages = [
+        SimpleNamespace(url_path="users-settings"),
+        SimpleNamespace(url_path="roles-settings"),
+    ]
+    monkeypatch.setattr(app_header, "can_see_page", lambda services, url: True)
+    with patch.object(app_header, "st") as mock_st:
+        mock_st.session_state = {}
+        app_header._render_access({}, access_pages=pages)
+        headings = [
+            call.args[0]
+            for call in mock_st.markdown.call_args_list
+            if call.args
+        ]
+        assert headings == ["**Access**"]
+        assert mock_st.page_link.call_count == 2
 
 
 def test_schedulers_popover_lists_domain_pages(monkeypatch):

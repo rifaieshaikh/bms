@@ -4,7 +4,13 @@ import pytest
 
 from vaybooks.bms.application.parties.workers.service import WorkerAppService
 from vaybooks.bms.domain.shared.enums import AccountType
-from vaybooks.bms.domain.parties.workers.entities import Worker
+from vaybooks.bms.domain.parties.workers.entities import (
+    SOURCE_CUSTOMIZATION,
+    SOURCE_STORE,
+    Worker,
+    WorkerActivityRef,
+    normalize_activity_refs,
+)
 from tests.conftest import FakeAccountRepository
 
 
@@ -23,11 +29,16 @@ class _FakeWorkerRepo:
         workers = list(self.store.values())
         return [w for w in workers if w.is_active] if active_only else workers
 
-    def list_by_activity(self, activity_id: str, active_only: bool = True):
+    def list_by_activity(
+        self,
+        activity_id: str,
+        source: str = SOURCE_CUSTOMIZATION,
+        active_only: bool = True,
+    ):
         if not activity_id:
             return []
         workers = [
-            w for w in self.store.values() if activity_id in (w.activity_ids or [])
+            w for w in self.store.values() if w.has_activity(activity_id, source)
         ]
         return [w for w in workers if w.is_active] if active_only else workers
 
@@ -36,9 +47,9 @@ def test_list_workers_by_activity_filters_active():
     repo = _FakeWorkerRepo()
     svc = WorkerAppService(repo, FakeAccountRepository())
 
-    w1 = Worker(worker_name="Ravi", activity_ids=["a1"], is_active=True)
-    w2 = Worker(worker_name="Ravi", activity_ids=["a1"], is_active=False)
-    w3 = Worker(worker_name="Meena", activity_ids=["a2"], is_active=True)
+    w1 = Worker(worker_name="Ravi", activity_refs=["a1"], is_active=True)
+    w2 = Worker(worker_name="Ravi", activity_refs=["a1"], is_active=False)
+    w3 = Worker(worker_name="Meena", activity_refs=["a2"], is_active=True)
     # Make deterministic ids in case of debug output
     w1.id, w2.id, w3.id = "w1", "w2", "w3"
     w1.created_at = w2.created_at = w3.created_at = datetime.utcnow()
@@ -51,6 +62,96 @@ def test_list_workers_by_activity_filters_active():
         "w1",
         "w2",
     }
+
+
+def test_list_workers_by_activity_respects_source():
+    repo = _FakeWorkerRepo()
+    svc = WorkerAppService(repo, FakeAccountRepository())
+
+    store_worker = Worker(
+        worker_name="Asha",
+        activity_refs=[WorkerActivityRef(activity_id="a1", source=SOURCE_STORE)],
+    )
+    boutique_worker = Worker(worker_name="Ravi", activity_refs=["a1"])
+    store_worker.id, boutique_worker.id = "ws", "wb"
+    repo.save(store_worker)
+    repo.save(boutique_worker)
+
+    assert [
+        w.id for w in svc.list_workers_by_activity("a1", source=SOURCE_STORE)
+    ] == ["ws"]
+    assert [w.id for w in svc.list_workers_by_activity("a1")] == ["wb"]
+
+
+def test_normalize_activity_refs_handles_legacy_shapes():
+    refs = normalize_activity_refs(
+        [
+            "a1",  # legacy plain id → customization
+            {"activity_id": "a2", "source": "store"},
+            WorkerActivityRef(activity_id="a3", source="project"),
+            {"activity_id": "a1", "source": "customization"},  # duplicate
+            {"activity_id": "", "source": "store"},  # blank id dropped
+            {"activity_id": "a4", "source": "bogus"},  # unknown source → customization
+        ]
+    )
+    assert refs == [
+        WorkerActivityRef(activity_id="a1", source=SOURCE_CUSTOMIZATION),
+        WorkerActivityRef(activity_id="a2", source=SOURCE_STORE),
+        WorkerActivityRef(activity_id="a3", source="project"),
+        WorkerActivityRef(activity_id="a4", source=SOURCE_CUSTOMIZATION),
+    ]
+
+
+def test_worker_legacy_activity_ids_property():
+    worker = Worker(
+        worker_name="Ravi",
+        activity_refs=[
+            WorkerActivityRef(activity_id="a1", source=SOURCE_STORE),
+            WorkerActivityRef(activity_id="a2", source=SOURCE_CUSTOMIZATION),
+        ],
+    )
+    assert worker.activity_ids == ["a1", "a2"]
+    assert worker.activity_ids_for_source(SOURCE_STORE) == ["a1"]
+    assert worker.activity_ids_for_source(SOURCE_CUSTOMIZATION) == ["a2"]
+
+
+def test_mongo_worker_doc_roundtrip_and_legacy_fallback():
+    from types import SimpleNamespace
+
+    from vaybooks.bms.infrastructure.repositories.parties.mongo_worker_repository import (
+        MongoWorkerRepository,
+    )
+
+    repo = MongoWorkerRepository(SimpleNamespace(workers=None))
+
+    worker = Worker(
+        worker_name="Ravi",
+        activity_refs=[
+            WorkerActivityRef(activity_id="a1", source=SOURCE_STORE),
+            WorkerActivityRef(activity_id="a2", source=SOURCE_CUSTOMIZATION),
+        ],
+    )
+    doc = repo._to_doc(worker)
+    assert doc["activity_refs"] == [
+        {"activity_id": "a1", "source": "store"},
+        {"activity_id": "a2", "source": "customization"},
+    ]
+    # Legacy flat list stays in sync for old indexes/queries.
+    assert doc["activity_ids"] == ["a1", "a2"]
+    restored = repo._from_doc(doc)
+    assert restored.activity_refs == worker.activity_refs
+
+    # Pre-migration doc: only activity_ids present → customization refs.
+    legacy_doc = {
+        "_id": "w1",
+        "worker_name": "Meena",
+        "activity_ids": ["a9"],
+        "is_active": True,
+    }
+    legacy = repo._from_doc(legacy_doc)
+    assert legacy.activity_refs == [
+        WorkerActivityRef(activity_id="a9", source=SOURCE_CUSTOMIZATION)
+    ]
 
 
 def test_create_worker_requires_name():

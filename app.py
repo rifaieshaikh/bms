@@ -20,6 +20,8 @@ from vaybooks.bms.ui.pages.parties.workers import list as workers
 from vaybooks.bms.ui.pages.parties.segments import list as party_segments
 from vaybooks.bms.ui.pages.settings.customization_activities import list as activities
 from vaybooks.bms.ui.pages.settings.project_activities import list as project_activities_mod
+from vaybooks.bms.ui.pages.settings.store_activities import list as store_activities_mod
+from vaybooks.bms.ui.pages.store.time_log import list as store_time_tracking_mod
 from vaybooks.bms.ui.pages.boutique import overview as boutique_overview_mod
 from vaybooks.bms.ui.pages.boutique import reports as boutique_reports_mod
 from vaybooks.bms.ui.pages.boutique import scheduled_reports as boutique_scheduled_reports_mod
@@ -382,6 +384,14 @@ project_activities_page = st.Page(
     _page(project_activities_mod, url_path="project-activities"), title="Project Activities", icon=":material/checklist:",
     url_path="project-activities",
 )
+store_activities_page = st.Page(
+    _page(store_activities_mod, url_path="store-activities"), title="Store Activity Configuration", icon=":material/checklist:",
+    url_path="store-activities",
+)
+store_time_page = st.Page(
+    _page(store_time_tracking_mod, url_path="store-time"), title="Business Tasks", icon=":material/storefront:",
+    url_path="store-time",
+)
 measurement_specs_page = st.Page(
     _page(measurement_specs, url_path="measurement-specs"), title="Measurement Specs", icon=":material/straighten:",
     url_path="measurement-specs",
@@ -724,6 +734,8 @@ navigation.register("reports", reports_page)
 navigation.register("customization_activities_list", activities_page)
 navigation.register("activities_list", activities_page)  # legacy alias
 navigation.register("project_activities_list", project_activities_page)
+navigation.register("store_activities_list", store_activities_page)
+navigation.register("store_time_list", store_time_page)
 navigation.register("measurement_specs", measurement_specs_page)
 navigation.register("order_workspace", order_workspace_page)
 navigation.register("services_list", services_page)
@@ -881,13 +893,17 @@ page_groups = {
         schedulers_boutique_page,
         schedulers_projects_page,
     ],
-    "Settings": [
+    "Business": [
         business_settings_page,
         settings_locations_page,
+        store_time_page,
+    ],
+    "Settings": [
         print_settings_page,
         keyboard_shortcuts_page,
         activities_page,
         project_activities_page,
+        store_activities_page,
         measurement_specs_page,
         services_page,
         crm_settings_page,
@@ -955,7 +971,7 @@ else:
     # (deep links keep working) but are surfaced from the header.
     visible_groups = {}
     for group, pages in page_groups.items():
-        if group in ("Settings", "Access", "Migration", "Schedulers"):
+        if group in ("Business", "Settings", "Access", "Migration", "Schedulers"):
             continue
         visible = [
             p
@@ -985,6 +1001,7 @@ else:
 
     render_app_header(
         _services,
+        business_pages=page_groups["Business"],
         settings_pages=page_groups["Settings"],
         access_pages=page_groups["Access"],
         migration_pages=page_groups["Migration"],

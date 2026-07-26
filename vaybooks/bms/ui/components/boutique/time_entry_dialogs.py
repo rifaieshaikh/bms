@@ -68,7 +68,9 @@ def time_form_fields(
             key=f"time_overnight_{key_prefix}",
         )
     workers = (
-        services["workers"].list_workers_by_activity(activity_id)
+        services["workers"].list_workers_by_activity(
+            activity_id, source="customization"
+        )
         if activity_id and services.get("workers")
         else []
     )

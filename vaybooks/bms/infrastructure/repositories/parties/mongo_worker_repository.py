@@ -3,7 +3,11 @@ from typing import List, Optional
 
 from pymongo.database import Database
 
-from vaybooks.bms.domain.parties.workers.entities import Worker
+from vaybooks.bms.domain.parties.workers.entities import (
+    SOURCE_CUSTOMIZATION,
+    Worker,
+    normalize_activity_refs,
+)
 
 
 class MongoWorkerRepository:
@@ -14,7 +18,12 @@ class MongoWorkerRepository:
         return {
             "_id": worker.id,
             "worker_name": worker.worker_name,
-            "activity_ids": list(worker.activity_ids or []),
+            "activity_refs": [
+                {"activity_id": ref.activity_id, "source": ref.source}
+                for ref in worker.activity_refs
+            ],
+            # Legacy flat list kept in sync for older indexes/queries.
+            "activity_ids": list(worker.activity_ids),
             "is_active": worker.is_active,
             "default_hourly_rate": float(worker.default_hourly_rate or 0.0),
             "linked_user_id": worker.linked_user_id or "",
@@ -23,10 +32,14 @@ class MongoWorkerRepository:
         }
 
     def _from_doc(self, doc: dict) -> Worker:
+        refs = doc.get("activity_refs")
+        if refs is None:
+            # Pre-migration document: plain ids are customization activities.
+            refs = list(doc.get("activity_ids") or [])
         return Worker(
             id=doc["_id"],
             worker_name=doc.get("worker_name", ""),
-            activity_ids=list(doc.get("activity_ids") or []),
+            activity_refs=normalize_activity_refs(refs),
             is_active=doc.get("is_active", True),
             default_hourly_rate=float(doc.get("default_hourly_rate") or 0.0),
             linked_user_id=doc.get("linked_user_id", "") or "",
@@ -46,11 +59,32 @@ class MongoWorkerRepository:
         query = {"is_active": True} if active_only else {}
         return [self._from_doc(d) for d in self._collection.find(query)]
 
-    def list_by_activity(self, activity_id: str, active_only: bool = True) -> List[Worker]:
+    def list_by_activity(
+        self,
+        activity_id: str,
+        source: str = SOURCE_CUSTOMIZATION,
+        active_only: bool = True,
+    ) -> List[Worker]:
         if not activity_id:
             return []
-        query: dict = {"activity_ids": activity_id}
+        ref_clause = {
+            "activity_refs": {
+                "$elemMatch": {"activity_id": activity_id, "source": source}
+            }
+        }
+        if source == SOURCE_CUSTOMIZATION:
+            # Pre-migration documents only carry the legacy flat id list.
+            query: dict = {
+                "$or": [
+                    ref_clause,
+                    {
+                        "activity_refs": {"$exists": False},
+                        "activity_ids": activity_id,
+                    },
+                ]
+            }
+        else:
+            query = ref_clause
         if active_only:
             query["is_active"] = True
         return [self._from_doc(d) for d in self._collection.find(query)]
-

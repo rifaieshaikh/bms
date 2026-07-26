@@ -1,6 +1,9 @@
 ﻿from typing import List, Optional, Protocol
 
-from vaybooks.bms.domain.parties.workers.entities import Worker
+from vaybooks.bms.domain.parties.workers.entities import (
+    SOURCE_CUSTOMIZATION,
+    Worker,
+)
 
 
 class WorkerRepository(Protocol):
@@ -10,4 +13,9 @@ class WorkerRepository(Protocol):
 
     def list_all(self, active_only: bool = True) -> List[Worker]: ...
 
-    def list_by_activity(self, activity_id: str, active_only: bool = True) -> List[Worker]: ...
+    def list_by_activity(
+        self,
+        activity_id: str,
+        source: str = SOURCE_CUSTOMIZATION,
+        active_only: bool = True,
+    ) -> List[Worker]: ...

@@ -23,7 +23,9 @@ def time_entry_form(
         key=f"{key_prefix}_ends_next_day",
     )
     workers = (
-        services["workers"].list_workers_by_activity(activity_id)
+        services["workers"].list_workers_by_activity(
+            activity_id, source="customization"
+        )
         if services and activity_id and services.get("workers")
         else []
     )

@@ -157,25 +157,38 @@ def _render_menu_section(title: str, pages: list) -> None:
         st.page_link(page)
 
 
+def _render_business(services: dict, *, business_pages: list) -> None:
+    pages = visible_pages(services, business_pages)
+    with st.popover(_ICON_LABEL, icon=":material/storefront:"):
+        if not pages:
+            st.caption("No business pages available.")
+            return
+        _render_menu_section("Business", pages)
+
+
+def _render_access(services: dict, *, access_pages: list) -> None:
+    pages = visible_pages(services, access_pages)
+    with st.popover(_ICON_LABEL, icon=":material/admin_panel_settings:"):
+        if not pages:
+            st.caption("No access pages available.")
+            return
+        _render_menu_section("Access", pages)
+
+
 def _render_settings(
     services: dict,
     *,
     settings_pages: list,
-    access_pages: list,
     migration_pages: list,
 ) -> None:
     settings = visible_pages(services, settings_pages)
-    access = visible_pages(services, access_pages)
     migration = visible_pages(services, migration_pages)
     with st.popover(_ICON_LABEL, icon=":material/settings:"):
-        if not (settings or access or migration):
+        if not (settings or migration):
             st.caption("No settings available.")
             return
         _render_menu_section("Settings", settings)
-        if settings and (access or migration):
-            st.divider()
-        _render_menu_section("Access", access)
-        if access and migration:
+        if settings and migration:
             st.divider()
         _render_menu_section("Migration", migration)
 
@@ -284,6 +297,7 @@ def render_app_header(
     services: dict,
     *,
     settings_pages: list,
+    business_pages: list | None = None,
     access_pages: list | None = None,
     migration_pages: list | None = None,
     scheduler_pages: list | None = None,
@@ -298,9 +312,15 @@ def render_app_header(
             )
         with c_actions:
             with st.container(key="zh_actions"):
-                c_loc, c_notif, c_schedulers, c_settings, c_account = st.columns(
-                    5, gap="small"
-                )
+                (
+                    c_loc,
+                    c_notif,
+                    c_schedulers,
+                    c_business,
+                    c_access,
+                    c_settings,
+                    c_account,
+                ) = st.columns(7, gap="small")
                 with c_loc:
                     _render_location_switcher(services)
                 with c_notif:
@@ -309,11 +329,14 @@ def render_app_header(
                     _render_schedulers(
                         services, scheduler_pages=scheduler_pages or []
                     )
+                with c_business:
+                    _render_business(services, business_pages=business_pages or [])
+                with c_access:
+                    _render_access(services, access_pages=access_pages or [])
                 with c_settings:
                     _render_settings(
                         services,
                         settings_pages=settings_pages,
-                        access_pages=access_pages or [],
                         migration_pages=migration_pages or [],
                     )
                 with c_account:

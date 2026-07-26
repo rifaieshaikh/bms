@@ -1,5 +1,6 @@
 import streamlit as st
 
+from vaybooks.bms.application.parties.workers.activity_options import refs_from_keys
 from vaybooks.bms.domain.shared.exceptions import ValidationError
 from vaybooks.bms.ui.auth.session import can_permission
 from vaybooks.bms.ui.components.common.list_view import render_list
@@ -15,13 +16,20 @@ from vaybooks.bms.ui.styles import render_card_grid
 PENDING_EDIT_WORKER = "pending_edit_worker"
 
 
-def _activity_options(services) -> dict:
-    activities = services["activities"].list_activities(active_only=False)
-    return {a.activity_name: a.id for a in activities}
+def _activity_options(services, worker=None) -> dict:
+    """Picker options as ``{composite key: label}``.
 
-
-def _resolve_activity_ids(options: dict, selected_names: list[str]) -> list[str]:
-    return [options[n] for n in selected_names if n in options]
+    Options come from the module-aware aggregator (store always; customization
+    when boutique is enabled; project when projects is enabled). When editing,
+    the worker's existing assignments are kept selectable even if inactive or
+    from a disabled module, so they are never silently stripped.
+    """
+    options_service = services["employee_activity_options"]
+    options = {o.key: o.label for o in options_service.list_options(active_only=True)}
+    if worker is not None:
+        for option in options_service.options_for_refs(worker.activity_refs):
+            options.setdefault(option.key, option.label)
+    return options
 
 
 def _can_manage_users(services: dict) -> bool:
@@ -100,6 +108,7 @@ def _add_worker_dialog(worker_service, services: dict):
     selected = st.multiselect(
         "Activities",
         list(act_opts.keys()),
+        format_func=lambda key: act_opts.get(key, key),
         key="add_worker_acts",
         placeholder="Select activities this employee can do…",
     )
@@ -118,7 +127,7 @@ def _add_worker_dialog(worker_service, services: dict):
                 )
             worker_service.create_worker(
                 name,
-                _resolve_activity_ids(act_opts, selected),
+                refs_from_keys(selected),
                 default_hourly_rate=hourly_rate,
                 **login,
             )
@@ -138,10 +147,12 @@ def _edit_worker_dialog(worker_service, services: dict, worker_id: str):
         st.error("Employee not found")
         return
 
-    act_opts = _activity_options(services)
-    act_name_by_id = {v: k for k, v in act_opts.items()}
-    current_names = [act_name_by_id.get(aid) for aid in worker.activity_ids]
-    current_names = [n for n in current_names if n]
+    act_opts = _activity_options(services, worker=worker)
+    current_keys = [
+        f"{ref.source}:{ref.activity_id}"
+        for ref in worker.activity_refs
+        if f"{ref.source}:{ref.activity_id}" in act_opts
+    ]
 
     name = st.text_input("Employee Name", value=worker.worker_name, key="edit_worker_name")
     hourly_rate = st.number_input(
@@ -154,7 +165,8 @@ def _edit_worker_dialog(worker_service, services: dict, worker_id: str):
     selected = st.multiselect(
         "Activities",
         list(act_opts.keys()),
-        default=current_names,
+        default=current_keys,
+        format_func=lambda key: act_opts.get(key, key),
         key="edit_worker_acts",
         placeholder="Select activities this employee can do…",
     )
@@ -184,7 +196,7 @@ def _edit_worker_dialog(worker_service, services: dict, worker_id: str):
             worker_service.update_worker(
                 worker_id,
                 name,
-                _resolve_activity_ids(act_opts, selected),
+                refs_from_keys(selected),
                 is_active,
                 default_hourly_rate=hourly_rate,
                 **login,
@@ -195,12 +207,15 @@ def _edit_worker_dialog(worker_service, services: dict, worker_id: str):
             st.error(str(exc))
 
 
-def _worker_card(worker, activity_names: dict, services: dict, index: int):
+def _worker_card(worker, services: dict, index: int):
     with st.container(border=True):
         status = "Active" if worker.is_active else "Inactive"
         st.markdown(f"**{worker.worker_name}**")
         st.caption(f"{status} · {_login_caption(services, worker.linked_user_id or '')}")
-        acts = [activity_names.get(aid, "⚠️ Unknown activity") for aid in worker.activity_ids]
+        options = services["employee_activity_options"].options_for_refs(
+            worker.activity_refs
+        )
+        acts = [o.label for o in options]
         st.write("Activities: " + (", ".join(acts) if acts else "—"))
         if st.button(
             "Edit",
@@ -218,11 +233,9 @@ def _load_workers(services, filters, sort):
 
 
 def _render_cards(page_workers, services):
-    activities = services["activities"].list_activities(active_only=False)
-    activity_names = {a.id: a.activity_name for a in activities}
     render_card_grid(
         page_workers,
-        lambda worker, i: _worker_card(worker, activity_names, services, i),
+        lambda worker, i: _worker_card(worker, services, i),
         suffix="workers",
     )
 

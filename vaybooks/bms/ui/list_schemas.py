@@ -80,6 +80,14 @@ def _activity_names(services):
             for a in services["activities"].list_activities(active_only=False)]
 
 
+def _store_activity_names(services):
+    store_activities = services.get("store_activities")
+    if store_activities is None:
+        return []
+    return [(a.activity_name, a.activity_name)
+            for a in store_activities.list_activities(active_only=False)]
+
+
 def _services_by_id(services):
     return [(s.id, s.service_name)
             for s in services["vendor_services"].list_services(active_only=False)]
@@ -151,6 +159,7 @@ OPTION_LOADERS = {
     "vendor_accounts": _vendor_accounts,
     "expense_accounts": _expense_accounts,
     "activity_names": _activity_names,
+    "store_activity_names": _store_activity_names,
     "services_by_id": _services_by_id,
     "inventory_categories": _inventory_categories,
     "inventory_products": _inventory_products,
@@ -706,6 +715,54 @@ PROJECT_ACTIVITIES = ListSchema(
     page_size=CARD_PAGE_SIZE,
 )
 
+STORE_ACTIVITIES = ListSchema(
+    entity_key="store_activities",
+    title="Store Activity Configuration",
+    filter_fields=[
+        FilterField("activity_name", "Activity name", F.EXACT),
+        FilterField("categories", "Category", F.MULTISELECT,
+                    record_attr="activity_category",
+                    options=_enum_opts(ActivityCategory)),
+        FilterField("types", "Type", F.MULTISELECT,
+                    record_attr="activity_type", options=_enum_opts(ActivityType)),
+        FilterField("active_only", "Active only", F.CHECKBOX,
+                    match=_match_activity_active),
+        FilterField("time_tracking", "Requires task", F.SELECT,
+                    options=[("yes", "Yes"), ("no", "No")],
+                    match=_match_activity_time_tracking),
+    ],
+    sort_options=[
+        SortOption("created_at", "Created"),
+        SortOption("activity_name", "Activity name"),
+        SortOption("activity_category", "Category"),
+    ],
+    default_sort="created_at",
+    page_size=CARD_PAGE_SIZE,
+)
+
+STORE_TIME = ListSchema(
+    entity_key="store_time",
+    title="Business Tasks",
+    filter_fields=[
+        FilterField("work_date", "Work date", F.DATE_RANGE),
+        FilterField("worker_name", "Employee", F.EXACT),
+        FilterField("activity_name", "Activity", F.SELECT,
+                    options_loader="store_activity_names"),
+        FilterField("location_id", "Location", F.ENTITY_SELECT,
+                    options_loader="inventory_locations"),
+        FilterField("status", "Status", F.SELECT,
+                    options=[("Created", "Created"), ("Completed", "Completed")]),
+    ],
+    sort_options=[
+        SortOption("work_date", "Work date"),
+        SortOption("created_at", "Created"),
+        SortOption("duration_minutes", "Duration"),
+        SortOption("labour_cost", "Labour cost"),
+    ],
+    default_sort="work_date",
+    page_size=CARD_PAGE_SIZE,
+)
+
 SERVICES = ListSchema(
     entity_key="services",
     title="Service Configuration",
@@ -731,7 +788,8 @@ SCHEMAS = {
         ORDERS, ITEMS, MEASUREMENTS, CUSTOMERS, VENDORS, TIME, ACCOUNTS, VOUCHERS, RECEIPTS,
         PAYMENTS, CREDIT_NOTES, DEBIT_NOTES, ACCOUNTING_INVOICES, STORE_SALES, JOURNAL,
         TRIAL_BALANCE, ACTIVITIES,
-        PROJECT_ACTIVITIES, SERVICES, INVENTORY_OVERVIEW, INVENTORY_CATEGORIES,
+        PROJECT_ACTIVITIES, STORE_ACTIVITIES, STORE_TIME, SERVICES,
+        INVENTORY_OVERVIEW, INVENTORY_CATEGORIES,
         INVENTORY_PRODUCTS, INVENTORY_STOCK, INVENTORY_STOCK_LEDGER, INVENTORY_MOVEMENTS,
         INVENTORY_CUSTOMER_PRICES,
     ]

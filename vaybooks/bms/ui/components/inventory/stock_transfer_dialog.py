@@ -48,7 +48,7 @@ def stock_transfer_dialog(services: dict) -> None:
     user = get_current_user(services)
     locations = accessible_locations(user, inventory)
     if len(locations) < 2:
-        st.warning("Add at least two active locations (Settings → Locations) before creating a transfer.")
+        st.warning("Add at least two active locations (Business → Locations) before creating a transfer.")
         if st.button("Close", key=f"{TRANSFER_DIALOG}_close_locations"):
             _clear()
             st.rerun()

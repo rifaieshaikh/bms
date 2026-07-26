@@ -87,17 +87,29 @@ def ensure_indexes(db):
 
     _create_index(db.activity_config, "activity_name", unique=True)
 
+    _create_index(db.store_activity_configs, "activity_name", unique=True)
+
     _create_index(db.vendor_services, "service_name", unique=True)
 
     _create_index(db.workers, "worker_name")
     _create_index(db.workers, "is_active")
     _create_index(db.workers, "activity_ids")
+    _create_index(
+        db.workers,
+        [("activity_refs.activity_id", 1), ("activity_refs.source", 1)],
+    )
 
     _create_index(db.time_entries, "order_id")
     _create_index(db.time_entries, "bill_number")
     _create_index(db.time_entries, "activity_id")
     _create_index(db.time_entries, "work_date")
     _create_index(db.time_entries, [("work_date", 1), ("activity_id", 1)])
+
+    _create_index(db.store_time_entries, "work_date")
+    _create_index(db.store_time_entries, "activity_id")
+    _create_index(db.store_time_entries, "worker_id")
+    _create_index(db.store_time_entries, "location_id")
+    _create_index(db.store_time_entries, "status")
 
     _create_index(db.expenses, "order_id")
     _create_index(db.expenses, "bill_number")

@@ -1,9 +1,13 @@
-﻿from typing import List, Optional
+﻿from typing import Iterable, List, Optional
 
 from vaybooks.bms.domain.finance.accounting.repository import AccountRepository
 from vaybooks.bms.domain.finance.accounting.services import AccountingDomainService
 from vaybooks.bms.domain.shared.exceptions import ValidationError
-from vaybooks.bms.domain.parties.workers.entities import Worker
+from vaybooks.bms.domain.parties.workers.entities import (
+    SOURCE_CUSTOMIZATION,
+    Worker,
+    normalize_activity_refs,
+)
 from vaybooks.bms.domain.parties.workers.repository import WorkerRepository
 from vaybooks.bms.domain.parties.workers.services import WorkerDomainService
 
@@ -22,8 +26,15 @@ class WorkerAppService:
     def list_workers(self, active_only: bool = True) -> List[Worker]:
         return self._repo.list_all(active_only=active_only)
 
-    def list_workers_by_activity(self, activity_id: str, active_only: bool = True) -> List[Worker]:
-        return self._repo.list_by_activity(activity_id, active_only=active_only)
+    def list_workers_by_activity(
+        self,
+        activity_id: str,
+        source: str = SOURCE_CUSTOMIZATION,
+        active_only: bool = True,
+    ) -> List[Worker]:
+        return self._repo.list_by_activity(
+            activity_id, source=source, active_only=active_only
+        )
 
     def get_worker(self, worker_id: str) -> Optional[Worker]:
         return self._repo.find_by_id(worker_id)
@@ -31,7 +42,7 @@ class WorkerAppService:
     def create_worker(
         self,
         worker_name: str,
-        activity_ids: List[str],
+        activity_refs: Iterable,
         default_hourly_rate: Optional[float] = None,
         *,
         create_login: bool = False,
@@ -56,7 +67,7 @@ class WorkerAppService:
 
         worker = Worker(
             worker_name=name,
-            activity_ids=list(activity_ids or []),
+            activity_refs=normalize_activity_refs(activity_refs),
             default_hourly_rate=float(default_hourly_rate or 0.0),
             linked_user_id=linked_user_id,
         )
@@ -69,7 +80,7 @@ class WorkerAppService:
         self,
         worker_id: str,
         worker_name: str,
-        activity_ids: List[str],
+        activity_refs: Iterable,
         is_active: bool = True,
         default_hourly_rate: Optional[float] = None,
         *,
@@ -105,7 +116,7 @@ class WorkerAppService:
 
         worker.update(
             worker_name=name,
-            activity_ids=list(activity_ids or []),
+            activity_refs=normalize_activity_refs(activity_refs),
             is_active=is_active,
             default_hourly_rate=rate,
             linked_user_id=linked_user_id,
