@@ -10,12 +10,14 @@ from typing import Dict, FrozenSet, Iterable, List, Set, Tuple
 
 MODULE_CORE = "core"
 MODULE_PARTIES = "parties"
+MODULE_CRM = "crm"
 MODULE_BOUTIQUE = "boutique"
 MODULE_PROJECTS = "projects"
 MODULE_SALES = "sales"
 MODULE_PURCHASES = "purchases"
 MODULE_INVENTORY = "inventory"
 MODULE_FINANCE = "finance"
+MODULE_SCHEDULERS = "schedulers"
 MODULE_MIGRATION = "migration"
 MODULE_SETTINGS = "settings"
 MODULE_SYSTEM = "system"
@@ -23,12 +25,14 @@ MODULE_SYSTEM = "system"
 ALL_MODULES: Tuple[str, ...] = (
     MODULE_CORE,
     MODULE_PARTIES,
+    MODULE_CRM,
     MODULE_BOUTIQUE,
     MODULE_PROJECTS,
     MODULE_SALES,
     MODULE_PURCHASES,
     MODULE_INVENTORY,
     MODULE_FINANCE,
+    MODULE_SCHEDULERS,
     MODULE_MIGRATION,
     MODULE_SETTINGS,
     MODULE_SYSTEM,
@@ -39,12 +43,14 @@ MODULE_KEYS: Tuple[str, ...] = tuple(f"module.{m}" for m in ALL_MODULES)
 MODULE_LABELS: Dict[str, str] = {
     MODULE_CORE: "Core",
     MODULE_PARTIES: "Parties",
+    MODULE_CRM: "CRM",
     MODULE_BOUTIQUE: "Boutique",
     MODULE_PROJECTS: "Projects",
     MODULE_SALES: "Sales",
     MODULE_PURCHASES: "Purchases",
     MODULE_INVENTORY: "Inventory",
     MODULE_FINANCE: "Finance",
+    MODULE_SCHEDULERS: "Schedulers",
     MODULE_MIGRATION: "Migration",
     MODULE_SETTINGS: "Settings",
     MODULE_SYSTEM: "System",
@@ -79,6 +85,36 @@ PERMISSIONS: Tuple[str, ...] = tuple(
         *_expand("parties.vendors", ("view", "create", "edit")),
         *_expand("parties.employees", ("view", "create", "edit")),
         *_expand("parties.segments", ("view", "edit")),
+        # CRM
+        "crm.dashboard.view",
+        *_expand(
+            "crm.leads",
+            ("view", "create", "edit", "delete", "assign", "convert"),
+        ),
+        *_expand(
+            "crm.enquiries",
+            ("view", "create", "edit", "delete", "assign", "convert"),
+        ),
+        *_expand("crm.activities", ("view", "create", "edit", "complete")),
+        *_expand("crm.calendar", ("view", "edit", "manage_team")),
+        # Record visibility scope; a CRM page must pair a *.view permission with
+        # exactly one of these to know which rows the user may read.
+        "crm.records.view_own",
+        "crm.records.view_team",
+        "crm.records.view_all",
+        "crm.reports.view",
+        "crm.reports.team.view",
+        "crm.reports.collection.view",
+        "crm.reports.export",
+        *_expand("crm.settings", ("view", "edit")),
+        "crm.import.run",
+        "crm.audit.view",
+        "crm.corrections.review",
+        "crm.corrections.auto_apply",
+        "crm.balances.view",
+        *_expand("crm.credit", ("view", "manage")),
+        *_expand("crm.payment_followups", ("view", "create", "edit")),
+        "crm.reminders.whatsapp.send",
         # Boutique
         "boutique.overview.view",
         *_expand("boutique.orders", ("view", "create", "edit")),
@@ -139,6 +175,10 @@ PERMISSIONS: Tuple[str, ...] = tuple(
         "finance.trial_balance.view",
         "finance.reports.view",
         "finance.export.view",
+        # Schedulers — view the pages, run manual triggers, save configuration.
+        "schedulers.view",
+        "schedulers.run",
+        "schedulers.edit",
         # Migration
         "migration.run",
         # Settings
@@ -212,6 +252,18 @@ PAGE_PERMISSIONS: Dict[str, str] = {
     "vendor-detail": "parties.vendors.view",
     "employees": "parties.employees.view",
     "party-segments": "parties.segments.view",
+    "crm-dashboard": "crm.dashboard.view",
+    "crm-leads": "crm.leads.view",
+    "crm-enquiries": "crm.enquiries.view",
+    "crm-activities": "crm.activities.view",
+    "crm-calendar": "crm.calendar.view",
+    "crm-reports": "crm.reports.view",
+    "crm-scheduled-reports": "schedulers.view",
+    "crm-settings": "crm.settings.view",
+    # Hidden CRM detail routes (reached from a list, never shown in navigation)
+    "crm-lead-detail": "crm.leads.view",
+    "crm-enquiry-detail": "crm.enquiries.view",
+    "crm-activity-detail": "crm.activities.view",
     "boutique-overview": "boutique.overview.view",
     "customizationOrders": "boutique.orders.view",
     "order-detail": "boutique.orders.view",
@@ -223,6 +275,7 @@ PAGE_PERMISSIONS: Dict[str, str] = {
     "time": "boutique.tasks.view",
     "calendar": "boutique.calendar.view",
     "boutique-reports": "boutique.reports.view",
+    "boutique-scheduled-reports": "schedulers.view",
     "projects-dashboard": "projects.overview.view",
     "project-enquiries": "projects.enquiries.view",
     "project-enquiry-workspace": "projects.enquiries.view",
@@ -232,6 +285,7 @@ PAGE_PERMISSIONS: Dict[str, str] = {
     "project-measurements": "projects.measurements.view",
     "project-ra-bills": "projects.ra_bills.view",
     "projects-reports": "projects.reports.view",
+    "projects-scheduled-reports": "schedulers.view",
     "projects-settings": "projects.settings.view",
     "project-site-mobile": "projects.site_mobile.view",
     "project-portal": "projects.portal.manage",
@@ -249,6 +303,7 @@ PAGE_PERMISSIONS: Dict[str, str] = {
     "sales-returns": "sales.returns.view",
     "sales-return-detail": "sales.returns.view",
     "sales-reports": "sales.reports.view",
+    "sales-scheduled-reports": "schedulers.view",
     "purchases-overview": "purchases.overview.view",
     "purchase-orders": "purchases.orders.view",
     "purchase-order-detail": "purchases.orders.view",
@@ -259,6 +314,7 @@ PAGE_PERMISSIONS: Dict[str, str] = {
     "purchase-returns": "purchases.returns.view",
     "purchase-return-detail": "purchases.returns.view",
     "purchases-reports": "purchases.reports.view",
+    "purchases-scheduled-reports": "schedulers.view",
     "inventory-overview": "inventory.overview.view",
     "inventory-categories": "inventory.categories.view",
     "inventory-warehouses": "inventory.warehouses.view",
@@ -271,6 +327,7 @@ PAGE_PERMISSIONS: Dict[str, str] = {
     "inventory-transfers": "inventory.transfers.view",
     "inventory-transfer-detail": "inventory.transfers.view",
     "inventory-reports": "inventory.reports.view",
+    "inventory-scheduled-reports": "schedulers.view",
     "settings-locations": "inventory.warehouses.view",
     "finance-overview": "finance.overview.view",
     "accounts": "finance.accounts.view",
@@ -285,6 +342,12 @@ PAGE_PERMISSIONS: Dict[str, str] = {
     "trial-balance": "finance.trial_balance.view",
     "reports": "finance.reports.view",
     "export-backup": "finance.export.view",
+    "schedulers-crm": "schedulers.view",
+    "schedulers-sales": "schedulers.view",
+    "schedulers-purchases": "schedulers.view",
+    "schedulers-inventory": "schedulers.view",
+    "schedulers-boutique": "schedulers.view",
+    "schedulers-projects": "schedulers.view",
     "data-migration": "migration.run",
     "migration-categories": "migration.run",
     "migration-products": "migration.run",
@@ -351,7 +414,9 @@ def _starter_feature_keys() -> FrozenSet[str]:
 
 def _growth_feature_keys() -> FrozenSet[str]:
     keys = set(_starter_feature_keys())
-    keys.update(expand_modules([MODULE_BOUTIQUE, MODULE_MIGRATION]))
+    keys.update(
+        expand_modules([MODULE_BOUTIQUE, MODULE_MIGRATION, MODULE_SCHEDULERS])
+    )
     keys.add("sales.quotations.approve")
     keys.add("migration.run")
     keys.add(module_key(MODULE_MIGRATION))
@@ -404,6 +469,10 @@ ROLE_WAREHOUSE_MANAGER = "role_warehouse_manager"
 ROLE_STORE_MANAGER = "role_store_manager"
 ROLE_STORE_ASSOCIATE = "role_store_associate"
 ROLE_SETTINGS_ADMIN = "role_settings_admin"
+ROLE_SALES_REP = "role_sales_rep"
+ROLE_SALES_MANAGER = "role_sales_manager"
+ROLE_CRM_ADMIN = "role_crm_admin"
+ROLE_COLLECTIONS = "role_collections"
 
 # ProjectAppRole.value → system role id
 PROJECT_APP_ROLE_TO_ROLE_ID: Dict[str, str] = {
@@ -599,7 +668,12 @@ SYSTEM_ROLE_DEFINITIONS: Dict[str, Dict] = {
         "description": "Read-only access across modules including internal cost.",
         "permission_keys": sorted(
             set(_all_view_permissions())
-            | {"projects.cost.view_internal", "finance.export.view"}
+            | {
+                "projects.cost.view_internal",
+                "finance.export.view",
+                "crm.records.view_all",
+                "crm.audit.view",
+            }
         ),
     },
     ROLE_SALES: {
@@ -696,13 +770,109 @@ SYSTEM_ROLE_DEFINITIONS: Dict[str, Dict] = {
             "finance.receipts.create",
         ),
     },
+    ROLE_SALES_REP: {
+        "id": ROLE_SALES_REP,
+        "name": "Sales Representative",
+        "description": "Own leads, enquiries, activities, calendar and personal reports.",
+        "permission_keys": _role_perms(
+            "core.dashboard.view",
+            "parties.customers.view",
+            "parties.customers.create",
+            "parties.customers.edit",
+            "crm.dashboard.view",
+            "crm.leads.view",
+            "crm.leads.create",
+            "crm.leads.edit",
+            "crm.leads.convert",
+            "crm.enquiries.view",
+            "crm.enquiries.create",
+            "crm.enquiries.edit",
+            "crm.enquiries.convert",
+            "crm.activities.*",
+            "crm.calendar.view",
+            "crm.calendar.edit",
+            "crm.records.view_own",
+            "crm.reports.view",
+        ),
+    },
+    ROLE_SALES_MANAGER: {
+        "id": ROLE_SALES_MANAGER,
+        "name": "Sales Manager",
+        "description": "Team pipeline, assignment, and team-wide CRM reporting.",
+        "permission_keys": _role_perms(
+            "core.*",
+            "parties.customers.*",
+            "parties.segments.view",
+            "parties.employees.view",
+            "crm.dashboard.view",
+            "crm.leads.view",
+            "crm.leads.create",
+            "crm.leads.edit",
+            "crm.leads.assign",
+            "crm.leads.convert",
+            "crm.enquiries.view",
+            "crm.enquiries.create",
+            "crm.enquiries.edit",
+            "crm.enquiries.assign",
+            "crm.enquiries.convert",
+            "crm.activities.*",
+            "crm.calendar.*",
+            "crm.records.view_own",
+            "crm.records.view_team",
+            "crm.reports.view",
+            "crm.reports.team.view",
+            "crm.reports.export",
+            "crm.settings.view",
+            "sales.overview.view",
+            "sales.quotations.view",
+            "sales.reports.view",
+        ),
+    },
+    ROLE_CRM_ADMIN: {
+        "id": ROLE_CRM_ADMIN,
+        "name": "CRM Administrator",
+        "description": "All CRM records, settings, imports, audit and automatic corrections.",
+        "permission_keys": _role_perms(
+            "core.*",
+            "parties.customers.*",
+            "parties.segments.*",
+            "crm.*",
+            "settings.audit.view",
+        ),
+    },
+    ROLE_COLLECTIONS: {
+        "id": ROLE_COLLECTIONS,
+        "name": "Accounts & Collection",
+        "description": "Balances, credit control, payment follow-ups, collection reports and reminders.",
+        "permission_keys": _role_perms(
+            "core.dashboard.view",
+            "parties.customers.view",
+            "crm.dashboard.view",
+            "crm.records.view_all",
+            "crm.activities.*",
+            "crm.calendar.view",
+            "crm.balances.view",
+            "crm.credit.*",
+            "crm.payment_followups.*",
+            "crm.reminders.whatsapp.send",
+            "crm.reports.view",
+            "crm.reports.collection.view",
+            "crm.reports.export",
+            "sales.invoices.view",
+            "finance.overview.view",
+            "finance.receipts.view",
+            "finance.receipts.create",
+        ),
+    },
     ROLE_SETTINGS_ADMIN: {
         "id": ROLE_SETTINGS_ADMIN,
         "name": "Settings Admin",
         "description": "Business and module settings without plan/flag control.",
         "permission_keys": sorted(
             p
-            for p in resolve_permission_patterns(["core.*", "settings.*"])
+            for p in resolve_permission_patterns(
+                ["core.*", "settings.*", "schedulers.*"]
+            )
             if p
             not in (
                 "settings.feature_flags.manage",

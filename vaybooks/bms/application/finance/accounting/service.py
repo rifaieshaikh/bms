@@ -1,3 +1,4 @@
+import logging
 from datetime import date, datetime
 from typing import List, Optional
 
@@ -8,6 +9,7 @@ from vaybooks.bms.domain.finance.accounting.services import (
     AccountingDomainService,
 )
 from vaybooks.bms.domain.shared.enums import AccountType, VoucherType
+from vaybooks.bms.domain.shared.date_utils import utc_now
 from vaybooks.bms.domain.sales.invoice_lock import assert_invoice_editable
 from vaybooks.bms.domain.shared.india import (
     CGST_INPUT_ACCOUNT_NAME,
@@ -22,6 +24,7 @@ from vaybooks.bms.domain.shared.india import (
 
 
 ADVANCE_RELEASE_DESCRIPTION_PREFIX = "Release advance on order"
+logger = logging.getLogger(__name__)
 
 
 class AccountingAppService:
@@ -30,11 +33,43 @@ class AccountingAppService:
         account_repo: AccountRepository,
         voucher_repo: VoucherRepository,
         counter_repo: CounterRepository,
+        crm_event_sink=None,
     ):
         self._account_repo = account_repo
         self._voucher_repo = voucher_repo
         self._counter_repo = counter_repo
+        self._crm_event_sink = crm_event_sink
         self._domain = AccountingDomainService(account_repo, voucher_repo)
+
+    def set_crm_event_sink(self, sink) -> None:
+        """Attach CRM integration after service composition."""
+        self._crm_event_sink = sink
+
+    def _emit_crm_event(self, event_type: str, **payload) -> None:
+        sink = self._crm_event_sink
+        if sink is None:
+            return
+        try:
+            if callable(sink):
+                sink(event_type, payload)
+            else:
+                sink.record_source_event(event_type=event_type, **payload)
+        except Exception:
+            logger.exception(
+                "CRM event publication failed: %s source=%s",
+                event_type,
+                payload.get("source_id", ""),
+            )
+
+    def _voucher_customer_id(self, voucher: Optional[Voucher]) -> str:
+        if voucher is None:
+            return ""
+        for line in voucher.lines:
+            account = self._account_repo.find_by_id(line.account_id)
+            customer_id = getattr(account, "linked_customer_id", "") if account else ""
+            if customer_id:
+                return customer_id
+        return ""
 
     def create_account(
         self,
@@ -297,7 +332,18 @@ class AccountingAppService:
             amount=amount,
             reference_order_id=reference_order_id,
         )
-        return self._domain.save_voucher(voucher)
+        voucher = self._domain.save_voucher(voucher)
+        self._emit_crm_event(
+            "payment_received",
+            source_module="finance",
+            source_type="receipt",
+            source_id=voucher.id,
+            customer_id=getattr(customer, "linked_customer_id", "") or "",
+            occurred_at=voucher.voucher_date,
+            status="Posted",
+            amount=float(amount or 0),
+        )
+        return voucher
 
     def update_customer_payment(
         self,
@@ -328,7 +374,18 @@ class AccountingAppService:
             reference_order_id=old.reference_order_id,
         )
         voucher.id = old.id
-        return self._domain.update_voucher(voucher)
+        voucher = self._domain.update_voucher(voucher)
+        self._emit_crm_event(
+            "payment_received",
+            source_module="finance",
+            source_type="receipt",
+            source_id=voucher.id,
+            customer_id=getattr(customer, "linked_customer_id", "") or "",
+            occurred_at=voucher.voucher_date,
+            status="Posted",
+            amount=float(amount or 0),
+        )
+        return voucher
 
     def create_receipt(
         self,
@@ -1275,6 +1332,23 @@ class AccountingAppService:
         if voucher and voucher.voucher_type == VoucherType.SALES_INVOICE:
             assert_invoice_editable(voucher.voucher_date)
         self._domain.reverse_and_delete_voucher(voucher_id)
+        if voucher and voucher.voucher_type in (
+            VoucherType.RECEIPT,
+            VoucherType.SALES_INVOICE,
+        ):
+            self._emit_crm_event(
+                "source_reversed",
+                source_module="finance",
+                source_type=(
+                    "receipt"
+                    if voucher.voucher_type == VoucherType.RECEIPT
+                    else "sales_invoice"
+                ),
+                source_id=voucher.id,
+                customer_id=self._voucher_customer_id(voucher),
+                occurred_at=utc_now(),
+                status="Reversed",
+            )
 
     def create_journal_entry(
         self,

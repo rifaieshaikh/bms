@@ -86,3 +86,48 @@ def test_update_worker_renames_salary_account():
     account = account_repo.find_worker_account(worker.id)
     assert account.account_name == "Salary - Ravi Kumar"
 
+
+class _FakeUsers:
+    def __init__(self):
+        self.created = []
+
+    def create_user(self, **kwargs):
+        from types import SimpleNamespace
+        from uuid import uuid4
+
+        user = SimpleNamespace(id=uuid4().hex, **kwargs)
+        self.created.append(user)
+        return user
+
+
+def test_create_worker_with_login_links_user():
+    worker_repo = _FakeWorkerRepo()
+    users = _FakeUsers()
+    svc = WorkerAppService(worker_repo, FakeAccountRepository(), user_service=users)
+
+    worker = svc.create_worker(
+        "Priya",
+        ["a1"],
+        create_login=True,
+        username="priya",
+        password="secret1",
+        role_ids=["role-sales-rep"],
+    )
+
+    assert worker.linked_user_id
+    assert users.created[0].username == "priya"
+    assert users.created[0].display_name == "Priya"
+    assert users.created[0].role_ids == ["role-sales-rep"]
+
+
+def test_create_worker_with_login_requires_user_service():
+    svc = WorkerAppService(_FakeWorkerRepo(), FakeAccountRepository())
+    with pytest.raises(Exception, match="User service is not configured"):
+        svc.create_worker(
+            "Priya",
+            ["a1"],
+            create_login=True,
+            username="priya",
+            password="secret1",
+        )
+

@@ -21,6 +21,7 @@ def validate_mapped_rows(
     issues: List[RowIssue] = []
     valid = 0
     req = required_keys(entity_type)
+    seen_fingerprints: set[str] = set()
     for row in rows:
         row_num = int(row.get("_row") or 0)
         row_errors = []
@@ -31,6 +32,33 @@ def validate_mapped_rows(
             opening = row.get("opening_qty")
             if opening is not None and opening < 0:
                 row_errors.append("opening_qty cannot be negative")
+        if entity_type == ImportEntityType.LEADS:
+            phone = row.get("phone") or row.get("phone_number")
+            if _nonempty(phone):
+                try:
+                    from vaybooks.bms.domain.shared.india import normalize_indian_phone
+
+                    normalize_indian_phone(str(phone))
+                except Exception as exc:
+                    row_errors.append(str(exc))
+            email = (row.get("email") or "").strip()
+            if email and "@" not in email:
+                row_errors.append("Invalid email format")
+            gstin = (row.get("gstin") or "").strip()
+            if gstin:
+                try:
+                    from vaybooks.bms.domain.shared.india import validate_gstin
+
+                    validate_gstin(gstin)
+                except Exception as exc:
+                    row_errors.append(str(exc))
+            from vaybooks.bms.domain.crm.services import lead_row_fingerprint
+
+            fp = lead_row_fingerprint(row)
+            if fp in seen_fingerprints:
+                row_errors.append("Duplicate row within uploaded file")
+            else:
+                seen_fingerprints.add(fp)
         if row_errors:
             for message in row_errors:
                 issues.append(RowIssue(row=row_num, message=message))

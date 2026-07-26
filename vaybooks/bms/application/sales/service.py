@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from copy import deepcopy
 from datetime import date, datetime
 from typing import List, Optional
@@ -60,6 +61,8 @@ from vaybooks.bms.infrastructure.repositories.finance.mongo_counter_repository i
     MongoCounterRepository,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class SalesAppService:
     def __init__(
@@ -75,6 +78,7 @@ class SalesAppService:
         estimate_repo: Optional[EstimateRepository] = None,
         quotation_repo: Optional[QuotationRepository] = None,
         customer_price_repo=None,
+        crm_event_sink=None,
     ):
         self._so_repo = so_repo
         self._dn_repo = dn_repo
@@ -87,9 +91,32 @@ class SalesAppService:
         self._estimate_repo = estimate_repo
         self._quotation_repo = quotation_repo
         self._customer_price_repo = customer_price_repo
+        self._crm_event_sink = crm_event_sink
         self._domain = SalesDomainService(
             so_repo, dn_repo, return_repo, estimate_repo, quotation_repo
         )
+
+    def _emit_crm_event(self, event_type: str, **payload) -> None:
+        """Publish a source-linked CRM event without breaking the sales posting.
+
+        The CRM sink enforces idempotency by source type/id/event type. Keeping
+        this boundary optional preserves backwards compatibility for tests and
+        installations where the CRM module has not been bootstrapped yet.
+        """
+        sink = self._crm_event_sink
+        if sink is None:
+            return
+        try:
+            if callable(sink):
+                sink(event_type, payload)
+            else:
+                sink.record_source_event(event_type=event_type, **payload)
+        except Exception:
+            logger.exception(
+                "CRM event publication failed: %s source=%s",
+                event_type,
+                payload.get("source_id", ""),
+            )
 
     def _line_resolver(self) -> SalesLineResolver:
         return SalesLineResolver(get_product=self._inventory.get_product)
@@ -380,7 +407,7 @@ class SalesAppService:
         terms_and_conditions: Optional[str] = None,
     ) -> Quotation:
         enriched, supply_type = self._enrich_so_lines(customer_id, lines)
-        return self._domain.create_quotation(
+        quotation = self._domain.create_quotation(
             quotation_number=self._counter_repo.next("quotation_number"),
             customer_id=customer_id,
             customer_name=self._customer_name(customer_id),
@@ -397,6 +424,16 @@ class SalesAppService:
                 terms_and_conditions,
             ),
         )
+        self._emit_crm_event(
+            "quotation_created",
+            source_module="sales",
+            source_type="quotation",
+            source_id=quotation.id,
+            customer_id=quotation.customer_id,
+            occurred_at=quotation.created_at,
+            status=quotation.status.value,
+        )
+        return quotation
 
     def update_quotation(
         self,
@@ -430,7 +467,20 @@ class SalesAppService:
         }
         if status is not None:
             changes["status"] = status
-        return self._domain.update_quotation(quotation_id, **changes)
+        quotation = self._domain.update_quotation(quotation_id, **changes)
+        if status in (QuotationStatus.SENT, QuotationStatus.ACCEPTED):
+            self._emit_crm_event(
+                "quotation_sent"
+                if status == QuotationStatus.SENT
+                else "quotation_confirmed",
+                source_module="sales",
+                source_type="quotation",
+                source_id=quotation.id,
+                customer_id=quotation.customer_id,
+                occurred_at=quotation.updated_at,
+                status=quotation.status.value,
+            )
+        return quotation
 
     def convert_quotation_to_sales_order(
         self,
@@ -639,7 +689,19 @@ class SalesAppService:
             bank_account_id,
             terms_and_conditions,
         )
-        return self._so_repo.save(order)
+        order = self._so_repo.save(order)
+        if order.status == SalesOrderStatus.CONFIRMED:
+            self._emit_crm_event(
+                "order_placed",
+                source_module="sales",
+                source_type="sales_order",
+                source_id=order.id,
+                customer_id=order.customer_id,
+                occurred_at=order.updated_at,
+                status=order.status.value,
+                amount=order.total_amount,
+            )
+        return order
 
     def update_sales_order(
         self,
@@ -678,10 +740,32 @@ class SalesAppService:
             bank_account_id,
             terms_and_conditions,
         )
-        return self._so_repo.save(order)
+        order = self._so_repo.save(order)
+        if order.status == SalesOrderStatus.CONFIRMED:
+            self._emit_crm_event(
+                "order_placed",
+                source_module="sales",
+                source_type="sales_order",
+                source_id=order.id,
+                customer_id=order.customer_id,
+                occurred_at=order.updated_at,
+                status=order.status.value,
+                amount=order.total_amount,
+            )
+        return order
 
     def cancel_sales_order(self, order_id: str) -> SalesOrder:
-        return self._domain.cancel_sales_order(order_id)
+        order = self._domain.cancel_sales_order(order_id)
+        self._emit_crm_event(
+            "source_reversed",
+            source_module="sales",
+            source_type="sales_order",
+            source_id=order.id,
+            customer_id=order.customer_id,
+            occurred_at=order.updated_at,
+            status=order.status.value,
+        )
+        return order
 
     def close_sales_order(self, order_id: str) -> SalesOrder:
         return self._domain.close_sales_order(order_id)
@@ -837,6 +921,17 @@ class SalesAppService:
                 voucher_date=voucher.voucher_date,
                 line_items=line_items,
             )
+        customer = self._customer_from_account(customer_account_id)
+        self._emit_crm_event(
+            "invoice_created",
+            source_module="finance",
+            source_type="sales_invoice",
+            source_id=voucher.id,
+            customer_id=customer.id,
+            occurred_at=voucher.voucher_date,
+            status="Posted",
+            amount=float(gross_amount or 0),
+        )
         return voucher
 
     def create_direct_sale(
@@ -1537,6 +1632,14 @@ class SalesAppService:
             self._domain.unmark_so_invoiced(old.reference_so_id, items)
         if self._customer_price_repo:
             self._customer_price_repo.delete_by_voucher(voucher_id)
+        self._emit_crm_event(
+            "source_reversed",
+            source_module="finance",
+            source_type="sales_invoice",
+            source_id=voucher_id,
+            occurred_at=utc_now(),
+            status="Reversed",
+        )
 
     def get_customer_rate(
         self, customer_id: str, product_id: str

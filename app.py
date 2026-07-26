@@ -22,6 +22,7 @@ from vaybooks.bms.ui.pages.settings.customization_activities import list as acti
 from vaybooks.bms.ui.pages.settings.project_activities import list as project_activities_mod
 from vaybooks.bms.ui.pages.boutique import overview as boutique_overview_mod
 from vaybooks.bms.ui.pages.boutique import reports as boutique_reports_mod
+from vaybooks.bms.ui.pages.boutique import scheduled_reports as boutique_scheduled_reports_mod
 from vaybooks.bms.ui.pages.boutique.orders import list as customization_orders_list
 from vaybooks.bms.ui.pages.boutique.orders import detail as customization_order_detail
 from vaybooks.bms.ui.pages.boutique.orders import orders as customization_orders
@@ -49,6 +50,7 @@ from vaybooks.bms.ui.pages.sales.orders import detail as sales_order_detail_mod
 from vaybooks.bms.ui.pages.sales.orders import list as sales_orders_mod
 from vaybooks.bms.ui.pages.sales import overview as sales_overview_mod
 from vaybooks.bms.ui.pages.sales import reports as sales_reports_mod
+from vaybooks.bms.ui.pages.sales import scheduled_reports as sales_scheduled_reports_mod
 from vaybooks.bms.ui.pages.inventory.categories import list as inventory_categories
 from vaybooks.bms.ui.pages.inventory.warehouses import list as inventory_warehouses
 from vaybooks.bms.ui.pages.inventory.customer_prices import list as inventory_customer_prices
@@ -57,6 +59,7 @@ from vaybooks.bms.ui.pages.inventory import overview as inventory_overview_mod
 from vaybooks.bms.ui.pages.inventory.products import detail as inventory_product_detail
 from vaybooks.bms.ui.pages.inventory.products import list as inventory_products
 from vaybooks.bms.ui.pages.inventory import reports as inventory_reports_mod
+from vaybooks.bms.ui.pages.inventory import scheduled_reports as inventory_scheduled_reports_mod
 from vaybooks.bms.ui.pages.inventory.stock_ledger import list as inventory_stock_ledger
 from vaybooks.bms.ui.pages.inventory.stock_on_hand import list as inventory_stock_on_hand
 from vaybooks.bms.ui.pages.inventory.transfers import list as inventory_transfers
@@ -70,6 +73,7 @@ from vaybooks.bms.ui.pages.purchases.orders import detail as purchase_order_deta
 from vaybooks.bms.ui.pages.purchases.orders import list as purchase_orders_mod
 from vaybooks.bms.ui.pages.purchases import overview as purchases_overview_mod
 from vaybooks.bms.ui.pages.purchases import reports as purchases_reports_mod
+from vaybooks.bms.ui.pages.purchases import scheduled_reports as purchases_scheduled_reports_mod
 from vaybooks.bms.ui.pages.purchases.returns import detail as purchase_return_detail_mod
 from vaybooks.bms.ui.pages.purchases.returns import list as purchase_returns_mod
 from vaybooks.bms.ui.pages.system.settings import list as system_settings
@@ -84,6 +88,17 @@ from vaybooks.bms.ui.pages.access.permissions import list as permissions_setting
 from vaybooks.bms.ui.pages.access.audit_logs import list as audit_logs
 from vaybooks.bms.ui.pages.access.feature_flags import list as feature_flags_settings
 from vaybooks.bms.ui.pages.access.plans import list as plans_settings
+from vaybooks.bms.ui.pages.crm import dashboard as crm_dashboard_mod
+from vaybooks.bms.ui.pages.crm import reports as crm_reports_mod
+from vaybooks.bms.ui.pages.crm import scheduled_reports as crm_scheduled_reports_mod
+from vaybooks.bms.ui.pages.crm import settings as crm_settings_mod
+from vaybooks.bms.ui.pages.crm.activities import detail as crm_activity_detail_mod
+from vaybooks.bms.ui.pages.crm.activities import list as crm_activities_mod
+from vaybooks.bms.ui.pages.crm.calendar import list as crm_calendar_mod
+from vaybooks.bms.ui.pages.crm.enquiries import detail as crm_enquiry_detail_mod
+from vaybooks.bms.ui.pages.crm.enquiries import list as crm_enquiries_mod
+from vaybooks.bms.ui.pages.crm.leads import detail as crm_lead_detail_mod
+from vaybooks.bms.ui.pages.crm.leads import list as crm_leads_mod
 from vaybooks.bms.ui.auth.session import (
     can_see_page,
     is_authenticated,
@@ -91,6 +106,7 @@ from vaybooks.bms.ui.auth.session import (
     try_restore_session,
 )
 from vaybooks.bms.ui.auth.dialogs import open_sign_in_dialog_if_needed
+from vaybooks.bms.ui.scheduler_hook import maybe_start_schedulers
 from vaybooks.bms.ui.components.common.app_header import render_app_header
 from vaybooks.bms.ui.auth.guard import require_page_access
 from vaybooks.bms.ui.pages.migration import hub as data_migration
@@ -115,8 +131,17 @@ from vaybooks.bms.ui.pages.projects import (
     projects_list as projects_list_mod,
     ra_bills_list as project_ra_bills_list_mod,
     reports as projects_reports_mod,
+    scheduled_reports as projects_scheduled_reports_mod,
     settings as projects_settings_mod,
     site_mobile as project_site_mobile_mod,
+)
+from vaybooks.bms.ui.pages.schedulers import (
+    boutique as schedulers_boutique_mod,
+    crm as schedulers_crm_mod,
+    inventory as schedulers_inventory_mod,
+    projects as schedulers_projects_mod,
+    purchases as schedulers_purchases_mod,
+    sales as schedulers_sales_mod,
 )
 
 setup_logging()
@@ -185,6 +210,12 @@ calendar_page = st.Page(
 boutique_reports_page = st.Page(
     _page(boutique_reports_mod, url_path="boutique-reports"), title="Reports", icon=":material/analytics:",
     url_path="boutique-reports",
+)
+boutique_scheduled_reports_page = st.Page(
+    _page(boutique_scheduled_reports_mod, url_path="boutique-scheduled-reports"),
+    title="Scheduled reports",
+    icon=":material/event_repeat:",
+    url_path="boutique-scheduled-reports",
 )
 accounts_page = st.Page(
     _page(accounts, url_path="accounts"), title="Accounts", icon=":material/account_balance:",
@@ -268,6 +299,12 @@ sales_reports_page = st.Page(
     icon=":material/analytics:",
     url_path="sales-reports",
 )
+sales_scheduled_reports_page = st.Page(
+    _page(sales_scheduled_reports_mod, url_path="sales-scheduled-reports"),
+    title="Scheduled reports",
+    icon=":material/event_repeat:",
+    url_path="sales-scheduled-reports",
+)
 purchases_overview_page = st.Page(
     _page(purchases_overview_mod, url_path="purchases-overview"),
     title="Overview",
@@ -296,6 +333,12 @@ purchases_reports_page = st.Page(
     icon=":material/analytics:",
     url_path="purchases-reports",
 )
+purchases_scheduled_reports_page = st.Page(
+    _page(purchases_scheduled_reports_mod, url_path="purchases-scheduled-reports"),
+    title="Scheduled reports",
+    icon=":material/event_repeat:",
+    url_path="purchases-scheduled-reports",
+)
 reports_page = st.Page(
     _page(reports, url_path="reports"), title="Reports", icon=":material/analytics:", url_path="reports",
 )
@@ -306,6 +349,30 @@ export_page = st.Page(
 data_migration_page = st.Page(
     _page(data_migration, url_path="data-migration"), title="Data Migration", icon=":material/upload_file:",
     url_path="data-migration",
+)
+schedulers_crm_page = st.Page(
+    _page(schedulers_crm_mod, url_path="schedulers-crm"), title="CRM",
+    icon=":material/support_agent:", url_path="schedulers-crm",
+)
+schedulers_sales_page = st.Page(
+    _page(schedulers_sales_mod, url_path="schedulers-sales"), title="Sales",
+    icon=":material/point_of_sale:", url_path="schedulers-sales",
+)
+schedulers_purchases_page = st.Page(
+    _page(schedulers_purchases_mod, url_path="schedulers-purchases"), title="Purchases",
+    icon=":material/shopping_cart:", url_path="schedulers-purchases",
+)
+schedulers_inventory_page = st.Page(
+    _page(schedulers_inventory_mod, url_path="schedulers-inventory"), title="Inventory",
+    icon=":material/inventory:", url_path="schedulers-inventory",
+)
+schedulers_boutique_page = st.Page(
+    _page(schedulers_boutique_mod, url_path="schedulers-boutique"), title="Boutique",
+    icon=":material/checkroom:", url_path="schedulers-boutique",
+)
+schedulers_projects_page = st.Page(
+    _page(schedulers_projects_mod, url_path="schedulers-projects"), title="Projects",
+    icon=":material/engineering:", url_path="schedulers-projects",
 )
 activities_page = st.Page(
     _page(activities, url_path="customization-activities"), title="Customization Activities", icon=":material/checklist:",
@@ -361,6 +428,12 @@ project_enquiry_workspace_page = st.Page(
 projects_reports_page = st.Page(
     _page(projects_reports_mod, url_path="projects-reports"), title="Reports", icon=":material/analytics:",
     url_path="projects-reports",
+)
+projects_scheduled_reports_page = st.Page(
+    _page(projects_scheduled_reports_mod, url_path="projects-scheduled-reports"),
+    title="Scheduled reports",
+    icon=":material/event_repeat:",
+    url_path="projects-scheduled-reports",
 )
 projects_settings_page = st.Page(
     _page(projects_settings_mod, url_path="projects-settings"), title="Settings", icon=":material/settings:",
@@ -433,6 +506,12 @@ inventory_reports_page = st.Page(
     icon=":material/assessment:",
     url_path="inventory-reports",
 )
+inventory_scheduled_reports_page = st.Page(
+    _page(inventory_scheduled_reports_mod, url_path="inventory-scheduled-reports"),
+    title="Scheduled reports",
+    icon=":material/event_repeat:",
+    url_path="inventory-scheduled-reports",
+)
 purchase_order_detail_page = st.Page(
     _page(purchase_order_detail_mod, url_path="purchase-order-detail"), title="PO Detail", url_path="purchase-order-detail",
 )
@@ -496,6 +575,40 @@ system_logs_page = st.Page(
     _page(system_logs, url_path="system-logs"), title="Logs", icon=":material/article:",
     url_path="system-logs",
 )
+crm_dashboard_page = st.Page(
+    _page(crm_dashboard_mod, url_path="crm-dashboard"), title="CRM Dashboard",
+    icon=":material/dashboard:", url_path="crm-dashboard",
+)
+crm_leads_page = st.Page(
+    _page(crm_leads_mod, url_path="crm-leads"), title="Leads", icon=":material/person_add:",
+    url_path="crm-leads",
+)
+crm_enquiries_page = st.Page(
+    _page(crm_enquiries_mod, url_path="crm-enquiries"), title="Enquiries",
+    icon=":material/contact_support:", url_path="crm-enquiries",
+)
+crm_activities_page = st.Page(
+    _page(crm_activities_mod, url_path="crm-activities"), title="Activities",
+    icon=":material/event_note:", url_path="crm-activities",
+)
+crm_calendar_page = st.Page(
+    _page(crm_calendar_mod, url_path="crm-calendar"), title="Calendar",
+    icon=":material/calendar_month:", url_path="crm-calendar",
+)
+crm_reports_page = st.Page(
+    _page(crm_reports_mod, url_path="crm-reports"), title="Reports",
+    icon=":material/analytics:", url_path="crm-reports",
+)
+crm_scheduled_reports_page = st.Page(
+    _page(crm_scheduled_reports_mod, url_path="crm-scheduled-reports"),
+    title="Scheduled reports",
+    icon=":material/event_repeat:",
+    url_path="crm-scheduled-reports",
+)
+crm_settings_page = st.Page(
+    _page(crm_settings_mod, url_path="crm-settings"), title="CRM Settings",
+    icon=":material/settings:", url_path="crm-settings",
+)
 
 # --- Hidden detail routes (deep-linkable, not in sidebar) --------------------
 order_detail_page = st.Page(
@@ -541,6 +654,18 @@ sales_return_detail_page = st.Page(
 inventory_product_detail_page = st.Page(
     _page(inventory_product_detail, url_path="inventory-product-detail"), title="Product Detail",
     url_path="inventory-product-detail",
+)
+crm_lead_detail_page = st.Page(
+    _page(crm_lead_detail_mod, url_path="crm-lead-detail"), title="Lead Detail",
+    url_path="crm-lead-detail",
+)
+crm_enquiry_detail_page = st.Page(
+    _page(crm_enquiry_detail_mod, url_path="crm-enquiry-detail"), title="Enquiry Detail",
+    url_path="crm-enquiry-detail",
+)
+crm_activity_detail_page = st.Page(
+    _page(crm_activity_detail_mod, url_path="crm-activity-detail"), title="Activity Detail",
+    url_path="crm-activity-detail",
 )
 
 # --- Navigation registry (used by go_to_detail / go_back_to_list) ------------
@@ -643,6 +768,16 @@ navigation.register("system_settings", system_settings_page)
 navigation.register("system_updates", system_updates_page)
 navigation.register("system_logs", system_logs_page)
 navigation.register("data_migration", data_migration_page)
+navigation.register("crm_dashboard", crm_dashboard_page)
+navigation.register("crm_leads_list", crm_leads_page)
+navigation.register("crm_lead_detail", crm_lead_detail_page)
+navigation.register("crm_enquiries_list", crm_enquiries_page)
+navigation.register("crm_enquiry_detail", crm_enquiry_detail_page)
+navigation.register("crm_activities_list", crm_activities_page)
+navigation.register("crm_activity_detail", crm_activity_detail_page)
+navigation.register("crm_calendar", crm_calendar_page)
+navigation.register("crm_reports", crm_reports_page)
+navigation.register("crm_settings", crm_settings_page)
 
 page_groups = {
     "": [dashboard_page, mtd_page],
@@ -652,6 +787,15 @@ page_groups = {
         workers_page,
         party_segments_page,
     ],
+    "CRM": [
+        crm_dashboard_page,
+        crm_leads_page,
+        crm_enquiries_page,
+        crm_activities_page,
+        crm_calendar_page,
+        crm_reports_page,
+        crm_scheduled_reports_page,
+    ],
     "Boutique": [
         boutique_overview_page,
         orders_list_page,
@@ -660,6 +804,7 @@ page_groups = {
         time_page,
         calendar_page,
         boutique_reports_page,
+        boutique_scheduled_reports_page,
     ],
     "Projects": [
         projects_dashboard_page,
@@ -668,6 +813,7 @@ page_groups = {
         project_measurements_list_page,
         project_ra_bills_list_page,
         projects_reports_page,
+        projects_scheduled_reports_page,
         projects_settings_page,
     ],
     "Sales": [
@@ -679,6 +825,7 @@ page_groups = {
         sales_invoices_page,
         sales_returns_page,
         sales_reports_page,
+        sales_scheduled_reports_page,
     ],
     "Purchases": [
         purchases_overview_page,
@@ -687,6 +834,7 @@ page_groups = {
         purchase_bills_page,
         purchase_returns_page,
         purchases_reports_page,
+        purchases_scheduled_reports_page,
     ],
     "Inventory": [
         inventory_overview_page,
@@ -698,6 +846,7 @@ page_groups = {
         inventory_transfers_page,
         inventory_customer_prices_page,
         inventory_reports_page,
+        inventory_scheduled_reports_page,
     ],
     "Finance": [
         finance_overview_page,
@@ -724,6 +873,14 @@ page_groups = {
         plans_settings_page,
         feature_flags_settings_page,
     ],
+    "Schedulers": [
+        schedulers_crm_page,
+        schedulers_sales_page,
+        schedulers_purchases_page,
+        schedulers_inventory_page,
+        schedulers_boutique_page,
+        schedulers_projects_page,
+    ],
     "Settings": [
         business_settings_page,
         settings_locations_page,
@@ -733,6 +890,7 @@ page_groups = {
         project_activities_page,
         measurement_specs_page,
         services_page,
+        crm_settings_page,
     ],
 }
 
@@ -762,6 +920,9 @@ hidden_pages = [
     sales_quotation_detail_page,
     sales_delivery_note_detail_page,
     sales_return_detail_page,
+    crm_lead_detail_page,
+    crm_enquiry_detail_page,
+    crm_activity_detail_page,
     inventory_product_detail_page,
     inventory_transfer_detail_page,
     inventory_warehouses_page,
@@ -788,11 +949,13 @@ if not is_authenticated():
         st.session_state["signin_dialog_open"] = True
     open_sign_in_dialog_if_needed(_services)
 else:
-    # Settings / Access / Migration stay registered with st.navigation (deep
-    # links keep working) but are surfaced from the header gear popover.
+    maybe_start_schedulers(_services)
+
+    # Settings / Access / Migration / Schedulers stay registered with st.navigation
+    # (deep links keep working) but are surfaced from the header.
     visible_groups = {}
     for group, pages in page_groups.items():
-        if group in ("Settings", "Access", "Migration"):
+        if group in ("Settings", "Access", "Migration", "Schedulers"):
             continue
         visible = [
             p
@@ -825,6 +988,7 @@ else:
         settings_pages=page_groups["Settings"],
         access_pages=page_groups["Access"],
         migration_pages=page_groups["Migration"],
+        scheduler_pages=page_groups["Schedulers"],
     )
 
     # Parents navigate here; action chords only set session flags for page render.

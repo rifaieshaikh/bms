@@ -16,6 +16,8 @@ from vaybooks.bms.ui.auth.session import (
 
 NOTIF_CACHE = "_header_notifications_cache"
 NOTIF_CACHE_AT = "_header_notifications_cached_at"
+SCHED_CACHE = "_header_scheduler_notifications_cache"
+SCHED_CACHE_AT = "_header_scheduler_notifications_cached_at"
 NOTIF_TTL_SECONDS = 120
 MAX_NOTIFICATIONS = 15
 
@@ -30,8 +32,8 @@ _KIND_PERMISSIONS = {
 
 
 def invalidate_notification_cache() -> None:
-    st.session_state.pop(NOTIF_CACHE, None)
-    st.session_state.pop(NOTIF_CACHE_AT, None)
+    for key in (NOTIF_CACHE, NOTIF_CACHE_AT, SCHED_CACHE, SCHED_CACHE_AT):
+        st.session_state.pop(key, None)
 
 
 def _load_pending_approvals(services: dict) -> list:
@@ -64,9 +66,30 @@ def _load_pending_approvals(services: dict) -> list:
     return [i for i in items if getattr(i, "kind", "") in allowed_kinds]
 
 
+def _load_scheduler_notifications(services: dict) -> list:
+    """Open scheduler notifications addressed to the current user."""
+    now = time.time()
+    cached_at = float(st.session_state.get(SCHED_CACHE_AT) or 0)
+    if SCHED_CACHE in st.session_state and (now - cached_at) < NOTIF_TTL_SECONDS:
+        return st.session_state[SCHED_CACHE]
+    svc = services.get("schedulers")
+    try:
+        items = (
+            list(svc.list_notifications(current_user_id(), limit=MAX_NOTIFICATIONS))
+            if svc
+            else []
+        )
+    except Exception:
+        items = []
+    st.session_state[SCHED_CACHE] = items
+    st.session_state[SCHED_CACHE_AT] = now
+    return items
+
+
 def _render_notifications(services: dict) -> None:
-    items = _load_pending_approvals(services)
-    count = len(items)
+    approvals = _load_pending_approvals(services)
+    scheduled = _load_scheduler_notifications(services)
+    count = len(approvals) + len(scheduled)
     # Badge count only when there are pending items; otherwise icon-only.
     label = str(count) if count else _ICON_LABEL
     with st.popover(label, icon=":material/notifications:"):
@@ -75,11 +98,14 @@ def _render_notifications(services: dict) -> None:
         if head_r.button("Refresh", key="header_notif_refresh"):
             invalidate_notification_cache()
             st.rerun()
-        if not items:
-            st.caption("No pending approvals.")
+        if not count:
+            st.caption("Nothing needs your attention.")
             return
-        st.caption(f"{count} pending approval{'s' if count != 1 else ''}")
-        for idx, item in enumerate(items[:MAX_NOTIFICATIONS]):
+        if approvals:
+            st.caption(
+                f"{len(approvals)} pending approval{'s' if len(approvals) != 1 else ''}"
+            )
+        for idx, item in enumerate(approvals[:MAX_NOTIFICATIONS]):
             row_l, row_r = st.columns([4, 1], vertical_alignment="center")
             row_l.write(getattr(item, "title", "") or "Pending approval")
             project_id = getattr(item, "project_id", "") or ""
@@ -88,8 +114,26 @@ def _render_notifications(services: dict) -> None:
                 key=f"header_notif_open_{idx}_{getattr(item, 'id', idx)}",
             ):
                 navigation.go_to_list("project_workspace", project=project_id)
-        if count > MAX_NOTIFICATIONS:
-            st.caption(f"… and {count - MAX_NOTIFICATIONS} more")
+        if len(approvals) > MAX_NOTIFICATIONS:
+            st.caption(f"… and {len(approvals) - MAX_NOTIFICATIONS} more")
+
+        if scheduled:
+            if approvals:
+                st.divider()
+            st.caption(f"{len(scheduled)} from schedulers")
+        for idx, item in enumerate(scheduled[:MAX_NOTIFICATIONS]):
+            row_l, row_r = st.columns([4, 1], vertical_alignment="center")
+            row_l.write(getattr(item, "title", "") or "Scheduler notification")
+            message = getattr(item, "message", "")
+            if message:
+                row_l.caption(message)
+            if row_r.button(
+                "Dismiss",
+                key=f"header_sched_read_{idx}_{getattr(item, 'id', idx)}",
+            ):
+                services["schedulers"].mark_notification_read(getattr(item, "id", ""))
+                invalidate_notification_cache()
+                st.rerun()
 
 
 def visible_pages(services: dict, pages: list) -> list:
@@ -134,6 +178,15 @@ def _render_settings(
         if access and migration:
             st.divider()
         _render_menu_section("Migration", migration)
+
+
+def _render_schedulers(services: dict, *, scheduler_pages: list) -> None:
+    pages = visible_pages(services, scheduler_pages)
+    with st.popover(_ICON_LABEL, icon=":material/schedule:"):
+        if not pages:
+            st.caption("No schedulers available.")
+            return
+        _render_menu_section("Schedulers", pages)
 
 
 def _render_location_switcher(services: dict) -> None:
@@ -233,6 +286,7 @@ def render_app_header(
     settings_pages: list,
     access_pages: list | None = None,
     migration_pages: list | None = None,
+    scheduler_pages: list | None = None,
 ) -> None:
     """Sticky top bar: brand left, icon actions hugging the right edge."""
     with st.container(key="zheader"):
@@ -244,11 +298,17 @@ def render_app_header(
             )
         with c_actions:
             with st.container(key="zh_actions"):
-                c_loc, c_notif, c_settings, c_account = st.columns(4, gap="small")
+                c_loc, c_notif, c_schedulers, c_settings, c_account = st.columns(
+                    5, gap="small"
+                )
                 with c_loc:
                     _render_location_switcher(services)
                 with c_notif:
                     _render_notifications(services)
+                with c_schedulers:
+                    _render_schedulers(
+                        services, scheduler_pages=scheduler_pages or []
+                    )
                 with c_settings:
                     _render_settings(
                         services,

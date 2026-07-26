@@ -423,6 +423,20 @@ def _related_transactions_section(
                         right.button("View", key=btn_key, disabled=True)
 
 
+def _render_crm_section(services: dict, customer) -> None:
+    """Render the CRM panel, skipping it when the CRM module is absent."""
+    try:
+        from vaybooks.bms.ui.components.crm.customer_section import (
+            render_customer_crm_section,
+        )
+    except Exception:
+        return
+    try:
+        render_customer_crm_section(services, customer)
+    except Exception as exc:  # noqa: BLE001 - CRM must never break this page
+        st.caption(f"CRM section unavailable: {exc}")
+
+
 def render(services: dict):
     from vaybooks.bms.ui.keyboard.actions import consume_action
     from vaybooks.bms.ui.keyboard.context import get_submit_map, set_current_page
@@ -605,6 +619,8 @@ def render(services: dict):
             customer_account_id=customer_account_id,
             counts=counts,
         )
+
+        _render_crm_section(services, customer)
 
         with st.container(border=True):
             st.subheader("Recent Customization Orders")

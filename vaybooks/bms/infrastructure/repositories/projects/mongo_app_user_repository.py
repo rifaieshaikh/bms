@@ -5,6 +5,7 @@ from typing import List, Optional
 
 from pymongo.database import Database
 
+from vaybooks.bms.domain.crm.enums import CrmRole
 from vaybooks.bms.domain.projects.access import AppUser, ProjectMembership
 from vaybooks.bms.domain.shared.enums import ProjectAppRole
 
@@ -19,6 +20,7 @@ class MongoAppUserRepository:
             "username": user.username,
             "display_name": user.display_name,
             "global_roles": [r.value for r in user.global_roles],
+            "crm_roles": [r.value for r in (user.crm_roles or [])],
             "active": user.active,
             "password_hash": user.password_hash,
             "created_at": user.created_at,
@@ -32,11 +34,18 @@ class MongoAppUserRepository:
                 roles.append(ProjectAppRole(raw))
             except ValueError:
                 continue
+        crm_roles = []
+        for raw in doc.get("crm_roles") or []:
+            try:
+                crm_roles.append(CrmRole(raw))
+            except ValueError:
+                continue
         return AppUser(
             id=doc["_id"],
             username=doc.get("username", ""),
             display_name=doc.get("display_name", ""),
             global_roles=roles,
+            crm_roles=crm_roles,
             active=bool(doc.get("active", True)),
             password_hash=doc.get("password_hash", ""),
             created_at=doc.get("created_at", datetime.utcnow()),

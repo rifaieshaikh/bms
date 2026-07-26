@@ -75,7 +75,7 @@ def test_hub_lists_every_entity_and_starts_wizard():
     assert not at.exception
 
     start_buttons = [b for b in at.button if b.label == "Start import"]
-    assert len(start_buttons) == 4
+    assert len(start_buttons) == 5
 
     start_buttons[2].click().run(timeout=20)
     assert not at.exception

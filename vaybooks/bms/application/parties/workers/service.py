@@ -13,9 +13,11 @@ class WorkerAppService:
         self,
         worker_repo: WorkerRepository,
         account_repo: AccountRepository,
+        user_service=None,
     ):
         self._repo = worker_repo
         self._accounting_domain = AccountingDomainService(account_repo, None)
+        self._users = user_service
 
     def list_workers(self, active_only: bool = True) -> List[Worker]:
         return self._repo.list_all(active_only=active_only)
@@ -31,14 +33,32 @@ class WorkerAppService:
         worker_name: str,
         activity_ids: List[str],
         default_hourly_rate: Optional[float] = None,
+        *,
+        create_login: bool = False,
+        username: str = "",
+        password: str = "",
+        role_ids: Optional[List[str]] = None,
+        location_ids: Optional[List[str]] = None,
     ) -> Worker:
         name = (worker_name or "").strip()
         if not name:
             raise ValidationError("Employee name is required")
+
+        linked_user_id = ""
+        if create_login:
+            linked_user_id = self._create_login_user(
+                display_name=name,
+                username=username,
+                password=password,
+                role_ids=role_ids,
+                location_ids=location_ids,
+            )
+
         worker = Worker(
             worker_name=name,
             activity_ids=list(activity_ids or []),
             default_hourly_rate=float(default_hourly_rate or 0.0),
+            linked_user_id=linked_user_id,
         )
         saved = self._repo.save(worker)
         account_name = WorkerDomainService.build_salary_account_name(saved)
@@ -52,6 +72,12 @@ class WorkerAppService:
         activity_ids: List[str],
         is_active: bool = True,
         default_hourly_rate: Optional[float] = None,
+        *,
+        create_login: bool = False,
+        username: str = "",
+        password: str = "",
+        role_ids: Optional[List[str]] = None,
+        location_ids: Optional[List[str]] = None,
     ) -> Worker:
         worker = self._repo.find_by_id(worker_id)
         if not worker:
@@ -64,11 +90,25 @@ class WorkerAppService:
             if default_hourly_rate is None
             else float(default_hourly_rate or 0.0)
         )
+
+        linked_user_id = worker.linked_user_id
+        if create_login:
+            if worker.linked_user_id:
+                raise ValidationError("This employee already has a system login")
+            linked_user_id = self._create_login_user(
+                display_name=name,
+                username=username,
+                password=password,
+                role_ids=role_ids,
+                location_ids=location_ids,
+            )
+
         worker.update(
             worker_name=name,
             activity_ids=list(activity_ids or []),
             is_active=is_active,
             default_hourly_rate=rate,
+            linked_user_id=linked_user_id,
         )
         saved = self._repo.save(worker)
         self._accounting_domain.sync_worker_salary_account(
@@ -83,3 +123,23 @@ class WorkerAppService:
             raise ValueError("Employee not found")
         worker.is_active = False
         return self._repo.save(worker)
+
+    def _create_login_user(
+        self,
+        *,
+        display_name: str,
+        username: str,
+        password: str,
+        role_ids: Optional[List[str]],
+        location_ids: Optional[List[str]],
+    ) -> str:
+        if self._users is None:
+            raise ValidationError("User service is not configured")
+        user = self._users.create_user(
+            username=username,
+            display_name=display_name,
+            password=password,
+            role_ids=list(role_ids or []),
+            location_ids=list(location_ids or []),
+        )
+        return user.id

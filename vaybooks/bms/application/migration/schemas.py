@@ -8,12 +8,15 @@ class ImportEntityType(str, Enum):
     PRODUCTS = "products"
     CUSTOMERS = "customers"
     VENDORS = "vendors"
+    LEADS = "leads"
 
 
 class DuplicatePolicy(str, Enum):
     SKIP = "skip"
     UPDATE = "update"
     FAIL = "fail"
+    IMPORT_AS_SEPARATE = "import_as_separate"
+    LINK_TO_CUSTOMER = "link_to_customer"
 
 
 class FieldType(str, Enum):
@@ -124,11 +127,62 @@ VENDOR_FIELDS: List[TargetField] = [
     TargetField("bank_name", "Bank Name", aliases=("bank",)),
 ]
 
+LEAD_FIELDS: List[TargetField] = [
+    TargetField(
+        "name",
+        "Lead Name",
+        required=True,
+        aliases=("lead name", "lead", "business name", "company", "customer name"),
+    ),
+    TargetField(
+        "phone",
+        "Phone",
+        required=True,
+        aliases=("phone_number", "mobile", "mobile number", "primary phone", "contact number"),
+    ),
+    TargetField(
+        "alternate_phone",
+        "Alternate Phone",
+        aliases=("alternate_phone_number", "alt phone", "alternate mobile"),
+    ),
+    TargetField("contact_person", "Contact Person", aliases=("contact", "contact name")),
+    TargetField("email", "Email", aliases=("email id", "e-mail")),
+    TargetField("address_line1", "Address Line 1", aliases=("address", "address1", "street")),
+    TargetField("address_line2", "Address Line 2", aliases=("address2",)),
+    TargetField("area", "Area", aliases=("locality", "local area")),
+    TargetField("city", "City", aliases=("town",)),
+    TargetField("state_code", "State Code", field_type=FieldType.STATE_CODE, aliases=("state", "state name")),
+    TargetField("pincode", "Pincode", aliases=("pin", "zip", "postal code")),
+    TargetField("gstin", "GSTIN", aliases=("gst", "gst no", "gst number")),
+    TargetField("source", "Lead Source", aliases=("lead source", "lead_source")),
+    TargetField(
+        "interested_products",
+        "Interested Products",
+        aliases=("products", "services", "interest", "product interest"),
+    ),
+    TargetField(
+        "estimated_value",
+        "Estimated Value",
+        field_type=FieldType.FLOAT,
+        aliases=("value", "est value", "potential"),
+    ),
+    TargetField("priority", "Priority", aliases=("lead priority",)),
+    TargetField("status", "Status", aliases=("lead status",)),
+    TargetField(
+        "assigned_user_name",
+        "Assigned Sales Rep",
+        aliases=("sales rep", "sales representative", "assigned to", "owner"),
+    ),
+    TargetField("notes", "Notes", aliases=("remark", "remarks")),
+    TargetField("branch", "Branch", aliases=("location", "branch name")),
+]
+
 ENTITY_FIELDS: Dict[ImportEntityType, List[TargetField]] = {
     ImportEntityType.CATEGORIES: CATEGORY_FIELDS,
     ImportEntityType.PRODUCTS: PRODUCT_FIELDS,
     ImportEntityType.CUSTOMERS: CUSTOMER_FIELDS,
     ImportEntityType.VENDORS: VENDOR_FIELDS,
+    ImportEntityType.LEADS: LEAD_FIELDS,
 }
 
 ENTITY_TITLES: Dict[ImportEntityType, str] = {
@@ -136,6 +190,7 @@ ENTITY_TITLES: Dict[ImportEntityType, str] = {
     ImportEntityType.PRODUCTS: "Products",
     ImportEntityType.CUSTOMERS: "Customers",
     ImportEntityType.VENDORS: "Vendors",
+    ImportEntityType.LEADS: "Leads",
 }
 
 

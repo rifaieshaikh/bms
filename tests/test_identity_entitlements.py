@@ -16,18 +16,28 @@ from vaybooks.bms.domain.entitlements.catalog import (
     DEFAULT_ADMIN_USERNAME,
     MODULE_BOUTIQUE,
     MODULE_CORE,
+    MODULE_CRM,
+    MODULE_LABELS,
     MODULE_PARTIES,
     MODULE_SALES,
     MODULE_SETTINGS,
+    ORG_ENTITLEMENT_ID,
     PERMISSIONS,
     PLAN_DEFINITIONS,
     PLAN_ENTERPRISE,
+    PLAN_GROWTH,
     PLAN_STARTER,
+    ROLE_AUDITOR,
+    ROLE_COLLECTIONS,
+    ROLE_CRM_ADMIN,
     ROLE_OWNER,
     ROLE_SALES,
+    ROLE_SALES_MANAGER,
+    ROLE_SALES_REP,
     SYSTEM_ROLE_DEFINITIONS,
     expand_modules,
     permission_for_page,
+    permissions_for_module,
 )
 from vaybooks.bms.domain.entitlements.entities import FeatureFlag, OrgEntitlement, Plan
 from vaybooks.bms.domain.identity.entities import Role, User
@@ -347,3 +357,246 @@ def test_migration_seed_definitions_cover_plans_and_roles():
     assert "Owner" == SYSTEM_ROLE_DEFINITIONS[ROLE_OWNER]["name"]
     # Enterprise includes all keys
     assert set(PLAN_DEFINITIONS[PLAN_ENTERPRISE]["feature_keys"]) == set(ALL_FEATURE_KEYS)
+
+
+# ---------------------------------------------------------------------------
+# CRM module
+# ---------------------------------------------------------------------------
+
+
+def _role_keys(role_id: str) -> set:
+    return set(SYSTEM_ROLE_DEFINITIONS[role_id]["permission_keys"])
+
+
+def test_crm_module_registered_in_catalog():
+    assert MODULE_CRM in ALL_MODULES
+    assert "module.crm" in ALL_FEATURE_KEYS
+    assert MODULE_LABELS[MODULE_CRM] == "CRM"
+    crm_perms = permissions_for_module(MODULE_CRM)
+    assert crm_perms
+    assert all(p.startswith("crm.") for p in crm_perms)
+    assert crm_perms <= set(PERMISSIONS)
+
+
+def test_crm_permission_catalog_covers_role_needs():
+    for key in (
+        "crm.dashboard.view",
+        "crm.leads.view",
+        "crm.leads.assign",
+        "crm.enquiries.convert",
+        "crm.activities.create",
+        "crm.calendar.manage_team",
+        "crm.records.view_own",
+        "crm.records.view_team",
+        "crm.records.view_all",
+        "crm.reports.team.view",
+        "crm.reports.collection.view",
+        "crm.settings.edit",
+        "crm.import.run",
+        "crm.audit.view",
+        "crm.corrections.auto_apply",
+        "crm.balances.view",
+        "crm.credit.manage",
+        "crm.payment_followups.edit",
+        "crm.reminders.whatsapp.send",
+    ):
+        assert key in PERMISSIONS
+
+
+def test_expand_modules_includes_crm_permissions():
+    keys = expand_modules([MODULE_CRM])
+    assert "module.crm" in keys
+    assert "crm.leads.view" in keys
+    assert "sales.invoices.view" not in keys
+
+
+def test_crm_page_permission_lookup():
+    assert permission_for_page("crm-dashboard") == "crm.dashboard.view"
+    assert permission_for_page("crm-leads") == "crm.leads.view"
+    assert permission_for_page("crm-enquiries") == "crm.enquiries.view"
+    assert permission_for_page("crm-activities") == "crm.activities.view"
+    assert permission_for_page("crm-calendar") == "crm.calendar.view"
+    assert permission_for_page("crm-reports") == "crm.reports.view"
+    assert permission_for_page("crm-settings") == "crm.settings.view"
+
+
+def test_hidden_crm_detail_routes_reuse_list_permissions():
+    assert permission_for_page("crm-lead-detail") == "crm.leads.view"
+    assert permission_for_page("crm-enquiry-detail") == "crm.enquiries.view"
+    assert permission_for_page("crm-activity-detail") == "crm.activities.view"
+
+
+def test_sales_rep_limited_to_own_records():
+    keys = _role_keys(ROLE_SALES_REP)
+    assert {
+        "crm.leads.create",
+        "crm.activities.create",
+        "crm.calendar.edit",
+        "crm.records.view_own",
+        "crm.reports.view",
+    } <= keys
+    assert "crm.records.view_team" not in keys
+    assert "crm.records.view_all" not in keys
+    assert "crm.leads.assign" not in keys
+    assert "crm.settings.edit" not in keys
+
+
+def test_sales_manager_can_assign_and_see_team():
+    keys = _role_keys(ROLE_SALES_MANAGER)
+    assert {
+        "crm.leads.assign",
+        "crm.enquiries.assign",
+        "crm.records.view_team",
+        "crm.reports.team.view",
+        "crm.calendar.manage_team",
+        "crm.settings.view",
+    } <= keys
+    assert "crm.records.view_all" not in keys
+    assert "crm.settings.edit" not in keys
+
+
+def test_crm_admin_has_every_crm_permission():
+    keys = _role_keys(ROLE_CRM_ADMIN)
+    assert permissions_for_module(MODULE_CRM) <= keys
+    assert {
+        "crm.settings.edit",
+        "crm.import.run",
+        "crm.audit.view",
+        "crm.corrections.auto_apply",
+        "crm.records.view_all",
+    } <= keys
+
+
+def test_collections_role_covers_balances_and_followups():
+    keys = _role_keys(ROLE_COLLECTIONS)
+    assert {
+        "crm.balances.view",
+        "crm.credit.view",
+        "crm.credit.manage",
+        "crm.payment_followups.view",
+        "crm.payment_followups.edit",
+        "crm.reports.collection.view",
+        "crm.reminders.whatsapp.send",
+        "crm.records.view_all",
+    } <= keys
+    assert "crm.settings.edit" not in keys
+    assert "crm.leads.create" not in keys
+
+
+def test_owner_receives_crm_permissions_on_default_plan():
+    assert permissions_for_module(MODULE_CRM) <= _role_keys(ROLE_OWNER)
+    auth = _auth()
+    owner = User(username="admin", role_ids=[ROLE_OWNER], active=True)
+    assert auth.can(owner, "crm.leads.view")
+    assert auth.can(owner, "crm.settings.edit")
+    assert auth.can_see_page(owner, "crm-dashboard")
+    assert auth.can_see_page(owner, "crm-lead-detail")
+
+
+def test_crm_module_off_blocks_crm_pages():
+    modules = [m for m in ALL_MODULES if m != MODULE_CRM]
+    auth = _auth(modules=modules)
+    owner = User(username="admin", role_ids=[ROLE_OWNER], active=True)
+    assert not auth.can(owner, "crm.leads.view")
+    assert not auth.can_see_page(owner, "crm-leads")
+    assert auth.can(owner, "sales.invoices.view")
+
+
+def test_existing_plans_stay_backward_compatible():
+    for plan_id in (PLAN_STARTER, PLAN_GROWTH):
+        keys = set(PLAN_DEFINITIONS[plan_id]["feature_keys"])
+        assert "module.crm" not in keys
+        assert not any(k.startswith("crm.") for k in keys)
+    assert "sales.invoices.view" in set(PLAN_DEFINITIONS[PLAN_STARTER]["feature_keys"])
+    assert "boutique.orders.view" in set(PLAN_DEFINITIONS[PLAN_GROWTH]["feature_keys"])
+    assert "module.crm" in set(PLAN_DEFINITIONS[PLAN_ENTERPRISE]["feature_keys"])
+
+
+class FakeCollection:
+    """Minimal in-memory stand-in for the migration's pymongo usage."""
+
+    def __init__(self, docs=None):
+        self.docs: Dict[str, dict] = {d["_id"]: dict(d) for d in (docs or [])}
+
+    def find_one(self, query):
+        return self.docs.get(query["_id"])
+
+    def insert_one(self, doc):
+        self.docs[doc["_id"]] = dict(doc)
+
+    def replace_one(self, query, doc, upsert=False):
+        if query["_id"] in self.docs or upsert:
+            self.docs[query["_id"]] = dict(doc)
+
+    def update_one(self, query, update):
+        doc = self.docs.get(query["_id"])
+        if doc is None:
+            return
+        for field, value in (update.get("$set") or {}).items():
+            doc[field] = value
+        for field, value in (update.get("$inc") or {}).items():
+            doc[field] = (doc.get(field) or 0) + value
+
+
+class FakeDb:
+    def __init__(self, org_modules: List[str]):
+        self.roles = FakeCollection()
+        self.plans = FakeCollection()
+        self.feature_flags = FakeCollection(
+            [{"_id": "sales.invoices.view", "key": "sales.invoices.view", "enabled": False}]
+        )
+        self.org_entitlements = FakeCollection(
+            [
+                {
+                    "_id": ORG_ENTITLEMENT_ID,
+                    "plan_id": PLAN_ENTERPRISE,
+                    "enabled_modules": list(org_modules),
+                    "version": 3,
+                }
+            ]
+        )
+
+
+def _run_crm_migration(org_modules: List[str]) -> FakeDb:
+    import importlib
+
+    migration = importlib.import_module(
+        "vaybooks.bms.infrastructure.db.migrations.versions.017_crm_entitlements"
+    )
+    db = FakeDb(org_modules)
+    migration.up(db)
+    return db
+
+
+def test_crm_migration_seeds_roles_flags_and_enables_module():
+    legacy_modules = [m for m in ALL_MODULES if m != MODULE_CRM]
+    db = _run_crm_migration(legacy_modules)
+
+    for role_id in (ROLE_SALES_REP, ROLE_SALES_MANAGER, ROLE_CRM_ADMIN, ROLE_COLLECTIONS):
+        assert role_id in db.roles.docs
+        assert db.roles.docs[role_id]["is_system"] is True
+    assert "crm.leads.view" in db.roles.docs[ROLE_OWNER]["permission_keys"]
+
+    assert "crm.leads.view" in db.feature_flags.docs
+    # Flags an admin already turned off are never re-enabled.
+    assert db.feature_flags.docs["sales.invoices.view"]["enabled"] is False
+
+    org = db.org_entitlements.docs[ORG_ENTITLEMENT_ID]
+    assert MODULE_CRM in org["enabled_modules"]
+    assert org["version"] == 4
+
+
+def test_crm_migration_respects_restricted_modules():
+    db = _run_crm_migration([MODULE_CORE, MODULE_SETTINGS, MODULE_SALES])
+    org = db.org_entitlements.docs[ORG_ENTITLEMENT_ID]
+    assert MODULE_CRM not in org["enabled_modules"]
+    assert org["version"] == 4
+
+
+def test_existing_roles_keep_their_permissions():
+    sales = _role_keys(ROLE_SALES)
+    assert {"sales.invoices.view", "parties.customers.view"} <= sales
+    assert not any(k.startswith("crm.") for k in sales)
+    auditor_keys = _role_keys(ROLE_AUDITOR)
+    assert "crm.records.view_all" in auditor_keys
+    assert "crm.leads.create" not in auditor_keys

@@ -42,6 +42,8 @@ class MongoCustomerRepository:
             "blacklisted_at": customer.blacklisted_at,
             "segment_ids": list(customer.segment_ids or []),
             "segment_names": list(customer.segment_names or []),
+            "assigned_user_id": customer.assigned_user_id or "",
+            "assigned_user_name": customer.assigned_user_name or "",
             "created_at": customer.created_at,
             "updated_at": customer.updated_at,
         }
@@ -79,6 +81,8 @@ class MongoCustomerRepository:
             blacklisted_at=doc.get("blacklisted_at"),
             segment_ids=list(doc.get("segment_ids") or []),
             segment_names=list(doc.get("segment_names") or []),
+            assigned_user_id=doc.get("assigned_user_id", "") or "",
+            assigned_user_name=doc.get("assigned_user_name", "") or "",
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
         )

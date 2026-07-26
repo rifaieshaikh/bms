@@ -1508,6 +1508,33 @@ CATEGORY_SERVICE_KEYS = {
     "Profitability": "reports_profitability",
 }
 
+# Projects → Reports. These are rendered by bespoke handlers rather than
+# SCHEMA_BY_REPORT_TYPE, but the catalog lives here so schedulers can reuse it.
+PROJECT_MODULE_REPORT_TYPES = [
+    "Portfolio Summary",
+    "Activity Profitability",
+    "Man-hours by Worker",
+    "Unallocated Costs",
+    "WIP / Unbilled Cost",
+    "Billing Register",
+    "Customer Outstanding",
+    "Vendor Payables",
+    "Quotation Pipeline",
+    "Retention Register",
+    "Collections & Outstanding",
+    "At-Risk Projects",
+    "Variations Log",
+    "Cost Transfers",
+    "Write-offs",
+    "TDS Deducted",
+    "PO Committed Cost",
+    "Document Inventory",
+    "BOQ Status",
+    "Measurement Register",
+    "RA Register (Claimed vs Certified)",
+    "Budget vs Actual",
+]
+
 # All non-Finance report menus (schemas still live in SCHEMA_BY_REPORT_TYPE).
 MODULE_OWNED_REPORT_TYPES = (
     BOUTIQUE_REPORT_TYPES

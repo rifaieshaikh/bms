@@ -8,32 +8,10 @@ import pandas as pd
 import streamlit as st
 
 from vaybooks.bms.domain.shared.enums import ProjectStatus
+from vaybooks.bms.ui.report_schemas import PROJECT_MODULE_REPORT_TYPES
 from vaybooks.bms.ui.styles import metric_grid
 
-REPORT_TYPES = [
-    "Portfolio Summary",
-    "Activity Profitability",
-    "Man-hours by Worker",
-    "Unallocated Costs",
-    "WIP / Unbilled Cost",
-    "Billing Register",
-    "Customer Outstanding",
-    "Vendor Payables",
-    "Quotation Pipeline",
-    "Retention Register",
-    "Collections & Outstanding",
-    "At-Risk Projects",
-    "Variations Log",
-    "Cost Transfers",
-    "Write-offs",
-    "TDS Deducted",
-    "PO Committed Cost",
-    "Document Inventory",
-    "BOQ Status",
-    "Measurement Register",
-    "RA Register (Claimed vs Certified)",
-    "Budget vs Actual",
-]
+REPORT_TYPES = PROJECT_MODULE_REPORT_TYPES
 
 
 def _date_range_picker(key_prefix: str) -> tuple[date, date]:

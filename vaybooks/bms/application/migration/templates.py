@@ -50,6 +50,21 @@ _SAMPLE_ROWS = {
             "opening_balance": "2000",
         }
     ],
+    ImportEntityType.LEADS: [
+        {
+            "name": "Sample Lead Co",
+            "phone": "9876543210",
+            "email": "lead@example.com",
+            "city": "Chennai",
+            "area": "T Nagar",
+            "state_code": "33",
+            "source": "Imported",
+            "status": "New",
+            "priority": "Medium",
+            "estimated_value": "25000",
+            "interested_products": "Retail supply",
+        }
+    ],
 }
 
 

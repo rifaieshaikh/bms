@@ -38,6 +38,8 @@ _POLICIES: Dict[str, DuplicatePolicy] = {
     "Skip": DuplicatePolicy.SKIP,
     "Update": DuplicatePolicy.UPDATE,
     "Fail": DuplicatePolicy.FAIL,
+    "Import as separate": DuplicatePolicy.IMPORT_AS_SEPARATE,
+    "Link to existing customer": DuplicatePolicy.LINK_TO_CUSTOMER,
 }
 
 _ENTITY_ORDER: List[ImportEntityType] = [
@@ -45,6 +47,7 @@ _ENTITY_ORDER: List[ImportEntityType] = [
     ImportEntityType.PRODUCTS,
     ImportEntityType.CUSTOMERS,
     ImportEntityType.VENDORS,
+    ImportEntityType.LEADS,
 ]
 
 _ENTITY_ICONS: Dict[ImportEntityType, str] = {
@@ -52,6 +55,7 @@ _ENTITY_ICONS: Dict[ImportEntityType, str] = {
     ImportEntityType.PRODUCTS: ":material/inventory_2:",
     ImportEntityType.CUSTOMERS: ":material/groups:",
     ImportEntityType.VENDORS: ":material/local_shipping:",
+    ImportEntityType.LEADS: ":material/person_add:",
 }
 
 _ENTITY_HINTS: Dict[ImportEntityType, str] = {
@@ -66,6 +70,9 @@ _ENTITY_HINTS: Dict[ImportEntityType, str] = {
     ),
     ImportEntityType.VENDORS: (
         "Names, contacts, GST details, bank details, and opening balances."
+    ),
+    ImportEntityType.LEADS: (
+        "Import prospect contacts with duplicate detection, assignment, and retry-safe batches."
     ),
 }
 
@@ -132,6 +139,8 @@ def _clear_entity_state(entity: ImportEntityType) -> None:
         "policy",
         "policy_choice",
         "uploader",
+        "file_bytes",
+        "filename",
         "load_profile",
         "save_name",
     ]
@@ -228,6 +237,8 @@ def _step_upload(migration, entity: ImportEntityType) -> None:
                 return
             cols = migration.source_columns(df)
             st.session_state[_sk(entity, "file_key")] = file_key
+            st.session_state[_sk(entity, "file_bytes")] = file_bytes
+            st.session_state[_sk(entity, "filename")] = uploaded.name
             st.session_state[_sk(entity, "df")] = df
             st.session_state[_sk(entity, "source_cols")] = cols
             st.session_state[_sk(entity, "mapping")] = migration.suggest_mapping(
@@ -334,7 +345,9 @@ def _step_mapping(migration, entity: ImportEntityType) -> None:
 
 
 # --- step 3: policy & dry-run ------------------------------------------------
-def _step_dry_run(migration, entity: ImportEntityType) -> None:
+def _step_dry_run(
+    migration, entity: ImportEntityType, services: Optional[dict] = None
+) -> None:
     df: pd.DataFrame | None = st.session_state.get(_sk(entity, "df"))
     mapping = st.session_state.get(_sk(entity, "mapping")) or {}
     if df is None:
@@ -343,6 +356,13 @@ def _step_dry_run(migration, entity: ImportEntityType) -> None:
         return
 
     labels = list(_POLICIES.keys())
+    if entity != ImportEntityType.LEADS:
+        labels = ["Skip", "Update", "Fail"]
+    elif services is not None:
+        from vaybooks.bms.ui.auth.session import can_permission
+
+        if not can_permission(services, "crm.corrections.review"):
+            labels.remove("Import as separate")
     stored = st.session_state.get(_sk(entity, "policy")) or labels[0]
     policy_label = st.radio(
         "When a row already exists",
@@ -352,7 +372,8 @@ def _step_dry_run(migration, entity: ImportEntityType) -> None:
         key=_sk(entity, "policy_choice"),
         help=(
             "Skip keeps existing data. Update overwrites master fields. "
-            "Fail stops on first duplicate."
+            "Fail stops on first duplicate. Lead imports may also create an "
+            "authorised separate record or link a match to an existing customer."
         ),
     )
     st.session_state[_sk(entity, "policy")] = policy_label
@@ -407,9 +428,23 @@ def _step_dry_run(migration, entity: ImportEntityType) -> None:
 def _run_import(migration, entity: ImportEntityType) -> None:
     df = st.session_state.get(_sk(entity, "df"))
     mapping = st.session_state.get(_sk(entity, "mapping")) or {}
+    from vaybooks.bms.ui.auth.session import current_user_id, current_user_name
+
+    extra = {}
+    if entity == ImportEntityType.LEADS:
+        extra = {
+            "file_bytes": st.session_state.get(_sk(entity, "file_bytes")),
+            "source_filename": st.session_state.get(_sk(entity, "filename")) or "",
+            "actor_id": current_user_id(),
+            "actor_name": current_user_name(),
+        }
     with st.spinner("Importing…"):
         result = migration.run_import(
-            entity, df, mapping, duplicate_policy=_policy(entity)
+            entity,
+            df,
+            mapping,
+            duplicate_policy=_policy(entity),
+            **extra,
         )
     st.session_state[_sk(entity, "result")] = result
     st.rerun()
@@ -565,7 +600,10 @@ def render_migration_wizard(services: dict, entity: ImportEntityType) -> None:
     )
 
     steps = [_step_upload, _step_mapping, _step_dry_run, _step_import]
-    steps[step](migration, entity)
+    if step == 2:
+        _step_dry_run(migration, entity, services)
+    else:
+        steps[step](migration, entity)
 
 
 def render(services: dict) -> None:

@@ -54,6 +54,8 @@ class Customer:
     blacklisted_at: Optional[datetime] = None
     segment_ids: List[str] = field(default_factory=list)
     segment_names: List[str] = field(default_factory=list)
+    assigned_user_id: str = ""
+    assigned_user_name: str = ""
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
 

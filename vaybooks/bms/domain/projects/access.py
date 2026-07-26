@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
+from vaybooks.bms.domain.crm.enums import CrmRole
 from vaybooks.bms.domain.shared.date_utils import utc_now
 from vaybooks.bms.domain.shared.enums import ProjectAppRole, ProjectCostCategory
 
@@ -74,6 +75,8 @@ class AppUser:
     username: str
     display_name: str = ""
     global_roles: List[ProjectAppRole] = field(default_factory=list)
+    # CRM roles live separately from ProjectAppRole for backward compatibility.
+    crm_roles: List[CrmRole] = field(default_factory=list)
     active: bool = True
     password_hash: str = ""
     id: str = field(default_factory=lambda: uuid4().hex)
@@ -87,6 +90,9 @@ class AppUser:
     @property
     def can_commercial_approve(self) -> bool:
         return any(r in _COMMERCIAL_APPROVERS for r in self.global_roles)
+
+    def has_crm_role(self, *roles: CrmRole) -> bool:
+        return any(r in self.crm_roles for r in roles)
 
 
 @dataclass

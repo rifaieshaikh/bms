@@ -51,6 +51,8 @@ class MigrationAppService:
         inventory_service: InventoryAppService,
         accounting_service: AccountingAppService,
         party_segment_service: Optional[PartySegmentAppService] = None,
+        lead_service=None,
+        import_batch_repo=None,
     ):
         self._profiles = profile_repo
         self._customers = customer_service
@@ -58,6 +60,8 @@ class MigrationAppService:
         self._inventory = inventory_service
         self._accounting = accounting_service
         self._party_segments = party_segment_service
+        self._leads = lead_service
+        self._import_batches = import_batch_repo
 
     # --- templates / parsing / mapping ---------------------------------
 
@@ -162,6 +166,12 @@ class MigrationAppService:
         df: pd.DataFrame,
         mapping: Dict[str, str],
         duplicate_policy: DuplicatePolicy = DuplicatePolicy.SKIP,
+        *,
+        file_bytes: Optional[bytes] = None,
+        source_filename: str = "",
+        actor_id: str = "",
+        actor_name: str = "",
+        branch: str = "",
     ) -> ImportResult:
         missing = missing_required(entity_type, mapping)
         if missing:
@@ -184,6 +194,16 @@ class MigrationAppService:
             return self._import_customers(rows, duplicate_policy)
         if entity_type == ImportEntityType.VENDORS:
             return self._import_vendors(rows, duplicate_policy)
+        if entity_type == ImportEntityType.LEADS:
+            return self._import_leads(
+                rows,
+                duplicate_policy,
+                file_bytes=file_bytes,
+                source_filename=source_filename,
+                actor_id=actor_id,
+                actor_name=actor_name,
+                branch=branch,
+            )
         raise ValueError(f"Unsupported entity type: {entity_type}")
 
     def issues_csv(self, result: ImportResult) -> str:
@@ -621,6 +641,123 @@ class MigrationAppService:
         if not account:
             return
         self._accounting.set_opening_balance(account.id, value)
+
+    def _import_leads(
+        self,
+        rows: List[Dict[str, Any]],
+        policy: DuplicatePolicy,
+        *,
+        file_bytes: Optional[bytes] = None,
+        source_filename: str = "",
+        actor_id: str = "",
+        actor_name: str = "",
+        branch: str = "",
+    ) -> ImportResult:
+        from vaybooks.bms.domain.crm.entities import CrmImportBatch
+        from vaybooks.bms.domain.crm.enums import ImportBatchStatus
+        from vaybooks.bms.domain.crm.services import file_bytes_hash, lead_row_fingerprint
+        from vaybooks.bms.domain.shared.date_utils import utc_now
+
+        result = ImportResult(entity_type=ImportEntityType.LEADS.value)
+        if self._leads is None:
+            result.failed = len(rows)
+            result.issues.append(
+                RowIssue(row=0, message="Lead import service is not configured")
+            )
+            return result
+
+        file_hash = file_bytes_hash(file_bytes or b"") if file_bytes is not None else ""
+        batch = None
+        if self._import_batches is not None:
+            if file_hash:
+                existing_batch = self._import_batches.find_by_file_hash(file_hash)
+                if (
+                    existing_batch
+                    and existing_batch.status == ImportBatchStatus.COMPLETED.value
+                ):
+                    result.created = existing_batch.created_count
+                    result.updated = existing_batch.updated_count
+                    result.skipped = existing_batch.skipped_count
+                    result.failed = existing_batch.failed_count
+                    return result
+            batch = CrmImportBatch(
+                entity_type="leads",
+                source_filename=source_filename or "",
+                file_hash=file_hash,
+                imported_by_id=actor_id,
+                imported_by_name=actor_name,
+                status=ImportBatchStatus.RUNNING.value,
+                total_rows=len(rows),
+                branch=branch,
+            )
+            batch = self._import_batches.save(batch)
+
+        batch_id = batch.id if batch else ""
+        policy_value = policy.value if isinstance(policy, DuplicatePolicy) else str(policy)
+
+        try:
+            for row in rows:
+                row_num = int(row.get("_row") or 0)
+                fingerprint = lead_row_fingerprint(row)
+                try:
+                    outcome = self._leads.upsert_from_import_row(
+                        row,
+                        policy=policy_value,
+                        batch_id=batch_id,
+                        fingerprint=fingerprint,
+                        actor_id=actor_id,
+                        actor_name=actor_name,
+                        branch=branch,
+                    )
+                    kind = outcome.get("outcome")
+                    if kind == "created":
+                        result.created += 1
+                    elif kind == "updated":
+                        result.updated += 1
+                    elif kind in {"skipped", "linked"}:
+                        result.skipped += 1
+                        if kind == "linked" and batch is not None:
+                            batch.linked_count += 1
+                    else:
+                        result.failed += 1
+                        result.issues.append(
+                            RowIssue(
+                                row=row_num,
+                                message=outcome.get("reason") or "Lead import failed",
+                            )
+                        )
+                        if policy == DuplicatePolicy.FAIL and kind == "failed":
+                            raise _AbortImport()
+                    if batch is not None:
+                        batch.row_outcomes.append(
+                            {"row": row_num, "fingerprint": fingerprint, **outcome}
+                        )
+                except _AbortImport:
+                    raise
+                except Exception as exc:
+                    result.failed += 1
+                    result.issues.append(RowIssue(row=row_num, message=str(exc)))
+                    if batch is not None:
+                        batch.row_outcomes.append(
+                            {
+                                "row": row_num,
+                                "fingerprint": fingerprint,
+                                "outcome": "failed",
+                                "reason": str(exc),
+                            }
+                        )
+        except _AbortImport:
+            pass
+
+        if batch is not None and self._import_batches is not None:
+            batch.created_count = result.created
+            batch.updated_count = result.updated
+            batch.skipped_count = result.skipped
+            batch.failed_count = result.failed
+            batch.status = ImportBatchStatus.COMPLETED.value
+            batch.completed_at = utc_now()
+            self._import_batches.save(batch)
+        return result
 
 
 class _AbortImport(Exception):

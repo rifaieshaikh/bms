@@ -37,6 +37,17 @@ from vaybooks.bms.application.settings.services.service import VendorServiceAppS
 from vaybooks.bms.application.inventory.service import InventoryAppService
 from vaybooks.bms.application.purchases.service import PurchaseAppService
 from vaybooks.bms.application.sales.service import SalesAppService
+from vaybooks.bms.application.crm import (
+    CrmActivityAppService,
+    CrmAutoActivityService,
+    CrmDashboardAppService,
+    CrmEnquiryAppService,
+    CrmLeadAppService,
+    CrmNotificationAppService,
+    CrmPaymentReminderService,
+    CrmReportService,
+    CrmSettingsAppService,
+)
 from vaybooks.bms.application.parties.workers.service import WorkerAppService
 from vaybooks.bms.application.boutique.measurements.service import MeasurementAppService
 from vaybooks.bms.application.attachment_app_service import AttachmentAppService
@@ -71,6 +82,16 @@ from vaybooks.bms.infrastructure.repositories.purchases.mongo_purchase_price_his
 )
 from vaybooks.bms.infrastructure.repositories.sales.mongo_customer_price_repository import (
     MongoCustomerPriceRepository,
+)
+from vaybooks.bms.infrastructure.repositories.crm import (
+    MongoCrmActivityRepository,
+    MongoCrmAuditRepository,
+    MongoCrmEnquiryRepository,
+    MongoCrmImportBatchRepository,
+    MongoCrmLeadRepository,
+    MongoCrmNotificationPreferencesRepository,
+    MongoCrmNotificationRepository,
+    MongoCrmSettingsRepository,
 )
 from vaybooks.bms.infrastructure.repositories.finance.mongo_accounting_repository import (
     MongoAccountRepository,
@@ -402,6 +423,14 @@ def get_services():
     feature_flag_repo = MongoFeatureFlagRepository(db)
     plan_repo = MongoPlanRepository(db)
     org_entitlement_repo = MongoOrgEntitlementRepository(db)
+    crm_lead_repo = MongoCrmLeadRepository(db)
+    crm_enquiry_repo = MongoCrmEnquiryRepository(db)
+    crm_activity_repo = MongoCrmActivityRepository(db)
+    crm_settings_repo = MongoCrmSettingsRepository(db)
+    crm_import_batch_repo = MongoCrmImportBatchRepository(db)
+    crm_audit_repo = MongoCrmAuditRepository(db)
+    crm_notification_repo = MongoCrmNotificationRepository(db)
+    crm_notification_preferences_repo = MongoCrmNotificationPreferencesRepository(db)
 
     authorization = AuthorizationService(
         user_repo=user_repo,
@@ -442,7 +471,17 @@ def get_services():
         audit=access_audit_service,
     )
 
-    accounting_service = AccountingAppService(account_repo, voucher_repo, counter_repo)
+    crm_auto_activity_service = CrmAutoActivityService(
+        crm_activity_repo,
+        settings_repo=crm_settings_repo,
+        lead_repo=crm_lead_repo,
+    )
+    accounting_service = AccountingAppService(
+        account_repo,
+        voucher_repo,
+        counter_repo,
+        crm_event_sink=crm_auto_activity_service,
+    )
     party_segment_service = PartySegmentAppService(party_segment_repo)
     customer_service = CustomerAppService(
         customer_repo, account_repo, segment_service=party_segment_service
@@ -452,6 +491,53 @@ def get_services():
     )
     business_service = BusinessAppService(business_profile_repo)
     vendor_services_config = VendorServiceAppService(vendor_service_repo)
+    crm_notification_service = CrmNotificationAppService(
+        crm_notification_repo,
+        preferences_repo=crm_notification_preferences_repo,
+        activity_repo=crm_activity_repo,
+        lead_repo=crm_lead_repo,
+        settings_repo=crm_settings_repo,
+    )
+    crm_settings_service = CrmSettingsAppService(
+        crm_settings_repo, audit_repo=crm_audit_repo
+    )
+    crm_lead_service = CrmLeadAppService(
+        crm_lead_repo,
+        audit_repo=crm_audit_repo,
+        activity_repo=crm_activity_repo,
+        notification_repo=crm_notification_repo,
+        notification_service=crm_notification_service,
+        customer_service=customer_service,
+        counter_repo=counter_repo,
+        settings_repo=crm_settings_repo,
+        user_service=user_service,
+        enquiry_repo=crm_enquiry_repo,
+    )
+    crm_enquiry_service = CrmEnquiryAppService(
+        crm_enquiry_repo,
+        audit_repo=crm_audit_repo,
+        activity_repo=crm_activity_repo,
+        lead_repo=crm_lead_repo,
+        counter_repo=counter_repo,
+        settings_repo=crm_settings_repo,
+        user_service=user_service,
+        notification_service=crm_notification_service,
+    )
+    crm_activity_service = CrmActivityAppService(
+        crm_activity_repo,
+        settings_repo=crm_settings_repo,
+        audit_repo=crm_audit_repo,
+        lead_repo=crm_lead_repo,
+        user_service=user_service,
+    )
+    crm_payment_reminder_service = CrmPaymentReminderService(
+        crm_settings_repo,
+        activity_repo=crm_activity_repo,
+        notification_service=crm_notification_service,
+        audit_repo=crm_audit_repo,
+        customer_service=customer_service,
+        accounting_service=accounting_service,
+    )
 
     reports_business = BusinessInsightsReportService(
         report_repo, accounting_service, vendor_service, customer_service
@@ -480,6 +566,8 @@ def get_services():
         inventory_service,
         accounting_service,
         party_segment_service=party_segment_service,
+        lead_service=crm_lead_service,
+        import_batch_repo=crm_import_batch_repo,
     )
     purchase_service = PurchaseAppService(
         po_repo,
@@ -505,6 +593,26 @@ def get_services():
         estimate_repo=estimate_repo,
         quotation_repo=quotation_repo,
         customer_price_repo=customer_price_repo,
+        crm_event_sink=crm_auto_activity_service,
+    )
+    crm_enquiry_service.set_sales_service(sales_service)
+    crm_dashboard_service = CrmDashboardAppService(
+        crm_lead_repo,
+        enquiry_repo=crm_enquiry_repo,
+        activity_repo=crm_activity_repo,
+        customer_service=customer_service,
+        sales_service=sales_service,
+        accounting_service=accounting_service,
+        settings_repo=crm_settings_repo,
+    )
+    crm_report_service = CrmReportService(
+        crm_lead_repo,
+        enquiry_repo=crm_enquiry_repo,
+        activity_repo=crm_activity_repo,
+        customer_service=customer_service,
+        settings_repo=crm_settings_repo,
+        sales_service=sales_service,
+        accounting_service=accounting_service,
     )
     reports_inventory = InventoryReportService(inventory_service, sales=sales_service)
     reports_purchases = PurchaseReportService(purchase_service)
@@ -696,7 +804,7 @@ def get_services():
         purchase_service=purchase_service,
     )
 
-    return {
+    services = {
         "customers": customer_service,
         "vendors": vendor_service,
         "party_segments": party_segment_service,
@@ -719,7 +827,7 @@ def get_services():
             attachment_service=attachment_service,
         ),
         "activities": ActivityAppService(activity_repo, order_repo),
-        "workers": WorkerAppService(worker_repo, account_repo),
+        "workers": WorkerAppService(worker_repo, account_repo, user_service=user_service),
         "time_tracking": TimeTrackingAppService(time_repo, order_repo),
         "expenses": expense_service,
         "invoices": invoice_service,
@@ -777,8 +885,89 @@ def get_services():
         "reports_purchases": reports_purchases,
         "reports_sales_module": reports_sales_module,
         "reports_boutique_module": reports_boutique_module,
+        "crm_leads": crm_lead_service,
+        "crm_enquiries": crm_enquiry_service,
+        "crm_activities": crm_activity_service,
+        "crm_auto_activities": crm_auto_activity_service,
+        "crm_dashboard": crm_dashboard_service,
+        "crm_reports": crm_report_service,
+        "crm_settings": crm_settings_service,
+        "crm_notifications": crm_notification_service,
+        "crm_payment_reminders": crm_payment_reminder_service,
+        "crm_access": authorization,
         "activity_repo": activity_repo,
         "order_repo": order_repo,
         "invoice_repo": invoice_repo,
         "delivery_repo": delivery_repo,
     }
+
+    scheduler_service = _build_scheduler_service(
+        db,
+        services,
+        repos={
+            "customers": customer_repo,
+            "vendors": vendor_repo,
+            "crm_activities": crm_activity_repo,
+            "crm_leads": crm_lead_repo,
+            "crm_enquiries": crm_enquiry_repo,
+            "accounts": account_repo,
+            "vouchers": voucher_repo,
+            "quotations": quotation_repo,
+            "estimates": estimate_repo,
+            "sales_orders": so_repo,
+            "delivery_notes": dn_repo,
+            "sales_returns": sales_return_repo,
+            "purchase_orders": po_repo,
+            "goods_receipts": grn_repo,
+            "inventory_products": inventory_product_repo,
+            "stock_transfers": stock_transfer_repo,
+            "boutique_orders": order_repo,
+            "boutique_invoices": invoice_repo,
+            "boutique_deliveries": delivery_repo,
+            "projects": project_repo,
+            "project_memberships": project_membership_repo,
+            "project_quotations": project_quotation_repo,
+            "project_procurement": project_procurement_repo,
+        },
+        audit=access_audit_service,
+    )
+    services["schedulers"] = scheduler_service
+    services["scheduler_notifications"] = scheduler_service
+    return services
+
+
+def _build_scheduler_service(db, services: dict, *, repos: dict, audit=None):
+    """Assemble the shared scheduler with every domain job and report runner."""
+    from vaybooks.bms.application.schedulers.jobs import all_jobs
+    from vaybooks.bms.application.schedulers.jobs._base import Deps
+    from vaybooks.bms.application.schedulers.registry import JobRegistry
+    from vaybooks.bms.application.schedulers.reports_registry import build_report_registry
+    from vaybooks.bms.application.schedulers.service import SchedulerAppService
+    from vaybooks.bms.infrastructure.repositories.schedulers import (
+        MongoSchedulerJobConfigRepository,
+        MongoSchedulerLeaseRepository,
+        MongoSchedulerNotificationRepository,
+        MongoSchedulerQueries,
+        MongoSchedulerReportArtifactRepository,
+        MongoSchedulerReportConfigRepository,
+        MongoSchedulerReportRunLogRepository,
+        MongoSchedulerRunLogRepository,
+    )
+
+    deps = Deps(queries=MongoSchedulerQueries(db), services=services, repos=repos)
+    registry = JobRegistry()
+    for job, definition in all_jobs(deps):
+        registry.register(job, definition)
+
+    return SchedulerAppService(
+        MongoSchedulerJobConfigRepository(db),
+        MongoSchedulerRunLogRepository(db),
+        MongoSchedulerLeaseRepository(db),
+        MongoSchedulerNotificationRepository(db),
+        registry=registry,
+        report_registry=build_report_registry(services),
+        report_config_repo=MongoSchedulerReportConfigRepository(db),
+        report_run_log_repo=MongoSchedulerReportRunLogRepository(db),
+        report_artifact_repo=MongoSchedulerReportArtifactRepository(db),
+        audit=audit,
+    )

@@ -83,6 +83,52 @@ def test_notifications_refresh_invalidates_cache(monkeypatch):
     assert svc.calls == 2
 
 
+class FakeSchedulerService:
+    def __init__(self, items):
+        self.items = list(items)
+        self.calls = 0
+        self.read = []
+
+    def list_notifications(self, recipient_id, *, state="open", limit=50):
+        self.calls += 1
+        return list(self.items)
+
+    def mark_notification_read(self, notification_id):
+        self.read.append(notification_id)
+
+
+def test_scheduler_notifications_reach_the_header(monkeypatch):
+    svc = FakeSchedulerService(
+        [SimpleNamespace(id="n1", title="Invoice payment pending", message="2 invoices")]
+    )
+    monkeypatch.setattr(app_header, "current_user_id", lambda: "u1")
+    with patch.object(app_header, "st") as mock_st:
+        mock_st.session_state = {}
+        items = app_header._load_scheduler_notifications({"schedulers": svc})
+    assert [i.title for i in items] == ["Invoice payment pending"]
+
+
+def test_scheduler_notifications_are_cached_within_the_ttl(monkeypatch):
+    svc = FakeSchedulerService([SimpleNamespace(id="n1", title="t", message="")])
+    monkeypatch.setattr(app_header, "current_user_id", lambda: "u1")
+    with patch.object(app_header, "st") as mock_st:
+        mock_st.session_state = {}
+        app_header._load_scheduler_notifications({"schedulers": svc})
+        app_header._load_scheduler_notifications({"schedulers": svc})
+    assert svc.calls == 1
+
+
+def test_the_header_survives_a_broken_scheduler_service(monkeypatch):
+    class Broken:
+        def list_notifications(self, *_args, **_kwargs):
+            raise RuntimeError("db down")
+
+    monkeypatch.setattr(app_header, "current_user_id", lambda: "u1")
+    with patch.object(app_header, "st") as mock_st:
+        mock_st.session_state = {}
+        assert app_header._load_scheduler_notifications({"schedulers": Broken()}) == []
+
+
 def test_notifications_cache_expires_after_ttl(monkeypatch):
     svc = FakeNotificationService([_item("quotation_approval")])
     monkeypatch.setattr(app_header, "can_permission", lambda s, k: True)
@@ -154,6 +200,36 @@ def test_settings_popover_renders_sectioned_links(monkeypatch):
         assert headings == ["**Settings**", "**Access**", "**Migration**"]
         assert mock_st.page_link.call_count == 3
         assert mock_st.divider.call_count == 2
+
+
+def test_schedulers_popover_lists_domain_pages(monkeypatch):
+    pages = [
+        SimpleNamespace(url_path="schedulers-crm"),
+        SimpleNamespace(url_path="schedulers-sales"),
+    ]
+    monkeypatch.setattr(app_header, "can_see_page", lambda services, url: True)
+    with patch.object(app_header, "st") as mock_st:
+        mock_st.session_state = {}
+        app_header._render_schedulers({}, scheduler_pages=pages)
+        headings = [
+            call.args[0]
+            for call in mock_st.markdown.call_args_list
+            if call.args
+        ]
+        assert headings == ["**Schedulers**"]
+        assert mock_st.page_link.call_count == 2
+
+
+def test_schedulers_popover_hides_when_empty(monkeypatch):
+    monkeypatch.setattr(app_header, "can_see_page", lambda services, url: False)
+    with patch.object(app_header, "st") as mock_st:
+        mock_st.session_state = {}
+        app_header._render_schedulers(
+            {},
+            scheduler_pages=[SimpleNamespace(url_path="schedulers-crm")],
+        )
+        mock_st.caption.assert_called_once()
+        assert mock_st.page_link.call_count == 0
 
 
 def test_account_popover_dispatches_sign_out():

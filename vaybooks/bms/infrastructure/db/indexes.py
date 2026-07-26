@@ -12,7 +12,7 @@ def _create_index(collection, keys, **kwargs):
     try:
         collection.create_index(keys, **kwargs)
     except OperationFailure as exc:
-        if exc.code != 86:  # IndexKeySpecsConflict
+        if exc.code not in (85, 86):  # IndexOptionsConflict / IndexKeySpecsConflict
             raise
         key_spec = _normalize_index_key(keys)
         for index in collection.list_indexes():
@@ -254,6 +254,92 @@ def ensure_indexes(db):
 
     _create_index(db.project_activity_configs, "activity_name")
     _create_index(db.project_activity_configs, "is_active")
+
+    # --- CRM ---
+    _create_index(db.customers, "assigned_user_id")
+    _create_index(
+        db.crm_leads,
+        [("phone_normalized", 1)],
+        name="crm_leads_phone_normalized_partial",
+    )
+    _create_index(
+        db.crm_leads,
+        [("email_normalized", 1)],
+        name="crm_leads_email_normalized_partial",
+    )
+    _create_index(
+        db.crm_leads,
+        [("gstin_normalized", 1)],
+        name="crm_leads_gstin_normalized_partial",
+    )
+    _create_index(db.crm_leads, "status")
+    _create_index(db.crm_leads, "assigned_user_id")
+    _create_index(db.crm_leads, "next_follow_up_at")
+    _create_index(db.crm_leads, "source")
+    _create_index(db.crm_leads, "created_at")
+    _create_index(db.crm_leads, "import_batch_id")
+    _create_index(
+        db.crm_leads,
+        "lead_number",
+        unique=True,
+        partialFilterExpression={"lead_number": {"$type": "string", "$gt": ""}},
+    )
+    _create_index(
+        db.crm_leads,
+        [("import_batch_id", 1), ("import_row_fingerprint", 1)],
+        unique=True,
+        name="crm_leads_import_fingerprint",
+        partialFilterExpression={
+            "import_batch_id": {"$type": "string", "$gt": ""},
+            "import_row_fingerprint": {"$type": "string", "$gt": ""},
+        },
+    )
+    _create_index(db.crm_enquiries, "status")
+    _create_index(db.crm_enquiries, "assigned_user_id")
+    _create_index(db.crm_enquiries, "next_follow_up_at")
+    _create_index(db.crm_enquiries, "lead_id")
+    _create_index(db.crm_enquiries, "customer_id")
+    _create_index(
+        db.crm_activities,
+        [
+            ("source_module", 1),
+            ("source_txn_type", 1),
+            ("source_txn_id", 1),
+            ("activity_type_key", 1),
+        ],
+        unique=True,
+        name="crm_activities_auto_idempotency_partial",
+        partialFilterExpression={
+            "source_module": {"$type": "string", "$gt": ""},
+            "source_txn_type": {"$type": "string", "$gt": ""},
+            "source_txn_id": {"$type": "string", "$gt": ""},
+            "activity_type_key": {"$type": "string", "$gt": ""},
+        },
+    )
+    _create_index(db.crm_activities, "lead_id")
+    _create_index(db.crm_activities, "enquiry_id")
+    _create_index(db.crm_activities, "customer_id")
+    _create_index(db.crm_activities, "assigned_user_id")
+    _create_index(db.crm_activities, "scheduled_at")
+    _create_index(db.crm_activities, "status")
+    _create_index(
+        db.crm_notifications,
+        [("dedupe_key", 1)],
+        unique=True,
+        name="crm_notifications_dedupe_partial",
+        partialFilterExpression={"dedupe_key": {"$type": "string", "$gt": ""}},
+    )
+    _create_index(db.crm_notification_preferences, "user_id", unique=True)
+    _create_index(db.crm_audit_entries, [("entity_type", 1), ("entity_id", 1)])
+    _create_index(db.crm_import_batches, "file_hash")
+
+    from vaybooks.bms.infrastructure.db.scheduler_indexes import (
+        ensure_scheduler_indexes,
+        ensure_scheduler_query_indexes,
+    )
+
+    ensure_scheduler_indexes(db)
+    ensure_scheduler_query_indexes(db)
 
 
 if __name__ == "__main__":
