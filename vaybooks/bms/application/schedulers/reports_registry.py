@@ -21,6 +21,7 @@ from vaybooks.bms.domain.schedulers.entities import (
     DOMAIN_BOUTIQUE,
     DOMAIN_CRM,
     DOMAIN_INVENTORY,
+    DOMAIN_PRODUCTION,
     DOMAIN_ORDER,
     DOMAIN_PROJECTS,
     DOMAIN_PURCHASES,
@@ -123,6 +124,7 @@ def build_report_registry(services: Dict[str, Any]) -> ReportRegistry:
     _register_sales(registry, services)
     _register_purchases(registry, services)
     _register_inventory(registry, services)
+    _register_production(registry, services)
     _register_boutique(registry, services)
     _register_projects(registry, services)
     return registry
@@ -287,6 +289,55 @@ def _register_inventory(registry: ReportRegistry, services: Dict[str, Any]) -> N
             "Product Rate Card": "product_rate_card_report",
         },
         service_label="Inventory reports service",
+    )
+
+
+def _register_production(registry: ReportRegistry, services: Dict[str, Any]) -> None:
+    from vaybooks.bms.ui.report_schemas import PRODUCTION_REPORT_TYPES
+
+    _register_schema_module(
+        registry,
+        services,
+        domain=DOMAIN_PRODUCTION,
+        service_key="reports_production",
+        titles=list(PRODUCTION_REPORT_TYPES),
+        methods={
+            "Batch Register": "batch_register_report",
+            "Batch Cost Sheet": "batch_cost_sheet_report",
+            "Batch Margin": "batch_margin_report",
+            "Yield vs Recipe (variance)": "yield_variance_report",
+            "Production Expenses (by type / activity)": "production_expense_report",
+            "Output Summary (by product / period)": "output_summary_report",
+            "RM Consumption": "rm_consumption_report",
+            "WIP / Unposted Batches": "wip_open_batches_report",
+            "Cost per Unit Trend": "cost_per_unit_trend_report",
+            "Recipe Master List": "recipe_master_report",
+        },
+        service_label="Production reports service",
+    )
+
+    def run_batch_cost_sheet(ctx: ReportContext) -> Any:
+        batch_id = str(ctx.option("batch_id", "") or "")
+        if not batch_id:
+            raise ReportSkipped(
+                "Batch Cost Sheet needs a production batch selected in the filters"
+            )
+        service = services.get("reports_production")
+        if service is None:
+            raise ReportSkipped("Production reports service is unavailable")
+        filters = dict(ctx.filters or {})
+        filters["batch_id"] = batch_id
+        if ctx.start and ctx.end:
+            filters["date_range"] = (ctx.start, ctx.end)
+        return service.batch_cost_sheet_report(filters)
+
+    registry.register(
+        ReportDefinition(
+            domain=DOMAIN_PRODUCTION,
+            report_id=slugify_report_id("Batch Cost Sheet"),
+            title="Batch Cost Sheet",
+        ),
+        run_batch_cost_sheet,
     )
 
 

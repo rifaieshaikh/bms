@@ -137,10 +137,23 @@ from vaybooks.bms.ui.pages.projects import (
     settings as projects_settings_mod,
     site_mobile as project_site_mobile_mod,
 )
+from vaybooks.bms.ui.pages.production import (
+    batch_detail as production_batch_detail_mod,
+    batches as production_batches_mod,
+    dashboard as production_dashboard_mod,
+    day_book as production_day_book_mod,
+    margins as production_margins_mod,
+    recipes as production_recipes_mod,
+    reports as production_reports_mod,
+    scheduled_reports as production_scheduled_reports_mod,
+    settings as production_settings_mod,
+    yield_report as production_yield_mod,
+)
 from vaybooks.bms.ui.pages.schedulers import (
     boutique as schedulers_boutique_mod,
     crm as schedulers_crm_mod,
     inventory as schedulers_inventory_mod,
+    production as schedulers_production_mod,
     projects as schedulers_projects_mod,
     purchases as schedulers_purchases_mod,
     sales as schedulers_sales_mod,
@@ -368,6 +381,10 @@ schedulers_inventory_page = st.Page(
     _page(schedulers_inventory_mod, url_path="schedulers-inventory"), title="Inventory",
     icon=":material/inventory:", url_path="schedulers-inventory",
 )
+schedulers_production_page = st.Page(
+    _page(schedulers_production_mod, url_path="schedulers-production"),
+    title="Production", icon=":material/factory:", url_path="schedulers-production",
+)
 schedulers_boutique_page = st.Page(
     _page(schedulers_boutique_mod, url_path="schedulers-boutique"), title="Boutique",
     icon=":material/checkroom:", url_path="schedulers-boutique",
@@ -521,6 +538,50 @@ inventory_scheduled_reports_page = st.Page(
     title="Scheduled reports",
     icon=":material/event_repeat:",
     url_path="inventory-scheduled-reports",
+)
+production_dashboard_page = st.Page(
+    _page(production_dashboard_mod, url_path="production-dashboard"),
+    title="Overview", icon=":material/factory:", url_path="production-dashboard",
+)
+production_recipes_page = st.Page(
+    _page(production_recipes_mod, url_path="production-recipes"),
+    title="Recipes", icon=":material/schema:", url_path="production-recipes",
+)
+production_batches_page = st.Page(
+    _page(production_batches_mod, url_path="production-batches"),
+    title="Batches", icon=":material/precision_manufacturing:",
+    url_path="production-batches",
+)
+production_batch_detail_page = st.Page(
+    _page(production_batch_detail_mod, url_path="production-batch-detail"),
+    title="Production Batch", url_path="production-batch-detail",
+)
+production_day_book_page = st.Page(
+    _page(production_day_book_mod, url_path="production-day-book"),
+    title="Day Book", icon=":material/menu_book:", url_path="production-day-book",
+)
+production_margins_page = st.Page(
+    _page(production_margins_mod, url_path="production-margins"),
+    title="Cost & Margin", icon=":material/monitoring:",
+    url_path="production-margins",
+)
+production_yield_page = st.Page(
+    _page(production_yield_mod, url_path="production-yield"),
+    title="Yield & Variance", icon=":material/ssid_chart:",
+    url_path="production-yield",
+)
+production_reports_page = st.Page(
+    _page(production_reports_mod, url_path="production-reports"),
+    title="Reports", icon=":material/assessment:", url_path="production-reports",
+)
+production_scheduled_reports_page = st.Page(
+    _page(production_scheduled_reports_mod, url_path="production-scheduled-reports"),
+    title="Scheduled reports", icon=":material/event_repeat:",
+    url_path="production-scheduled-reports",
+)
+production_settings_page = st.Page(
+    _page(production_settings_mod, url_path="production-settings"),
+    title="Production Settings", icon=":material/factory:", url_path="production-settings",
 )
 purchase_order_detail_page = st.Page(
     _page(purchase_order_detail_mod, url_path="purchase-order-detail"), title="PO Detail", url_path="purchase-order-detail",
@@ -765,6 +826,15 @@ navigation.register("inventory_transfers_list", inventory_transfers_page)
 navigation.register("inventory_transfer_detail", inventory_transfer_detail_page)
 navigation.register("inventory_reports", inventory_reports_page)
 navigation.register("inventory_product_detail", inventory_product_detail_page)
+navigation.register("production_dashboard", production_dashboard_page)
+navigation.register("production_recipes", production_recipes_page)
+navigation.register("production_batches", production_batches_page)
+navigation.register("production_batch_detail", production_batch_detail_page)
+navigation.register("production_day_book", production_day_book_page)
+navigation.register("production_margins", production_margins_page)
+navigation.register("production_yield", production_yield_page)
+navigation.register("production_reports", production_reports_page)
+navigation.register("production_settings", production_settings_page)
 navigation.register("settings_locations_list", settings_locations_page)
 navigation.register("export_backup", export_page)
 navigation.register("business_settings", business_settings_page)
@@ -860,6 +930,16 @@ page_groups = {
         inventory_reports_page,
         inventory_scheduled_reports_page,
     ],
+    "Production": [
+        production_dashboard_page,
+        production_recipes_page,
+        production_batches_page,
+        production_day_book_page,
+        production_margins_page,
+        production_yield_page,
+        production_reports_page,
+        production_scheduled_reports_page,
+    ],
     "Finance": [
         finance_overview_page,
         accounts_page,
@@ -890,6 +970,7 @@ page_groups = {
         schedulers_sales_page,
         schedulers_purchases_page,
         schedulers_inventory_page,
+        schedulers_production_page,
         schedulers_boutique_page,
         schedulers_projects_page,
     ],
@@ -907,6 +988,7 @@ page_groups = {
         measurement_specs_page,
         services_page,
         crm_settings_page,
+        production_settings_page,
     ],
 }
 
@@ -918,6 +1000,7 @@ if is_desktop():
     ]
 
 hidden_pages = [
+    production_batch_detail_page,
     order_detail_page,
     order_workspace_page,
     project_detail_page,

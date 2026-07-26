@@ -51,6 +51,7 @@ class Voucher:
     reference_dn_id: Optional[str] = None
     reference_project_id: Optional[str] = None
     reference_activity_id: Optional[str] = None
+    reference_production_batch_id: Optional[str] = None
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
 

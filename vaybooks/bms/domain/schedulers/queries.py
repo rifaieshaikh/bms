@@ -113,6 +113,19 @@ class SchedulerQueries(Protocol):
         self, statuses: Sequence[str], before: date, *, limit: int
     ) -> List[str]: ...
 
+    # --- Production ---
+    def production_batch_ids_by_status_before(
+        self, statuses: Sequence[str], before: date, *, limit: int
+    ) -> List[str]: ...
+
+    def production_batch_ids_by_status(
+        self, statuses: Sequence[str], *, limit: int
+    ) -> List[str]: ...
+
+    def production_batch_ids_margin_below(
+        self, maximum: float, *, limit: int
+    ) -> List[str]: ...
+
     # --- Boutique ---
     def boutique_order_ids_by_etd(
         self,

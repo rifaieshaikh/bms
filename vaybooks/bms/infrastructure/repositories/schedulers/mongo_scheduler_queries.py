@@ -338,6 +338,36 @@ class MongoSchedulerQueries:
         cursor = self._db.stock_transfers.find(query, {"_id": 1}).limit(limit)
         return _ids(cursor)
 
+    # --- Production ----------------------------------------------------------
+
+    def production_batch_ids_by_status_before(
+        self, statuses: Sequence[str], before: date, *, limit: int
+    ) -> List[str]:
+        query: Dict[str, Any] = {"status": {"$in": list(statuses)}}
+        query.update(_date_before("updated_at", before))
+        return _ids(
+            self._db.production_batches.find(query, {"_id": 1}).limit(limit)
+        )
+
+    def production_batch_ids_by_status(
+        self, statuses: Sequence[str], *, limit: int
+    ) -> List[str]:
+        return _ids(
+            self._db.production_batches.find(
+                {"status": {"$in": list(statuses)}}, {"_id": 1}
+            ).limit(limit)
+        )
+
+    def production_batch_ids_margin_below(
+        self, maximum: float, *, limit: int
+    ) -> List[str]:
+        return _ids(
+            self._db.production_batches.find(
+                {"status": "Posted", "batch_margin": {"$lt": float(maximum)}},
+                {"_id": 1},
+            ).limit(limit)
+        )
+
     # --- Boutique ------------------------------------------------------------
 
     def boutique_order_ids_by_etd(

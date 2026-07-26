@@ -1465,6 +1465,37 @@ INVENTORY_REPORT_TYPES = [
     "Product Rate Card",
 ]
 
+# Production → Reports.
+PRODUCTION_REPORT_TYPES = [
+    "Batch Register",
+    "Batch Cost Sheet",
+    "Batch Margin",
+    "Yield vs Recipe (variance)",
+    "Production Expenses (by type / activity)",
+    "Output Summary (by product / period)",
+    "RM Consumption",
+    "WIP / Unposted Batches",
+    "Cost per Unit Trend",
+    "Recipe Master List",
+]
+
+PRODUCTION_REPORT = ListSchema(
+    entity_key="report_production",
+    title="Production Report",
+    filter_fields=[
+        FilterField("date_range", "Period", F.DATE_RANGE, default=_mtd),
+        FilterField(
+            "batch_id",
+            "Production batch",
+            F.SELECT,
+            options_loader="production_batches",
+        ),
+    ],
+    sort_options=[SortOption("date", "Date")],
+    default_sort="date",
+    page_size=REPORT_PAGE_SIZE,
+)
+
 SCHEMA_BY_REPORT_TYPE = {
     "Period Financial Summary": PERIOD_FINANCIAL_SUMMARY,
     "Top Customers by Revenue": TOP_CUSTOMERS_REVENUE,
@@ -1511,6 +1542,7 @@ SCHEMA_BY_REPORT_TYPE = {
     "Delivery Pending": DN_PENDING,
     "Sales by Customer": SALES_BY_CUSTOMER,
     "Sales Returns Summary": SALES_RETURNS_SUMMARY,
+    **{title: PRODUCTION_REPORT for title in PRODUCTION_REPORT_TYPES},
 }
 
 CATEGORY_BY_REPORT_TYPE = {
@@ -1557,6 +1589,7 @@ MODULE_OWNED_REPORT_TYPES = (
     + SALES_MODULE_REPORT_TYPES
     + PURCHASE_MODULE_REPORT_TYPES
     + INVENTORY_REPORT_TYPES
+    + PRODUCTION_REPORT_TYPES
 )
 
 REPORT_TYPES = [

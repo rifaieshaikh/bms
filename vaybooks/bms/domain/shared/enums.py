@@ -165,6 +165,27 @@ class StockReferenceType(str, Enum):
     DELIVERY_NOTE = "Delivery Note"
     SALES_RETURN = "Sales Return"
     STOCK_TRANSFER = "Stock Transfer"
+    PRODUCTION_BATCH = "Production Batch"
+
+
+class ProductionBatchStatus(str, Enum):
+    DRAFT = "Draft"
+    IN_PROGRESS = "In Progress"
+    POSTED = "Posted"
+    CANCELLED = "Cancelled"
+
+
+class ProductionOutputRole(str, Enum):
+    MAIN = "Main"
+    CO_PRODUCT = "Co-product"
+    BY_PRODUCT = "By-product"
+    SCRAP = "Scrap"
+
+
+class ProductionCostAllocationMethod(str, Enum):
+    NRV = "NRV"
+    PERCENTAGE = "Percentage"
+    PRIMARY_ABSORBS_ALL = "Primary Absorbs All"
 
 
 class PartyRegistrationType(str, Enum):

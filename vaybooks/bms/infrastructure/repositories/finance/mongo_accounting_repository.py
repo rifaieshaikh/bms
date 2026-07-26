@@ -139,6 +139,7 @@ class MongoVoucherRepository:
             "reference_dn_id": voucher.reference_dn_id,
             "reference_project_id": voucher.reference_project_id,
             "reference_activity_id": voucher.reference_activity_id,
+            "reference_production_batch_id": voucher.reference_production_batch_id,
             "lines": [self._line_to_doc(l) for l in voucher.lines],
             "created_at": voucher.created_at,
             "updated_at": voucher.updated_at,
@@ -160,6 +161,9 @@ class MongoVoucherRepository:
             reference_dn_id=doc.get("reference_dn_id"),
             reference_project_id=doc.get("reference_project_id"),
             reference_activity_id=doc.get("reference_activity_id"),
+            reference_production_batch_id=doc.get(
+                "reference_production_batch_id"
+            ),
             lines=[self._line_from_doc(l) for l in doc.get("lines", [])],
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),

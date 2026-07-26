@@ -769,6 +769,78 @@ class InventoryDomainService:
             recorded.append(movement)
         return recorded
 
+    def apply_production_issue(
+        self,
+        batch_id: str,
+        lines: list[dict],
+        movement_date: Optional[date] = None,
+    ) -> list[StockMovement]:
+        recorded: list[StockMovement] = []
+        md = movement_date or date.today()
+        for line in lines:
+            product_id = line.get("product_id")
+            if not product_id:
+                continue
+            product = self._product_repo.find_by_id(str(product_id))
+            if not product:
+                raise ValidationError("Product not found for production issue")
+            qty = float(line.get("qty") or 0)
+            if qty <= 0:
+                continue
+            recorded.append(
+                self._record_movement(
+                    product,
+                    StockMovementType.ISSUE,
+                    qty,
+                    md,
+                    StockReferenceType.PRODUCTION_BATCH,
+                    batch_id,
+                    (line.get("description") or "").strip()
+                    or "Production material issue",
+                    location_id=str(
+                        line.get("location_id") or line.get("warehouse_id") or ""
+                    )
+                    or None,
+                )
+            )
+        return recorded
+
+    def apply_production_receive(
+        self,
+        batch_id: str,
+        lines: list[dict],
+        movement_date: Optional[date] = None,
+    ) -> list[StockMovement]:
+        recorded: list[StockMovement] = []
+        md = movement_date or date.today()
+        for line in lines:
+            product_id = line.get("product_id")
+            if not product_id:
+                continue
+            product = self._product_repo.find_by_id(str(product_id))
+            if not product:
+                raise ValidationError("Product not found for production receipt")
+            qty = float(line.get("qty") or 0)
+            if qty <= 0:
+                continue
+            recorded.append(
+                self._record_movement(
+                    product,
+                    StockMovementType.RECEIVE,
+                    qty,
+                    md,
+                    StockReferenceType.PRODUCTION_BATCH,
+                    batch_id,
+                    (line.get("description") or "").strip()
+                    or "Production output receipt",
+                    location_id=str(
+                        line.get("location_id") or line.get("warehouse_id") or ""
+                    )
+                    or None,
+                )
+            )
+        return recorded
+
     def apply_landed_cost(self, lines: list[dict]) -> None:
         for line in lines:
             product_id = line.get("product_id")

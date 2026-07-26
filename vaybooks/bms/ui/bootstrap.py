@@ -28,6 +28,9 @@ from vaybooks.bms.application.finance.reports.services.purchase_report_service i
 from vaybooks.bms.application.finance.reports.services.sales_module_report_service import (
     SalesModuleReportService,
 )
+from vaybooks.bms.application.finance.reports.services.production_report_service import (
+    ProductionReportService,
+)
 from vaybooks.bms.application.finance.reports.services.sales_report_service import SalesReportService
 from vaybooks.bms.application.boutique.reports.service import BoutiqueModuleReportService
 from vaybooks.bms.application.boutique.time_tracking.service import TimeTrackingAppService
@@ -37,6 +40,7 @@ from vaybooks.bms.application.settings.services.service import VendorServiceAppS
 from vaybooks.bms.application.inventory.service import InventoryAppService
 from vaybooks.bms.application.purchases.service import PurchaseAppService
 from vaybooks.bms.application.sales.service import SalesAppService
+from vaybooks.bms.application.production.service import ProductionAppService
 from vaybooks.bms.application.crm import (
     CrmActivityAppService,
     CrmAutoActivityService,
@@ -103,6 +107,11 @@ from vaybooks.bms.infrastructure.repositories.crm import (
 from vaybooks.bms.infrastructure.repositories.finance.mongo_accounting_repository import (
     MongoAccountRepository,
     MongoVoucherRepository,
+)
+from vaybooks.bms.infrastructure.repositories.production import (
+    MongoProductionBatchRepository,
+    MongoProductionSettingsRepository,
+    MongoRecipeRepository,
 )
 from vaybooks.bms.infrastructure.repositories.boutique.mongo_activity_repository import MongoActivityRepository
 from vaybooks.bms.infrastructure.repositories.finance.mongo_counter_repository import MongoCounterRepository
@@ -376,6 +385,9 @@ def get_services():
     location_repo = MongoLocationRepository(db)
     stock_balance_repo = MongoStockBalanceRepository(db)
     stock_transfer_repo = MongoStockTransferRepository(db)
+    production_recipe_repo = MongoRecipeRepository(db)
+    production_batch_repo = MongoProductionBatchRepository(db)
+    production_settings_repo = MongoProductionSettingsRepository(db)
     po_repo = MongoPurchaseOrderRepository(db)
     grn_repo = MongoGoodsReceiptRepository(db)
     purchase_return_repo = MongoPurchaseReturnRepository(db)
@@ -574,6 +586,14 @@ def get_services():
         balance_repo=stock_balance_repo,
         transfer_repo=stock_transfer_repo,
     )
+    production_service = ProductionAppService(
+        production_recipe_repo,
+        production_batch_repo,
+        production_settings_repo,
+        inventory_service,
+        accounting_service,
+    )
+    reports_production = ProductionReportService(production_service)
     migration_service = MigrationAppService(
         mapping_profile_repo,
         customer_service,
@@ -910,6 +930,8 @@ def get_services():
         "export": ExportAppService(report_repo),
         "migration": migration_service,
         "inventory": inventory_service,
+        "production": production_service,
+        "reports_production": reports_production,
         "purchases": purchase_service,
         "sales": sales_service,
         "reports_purchases": reports_purchases,
@@ -951,6 +973,8 @@ def get_services():
             "goods_receipts": grn_repo,
             "inventory_products": inventory_product_repo,
             "stock_transfers": stock_transfer_repo,
+            "production_recipes": production_recipe_repo,
+            "production_batches": production_batch_repo,
             "boutique_orders": order_repo,
             "boutique_invoices": invoice_repo,
             "boutique_deliveries": delivery_repo,

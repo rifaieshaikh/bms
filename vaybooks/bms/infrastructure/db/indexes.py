@@ -130,6 +130,7 @@ def ensure_indexes(db):
     _create_index(db.vouchers, "voucher_number", unique=True)
     _create_index(db.vouchers, "voucher_date")
     _create_index(db.vouchers, "reference_order_id")
+    _create_index(db.vouchers, "reference_production_batch_id")
 
     _create_index(db.product_categories, [("parent_id", 1), ("name", 1)], unique=True)
     _create_index(db.product_categories, "name")
@@ -160,6 +161,15 @@ def ensure_indexes(db):
     _create_index(db.stock_transfers, "to_location_id")
     _create_index(db.stock_transfers, "status")
     _create_index(db.stock_transfers, "transfer_date")
+
+    _create_index(db.production_recipes, "code")
+    _create_index(db.production_recipes, "name")
+    _create_index(db.production_recipes, "is_active")
+    _create_index(db.production_batches, "batch_number", unique=True)
+    _create_index(db.production_batches, "recipe_id")
+    _create_index(db.production_batches, "status")
+    _create_index(db.production_batches, "batch_date")
+    _create_index(db.production_batches, "updated_at")
 
     _create_index(db.purchase_orders, "po_number", unique=True)
     _create_index(db.purchase_orders, "vendor_id")

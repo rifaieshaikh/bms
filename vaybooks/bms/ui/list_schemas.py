@@ -123,6 +123,16 @@ def _inventory_locations(services):
     ]
 
 
+def _production_batches(services):
+    production = services.get("production")
+    if production is None:
+        return []
+    return [
+        (batch.id, f"{batch.batch_number} — {batch.recipe_name}")
+        for batch in production.list_batches()
+    ]
+
+
 def _party_segments(services):
     segments = services.get("party_segments")
     if segments is None:
@@ -164,6 +174,7 @@ OPTION_LOADERS = {
     "inventory_categories": _inventory_categories,
     "inventory_products": _inventory_products,
     "inventory_locations": _inventory_locations,
+    "production_batches": _production_batches,
     "party_segments": _party_segments,
     "customer_segments": _customer_segments,
     "vendor_segments": _vendor_segments,

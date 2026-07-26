@@ -534,6 +534,22 @@ class InventoryAppService:
     def apply_landed_cost(self, lines: list[dict]) -> None:
         self._domain.apply_landed_cost(lines)
 
+    def apply_production_issue(
+        self,
+        batch_id: str,
+        lines: list[dict],
+        movement_date: Optional[date] = None,
+    ):
+        return self._domain.apply_production_issue(batch_id, lines, movement_date)
+
+    def apply_production_receive(
+        self,
+        batch_id: str,
+        lines: list[dict],
+        movement_date: Optional[date] = None,
+    ):
+        return self._domain.apply_production_receive(batch_id, lines, movement_date)
+
     def reverse_movements_by_reference(self, reference_id: str) -> None:
         self._domain.reverse_movements_by_reference(reference_id)
 

@@ -1355,6 +1355,7 @@ class AccountingAppService:
         description: str,
         lines: List[dict],
         voucher_date: Optional[date] = None,
+        reference_production_batch_id: Optional[str] = None,
     ) -> Voucher:
         voucher_number = self._counter_repo.next("voucher_number")
         v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
@@ -1374,6 +1375,7 @@ class AccountingAppService:
             description=description,
             lines=voucher_lines,
         )
+        voucher.reference_production_batch_id = reference_production_batch_id
         return self._domain.save_voucher(voucher)
 
     def get_account_ledger(self, account_id: str) -> List[dict]:

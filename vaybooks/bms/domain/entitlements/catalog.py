@@ -16,6 +16,7 @@ MODULE_PROJECTS = "projects"
 MODULE_SALES = "sales"
 MODULE_PURCHASES = "purchases"
 MODULE_INVENTORY = "inventory"
+MODULE_PRODUCTION = "production"
 MODULE_FINANCE = "finance"
 MODULE_SCHEDULERS = "schedulers"
 MODULE_MIGRATION = "migration"
@@ -31,6 +32,7 @@ ALL_MODULES: Tuple[str, ...] = (
     MODULE_SALES,
     MODULE_PURCHASES,
     MODULE_INVENTORY,
+    MODULE_PRODUCTION,
     MODULE_FINANCE,
     MODULE_SCHEDULERS,
     MODULE_MIGRATION,
@@ -49,6 +51,7 @@ MODULE_LABELS: Dict[str, str] = {
     MODULE_SALES: "Sales",
     MODULE_PURCHASES: "Purchases",
     MODULE_INVENTORY: "Inventory",
+    MODULE_PRODUCTION: "Production",
     MODULE_FINANCE: "Finance",
     MODULE_SCHEDULERS: "Schedulers",
     MODULE_MIGRATION: "Migration",
@@ -163,6 +166,15 @@ PERMISSIONS: Tuple[str, ...] = tuple(
         *_expand("inventory.customer_prices", ("view", "edit")),
         *_expand("inventory.transfers", ("view", "create")),
         "inventory.reports.view",
+        # Production
+        "production.dashboard.view",
+        *_expand("production.recipes", ("view", "create", "edit")),
+        *_expand("production.batches", ("view", "create", "edit", "post")),
+        "production.day_book.view",
+        "production.margins.view",
+        "production.yield.view",
+        "production.reports.view",
+        *_expand("production.settings", ("view", "edit")),
         # Finance
         "finance.overview.view",
         *_expand("finance.accounts", ("view", "edit")),
@@ -332,6 +344,16 @@ PAGE_PERMISSIONS: Dict[str, str] = {
     "inventory-reports": "inventory.reports.view",
     "inventory-scheduled-reports": "schedulers.view",
     "settings-locations": "inventory.warehouses.view",
+    "production-dashboard": "production.dashboard.view",
+    "production-recipes": "production.recipes.view",
+    "production-batches": "production.batches.view",
+    "production-batch-detail": "production.batches.view",
+    "production-day-book": "production.day_book.view",
+    "production-margins": "production.margins.view",
+    "production-yield": "production.yield.view",
+    "production-reports": "production.reports.view",
+    "production-scheduled-reports": "schedulers.view",
+    "production-settings": "production.settings.view",
     "finance-overview": "finance.overview.view",
     "accounts": "finance.accounts.view",
     "account-detail": "finance.accounts.view",
@@ -349,6 +371,7 @@ PAGE_PERMISSIONS: Dict[str, str] = {
     "schedulers-sales": "schedulers.view",
     "schedulers-purchases": "schedulers.view",
     "schedulers-inventory": "schedulers.view",
+    "schedulers-production": "schedulers.view",
     "schedulers-boutique": "schedulers.view",
     "schedulers-projects": "schedulers.view",
     "data-migration": "migration.run",
@@ -477,6 +500,7 @@ ROLE_SALES_REP = "role_sales_rep"
 ROLE_SALES_MANAGER = "role_sales_manager"
 ROLE_CRM_ADMIN = "role_crm_admin"
 ROLE_COLLECTIONS = "role_collections"
+ROLE_PRODUCTION_MANAGER = "role_production_manager"
 
 # ProjectAppRole.value → system role id
 PROJECT_APP_ROLE_TO_ROLE_ID: Dict[str, str] = {
@@ -633,6 +657,9 @@ SYSTEM_ROLE_DEFINITIONS: Dict[str, Dict] = {
             "inventory.*",
             "purchases.grn.*",
             "parties.vendors.view",
+            "production.dashboard.view",
+            "production.recipes.view",
+            "production.batches.*",
         ),
     },
     ROLE_ACCOUNTANT: {
@@ -649,6 +676,12 @@ SYSTEM_ROLE_DEFINITIONS: Dict[str, Dict] = {
             "purchases.bills.view",
             "purchases.returns.view",
             "projects.ra_bills.view",
+            "production.dashboard.view",
+            "production.batches.view",
+            "production.day_book.view",
+            "production.margins.view",
+            "production.reports.view",
+            "production.settings.*",
             "projects.cost.view_internal",
         ),
     },
@@ -869,6 +902,25 @@ SYSTEM_ROLE_DEFINITIONS: Dict[str, Dict] = {
             "finance.overview.view",
             "finance.receipts.view",
             "finance.receipts.create",
+        ),
+    },
+    ROLE_PRODUCTION_MANAGER: {
+        "id": ROLE_PRODUCTION_MANAGER,
+        "name": "Production Manager",
+        "description": "Recipes, production batches, costing, posting, and reports.",
+        "permission_keys": _role_perms(
+            "core.*",
+            "production.*",
+            "inventory.overview.view",
+            "inventory.products.view",
+            "inventory.stock.view",
+            "inventory.stock_ledger.view",
+            "inventory.movements.view",
+            "purchases.overview.view",
+            "purchases.grn.view",
+            "sales.overview.view",
+            "sales.invoices.view",
+            "schedulers.view",
         ),
     },
     ROLE_SETTINGS_ADMIN: {

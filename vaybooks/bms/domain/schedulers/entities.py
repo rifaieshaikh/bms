@@ -19,6 +19,7 @@ DOMAIN_CRM = "crm"
 DOMAIN_SALES = "sales"
 DOMAIN_PURCHASES = "purchases"
 DOMAIN_INVENTORY = "inventory"
+DOMAIN_PRODUCTION = "production"
 DOMAIN_BOUTIQUE = "boutique"
 DOMAIN_PROJECTS = "projects"
 
@@ -28,6 +29,7 @@ DOMAIN_ORDER: tuple[str, ...] = (
     DOMAIN_SALES,
     DOMAIN_PURCHASES,
     DOMAIN_INVENTORY,
+    DOMAIN_PRODUCTION,
     DOMAIN_BOUTIQUE,
     DOMAIN_PROJECTS,
 )
@@ -37,6 +39,7 @@ DOMAIN_LABELS: Dict[str, str] = {
     DOMAIN_SALES: "Sales",
     DOMAIN_PURCHASES: "Purchases",
     DOMAIN_INVENTORY: "Inventory",
+    DOMAIN_PRODUCTION: "Production",
     DOMAIN_BOUTIQUE: "Boutique",
     DOMAIN_PROJECTS: "Projects",
 }
