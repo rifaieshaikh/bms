@@ -72,6 +72,7 @@ class ProjectRABill:
     claimed_by: str = ""
     certified_by: str = ""
     certified_at: Optional[datetime] = None
+    financial_year: str = ""
     id: str = field(default_factory=lambda: uuid4().hex)
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)

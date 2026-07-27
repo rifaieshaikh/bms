@@ -133,6 +133,12 @@ class FakeVoucherRepository:
     def list_by_order(self, order_id: str) -> List[Voucher]:
         return [v for v in self._store.values() if v.reference_order_id == order_id]
 
+    def find_by_invoice(self, invoice_id: str) -> Optional[Voucher]:
+        for voucher in self._store.values():
+            if getattr(voucher, "reference_invoice_id", None) == invoice_id:
+                return voucher
+        return None
+
     def list_all(self) -> List[Voucher]:
         return list(self._store.values())
 
@@ -432,8 +438,21 @@ class FakeCounterRepository:
         return f"{prefix}-{self._counters[counter_name]:04d}"
 
     def peek(self, counter_name: str) -> str:
+        if counter_name not in self._counters:
+            self._counters[counter_name] = 0
+            self._prefixes.setdefault(counter_name, counter_name[:3].upper())
         prefix = self._prefixes[counter_name]
         return f"{prefix}-{self._counters[counter_name] + 1:04d}"
+
+    def ensure_and_next(self, counter_name: str) -> int:
+        if counter_name not in self._counters:
+            self._counters[counter_name] = 0
+            self._prefixes.setdefault(counter_name, "")
+        self._counters[counter_name] += 1
+        return int(self._counters[counter_name])
+
+    def peek_next_value(self, counter_name: str) -> int:
+        return int(self._counters.get(counter_name, 0)) + 1
 
 
 class FakeProductCategoryRepository:

@@ -10,7 +10,6 @@ from vaybooks.bms.application.inventory.service import InventoryAppService
 from vaybooks.bms.domain.finance.accounting.entities import Voucher
 from vaybooks.bms.domain.finance.accounting.sales_parsing import (
     sales_amounts_from_lines,
-    sales_row_from_voucher,
 )
 from vaybooks.bms.domain.parties.customers.entities import Customer
 from vaybooks.bms.domain.sales.customer_prices import CustomerPriceEntry
@@ -41,6 +40,11 @@ from vaybooks.bms.domain.sales.sales_line_resolver import (
 )
 from vaybooks.bms.domain.sales.services import SalesDomainService
 from vaybooks.bms.domain.shared.date_utils import utc_now
+from vaybooks.bms.domain.shared.financial_year import (
+    format_invoice_number,
+    peek_invoice_number,
+    resolve_financial_year,
+)
 from vaybooks.bms.domain.shared.enums import (
     DeliveryNoteStatus,
     EstimateStatus,
@@ -295,6 +299,18 @@ class SalesAppService:
                                 f"{product.name}"
                             )
             taxable = round(qty * rate, 2)
+            mode = (row.get("discount_mode") or "flat").strip() or "flat"
+            if "discount_input" in row:
+                disc_input = float(row.get("discount_input") or 0)
+            else:
+                disc_input = float(row.get("discount") or 0)
+            if mode in {"percent", "%", "pct"}:
+                line_discount = round(
+                    taxable * min(max(disc_input, 0.0), 100.0) / 100.0, 2
+                )
+            else:
+                line_discount = round(min(max(disc_input, 0.0), taxable), 2)
+            taxable = round(max(taxable - line_discount, 0.0), 2)
             gst = compute_sales_gst(
                 taxable,
                 gst_rate,
@@ -303,6 +319,9 @@ class SalesAppService:
                 customer_state_code=customer_state,
             )
             row["rate"] = round(rate, 2)
+            row["discount"] = line_discount
+            row["discount_mode"] = "percent" if mode in {"percent", "%", "pct"} else "flat"
+            row["discount_input"] = round(disc_input, 2)
             row["hsn_sac"] = hsn_sac
             row["gst_rate"] = gst_rate if registered else 0.0
             row["taxable_amount"] = gst.taxable_amount
@@ -549,6 +568,41 @@ class SalesAppService:
         estimate.status = status
         estimate.updated_at = utc_now()
         return self._estimate_repo.save(estimate)
+
+    def set_quotation_status(
+        self, quotation_id: str, status: QuotationStatus
+    ) -> Quotation:
+        if not self._quotation_repo:
+            raise ValueError("Quotation repository is not configured")
+        quotation = self._quotation_repo.find_by_id(quotation_id)
+        if not quotation:
+            raise ValueError("Quotation not found")
+        if quotation.status in (
+            QuotationStatus.CANCELLED,
+            QuotationStatus.EXPIRED,
+            QuotationStatus.CONVERTED,
+        ):
+            raise ValueError(
+                "Cannot change status of a cancelled, expired, or converted quotation"
+            )
+        if status == QuotationStatus.CONVERTED:
+            raise ValueError("Use Convert to Sales Order")
+        quotation.status = status
+        quotation.updated_at = utc_now()
+        saved = self._quotation_repo.save(quotation)
+        if status in (QuotationStatus.SENT, QuotationStatus.ACCEPTED):
+            self._emit_crm_event(
+                "quotation_sent"
+                if status == QuotationStatus.SENT
+                else "quotation_confirmed",
+                source_module="sales",
+                source_type="quotation",
+                source_id=saved.id,
+                customer_id=saved.customer_id,
+                occurred_at=saved.updated_at,
+                status=saved.status.value,
+            )
+        return saved
 
     def convert_estimate_to_sales_order(
         self,
@@ -858,6 +912,74 @@ class SalesAppService:
             location_name=location_name,
         )
 
+    def _invoice_numbering_settings(self) -> tuple[str, str, int]:
+        """Return (mode, prefix, fy_start_month).
+
+        No business service → external (manual) so callers without settings keep
+        current behaviour. New BusinessProfile defaults remain ``app``.
+        """
+        if not self._business_service:
+            return "external", "INV/{FY}/", 4
+        profile = self._business_service.get_profile()
+        mode = (getattr(profile, "invoice_numbering_mode", None) or "external")
+        mode = str(mode).strip().lower()
+        if mode not in {"app", "external"}:
+            mode = "external"
+        prefix = (
+            getattr(profile, "invoice_number_prefix", None) or "INV/{FY}/"
+        ).strip() or "INV/{FY}/"
+        try:
+            fy_month = int(getattr(profile, "fy_start_month", 4) or 4)
+        except (TypeError, ValueError):
+            fy_month = 4
+        if fy_month < 1 or fy_month > 12:
+            fy_month = 4
+        return mode, prefix, fy_month
+
+    def sales_invoice_numbering_mode(self) -> str:
+        return self._invoice_numbering_settings()[0]
+
+    def resolve_voucher_financial_year(
+        self, voucher_date: Optional[date] = None
+    ) -> str:
+        _, _, fy_month = self._invoice_numbering_settings()
+        return resolve_financial_year(voucher_date or date.today(), fy_month)
+
+    def preview_next_sales_invoice_number(
+        self, voucher_date: Optional[date] = None
+    ) -> Optional[str]:
+        """Preview the next app-mode invoice number without consuming a counter."""
+        mode, prefix, fy_month = self._invoice_numbering_settings()
+        if mode != "app":
+            return None
+        fy = resolve_financial_year(voucher_date or date.today(), fy_month)
+        next_seq = self._counter_repo.peek_next_value(f"sales_invoice_number:{fy}")
+        return peek_invoice_number(prefix, fy, next_seq)
+
+    def _resolve_store_invoice_number(
+        self,
+        store_invoice_number: str,
+        *,
+        voucher_date: Optional[date],
+        existing_number: Optional[str] = None,
+        assign_new: bool = True,
+    ) -> tuple[str, str]:
+        """Return (store_invoice_number, financial_year)."""
+        mode, prefix, fy_month = self._invoice_numbering_settings()
+        fy = resolve_financial_year(voucher_date or date.today(), fy_month)
+        if mode == "app":
+            if assign_new:
+                seq = self._counter_repo.ensure_and_next(f"sales_invoice_number:{fy}")
+                return format_invoice_number(prefix, fy, seq), fy
+            kept = (existing_number or store_invoice_number or "").strip()
+            if not kept:
+                raise ValueError("Store invoice number is required")
+            return kept, fy
+        number = (store_invoice_number or "").strip()
+        if not number:
+            raise ValueError("Store invoice number is required")
+        return number, fy
+
     def create_sales_invoice(
         self,
         customer_account_id: str,
@@ -873,11 +995,15 @@ class SalesAppService:
         line_items: Optional[list[dict]] = None,
         invoice_discount: float = 0.0,
         document_content: Optional[DocumentContentSnapshot] = None,
+        credit_applied: float = 0.0,
+        advance_applied: float = 0.0,
     ) -> Voucher:
         sales_lines = None
         note = line_items_note
         if document_content is None:
             document_content = self.build_document_content("sales_invoice")
+        credit_applied = round(max(float(credit_applied or 0), 0.0), 2)
+        advance_applied = round(max(float(advance_applied or 0), 0.0), 2)
         if line_items:
             sales_lines, note, grand_total = self._prepare_sales_invoice(
                 customer_account_id,
@@ -887,20 +1013,28 @@ class SalesAppService:
             )
             gross_amount = grand_total
             discount_amount = 0.0
-            amount_received = round(min(amount_received, grand_total), 2)
+            amount_received = round(max(float(amount_received or 0), 0.0), 2)
 
+        resolved_number, financial_year = self._resolve_store_invoice_number(
+            store_invoice_number,
+            voucher_date=voucher_date,
+            assign_new=True,
+        )
         voucher = self._accounting.create_cash_sales_invoice(
             customer_account_id=customer_account_id,
             store_account_id=store_account_id,
             gross_amount=gross_amount,
             discount_amount=discount_amount,
             amount_received=amount_received,
-            store_invoice_number=store_invoice_number,
+            store_invoice_number=resolved_number,
             line_items_note=note,
             voucher_date=voucher_date,
             reference_so_id=reference_so_id,
             reference_dn_id=reference_dn_id,
             sales_lines=sales_lines,
+            financial_year=financial_year,
+            credit_applied=credit_applied,
+            advance_applied=advance_applied,
         )
         if reference_dn_id:
             dn = self._dn_repo.find_by_id(reference_dn_id)
@@ -917,7 +1051,7 @@ class SalesAppService:
             self._record_customer_prices_from_invoice(
                 customer_account_id=customer_account_id,
                 voucher_id=voucher.id,
-                store_invoice_number=store_invoice_number,
+                store_invoice_number=resolved_number,
                 voucher_date=voucher.voucher_date,
                 line_items=line_items,
             )
@@ -946,6 +1080,8 @@ class SalesAppService:
         line_items_note: str = "",
         voucher_date: Optional[date] = None,
         invoice_discount: float = 0.0,
+        credit_applied: float = 0.0,
+        advance_applied: float = 0.0,
     ) -> Voucher:
         line_discount_total = round(discount_amount - invoice_discount, 2)
         if line_discount_total < 0:
@@ -961,6 +1097,8 @@ class SalesAppService:
             voucher_date=voucher_date,
             line_items=line_items,
             invoice_discount=invoice_discount,
+            credit_applied=credit_applied,
+            advance_applied=advance_applied,
         )
 
     def convert_sales_order_to_invoice(
@@ -989,12 +1127,37 @@ class SalesAppService:
         for line in order.lines:
             remaining = round(line.qty_ordered - line.qty_invoiced, 2)
             if remaining > 0:
+                mode = getattr(line, "discount_mode", "flat") or "flat"
+                disc_input = float(
+                    getattr(line, "discount_input", None)
+                    if getattr(line, "discount_input", None) is not None
+                    else getattr(line, "discount", 0)
+                    or 0
+                )
+                if mode in {"percent", "%", "pct"}:
+                    line_discount = round(
+                        remaining
+                        * float(line.rate or 0)
+                        * min(max(disc_input, 0.0), 100.0)
+                        / 100.0,
+                        2,
+                    )
+                else:
+                    # Flat: proportion of remaining qty vs ordered
+                    line_discount = round(
+                        float(getattr(line, "discount", 0) or 0)
+                        * (remaining / line.qty_ordered if line.qty_ordered else 0),
+                        2,
+                    )
                 raw_lines.append(
                     {
                         "product_id": line.product_id,
                         "description": line.product_name,
                         "qty": remaining,
                         "rate": line.rate,
+                        "discount": line_discount,
+                        "discount_mode": mode,
+                        "discount_input": disc_input,
                     }
                 )
         if not raw_lines:
@@ -1446,9 +1609,14 @@ class SalesAppService:
     def list_sales_invoices(self) -> list[dict]:
         discount = self._accounting.get_discount_account()
         discount_id = discount.id if discount else None
+        settlement_map = self._accounting.invoice_settlement_map()
         rows = []
         for voucher in self._accounting.list_vouchers_by_type(VoucherType.SALES_INVOICE):
-            row = sales_row_from_voucher(voucher, discount_id)
+            row = self._accounting.enrich_sales_invoice_row(
+                voucher,
+                discount_account_id=discount_id,
+                settlement_map=settlement_map,
+            )
             row["reference_so_id"] = getattr(voucher, "reference_so_id", None)
             row["reference_dn_id"] = getattr(voucher, "reference_dn_id", None)
             row["reference_project_id"] = getattr(voucher, "reference_project_id", None)
@@ -1512,7 +1680,12 @@ class SalesAppService:
             return None
         discount = self._accounting.get_discount_account()
         discount_id = discount.id if discount else None
-        row = sales_row_from_voucher(voucher, discount_id)
+        settlement_map = self._accounting.invoice_settlement_map()
+        row = self._accounting.enrich_sales_invoice_row(
+            voucher,
+            discount_account_id=discount_id,
+            settlement_map=settlement_map,
+        )
         row["reference_so_id"] = getattr(voucher, "reference_so_id", None)
         row["reference_dn_id"] = getattr(voucher, "reference_dn_id", None)
         row["reference_project_id"] = getattr(voucher, "reference_project_id", None)
@@ -1532,6 +1705,8 @@ class SalesAppService:
         custom_values: Optional[dict] = None,
         bank_account_id: Optional[str] = None,
         terms_and_conditions: Optional[str] = None,
+        credit_applied: float = 0.0,
+        advance_applied: float = 0.0,
     ) -> Voucher:
         old = self._accounting.get_voucher(voucher_id)
         if not old or old.voucher_type != VoucherType.SALES_INVOICE:
@@ -1589,18 +1764,32 @@ class SalesAppService:
                         raise ValueError(
                             f"Invoice quantity exceeds Sales Order quantity for {product_id}"
                         )
+        from vaybooks.bms.domain.finance.accounting.sales_parsing import (
+            parse_store_invoice_number,
+        )
+
+        existing_number = parse_store_invoice_number(old.description or "")
+        resolved_number, financial_year = self._resolve_store_invoice_number(
+            store_invoice_number,
+            voucher_date=voucher_date,
+            existing_number=existing_number,
+            assign_new=False,
+        )
         voucher = self._accounting.update_cash_sales_invoice(
             voucher_id=voucher_id,
             customer_account_id=customer_account_id,
             store_account_id=store_account_id,
             gross_amount=grand_total,
             discount_amount=0.0,
-            amount_received=min(amount_received, grand_total),
-            store_invoice_number=store_invoice_number,
+            amount_received=round(max(float(amount_received or 0), 0.0), 2),
+            store_invoice_number=resolved_number,
             line_items_note=note,
             voucher_date=voucher_date,
             sales_lines=sales_lines,
             allow_erp_linked=True,
+            financial_year=financial_year,
+            credit_applied=round(max(float(credit_applied or 0), 0.0), 2),
+            advance_applied=round(max(float(advance_applied or 0), 0.0), 2),
         )
         if not old.reference_dn_id:
             self._inventory.reverse_movements_by_reference(voucher_id)
@@ -1611,7 +1800,7 @@ class SalesAppService:
         self._record_customer_prices_from_invoice(
             customer_account_id=customer_account_id,
             voucher_id=voucher.id,
-            store_invoice_number=store_invoice_number,
+            store_invoice_number=resolved_number,
             voucher_date=voucher.voucher_date,
             line_items=line_items,
             replace_voucher=True,

@@ -45,6 +45,7 @@ class MongoProjectProformaRepository:
             "description": proforma.description,
             "status": proforma.status,
             "lines": [self._line_to_doc(line) for line in proforma.lines],
+            "financial_year": proforma.financial_year or "",
             "created_at": proforma.created_at,
         }
 
@@ -58,6 +59,7 @@ class MongoProjectProformaRepository:
             description=doc.get("description", ""),
             status=doc.get("status", "Draft"),
             lines=[self._line_from_doc(line) for line in doc.get("lines", [])],
+            financial_year=doc.get("financial_year", "") or "",
             created_at=doc.get("created_at", datetime.utcnow()),
         )
 

@@ -25,6 +25,9 @@ class InMemoryCustomerRepository:
         return self._store.get(customer_id)
 
     def find_by_phone(self, phone: str) -> Optional[Customer]:
+        phone = (phone or "").strip()
+        if not phone:
+            return None
         for customer in self._store.values():
             if customer.phone_number == phone:
                 return customer
@@ -143,3 +146,80 @@ def test_update_allows_same_customer_phone():
         _customer_input(customer_name="Ananya Rao Updated"),
     )
     assert updated.customer_name == "Ananya Rao Updated"
+
+
+def test_create_phone_only_when_name_optional():
+    repo = InMemoryCustomerRepository()
+    service = CustomerDomainService(repo)
+    customer = service.create(
+        CustomerInput(customer_name="", phone_number="9876543210"),
+        require_name=False,
+        require_phone=True,
+    )
+    assert customer.customer_name == ""
+    assert customer.phone_number == "9876543210"
+
+
+def test_create_name_only_when_phone_optional():
+    repo = InMemoryCustomerRepository()
+    service = CustomerDomainService(repo)
+    customer = service.create(
+        CustomerInput(customer_name="Walk-in", phone_number=""),
+        require_name=True,
+        require_phone=False,
+    )
+    assert customer.customer_name == "Walk-in"
+    assert customer.phone_number == ""
+
+
+def test_create_rejects_blank_identity_even_when_both_optional():
+    repo = InMemoryCustomerRepository()
+    service = CustomerDomainService(repo)
+    customer = service.create(
+        CustomerInput(customer_name="", phone_number=""),
+        require_name=False,
+        require_phone=False,
+    )
+    assert customer.customer_name == ""
+    assert customer.phone_number == ""
+
+
+
+def test_find_or_create_creates_when_phone_unknown_and_name_empty():
+    repo = InMemoryCustomerRepository()
+    service = CustomerDomainService(repo)
+    customer = service.find_or_create(
+        "",
+        "9000000002",
+        require_name=False,
+        require_phone=True,
+    )
+    assert customer.phone_number == "9000000002"
+    assert customer.customer_name == ""
+    assert len(repo.list_all()) == 1
+
+
+def test_find_or_create_returns_existing_by_phone():
+    repo = InMemoryCustomerRepository()
+    service = CustomerDomainService(repo)
+    first = service.create(_customer_input())
+    found = service.find_or_create("Different", "9876543210")
+    assert found.id == first.id
+    assert found.customer_name == "Ananya Rao"
+    assert len(repo.list_all()) == 1
+
+
+def test_multiple_customers_without_phone_allowed():
+    repo = InMemoryCustomerRepository()
+    service = CustomerDomainService(repo)
+    a = service.create(
+        CustomerInput(customer_name="A", phone_number=""),
+        require_phone=False,
+    )
+    b = service.create(
+        CustomerInput(customer_name="B", phone_number=""),
+        require_phone=False,
+    )
+    assert a.id != b.id
+    assert len(repo.list_all()) == 2
+

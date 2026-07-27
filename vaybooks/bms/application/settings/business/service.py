@@ -48,6 +48,11 @@ class BusinessAppService:
         pan: str = "",
         registration_type: VendorRegistrationType = VendorRegistrationType.UNREGISTERED,
         composition_tax_rate: float = 1.0,
+        require_customer_name: bool = True,
+        require_customer_phone: bool = True,
+        invoice_numbering_mode: str = "app",
+        invoice_number_prefix: str = "INV/{FY}/",
+        fy_start_month: int = 4,
     ) -> BusinessProfile:
         legal_name = legal_name.strip()
         trade_name = trade_name.strip()
@@ -77,6 +82,16 @@ class BusinessAppService:
         if composition_rate < 0 or composition_rate > 100:
             raise ValidationError("Composition GST rate must be between 0 and 100")
 
+        mode = (invoice_numbering_mode or "app").strip().lower()
+        if mode not in {"app", "external"}:
+            raise ValidationError("Invoice numbering mode must be 'app' or 'external'")
+        prefix = (invoice_number_prefix or "").strip() or "INV/{FY}/"
+        if mode == "app" and not prefix:
+            raise ValidationError("Invoice number prefix is required for app numbering")
+        fy_month = int(fy_start_month or 4)
+        if fy_month < 1 or fy_month > 12:
+            raise ValidationError("Financial year start month must be between 1 and 12")
+
         profile = self.get_profile()
         profile.update(
             legal_name=legal_name,
@@ -93,6 +108,11 @@ class BusinessAppService:
             pan=pin,
             registration_type=registration_type,
             composition_tax_rate=composition_rate,
+            require_customer_name=bool(require_customer_name),
+            require_customer_phone=bool(require_customer_phone),
+            invoice_numbering_mode=mode,
+            invoice_number_prefix=prefix,
+            fy_start_month=fy_month,
         )
         return self._repo.save(profile)
 

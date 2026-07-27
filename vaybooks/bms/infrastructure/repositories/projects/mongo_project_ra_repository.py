@@ -77,6 +77,7 @@ class MongoProjectRABillRepository:
             "claimed_by": ra_bill.claimed_by,
             "certified_by": ra_bill.certified_by,
             "certified_at": ra_bill.certified_at,
+            "financial_year": ra_bill.financial_year or "",
             "created_at": ra_bill.created_at,
             "updated_at": ra_bill.updated_at,
         }
@@ -126,6 +127,7 @@ class MongoProjectRABillRepository:
             claimed_by=doc.get("claimed_by", ""),
             certified_by=doc.get("certified_by", ""),
             certified_at=doc.get("certified_at"),
+            financial_year=doc.get("financial_year", "") or "",
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
         )

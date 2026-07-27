@@ -5,6 +5,9 @@ from __future__ import annotations
 import streamlit as st
 
 from vaybooks.bms.ui import navigation
+from vaybooks.bms.ui.components.sales.invoice_number_field import (
+    render_store_invoice_number_field,
+)
 from vaybooks.bms.ui.components.sales.priced_document_form import (
     render_priced_document_form,
 )
@@ -165,8 +168,9 @@ def _estimate_invoice_dialog(services: dict) -> None:
         format_func=lambda account_id: store_by_id[account_id].account_name,
         key=f"{ESTIMATE_INVOICE_DIALOG}_store",
     )
-    invoice_number = st.text_input(
-        "Store invoice number", key=f"{ESTIMATE_INVOICE_DIALOG}_number"
+    invoice_number = render_store_invoice_number_field(
+        sales,
+        key=f"{ESTIMATE_INVOICE_DIALOG}_number",
     )
     received = st.number_input(
         "Amount received",
@@ -178,7 +182,10 @@ def _estimate_invoice_dialog(services: dict) -> None:
         "Create invoice", type="primary", key=f"{ESTIMATE_INVOICE_DIALOG}_save"
     ):
         try:
-            if not invoice_number.strip():
+            if (
+                sales.sales_invoice_numbering_mode() == "external"
+                and not invoice_number.strip()
+            ):
                 raise ValueError("Store invoice number is required")
             voucher = sales.convert_estimate_to_invoice(
                 estimate.id,

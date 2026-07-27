@@ -46,6 +46,14 @@ class MongoSalesOrderRepository:
             "qty_delivered": line.qty_delivered,
             "qty_invoiced": line.qty_invoiced,
             "rate": line.rate,
+            "discount": float(getattr(line, "discount", 0) or 0),
+            "discount_mode": getattr(line, "discount_mode", "flat") or "flat",
+            "discount_input": float(
+                getattr(line, "discount_input", None)
+                if getattr(line, "discount_input", None) is not None
+                else getattr(line, "discount", 0)
+                or 0
+            ),
             "hsn_sac": line.hsn_sac,
             "gst_rate": line.gst_rate,
             "taxable_amount": line.taxable_amount,
@@ -64,6 +72,14 @@ class MongoSalesOrderRepository:
             qty_delivered=float(doc.get("qty_delivered") or 0),
             qty_invoiced=float(doc.get("qty_invoiced") or 0),
             rate=float(doc.get("rate") or 0),
+            discount=float(doc.get("discount") or 0),
+            discount_mode=doc.get("discount_mode", "flat") or "flat",
+            discount_input=float(
+                doc.get("discount_input")
+                if doc.get("discount_input") is not None
+                else doc.get("discount")
+                or 0
+            ),
             hsn_sac=doc.get("hsn_sac", ""),
             gst_rate=float(doc.get("gst_rate") or 0),
             taxable_amount=float(doc.get("taxable_amount") or 0),

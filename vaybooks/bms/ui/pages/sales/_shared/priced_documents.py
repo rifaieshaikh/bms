@@ -173,8 +173,6 @@ def render_detail(services: dict, document_type: str) -> None:
         st.error(f"Could not generate PDF: {exc}")
 
     terminal = {"Cancelled", "Expired", "Converted"}
-    if not is_estimate:
-        terminal.add("Rejected")
     can_edit = document.status.value not in terminal
 
     can_convert_quote = (
@@ -226,38 +224,44 @@ def render_detail(services: dict, document_type: str) -> None:
         )
     clicked = document_actions(actions, suffix=f"{document_type}_{document.id}")
 
-    if is_estimate and can_edit:
+    if can_edit:
+        status_enum = EstimateStatus if is_estimate else QuotationStatus
+        set_status = (
+            services["sales"].set_estimate_status
+            if is_estimate
+            else services["sales"].set_quotation_status
+        )
         status_actions = []
-        if document.status == EstimateStatus.DRAFT:
+        if document.status == status_enum.DRAFT:
             status_actions.extend(
                 [
-                    ("Mark as Sent", EstimateStatus.SENT, "status_sent"),
-                    ("Accept", EstimateStatus.ACCEPTED, "status_accept"),
-                    ("Reject", EstimateStatus.REJECTED, "status_reject"),
+                    ("Mark as Sent", status_enum.SENT, "status_sent"),
+                    ("Accept", status_enum.ACCEPTED, "status_accept"),
+                    ("Reject", status_enum.REJECTED, "status_reject"),
                 ]
             )
-        elif document.status == EstimateStatus.SENT:
+        elif document.status == status_enum.SENT:
             status_actions.extend(
                 [
-                    ("Accept", EstimateStatus.ACCEPTED, "status_accept"),
-                    ("Reject", EstimateStatus.REJECTED, "status_reject"),
+                    ("Accept", status_enum.ACCEPTED, "status_accept"),
+                    ("Reject", status_enum.REJECTED, "status_reject"),
                 ]
             )
-        elif document.status == EstimateStatus.ACCEPTED:
+        elif document.status == status_enum.ACCEPTED:
             status_actions.append(
-                ("Mark as Sent", EstimateStatus.SENT, "status_sent")
+                ("Mark as Sent", status_enum.SENT, "status_sent")
             )
-        elif document.status == EstimateStatus.REJECTED:
+        elif document.status == status_enum.REJECTED:
             status_actions.append(
-                ("Reopen as Draft", EstimateStatus.DRAFT, "status_draft")
+                ("Reopen as Draft", status_enum.DRAFT, "status_draft")
             )
         if document.status not in (
-            EstimateStatus.CANCELLED,
-            EstimateStatus.EXPIRED,
-            EstimateStatus.CONVERTED,
+            status_enum.CANCELLED,
+            status_enum.EXPIRED,
+            status_enum.CONVERTED,
         ):
             status_actions.append(
-                ("Cancel", EstimateStatus.CANCELLED, "status_cancel")
+                ("Cancel", status_enum.CANCELLED, "status_cancel")
             )
         if status_actions:
             st.caption("Change status")
@@ -271,15 +275,12 @@ def render_detail(services: dict, document_type: str) -> None:
             for label, new_status, key in status_actions:
                 if status_clicked.get(key):
                     try:
-                        services["sales"].set_estimate_status(
-                            document.id, new_status
-                        )
+                        set_status(document.id, new_status)
                         st.success(f"Status updated to {new_status.value}")
                         st.rerun()
                     except Exception as exc:
                         st.error(str(exc))
                     break
-
     if clicked.get("edit"):
         if not can_edit:
             st.warning("This document can no longer be edited.")

@@ -20,10 +20,19 @@ from vaybooks.bms.ui.components.sales.sales_line_ui import (
     line_items_total,
     line_tax_profile,
     preview_sales_line_gst,
+    sales_tax_column_labels,
+    sales_tax_display_mode,
     tax_summary_from_previews,
 )
 from vaybooks.bms.ui.components.common.dialog_state import reset_dialog_state
 from vaybooks.bms.ui.auth.session import require_specific_location
+from vaybooks.bms.ui.components.sales.discount_controls import (
+    eligible_invoice_discount_base,
+    render_invoice_level_discount,
+)
+from vaybooks.bms.ui.components.sales.invoice_number_field import (
+    render_store_invoice_number_field,
+)
 from vaybooks.bms.ui.components.sales.sales_lines_entry_table import (
     entry_table_focus_chain,
     entry_table_focus_columns,
@@ -138,21 +147,20 @@ def sales_record_dialog(services: dict) -> None:
     default_store = store_accounts[0].id
 
     inv_cols = st.columns(2)
-    store_number = inv_cols[0].text_input(
-        "Store invoice number",
-        key=f"{SALES_RECORD_DIALOG}_store_no",
-    )
-    inv_date = inv_cols[1].date_input(
-        "Date",
-        value=date.today(),
-        key=f"{SALES_RECORD_DIALOG}_date",
-    )
-    store_name = st.selectbox(
-        "Cash / Bank account",
-        store_names,
-        index=_index_of(store_opts, default_store),
-        key=f"{SALES_RECORD_DIALOG}_store",
-    )
+    date_key = f"{SALES_RECORD_DIALOG}_date"
+    preview_date = st.session_state.get(date_key) or date.today()
+    with inv_cols[0]:
+        store_number = render_store_invoice_number_field(
+            services.get("sales"),
+            key=f"{SALES_RECORD_DIALOG}_store_no",
+            voucher_date=preview_date if isinstance(preview_date, date) else date.today(),
+        )
+    with inv_cols[1]:
+        inv_date = st.date_input(
+            "Date",
+            value=date.today(),
+            key=date_key,
+        )
     products = inventory_service.list_products(active_only=True) if inventory_service else []
     if not products:
         st.error("Add inventory products first.")
@@ -181,6 +189,13 @@ def sales_record_dialog(services: dict) -> None:
             "qty": float(row.get("qty") or 0),
             "rate": float(row.get("rate") or 0),
             "discount": float(row.get("discount") or 0),
+            "discount_mode": row.get("discount_mode") or "flat",
+            "discount_input": float(
+                row.get("discount_input")
+                if row.get("discount_input") is not None
+                else row.get("discount")
+                or 0
+            ),
             "product_id": row.get("product_id"),
         }
         for row in editor_lines
@@ -216,54 +231,148 @@ def sales_record_dialog(services: dict) -> None:
 
     inv_disc_key = f"{SALES_RECORD_DIALOG}_inv_disc"
     received_key = f"{SALES_RECORD_DIALOG}_received"
+    store_key = f"{SALES_RECORD_DIALOG}_store"
     save_key = f"{SALES_RECORD_DIALOG}_save"
     cancel_key = f"{SALES_RECORD_DIALOG}_cancel"
     date_key = f"{SALES_RECORD_DIALOG}_date"
     customer_name_key = f"{SALES_RECORD_DIALOG}_customer_name"
 
-    inv_disc_cols = st.columns(2)
-    invoice_discount = inv_disc_cols[0].number_input(
-        "Invoice-level discount (₹)",
-        min_value=0.0,
-        value=0.0,
-        key=inv_disc_key,
+    inv_disc_base = eligible_invoice_discount_base(line_items)
+    invoice_discount = render_invoice_level_discount(
+        key_prefix=inv_disc_key,
+        base_amount=inv_disc_base,
     )
-    max_inv_disc = max(taxable_sub - line_discount_total, 0.0) if taxable_sub else max(
-        gross - line_discount_total, 0.0
-    )
-    invoice_discount = round(min(max(invoice_discount, 0.0), max_inv_disc), 2)
     total_discount = round(line_discount_total + invoice_discount, 2)
 
-    if invoice_discount > 0 and show_gst and taxable_sub > 0:
-        factor = round((taxable_sub - invoice_discount) / taxable_sub, 6)
-        adjusted_grand = round(grand_before_inv_disc * factor, 2)
-        if tax_summary:
-            adjusted_tax = round(tax_summary.get("total_tax", 0) * factor, 2)
-            net_due = round(taxable_sub - invoice_discount + adjusted_tax, 2)
+    if invoice_discount > 0 and show_gst and inv_disc_base > 0:
+        # Approximate GST net: shrink eligible portion of taxable, keep line-discounted lines.
+        factor = round((inv_disc_base - invoice_discount) / inv_disc_base, 6)
+        eligible_taxable = round(
+            sum(
+                float(p.get("taxable_amount") or 0)
+                for row, p in zip(line_items, gst_previews)
+                if float(row.get("discount") or 0) <= 0.01
+            ),
+            2,
+        ) if gst_previews and len(gst_previews) == len(line_items) else inv_disc_base
+        other_taxable = round(max(taxable_sub - eligible_taxable, 0.0), 2)
+        adjusted_eligible = round(eligible_taxable * factor, 2)
+        adjusted_taxable = round(other_taxable + adjusted_eligible, 2)
+        if tax_summary and taxable_sub > 0:
+            tax_factor = round(adjusted_taxable / taxable_sub, 6) if taxable_sub else 1.0
+            adjusted_tax = round(tax_summary.get("total_tax", 0) * tax_factor, 2)
+            net_due = round(adjusted_taxable + adjusted_tax, 2)
         else:
-            net_due = round(adjusted_grand - invoice_discount, 2)
+            net_due = round(max(grand_before_inv_disc - invoice_discount, 0.0), 2)
+    elif invoice_discount > 0:
+        net_due = round(max(grand_before_inv_disc - invoice_discount, 0.0), 2)
     else:
         net_due = round(max(grand_before_inv_disc - invoice_discount, 0.0), 2)
 
-    received = st.number_input(
-        "Amount received now",
-        min_value=0.0,
-        max_value=float(net_due) if net_due > 0 else 0.0,
-        value=float(net_due),
-        key=received_key,
+    credit_available = 0.0
+    advance_available = 0.0
+    if matched_customer:
+        cust_acct = accounting_service.get_customer_account(matched_customer.id)
+        if cust_acct:
+            credit_available = accounting_service.customer_credit_balance(cust_acct.id)
+            advance_available = accounting_service.get_customer_unapplied_advance(
+                cust_acct.id, general_only=True
+            )
+
+    credit_key = f"{SALES_RECORD_DIALOG}_credit_applied"
+    default_credit = round(min(credit_available, net_due), 2) if credit_available > 0 else 0.0
+    credit_applied = 0.0
+    if credit_available > 0:
+        credit_applied = st.number_input(
+            "Apply customer credit",
+            min_value=0.0,
+            max_value=float(min(credit_available, net_due)) if net_due > 0 else 0.0,
+            value=float(default_credit),
+            key=credit_key,
+            help=f"Available credit ₹{credit_available:,.2f}",
+        )
+        st.caption(
+            f"Available credit: ₹{credit_available:,.2f} · "
+            f"Collect cash for remainder after credit."
+        )
+
+    after_credit = round(max(net_due - float(credit_applied or 0), 0.0), 2)
+    advance_key = f"{SALES_RECORD_DIALOG}_advance_applied"
+    default_advance = (
+        round(min(advance_available, after_credit), 2) if advance_available > 0 else 0.0
     )
-    balance = round(net_due - received, 2)
+    advance_applied = 0.0
+    if advance_available > 0:
+        advance_applied = st.number_input(
+            "Apply customer advance",
+            min_value=0.0,
+            max_value=float(min(advance_available, after_credit))
+            if after_credit > 0
+            else 0.0,
+            value=float(default_advance),
+            key=advance_key,
+            help=f"Available advance ₹{advance_available:,.2f} (general, not order-linked)",
+        )
+        st.caption(
+            f"Available advance: ₹{advance_available:,.2f} · "
+            f"Settles from Advance From Customers."
+        )
+
+    cash_due = round(
+        max(net_due - float(credit_applied or 0) - float(advance_applied or 0), 0.0),
+        2,
+    )
+    if received_key not in st.session_state:
+        st.session_state[received_key] = float(cash_due)
+
+    pay_cols = st.columns(2)
+    with pay_cols[0]:
+        received = st.number_input(
+            "Amount received now",
+            min_value=0.0,
+            key=received_key,
+            help="You can receive more than due; excess stays as customer credit.",
+        )
+    with pay_cols[1]:
+        store_name = st.selectbox(
+            "Cash / Bank account",
+            store_names,
+            index=_index_of(store_opts, default_store),
+            key=store_key,
+        )
+    overpay = round(max(float(received or 0) - cash_due, 0.0), 2)
+    balance = round(cash_due - float(received or 0), 2)
+    if overpay > 0:
+        st.caption(
+            f"Overpay ₹{overpay:,.2f} will be kept as customer credit "
+            f"(invoice settles ₹{cash_due:,.2f})."
+        )
+    elif balance > 0.01:
+        st.caption(f"Balance due after this payment: ₹{balance:,.2f}")
 
     with st.container(border=True):
         st.markdown("**Summary**")
         if show_gst:
-            m = st.columns(6)
+            tax_mode = sales_tax_display_mode(
+                business_registered=True,
+                business_state_code=business_state,
+                customer_state_code=customer_state or "",
+            )
+            tax_labels = sales_tax_column_labels(tax_mode)
+            m = st.columns(3 + len(tax_labels))
             m[0].metric("Subtotal (taxable)", f"₹{taxable_sub:,.0f}")
-            m[1].metric("CGST", f"₹{tax_summary.get('cgst', 0):,.0f}")
-            m[2].metric("SGST", f"₹{tax_summary.get('sgst', 0):,.0f}")
-            m[3].metric("IGST", f"₹{tax_summary.get('igst', 0):,.0f}")
-            m[4].metric("Grand total", f"₹{grand_before_inv_disc:,.0f}")
-            m[5].metric("Net due", f"₹{net_due:,.0f}")
+            key_by_label = {
+                "CGST": "cgst",
+                "SGST": "sgst",
+                "UTGST": "utgst",
+                "IGST": "igst",
+            }
+            for i, label in enumerate(tax_labels):
+                m[1 + i].metric(
+                    label, f"₹{tax_summary.get(key_by_label[label], 0):,.0f}"
+                )
+            m[-2].metric("Grand total", f"₹{grand_before_inv_disc:,.0f}")
+            m[-1].metric("Net due", f"₹{net_due:,.0f}")
             if total_discount > 0:
                 st.caption(f"Discount (line + invoice): ₹{total_discount:,.0f}")
         else:
@@ -290,13 +399,19 @@ def sales_record_dialog(services: dict) -> None:
     row_columns = entry_table_focus_columns(SALES_RECORD_DIALOG)
     grid_roles = entry_table_grid_roles(SALES_RECORD_DIALOG)
     restore = st.session_state.pop(SALES_RECORD_FOCUS_KEY, None)
+    inv_disc_mode = st.session_state.get(f"{inv_disc_key}_mode", "₹")
+    inv_disc_focus = (
+        f"{inv_disc_key}_pct" if inv_disc_mode == "%" else f"{inv_disc_key}_flat"
+    )
     get_strategy(SALES_INVOICE_FOCUS_STRATEGY).inject(
         chain=[
             customer_name_key,
             date_key,
             *row_chain,
-            inv_disc_key,
+            f"{inv_disc_key}_mode",
+            inv_disc_focus,
             received_key,
+            store_key,
             save_key,
             cancel_key,
         ],
@@ -342,6 +457,8 @@ def sales_record_dialog(services: dict) -> None:
                     line_items,
                     voucher_date=inv_date,
                     invoice_discount=invoice_discount,
+                    credit_applied=float(credit_applied or 0),
+                    advance_applied=float(advance_applied or 0),
                 )
             else:
                 from vaybooks.bms.ui.components.sales.sales_invoice_form import serialize_line_items
@@ -356,6 +473,8 @@ def sales_record_dialog(services: dict) -> None:
                     store_number,
                     line_items_note=note,
                     voucher_date=inv_date,
+                    credit_applied=float(credit_applied or 0),
+                    advance_applied=float(advance_applied or 0),
                 )
                 if inventory_service:
                     inventory_service.apply_sales_movements(voucher.id, line_items)

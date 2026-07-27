@@ -17,8 +17,15 @@ def customer_card(
     customer: Customer, order_count: int, balance: float, key_prefix: str
 ) -> bool:
     with st.container(border=True):
-        st.markdown(f"### {customer.customer_name}")
-        st.write(f"\U0001f4de {customer.phone_number}")
+        display_name = (customer.customer_name or "").strip() or (
+            (customer.phone_number or "").strip() or "Unnamed customer"
+        )
+        st.markdown(f"### {display_name}")
+        phone = (customer.phone_number or "").strip()
+        if phone:
+            st.write(f"\U0001f4de {phone}")
+        else:
+            st.caption("No phone on file")
         if customer.gstin:
             st.caption(f"GSTIN: {customer.gstin}")
 

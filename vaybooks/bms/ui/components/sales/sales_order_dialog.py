@@ -89,12 +89,19 @@ def sales_order_dialog(services: dict) -> None:
     if supply_type == "B2C" and not customer_state:
         customer_state = business_state
     if show_gst:
+        from vaybooks.bms.ui.components.sales.sales_line_ui import sales_tax_display_mode
+
         if customer_state and business_state:
-            place = (
-                "Intra-state"
-                if customer_state == business_state
-                else "Inter-state (IGST)"
+            mode = sales_tax_display_mode(
+                business_registered=True,
+                business_state_code=business_state,
+                customer_state_code=customer_state,
             )
+            place = {
+                "cgst_sgst": "Intra-state (CGST + SGST)",
+                "cgst_utgst": "Intra-UT (CGST + UTGST)",
+                "igst": "Inter-state (IGST)",
+            }.get(mode, "GST")
             st.caption(f"Supply type: **{supply_type}** · {place}")
         else:
             st.caption(f"Supply type: **{supply_type}**")
@@ -122,7 +129,7 @@ def sales_order_dialog(services: dict) -> None:
         initial_lines=None,
         customer_id=selected_customer.id if selected_customer else None,
         use_customer_pricing=True,
-        show_discount=False,
+        show_discount=True,
         sales_service=sales,
         inventory_service=inventory,
         business_registered=show_gst,
@@ -170,6 +177,14 @@ def sales_order_dialog(services: dict) -> None:
                     "product_name": row.get("product_name") or "",
                     "qty_ordered": float(row.get("qty_ordered") or 0),
                     "rate": float(row.get("rate") or 0),
+                    "discount": float(row.get("discount") or 0),
+                    "discount_mode": row.get("discount_mode") or "flat",
+                    "discount_input": float(
+                        row.get("discount_input")
+                        if row.get("discount_input") is not None
+                        else row.get("discount")
+                        or 0
+                    ),
                 }
                 for row in lines
                 if row.get("product_id") and float(row.get("qty_ordered") or 0) > 0

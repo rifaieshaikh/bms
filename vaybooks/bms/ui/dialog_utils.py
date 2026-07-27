@@ -48,6 +48,8 @@ DIALOG_FLAG_PREFIXES = (
     "customer_add_dialog",
     "customer_edit_dialog",
     "customer_blacklist_dialog",
+    "customer_refund_dialog",
+    "customer_move_advance_dialog",
     "crm_lead_add_dialog",
     "crm_lead_edit_dialog",
     "crm_lead_assign_dialog",

@@ -276,3 +276,41 @@ class MongoProjectRepository:
             }
         )
         return [self._from_doc(d) for d in docs]
+
+    def count_by_customer(self, customer_id: str) -> int:
+        return self._collection.count_documents({"customer_id": customer_id})
+
+    def get_customer_summary(self, customer_id: str) -> dict:
+        """Project counts and contract value for one customer."""
+        active_statuses = [
+            ProjectStatus.ACTIVE.value,
+            ProjectStatus.PLANNED.value,
+            ProjectStatus.ON_HOLD.value,
+        ]
+        pipeline = [
+            {"$match": {"customer_id": customer_id}},
+            {
+                "$group": {
+                    "_id": None,
+                    "project_count": {"$sum": 1},
+                    "active_count": {
+                        "$sum": {
+                            "$cond": [
+                                {"$in": ["$status", active_statuses]},
+                                1,
+                                0,
+                            ]
+                        }
+                    },
+                    "contract_value": {
+                        "$sum": {"$ifNull": ["$contract_value", 0]}
+                    },
+                }
+            },
+        ]
+        row = next(iter(self._collection.aggregate(pipeline)), None) or {}
+        return {
+            "project_count": int(row.get("project_count") or 0),
+            "active_count": int(row.get("active_count") or 0),
+            "contract_value": round(float(row.get("contract_value") or 0), 2),
+        }

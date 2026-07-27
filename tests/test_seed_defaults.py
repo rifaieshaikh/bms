@@ -81,4 +81,11 @@ def test_default_accounts_include_activity_expense_buckets():
         "Embroidery Expense",
         "Salary Expense",
         "Discount Allowed",
+        "Settlement Expense",
     }.issubset(expense_names)
+
+
+def test_default_accounts_include_settlement_accounts():
+    by_name = {name: account_type for name, account_type, _ in DEFAULT_ACCOUNTS}
+    assert by_name["Settlement"].value == "Asset"
+    assert by_name["Settlement Expense"].value == "Expense"

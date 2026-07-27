@@ -42,6 +42,7 @@ class Voucher:
     description: str
     lines: List[VoucherLine]
     id: str = field(default_factory=lambda: uuid4().hex)
+    financial_year: str = ""
     reference_order_id: Optional[str] = None
     reference_invoice_id: Optional[str] = None
     reference_service_id: Optional[str] = None
@@ -76,8 +77,12 @@ class Voucher:
             for line in self.lines:
                 if line.debit_amount > 0 and line.description == "Cash/Bank received":
                     return line.debit_amount
+        if self.voucher_type == VoucherType.ADVANCE:
+            for line in self.lines:
+                if line.debit_amount > 0 and line.description == "Cash/Bank received":
+                    return line.debit_amount
+            return 0.0
         routed = (
-            VoucherType.ADVANCE,
             VoucherType.RECEIPT,
             VoucherType.REFUND,
             VoucherType.VENDOR_PAYMENT,

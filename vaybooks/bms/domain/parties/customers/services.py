@@ -14,17 +14,38 @@ class CustomerDomainService:
     def __init__(self, customer_repo: CustomerRepository):
         self._customer_repo = customer_repo
 
-    def create(self, customer_input: CustomerInput) -> Customer:
-        normalized = self._validate_and_normalize(customer_input)
+    def create(
+        self,
+        customer_input: CustomerInput,
+        *,
+        require_name: bool = True,
+        require_phone: bool = True,
+    ) -> Customer:
+        normalized = self._validate_and_normalize(
+            customer_input,
+            require_name=require_name,
+            require_phone=require_phone,
+        )
         self._check_duplicates(normalized, exclude_customer_id=None)
         customer = Customer.from_input(normalized)
         return self._customer_repo.save(customer)
 
-    def update(self, customer_id: str, customer_input: CustomerInput) -> Customer:
+    def update(
+        self,
+        customer_id: str,
+        customer_input: CustomerInput,
+        *,
+        require_name: bool = True,
+        require_phone: bool = True,
+    ) -> Customer:
         customer = self._customer_repo.find_by_id(customer_id)
         if not customer:
             raise ValidationError("Customer not found")
-        normalized = self._validate_and_normalize(customer_input)
+        normalized = self._validate_and_normalize(
+            customer_input,
+            require_name=require_name,
+            require_phone=require_phone,
+        )
         self._check_duplicates(normalized, exclude_customer_id=customer_id)
         customer.apply_input(normalized)
         return self._customer_repo.save(customer)
@@ -35,41 +56,53 @@ class CustomerDomainService:
         alternate_phone_number: Optional[str] = None,
         notes: str = "",
     ) -> Customer:
-        if not customer_name.strip():
-            raise ValidationError("Customer name is required")
-        customer = Customer(
-            customer_name=customer_name.strip(),
-            phone_number="",
-            alternate_phone_number=alternate_phone_number,
-            notes=notes,
+        """Create a customer with name only (phone optional path)."""
+        return self.create(
+            CustomerInput(
+                customer_name=customer_name,
+                phone_number="",
+                alternate_phone_number=alternate_phone_number,
+                notes=notes,
+            ),
+            require_name=True,
+            require_phone=False,
         )
-        return self._customer_repo.save(customer)
 
     def find_or_create(
         self,
         customer_name: str,
         phone_number: str,
+        *,
+        require_name: bool = True,
+        require_phone: bool = True,
         **kwargs,
     ) -> Customer:
-        if not customer_name.strip():
-            raise ValidationError("Customer name is required")
-        if not phone_number.strip():
-            raise ValidationError("Phone number is required")
-
-        existing = self._customer_repo.find_by_phone(phone_number.strip())
-        if existing:
-            return existing
+        phone = (phone_number or "").strip()
+        if phone:
+            existing = self._customer_repo.find_by_phone(phone)
+            if existing:
+                return existing
 
         customer_input = CustomerInput(
-            customer_name=customer_name,
-            phone_number=phone_number,
+            customer_name=customer_name or "",
+            phone_number=phone,
             alternate_phone_number=kwargs.get("alternate_phone_number"),
             address_line1=kwargs.get("address", ""),
             notes=kwargs.get("notes", ""),
         )
-        return self.create(customer_input)
+        return self.create(
+            customer_input,
+            require_name=require_name,
+            require_phone=require_phone,
+        )
 
-    def _validate_and_normalize(self, customer_input: CustomerInput) -> CustomerInput:
+    def _validate_and_normalize(
+        self,
+        customer_input: CustomerInput,
+        *,
+        require_name: bool = True,
+        require_phone: bool = True,
+    ) -> CustomerInput:
         normalized = normalize_party_fields(
             name=customer_input.customer_name,
             phone_number=customer_input.phone_number,
@@ -86,6 +119,9 @@ class CustomerDomainService:
             pan=customer_input.pan,
             registration_type=customer_input.registration_type,
             msme_number=customer_input.msme_number,
+            require_name=require_name,
+            require_phone=require_phone,
+            require_at_least_one_identity=False,
         )
         return CustomerInput(
             customer_name=normalized.name,
@@ -110,12 +146,15 @@ class CustomerDomainService:
     def _check_duplicates(
         self, customer_input: CustomerInput, exclude_customer_id: Optional[str]
     ) -> None:
-        existing_phone = self._customer_repo.find_by_phone(customer_input.phone_number)
-        if existing_phone and existing_phone.id != exclude_customer_id:
-            raise DuplicateCustomerError(
-                f"A customer with phone {customer_input.phone_number} already exists.",
-                existing_phone.id,
+        if (customer_input.phone_number or "").strip():
+            existing_phone = self._customer_repo.find_by_phone(
+                customer_input.phone_number
             )
+            if existing_phone and existing_phone.id != exclude_customer_id:
+                raise DuplicateCustomerError(
+                    f"A customer with phone {customer_input.phone_number} already exists.",
+                    existing_phone.id,
+                )
         if customer_input.gstin:
             existing_gstin = self._customer_repo.find_by_gstin(customer_input.gstin)
             if existing_gstin and existing_gstin.id != exclude_customer_id:

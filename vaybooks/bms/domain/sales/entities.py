@@ -19,6 +19,9 @@ class SalesOrderLine:
     product_id: str
     qty_ordered: float
     rate: float = 0.0
+    discount: float = 0.0
+    discount_mode: str = "flat"
+    discount_input: float = 0.0
     id: str = field(default_factory=lambda: uuid4().hex)
     product_name: str = ""
     qty_delivered: float = 0.0
@@ -40,7 +43,12 @@ class SalesOrderLine:
 
     @property
     def line_total(self) -> float:
-        base = self.taxable_amount or round(self.qty_ordered * self.rate, 2)
+        if self.taxable_amount:
+            base = self.taxable_amount
+        else:
+            gross = round(self.qty_ordered * self.rate, 2)
+            disc = round(min(max(self.discount, 0.0), gross), 2)
+            base = round(max(gross - disc, 0.0), 2)
         return round(base + self.total_tax, 2)
 
     @property

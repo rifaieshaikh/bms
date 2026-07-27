@@ -80,8 +80,17 @@ def _render_customer_step(services: dict) -> None:
             return
 
     st.subheader("Select or create customer")
+    preselect_id = st.session_state.pop("order_workspace_preselect_customer_id", None)
+    initial_customer = None
+    if preselect_id:
+        try:
+            initial_customer = customer_service.get_customer_detail(preselect_id)
+        except Exception:
+            initial_customer = None
     selection = render_customer_identity_selector(
-        customer_service, key_prefix="ws_cust"
+        customer_service,
+        key_prefix="ws_cust",
+        initial_customer=initial_customer,
     )
     notes = st.text_area("Order notes", key="ws_new_order_notes")
     etd = st.date_input(
@@ -90,16 +99,29 @@ def _render_customer_step(services: dict) -> None:
         key="ws_new_order_etd",
     )
     if st.button("Create draft order", type="primary"):
-        if not selection.customer_name or not selection.phone_number:
-            st.error("Customer name and mobile are required")
+        require_name, require_phone = True, True
+        if hasattr(customer_service, "identity_policy"):
+            require_name, require_phone = customer_service.identity_policy()
+        name = (selection.customer_name or "").strip()
+        phone = (selection.phone_number or "").strip()
+        if require_name and not name:
+            st.error("Customer name is required")
+            return
+        if require_phone and not phone:
+            st.error("Mobile number is required")
+            return
+        if not name and not phone:
+            st.error("Customer name or mobile is required")
             return
         try:
             order = order_service.create_draft_order(
-                customer_name=selection.customer_name,
-                phone_number=selection.phone_number,
+                customer_name=name,
+                phone_number=phone,
                 notes=notes,
                 expected_delivery_date=etd,
                 customer_id=selection.customer_id or None,
+                require_name=require_name,
+                require_phone=require_phone,
             )
             st.session_state[WORKSPACE_ORDER_ID] = order.id
             _set_step("Measurements")
@@ -768,12 +790,46 @@ def _render_advance_step(services: dict, order) -> None:
         value=order.expected_delivery_date or date.today() + timedelta(days=7),
         key="ws_adv_etd",
     )
+
+    customer_account = accounting.get_customer_account(order.customer_id)
+    credit_available = (
+        accounting.customer_credit_balance(customer_account.id)
+        if customer_account
+        else 0.0
+    )
+    if credit_available > 0:
+        st.info(
+            f"Customer credit available: **₹{credit_available:,.2f}**. "
+            "It can be moved to this order's advance (no cash)."
+        )
+        if st.button(
+            "Move credit to advance",
+            key="ws_adv_move_credit",
+            type="secondary",
+        ):
+            try:
+                saved, voucher = order_service.apply_customer_credit_as_order_advance(
+                    order.id
+                )
+                if voucher:
+                    st.session_state["ws_last_advance_voucher_id"] = voucher.id
+                    st.success(
+                        f"Moved ₹{voucher.lines[0].debit_amount:,.2f} credit "
+                        f"to advance for {saved.order_number}"
+                    )
+                else:
+                    st.info("No customer credit to move.")
+                st.rerun()
+            except Exception as exc:
+                st.error(str(exc))
+
     advance = st.number_input(
-        "Advance amount",
+        "Cash advance amount",
         min_value=0.0,
-        value=float(order.advance_amount or 0),
+        value=0.0,
         step=100.0,
         key="ws_adv_amt",
+        help="Additional cash/bank advance. Customer credit is moved separately above.",
     )
     cash_accounts = accounting.get_store_accounts()
     account_labels = {a.id: a.account_name for a in cash_accounts}
@@ -792,20 +848,25 @@ def _render_advance_step(services: dict, order) -> None:
     if cols[0].button("Save advance & ETD"):
         try:
             order_service.update_order_etd(order.id, etd)
-            saved, voucher = order_service.save_order_advance(
-                order.id, advance, receiving_id
-            )
-            st.session_state["ws_last_advance_voucher_id"] = (
-                voucher.id if voucher else None
-            )
+            if credit_available > 0:
+                order_service.apply_customer_credit_as_order_advance(order.id)
+            if advance > 0:
+                saved, voucher = order_service.record_cash_order_advance(
+                    order.id, advance, receiving_id
+                )
+                st.session_state["ws_last_advance_voucher_id"] = (
+                    voucher.id if voucher else None
+                )
             st.success("Saved")
             st.rerun()
         except Exception as exc:
             st.error(str(exc))
 
     voucher = order_service.find_advance_voucher(order.id)
+    refreshed = order_service.get_order_detail(order.id) or order
+    adv_amt = float(getattr(refreshed, "advance_amount", None) or 0)
     if voucher:
-        st.info(f"Advance voucher **{voucher.voucher_number}** · ₹{order.advance_amount:,.2f}")
+        st.info(f"Advance voucher **{voucher.voucher_number}** · ₹{adv_amt:,.2f}")
         try:
             from vaybooks.bms.infrastructure.pdf.advance_receipt_pdf import (
                 generate_advance_receipt_pdf,
@@ -814,7 +875,7 @@ def _render_advance_step(services: dict, order) -> None:
             business = services["business"].get_profile()
             customer = services["customers"].get_customer_detail(order.customer_id)
             pdf_bytes = generate_advance_receipt_pdf(
-                voucher, order, customer, business
+                voucher, refreshed, customer, business
             )
             st.download_button(
                 "Download advance receipt",
@@ -825,12 +886,18 @@ def _render_advance_step(services: dict, order) -> None:
             )
         except Exception as exc:
             st.caption(f"Receipt print unavailable: {exc}")
+    elif adv_amt > 0:
+        st.info(f"Order advance recorded: ₹{adv_amt:,.2f}")
 
     if cols[1].button("Confirm order", type="primary"):
         try:
             order_service.update_order_etd(order.id, etd)
+            if credit_available > 0:
+                order_service.apply_customer_credit_as_order_advance(order.id)
             if advance > 0:
-                order_service.save_order_advance(order.id, advance, receiving_id)
+                order_service.record_cash_order_advance(
+                    order.id, advance, receiving_id
+                )
             confirmed = order_service.confirm_order(order.id)
             st.session_state.pop(WORKSPACE_ORDER_ID, None)
             st.session_state.pop(WORKSPACE_STEP, None)

@@ -103,8 +103,15 @@ def _add_customer_dialog(customer_service, services: dict):
     if dup_id:
         _render_duplicate_customer_warning(dup_id, customer_service)
 
+    require_name, require_phone = True, True
+    if hasattr(customer_service, "identity_policy"):
+        require_name, require_phone = customer_service.identity_policy()
+
     customer_input = render_customer_form(
-        "c_add", segment_options=_customer_segment_options(services)
+        "c_add",
+        segment_options=_customer_segment_options(services),
+        require_name=require_name,
+        require_phone=require_phone,
     )
 
     cols = st.columns(2)
@@ -127,10 +134,16 @@ def _edit_customer_dialog(customer_service, customer_id: str, services: dict):
         st.error("Customer not found")
         return
 
+    require_name, require_phone = True, True
+    if hasattr(customer_service, "identity_policy"):
+        require_name, require_phone = customer_service.identity_policy()
+
     customer_input = render_customer_form(
         "c_edit",
         customer=customer,
         segment_options=_customer_segment_options(services, customer),
+        require_name=require_name,
+        require_phone=require_phone,
     )
 
     cols = st.columns(2)

@@ -11,6 +11,21 @@ from vaybooks.bms.domain.shared.india import compute_sales_gst
 from vaybooks.bms.domain.shared.item_tax import ItemTaxProfile
 
 
+def _resolved_line_discount(raw: dict, *, qty: float, rate: float) -> float:
+    gross = round(max(qty, 0.0) * max(rate, 0.0), 2)
+    mode = str(raw.get("discount_mode") or "flat").strip().lower()
+    if "discount_input" in raw:
+        value = float(raw.get("discount_input") or 0)
+    else:
+        value = float(raw.get("discount") or 0)
+    value = max(value, 0.0)
+    if mode in {"percent", "%", "pct"}:
+        amount = round(gross * min(value, 100.0) / 100.0, 2)
+    else:
+        amount = round(value, 2)
+    return round(min(amount, gross), 2)
+
+
 def business_is_registered(business: Optional[BusinessProfile]) -> bool:
     if not business:
         return False
@@ -66,8 +81,9 @@ class SalesLineResolver:
                 if not desc:
                     continue
                 line_gross = round(qty * rate, 2)
-                line_discount = round(min(float(raw.get("discount") or 0), line_gross), 2)
+                line_discount = _resolved_line_discount(raw, qty=qty, rate=rate)
                 taxable = round(max(line_gross - line_discount, 0.0), 2)
+                raw = {**raw, "discount": line_discount, "rate": rate}
                 gst = compute_sales_gst(
                     taxable,
                     effective_sales_gst_rate(business, 0.0),
@@ -94,8 +110,9 @@ class SalesLineResolver:
             if rate == 0:
                 rate = float(getattr(product, "selling_rate", 0) or 0)
             line_gross = round(qty * rate, 2)
-            line_discount = round(min(float(raw.get("discount") or 0), line_gross), 2)
+            line_discount = _resolved_line_discount(raw, qty=qty, rate=rate)
             taxable = round(max(line_gross - line_discount, 0.0), 2)
+            raw = {**raw, "discount": line_discount, "rate": rate}
             gst = compute_sales_gst(
                 taxable,
                 gst_rate,

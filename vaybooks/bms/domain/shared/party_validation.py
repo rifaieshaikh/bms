@@ -68,13 +68,21 @@ def normalize_party_fields(
     pan: str = "",
     registration_type: PartyRegistrationType = PartyRegistrationType.UNREGISTERED,
     msme_number: str = "",
+    require_name: bool = True,
+    require_phone: bool = True,
+    require_at_least_one_identity: bool = True,
 ) -> NormalizedPartyFields:
-    if not (name or "").strip():
-        raise ValidationError("Name is required")
-    if not (phone_number or "").strip():
-        raise ValidationError("Phone number is required")
+    name_norm = (name or "").strip()
+    phone_raw = (phone_number or "").strip()
 
-    phone = normalize_indian_phone(phone_number)
+    if require_name and not name_norm:
+        raise ValidationError("Name is required")
+    if require_phone and not phone_raw:
+        raise ValidationError("Phone number is required")
+    if require_at_least_one_identity and not name_norm and not phone_raw:
+        raise ValidationError("Name or phone number is required")
+
+    phone = normalize_indian_phone(phone_raw) if phone_raw else ""
     alt_phone = None
     if alternate_phone_number and alternate_phone_number.strip():
         alt_phone = normalize_indian_phone(alternate_phone_number)
@@ -88,7 +96,7 @@ def normalize_party_fields(
         raise ValidationError("GSTIN is required for registered parties")
 
     return NormalizedPartyFields(
-        name=name.strip(),
+        name=name_norm,
         phone_number=phone,
         alternate_phone_number=alt_phone,
         email=(email or "").strip(),

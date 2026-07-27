@@ -10,6 +10,9 @@ from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.components.common.document_custom_fields import (
     render_document_custom_fields,
 )
+from vaybooks.bms.ui.components.sales.invoice_number_field import (
+    render_store_invoice_number_field,
+)
 from vaybooks.bms.ui.components.sales.sales_lines_entry_table import (
     entry_table_focus_chain,
     entry_table_focus_columns,
@@ -104,6 +107,14 @@ def _so_edit_dialog(services: dict) -> None:
             "product_name": line.product_name,
             "qty_ordered": line.qty_ordered,
             "rate": line.rate,
+            "discount": float(getattr(line, "discount", 0) or 0),
+            "discount_mode": getattr(line, "discount_mode", "flat") or "flat",
+            "discount_input": float(
+                getattr(line, "discount_input", None)
+                if getattr(line, "discount_input", None) is not None
+                else getattr(line, "discount", 0)
+                or 0
+            ),
         }
         for line in order.lines
     ]
@@ -113,7 +124,7 @@ def _so_edit_dialog(services: dict) -> None:
         initial_lines=initial_lines,
         customer_id=order.customer_id,
         use_customer_pricing=True,
-        show_discount=False,
+        show_discount=True,
         sales_service=sales,
         inventory_service=inventory,
         business_registered=registered,
@@ -230,8 +241,9 @@ def _so_invoice_dialog(services: dict) -> None:
         format_func=lambda account_id: store_by_id[account_id].account_name,
         key=f"{SO_INVOICE_DIALOG}_store",
     )
-    invoice_number = st.text_input(
-        "Store invoice number", key=f"{SO_INVOICE_DIALOG}_number"
+    invoice_number = render_store_invoice_number_field(
+        sales,
+        key=f"{SO_INVOICE_DIALOG}_number",
     )
     received = st.number_input(
         "Amount received",
@@ -241,7 +253,10 @@ def _so_invoice_dialog(services: dict) -> None:
     )
     if st.button("Create invoice", type="primary", key=f"{SO_INVOICE_DIALOG}_save"):
         try:
-            if not invoice_number.strip():
+            if (
+                sales.sales_invoice_numbering_mode() == "external"
+                and not invoice_number.strip()
+            ):
                 raise ValueError("Store invoice number is required")
             voucher = sales.convert_sales_order_to_invoice(
                 order.id,

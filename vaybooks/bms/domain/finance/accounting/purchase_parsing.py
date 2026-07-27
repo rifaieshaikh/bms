@@ -104,12 +104,18 @@ def purchase_row_from_voucher(voucher) -> dict:
         bill_date = bill_date.date() if callable(getattr(bill_date, "date", None)) else bill_date
     voucher_type = getattr(voucher, "voucher_type", None)
     type_value = voucher_type.value if hasattr(voucher_type, "value") else str(voucher_type or "")
+    financial_year = (getattr(voucher, "financial_year", None) or "").strip()
+    if not financial_year and bill_date:
+        from vaybooks.bms.domain.shared.financial_year import resolve_financial_year
+
+        financial_year = resolve_financial_year(bill_date)
     return {
         "id": voucher.id,
         "vendor_bill_number": bill_number,
         "vendor_name": amounts["vendor_name"],
         "vendor_account_id": amounts["vendor_account_id"],
         "bill_date": bill_date,
+        "financial_year": financial_year,
         "total": amounts["total"],
         "paid": amounts["paid"],
         "outstanding": amounts["outstanding"],

@@ -17,11 +17,36 @@ class CustomerIdentitySelection:
 
 
 def _name_label(customer) -> str:
-    return f"{customer.customer_name} — {customer.phone_number}"
+    name = (customer.customer_name or "").strip() or "Unnamed"
+    phone = (customer.phone_number or "").strip()
+    if phone:
+        return f"{name} — {phone}"
+    return name
 
 
 def _mobile_label(customer) -> str:
-    return f"{customer.phone_number} — {customer.customer_name}"
+    name = (customer.customer_name or "").strip() or "Unnamed"
+    phone = (customer.phone_number or "").strip()
+    if phone:
+        return f"{phone} — {name}"
+    return name
+
+
+def _as_select_value(value: Any) -> Any:
+    """Normalize prior text_input/list session values back to selectbox shape."""
+    if isinstance(value, list):
+        items = [str(item).strip() for item in value if item]
+        return items[0] if items else None
+    if isinstance(value, str):
+        text = value.strip()
+        return text or None
+    return value
+
+
+def _require_flags(customer_service) -> tuple[bool, bool]:
+    if hasattr(customer_service, "identity_policy"):
+        return customer_service.identity_policy()
+    return True, True
 
 
 def render_customer_identity_selector(
@@ -52,6 +77,8 @@ def render_customer_identity_selector(
     name_key = f"{key_prefix}_customer_name"
     mobile_key = f"{key_prefix}_customer_mobile"
     matched_key = f"{key_prefix}_customer_id"
+    # Drop keys from the temporary text-input UI experiment.
+    st.session_state.pop(f"{key_prefix}_customer_pick", None)
 
     if name_key not in st.session_state:
         st.session_state[name_key] = (
@@ -59,11 +86,17 @@ def render_customer_identity_selector(
             if initial_customer is not None
             else None
         )
+    else:
+        st.session_state[name_key] = _as_select_value(st.session_state.get(name_key))
     if mobile_key not in st.session_state:
         st.session_state[mobile_key] = (
             mobile_label_by_id.get(initial_customer.id)
             if initial_customer is not None
             else None
+        )
+    else:
+        st.session_state[mobile_key] = _as_select_value(
+            st.session_state.get(mobile_key)
         )
     if matched_key not in st.session_state and initial_customer is not None:
         st.session_state[matched_key] = initial_customer.id
@@ -163,16 +196,20 @@ def resolve_customer_identity(
     customer_service,
     selection: CustomerIdentitySelection,
 ):
-    """Return the selected customer or create one using sales-order checks."""
+    """Return existing customer or create one using business identity settings."""
     if selection.customer_id:
         customer = customer_service.get_customer_detail(selection.customer_id)
         if customer is not None:
             return customer
-    if not selection.customer_name:
+
+    require_name, require_phone = _require_flags(customer_service)
+    name = (selection.customer_name or "").strip()
+    phone = (selection.phone_number or "").strip()
+
+    # Only enforce fields marked required in Business Settings.
+    if require_name and not name:
         raise ValueError("Customer name is required")
-    if not selection.phone_number:
+    if require_phone and not phone:
         raise ValueError("Mobile number is required")
-    return customer_service.find_or_create_customer(
-        selection.customer_name,
-        selection.phone_number,
-    )
+
+    return customer_service.find_or_create_customer(name, phone)

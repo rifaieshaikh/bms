@@ -66,10 +66,20 @@ def render(services: dict) -> None:
         caption_parts=[
             f"Vendor: {row.get('vendor_name') or '—'}",
             f"Voucher: {voucher.voucher_number}",
+            *(
+                [f"FY {row['financial_year']}"]
+                if row.get("financial_year")
+                else []
+            ),
         ],
         left_facts=[
             ("Date", format_document_date(row.get("bill_date"))),
             ("Vendor", row.get("vendor_name") or "—"),
+            *(
+                [("Financial year", row["financial_year"])]
+                if row.get("financial_year")
+                else []
+            ),
         ],
         right_facts=[
             ("Total", format_money(row.get("total"))),

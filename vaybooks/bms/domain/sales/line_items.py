@@ -14,6 +14,8 @@ class SalesInvoiceLine:
     qty: float
     rate: float
     discount: float = 0.0
+    discount_mode: str = "flat"
+    discount_input: float = 0.0
     description: str = ""
     hsn_sac: str = ""
     taxable_amount: float = 0.0
@@ -39,6 +41,8 @@ class SalesInvoiceLine:
             "qty": self.qty,
             "rate": self.rate,
             "discount": self.discount,
+            "discount_mode": self.discount_mode or "flat",
+            "discount_input": self.discount_input,
             "hsn_sac": self.hsn_sac,
             "taxable_amount": self.taxable_amount,
             "cgst_amount": self.cgst_amount,
@@ -65,12 +69,24 @@ class SalesInvoiceLine:
     ) -> SalesInvoiceLine:
         product_id = str(raw.get("product_id") or raw.get("item_id") or "")
         line_discount = round(float(raw.get("discount") or 0), 2)
+        discount_mode = (raw.get("discount_mode") or "flat").strip() or "flat"
+        discount_input = round(
+            float(
+                raw.get("discount_input")
+                if raw.get("discount_input") is not None
+                else raw.get("discount")
+                or 0
+            ),
+            2,
+        )
         return cls(
             product_id=product_id,
             item_name=item_name,
             qty=float(raw.get("qty") or 0),
             rate=float(raw.get("rate") or 0),
             discount=line_discount,
+            discount_mode=discount_mode,
+            discount_input=discount_input,
             description=(raw.get("description") or item_name or "").strip(),
             hsn_sac=tax_profile.hsn_sac,
             taxable_amount=gst.taxable_amount,
@@ -110,24 +126,47 @@ def apply_invoice_discount_to_lines(
     business_state_code: str,
     customer_state_code: str,
 ) -> list[SalesInvoiceLine]:
-    """Reduce taxable proportionally, then recompute GST per line."""
+    """Apply invoice discount only to lines without item discount, by qty×rate weight."""
     from vaybooks.bms.domain.shared.india import compute_sales_gst
 
     if not lines or invoice_discount <= 0:
         return lines
 
-    invoice_discount = round(min(invoice_discount, sum(l.taxable_amount for l in lines)), 2)
+    eligible = [line for line in lines if float(line.discount or 0) <= 0.01]
+    if not eligible:
+        return lines
+
+    weights = {
+        id(line): round(max(float(line.qty or 0), 0.0) * max(float(line.rate or 0), 0.0), 2)
+        for line in eligible
+    }
+    total_weight = round(sum(weights.values()), 2)
+    eligible_taxable = round(sum(float(line.taxable_amount or 0) for line in eligible), 2)
+    if total_weight <= 0 or eligible_taxable <= 0:
+        return lines
+
+    invoice_discount = round(min(float(invoice_discount), eligible_taxable), 2)
     if invoice_discount <= 0:
         return lines
 
-    total_taxable = sum(line.taxable_amount for line in lines)
-    if total_taxable <= 0:
-        return lines
+    # Distribute discount; last eligible line absorbs rounding remainder.
+    allocated = 0.0
+    share_by_id: dict[int, float] = {}
+    for index, line in enumerate(eligible):
+        if index == len(eligible) - 1:
+            share = round(invoice_discount - allocated, 2)
+        else:
+            share = round(invoice_discount * (weights[id(line)] / total_weight), 2)
+            allocated = round(allocated + share, 2)
+        share_by_id[id(line)] = min(share, float(line.taxable_amount or 0))
 
-    factor = round((total_taxable - invoice_discount) / total_taxable, 6)
     adjusted: list[SalesInvoiceLine] = []
     for line in lines:
-        new_taxable = round(line.taxable_amount * factor, 2)
+        share = share_by_id.get(id(line), 0.0)
+        if share <= 0:
+            adjusted.append(line)
+            continue
+        new_taxable = round(max(float(line.taxable_amount or 0) - share, 0.0), 2)
         gst = compute_sales_gst(
             new_taxable,
             line.gst_rate,
@@ -142,6 +181,8 @@ def apply_invoice_discount_to_lines(
                 qty=line.qty,
                 rate=line.rate,
                 discount=line.discount,
+                discount_mode=line.discount_mode,
+                discount_input=line.discount_input,
                 description=line.description,
                 hsn_sac=line.hsn_sac,
                 taxable_amount=gst.taxable_amount,

@@ -15,14 +15,18 @@ def render_customer_form(
     key_prefix: str,
     customer: Optional[Customer] = None,
     segment_options: Optional[Dict[str, str]] = None,
+    *,
+    require_name: bool = True,
+    require_phone: bool = True,
 ) -> CustomerInput:
     """Render customer fields.
 
     ``segment_options`` maps display name -> segment id (active customer segments).
     """
     col_name, col_contact = st.columns(2)
+    name_label = "Customer Name *" if require_name else "Customer Name"
     customer_name = col_name.text_input(
-        "Customer Name *",
+        name_label,
         value=customer.customer_name if customer else "",
         key=f"{key_prefix}_name",
     )
@@ -32,8 +36,9 @@ def render_customer_form(
         key=f"{key_prefix}_contact",
     )
     col_phone, col_alt, col_email = st.columns(3)
+    phone_label = "Phone Number *" if require_phone else "Phone Number"
     phone_number = col_phone.text_input(
-        "Phone Number *",
+        phone_label,
         value=customer.phone_number if customer else "",
         key=f"{key_prefix}_phone",
         placeholder="10-digit mobile",

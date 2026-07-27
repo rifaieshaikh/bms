@@ -7,7 +7,6 @@ import streamlit as st
 from vaybooks.bms.domain.shared.enums import VoucherType
 from vaybooks.bms.domain.shared.india import state_name_for_code
 from vaybooks.bms.ui import navigation
-from vaybooks.bms.domain.finance.accounting.sales_parsing import sales_row_from_voucher
 from vaybooks.bms.domain.sales.line_items import parse_sales_document_content
 from vaybooks.bms.domain.sales.invoice_lock import can_edit_invoice
 from vaybooks.bms.infrastructure.pdf.sales_doc_pdf import generate_sales_document_pdf
@@ -59,7 +58,12 @@ def render(services: dict) -> None:
 
     discount = accounting.get_discount_account()
     discount_id = discount.id if discount else None
-    row = sales_row_from_voucher(voucher, discount_id)
+    settlement_map = accounting.invoice_settlement_map()
+    row = accounting.enrich_sales_invoice_row(
+        voucher,
+        discount_account_id=discount_id,
+        settlement_map=settlement_map,
+    )
     parsed = parse_cash_sales_voucher(voucher, discount_id)
     tax_summary = parsed.get("tax_summary") or {}
     line_items = parsed.get("line_items") or []
@@ -71,7 +75,11 @@ def render(services: dict) -> None:
         format_document_date(row.get("sale_date")),
         f"Voucher {voucher.voucher_number}",
     ]
+    if row.get("financial_year"):
+        caption_parts.append(f"FY {row['financial_year']}")
     right_facts = [("Sale date", format_document_date(row.get("sale_date")))]
+    if row.get("financial_year"):
+        right_facts.append(("Financial year", row["financial_year"]))
     if ref_so:
         so = services.get("sales")
         if so:
@@ -177,6 +185,7 @@ def render(services: dict) -> None:
             st.error(f"Could not generate PDF: {exc}")
 
     editable = can_edit_invoice(voucher.voucher_date)
+    outstanding = float(row.get("outstanding") or 0)
     actions = []
     if pdf_bytes is not None:
         combined_copies = bool(
@@ -198,6 +207,8 @@ def render(services: dict) -> None:
             }
         )
     actions.append({"label": "Edit", "key": "edit"})
+    if customer_account_id and outstanding > 0.01:
+        actions.append({"label": "Record Receipt", "key": "record_receipt"})
     if linked_customer_id:
         actions.append({"label": "View customer →", "key": "view_customer"})
     clicked = document_actions(actions, suffix=f"sale_{voucher.id}")
@@ -210,6 +221,13 @@ def render(services: dict) -> None:
         else:
             arm_invoice_edit_dialog(voucher.id)
             st.rerun()
+    if clicked.get("record_receipt") and customer_account_id:
+        from vaybooks.bms.ui.pages.finance.accounts import list as acc
+
+        st.session_state[acc.RCPT] = "new"
+        st.session_state[acc.RCPT_PRESELECT_ACCOUNT] = customer_account_id
+        st.session_state[acc.RCPT_PRESELECT_INVOICE] = voucher.id
+        st.rerun()
     if clicked.get("view_customer") and linked_customer_id:
         navigation.go_to_detail("customer_detail", linked_customer_id)
         return
@@ -335,3 +353,8 @@ def render(services: dict) -> None:
         customer_account_id=customer_account_id,
         invoice_discount=invoice_discount,
     )
+    if services.get("accounting"):
+        from vaybooks.bms.ui.pages.finance.accounts import list as acc
+
+        if st.session_state.get(acc.RCPT):
+            acc._receipt_dialog(services["accounting"])

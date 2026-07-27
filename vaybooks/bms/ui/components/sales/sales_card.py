@@ -28,18 +28,24 @@ def _customer_name(party_name: str) -> str:
     return rest or "Customer"
 
 
-def _payment_badge(outstanding: float) -> str:
-    if outstanding > 0.01:
-        return status_badge("Unpaid", compact=True)
-    return status_badge("Paid", compact=True)
+def _payment_badge(row: dict) -> str:
+    label = (row.get("payment_status_label") or "").strip()
+    if not label:
+        outstanding = float(row.get("outstanding") or 0)
+        collected = float(row.get("collected") or 0)
+        if outstanding <= 0.01:
+            label = "Paid"
+        elif collected > 0.01:
+            label = "Partially paid"
+        else:
+            label = "Unpaid"
+    return status_badge(label, compact=True)
 
 
 def _sales_card(row: dict, suffix: str) -> None:
     store_no = row.get("store_invoice_number") or "—"
     gross = float(row.get("gross") or 0)
     net = float(row.get("net") or gross)
-    balance = float(row.get("outstanding") or 0)
-
     with st.container(border=True):
         st.markdown(
             f'<p class="z-card-title">{store_no}</p>',
@@ -58,7 +64,7 @@ def _sales_card(row: dict, suffix: str) -> None:
             f"₹{net:,.0f}</p>",
             unsafe_allow_html=True,
         )
-        st.markdown(_payment_badge(balance), unsafe_allow_html=True)
+        st.markdown(_payment_badge(row), unsafe_allow_html=True)
 
         sale_id = row.get("id")
         if sale_id and st.button(

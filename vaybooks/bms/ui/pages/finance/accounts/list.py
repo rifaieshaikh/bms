@@ -29,6 +29,7 @@ LEDGER_ACC = "acc_ledger_dialog"
 ACCOUNTS_PAGE_SIZE = CARD_PAGE_SIZE
 RCPT = "acc_receipt_dialog"
 RCPT_PRESELECT_ACCOUNT = "acc_receipt_preselect_customer_account_id"
+RCPT_PRESELECT_INVOICE = "acc_receipt_preselect_invoice_id"
 PAY = "acc_payment_dialog"
 SAL = "acc_salary_dialog"
 INV_CUST = "acc_cust_inv_dialog"
@@ -189,23 +190,41 @@ def _ledger_dialog(accounting_service):
         st.rerun()
 
 
-@st.dialog("Record Receipt", on_dismiss=make_dismiss_handler(RCPT))
+@st.dialog(
+    "Record Receipt",
+    on_dismiss=make_dismiss_handler(
+        RCPT, RCPT_PRESELECT_ACCOUNT, RCPT_PRESELECT_INVOICE
+    ),
+)
 def _receipt_dialog(accounting_service):
+    from vaybooks.bms.domain.finance.accounting.settlement import (
+        ALLOC_INVOICE_TAG,
+        allocation_rows_from_meta,
+        allocated_total,
+        resolve_receipt_allocations,
+        strip_meta,
+    )
+
     target = st.session_state.get(RCPT)
     voucher = None if target in (None, "new") else accounting_service.get_voucher(target)
 
     store_accounts = accounting_service.get_store_accounts()
     customers = [a for a in accounting_service.list_accounts() if a.linked_customer_id]
+    def _clear_receipt_session() -> None:
+        st.session_state.pop(RCPT, None)
+        st.session_state.pop(RCPT_PRESELECT_ACCOUNT, None)
+        st.session_state.pop(RCPT_PRESELECT_INVOICE, None)
+
     if not store_accounts or not customers:
         st.error("Need at least one store account and one customer account.")
         if st.button("Close"):
-            st.session_state.pop(RCPT, None)
-            st.session_state.pop(RCPT_PRESELECT_ACCOUNT, None)
+            _clear_receipt_session()
             st.rerun()
         return
 
     recv_opts = {a.account_name: a.id for a in store_accounts}
     cust_opts = {a.account_name: a.id for a in customers}
+    preselect_invoice_id = st.session_state.get(RCPT_PRESELECT_INVOICE)
     existing_recv = voucher.lines[0].account_id if voucher else None
     existing_cust = (
         voucher.lines[1].account_id
@@ -213,6 +232,19 @@ def _receipt_dialog(accounting_service):
         else st.session_state.get(RCPT_PRESELECT_ACCOUNT)
     )
     existing_amt = voucher.lines[0].debit_amount if voucher else 0.0
+    existing_alloc_rows = (
+        allocation_rows_from_meta(voucher.description or "") if voucher else []
+    )
+    existing_invoice_id = (
+        existing_alloc_rows[0]["invoice_id"]
+        if len(existing_alloc_rows) == 1
+        else None
+    )
+    if not existing_invoice_id and preselect_invoice_id:
+        existing_invoice_id = preselect_invoice_id
+    existing_desc = ""
+    if voucher:
+        existing_desc = strip_meta(voucher.description or "", ALLOC_INVOICE_TAG)
 
     recv = st.selectbox(
         "Receiving Account (Store)", list(recv_opts.keys()),
@@ -222,29 +254,86 @@ def _receipt_dialog(accounting_service):
         "Customer Account", list(cust_opts.keys()),
         index=_index_of(cust_opts, existing_cust),
     )
+
+    customer_account_id = cust_opts[cust]
+    open_invoices = accounting_service.list_open_sales_invoices_for_customer(
+        customer_account_id,
+        exclude_receipt_id=voucher.id if voucher else None,
+    )
+    if not voucher and existing_invoice_id and existing_amt <= 0:
+        for inv in open_invoices:
+            if inv.get("id") == existing_invoice_id:
+                existing_amt = float(inv.get("outstanding") or 0)
+                break
+
     amount = st.number_input("Amount", min_value=0.0, value=float(existing_amt))
     v_date = st.date_input("Date", value=date.today())
-    desc = st.text_input("Description", value=voucher.description if voucher else "")
+    desc = st.text_input("Description", value=existing_desc)
+
+    invoice_opts = {"(none — FIFO)": None}
+    for inv in open_invoices:
+        label = (
+            f"{inv.get('store_invoice_number') or inv.get('id')} — "
+            f"₹{float(inv.get('outstanding') or 0):,.2f} due "
+            f"({inv.get('sale_date') or '—'})"
+        )
+        invoice_opts[label] = inv.get("id")
+
+    default_inv_index = 0
+    if existing_invoice_id:
+        for i, inv_id in enumerate(invoice_opts.values()):
+            if inv_id == existing_invoice_id:
+                default_inv_index = i
+                break
+
+    alloc_label = st.selectbox(
+        "Allocate to invoice",
+        list(invoice_opts.keys()),
+        index=default_inv_index,
+        help="Pick an invoice to settle that bill only. Leave as FIFO to apply "
+        "oldest open invoices first.",
+    )
+    allocation_invoice_id = invoice_opts[alloc_label]
+
+    preview_rows, preview_unalloc = resolve_receipt_allocations(
+        amount,
+        allocation_invoice_id=allocation_invoice_id,
+        open_invoices=open_invoices,
+    )
+    applied = allocated_total(preview_rows)
+    st.caption(
+        f"Applied to invoices: ₹{applied:,.2f} · "
+        f"Unallocated credit: ₹{preview_unalloc:,.2f}"
+    )
 
     cols = st.columns(2)
     if cols[0].button("Save", type="primary", width="stretch"):
         try:
             if voucher:
                 accounting_service.update_receipt(
-                    voucher.id, recv_opts[recv], cust_opts[cust], amount, desc, v_date
+                    voucher.id,
+                    recv_opts[recv],
+                    cust_opts[cust],
+                    amount,
+                    desc,
+                    v_date,
+                    allocation_invoice_id=allocation_invoice_id,
                 )
             else:
                 accounting_service.create_receipt(
-                    recv_opts[recv], cust_opts[cust], amount, desc, v_date
+                    recv_opts[recv],
+                    cust_opts[cust],
+                    amount,
+                    desc,
+                    v_date,
+                    allocation_invoice_id=allocation_invoice_id,
                 )
-            st.session_state.pop(RCPT, None)
-            st.session_state.pop(RCPT_PRESELECT_ACCOUNT, None)
+            _clear_receipt_session()
             st.rerun()
         except Exception as exc:
             st.error(str(exc))
     if cols[1].button("Cancel", width="stretch"):
-        st.session_state.pop(RCPT, None)
-        st.session_state.pop(RCPT_PRESELECT_ACCOUNT, None)
+        _clear_receipt_session()
         st.rerun()
 
 
@@ -631,24 +720,31 @@ def _note_dialog_body(accounting_service, *, note_kind: str, flag_key: str, key_
         key=f"{key_prefix}_source",
     )
 
-    settle_amount = st.number_input(
-        "Settle amount (optional)",
-        min_value=0.0,
-        value=0.0,
-        key=f"{key_prefix}_settle_amt",
-    )
+    settle_amount = 0.0
     settle_account_id = None
-    if settle_amount > 0:
-        if not stores:
-            st.error("Need a store/cash account to settle.")
-        else:
-            store_opts = {a.account_name: a.id for a in stores}
-            settle_name = st.selectbox(
-                "Settlement Account (Cash/Bank)",
-                list(store_opts.keys()),
-                key=f"{key_prefix}_settle_acct",
-            )
-            settle_account_id = store_opts[settle_name]
+    if note_kind == "credit":
+        st.caption(
+            "Credit notes create customer credit only. To pay cash/bank, use "
+            "Record Refund on the customer after issuing the note."
+        )
+    else:
+        settle_amount = st.number_input(
+            "Settle amount (optional)",
+            min_value=0.0,
+            value=0.0,
+            key=f"{key_prefix}_settle_amt",
+        )
+        if settle_amount > 0:
+            if not stores:
+                st.error("Need a store/cash account to settle.")
+            else:
+                store_opts = {a.account_name: a.id for a in stores}
+                settle_name = st.selectbox(
+                    "Settlement Account (Cash/Bank)",
+                    list(store_opts.keys()),
+                    key=f"{key_prefix}_settle_acct",
+                )
+                settle_account_id = store_opts[settle_name]
 
     cols = st.columns(2)
     if cols[0].button("Save", type="primary", width="stretch", key=f"{key_prefix}_save"):
@@ -936,6 +1032,59 @@ def open_pending_dialogs(services: dict) -> None:
         _debit_note_dialog(accounting_service)
 
 
+def _render_customer_settlements_inbox(accounting_service) -> None:
+    """Pending parks awaiting Approve (expense) or Reject (reverse)."""
+    try:
+        pending = accounting_service.list_customer_settlements(status="pending")
+    except Exception:
+        pending = []
+    with st.container(border=True):
+        st.subheader("Customer Settlements")
+        if not pending:
+            st.caption("No pending customer settlements.")
+            return
+        st.caption(
+            f"{len(pending)} pending — Approve posts Settlement Expense; "
+            "Reject reverses the park and reopens allocated invoices."
+        )
+        for row in pending:
+            park_id = row["id"]
+            with st.container(border=True):
+                left, mid, right = st.columns([3, 2, 2], vertical_alignment="center")
+                with left:
+                    st.markdown(f"**{row.get('customer_name') or 'Customer'}**")
+                    st.caption(
+                        f"{row.get('voucher_number') or park_id} · "
+                        f"{_fmt_date(row.get('voucher_date'))} · "
+                        f"{row.get('reason') or '—'}"
+                    )
+                with mid:
+                    st.metric("Pending", f"₹{float(row.get('remaining') or 0):,.2f}")
+                with right:
+                    a1, a2 = st.columns(2)
+                    if a1.button(
+                        "Approve",
+                        key=f"acc_settle_approve_{park_id}",
+                        type="primary",
+                        width="stretch",
+                    ):
+                        try:
+                            accounting_service.approve_customer_settlement(park_id)
+                            st.rerun()
+                        except Exception as exc:
+                            st.error(str(exc))
+                    if a2.button(
+                        "Reject",
+                        key=f"acc_settle_reject_{park_id}",
+                        width="stretch",
+                    ):
+                        try:
+                            accounting_service.reject_customer_settlement(park_id)
+                            st.rerun()
+                        except Exception as exc:
+                            st.error(str(exc))
+
+
 def _load_accounts(services, filters, sort):
     try:
         return services["accounting"].list_accounts(active_only=False)
@@ -991,6 +1140,7 @@ def _render_account_cards(page_accounts, services):
 
 def render(services: dict):
     accounting_service = services["accounting"]
+    _render_customer_settlements_inbox(accounting_service)
     bar = render_list(
         ACCOUNTS,
         services=services,

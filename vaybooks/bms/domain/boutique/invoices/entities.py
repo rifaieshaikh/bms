@@ -48,6 +48,7 @@ class Invoice:
     igst_amount: float = 0.0
     utgst_amount: float = 0.0
     invoice_kind: str = INVOICE_KIND_STANDARD
+    financial_year: str = ""
     id: str = field(default_factory=lambda: uuid4().hex)
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)

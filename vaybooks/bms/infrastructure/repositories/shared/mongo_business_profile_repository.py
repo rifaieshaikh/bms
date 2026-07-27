@@ -35,6 +35,11 @@ class MongoBusinessProfileRepository:
             "pan": profile.pan,
             "registration_type": profile.registration_type.value,
             "composition_tax_rate": profile.composition_tax_rate,
+            "require_customer_name": bool(profile.require_customer_name),
+            "require_customer_phone": bool(profile.require_customer_phone),
+            "invoice_numbering_mode": profile.invoice_numbering_mode or "app",
+            "invoice_number_prefix": profile.invoice_number_prefix or "INV/{FY}/",
+            "fy_start_month": int(profile.fy_start_month or 4),
             "bank_accounts": [
                 dataclass_to_dict(account) for account in profile.bank_accounts
             ],
@@ -73,6 +78,16 @@ class MongoBusinessProfileRepository:
             pan=doc.get("pan", ""),
             registration_type=registration_type,
             composition_tax_rate=float(doc.get("composition_tax_rate", 1.0) or 0),
+            require_customer_name=bool(doc.get("require_customer_name", True)),
+            require_customer_phone=bool(doc.get("require_customer_phone", True)),
+            # Missing field → external so existing tenants keep manual invoice entry.
+            invoice_numbering_mode=(
+                doc["invoice_numbering_mode"]
+                if "invoice_numbering_mode" in doc
+                else "external"
+            ),
+            invoice_number_prefix=doc.get("invoice_number_prefix") or "INV/{FY}/",
+            fy_start_month=int(doc.get("fy_start_month", 4) or 4),
             bank_accounts=[
                 account
                 for account in (

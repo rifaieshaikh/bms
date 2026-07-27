@@ -510,13 +510,17 @@ def get_services():
         crm_event_sink=crm_auto_activity_service,
     )
     party_segment_service = PartySegmentAppService(party_segment_repo)
+    business_service = BusinessAppService(business_profile_repo)
+    accounting_service.set_business_service(business_service)
     customer_service = CustomerAppService(
-        customer_repo, account_repo, segment_service=party_segment_service
+        customer_repo,
+        account_repo,
+        segment_service=party_segment_service,
+        business_service=business_service,
     )
     vendor_service = VendorAppService(
         vendor_repo, account_repo, segment_service=party_segment_service
     )
-    business_service = BusinessAppService(business_profile_repo)
     vendor_services_config = VendorServiceAppService(vendor_service_repo)
     crm_notification_service = CrmNotificationAppService(
         crm_notification_repo,

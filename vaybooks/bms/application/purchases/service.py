@@ -31,6 +31,7 @@ from vaybooks.bms.domain.shared.enums import (
     VoucherType,
 )
 from vaybooks.bms.domain.shared.exceptions import ValidationError
+from vaybooks.bms.domain.shared.financial_year import resolve_financial_year
 from vaybooks.bms.infrastructure.repositories.finance.mongo_counter_repository import (
     MongoCounterRepository,
 )
@@ -482,6 +483,25 @@ class PurchaseAppService:
     def get_purchase_return(self, return_id: str) -> Optional[PurchaseReturn]:
         return self._return_repo.find_by_id(return_id)
 
+    def _fy_start_month(self) -> int:
+        if not self._business_service:
+            return 4
+        profile = self._business_service.get_profile()
+        try:
+            month = int(getattr(profile, "fy_start_month", 4) or 4)
+        except (TypeError, ValueError):
+            month = 4
+        if month < 1 or month > 12:
+            return 4
+        return month
+
+    def resolve_voucher_financial_year(
+        self, voucher_date: Optional[date] = None
+    ) -> str:
+        return resolve_financial_year(
+            voucher_date or date.today(), self._fy_start_month()
+        )
+
     def create_purchase_bill(
         self,
         vendor_account_id: str,
@@ -498,6 +518,7 @@ class PurchaseAppService:
         vendor_id: Optional[str] = None,
         resolved_lines=None,
     ) -> Voucher:
+        financial_year = self.resolve_voucher_financial_year(voucher_date)
         voucher = self._accounting.create_purchase_bill(
             vendor_account_id=vendor_account_id,
             expense_lines=expense_lines,
@@ -509,6 +530,7 @@ class PurchaseAppService:
             reference_service_id=reference_service_id,
             reference_po_id=reference_po_id,
             reference_grn_id=reference_grn_id,
+            financial_year=financial_year,
         )
         if vendor_id and resolved_lines:
             self._record_price_history(
@@ -575,6 +597,7 @@ class PurchaseAppService:
         # apply_stock is accepted for API compatibility with create, but bill edit
         # is metadata + GST only — no stock / landed re-application on update.
         _ = apply_stock
+        financial_year = self.resolve_voucher_financial_year(voucher_date)
         voucher = self._accounting.update_purchase_bill(
             voucher_id,
             vendor_account_id,
@@ -584,6 +607,7 @@ class PurchaseAppService:
             paying_account_id,
             voucher_date,
             reference_service_id,
+            financial_year=financial_year,
         )
         return voucher
 

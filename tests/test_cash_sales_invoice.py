@@ -96,6 +96,34 @@ def test_cash_sales_invoice_partial_payment_leaves_customer_balance():
     assert accounts["cash"].current_balance == 600.0
 
 
+def test_cash_sales_invoice_overpay_creates_customer_credit():
+    service = _service()
+    accounts = _seed_accounts(service._account_repo)
+
+    voucher = service.create_cash_sales_invoice(
+        accounts["customer"].id,
+        accounts["cash"].id,
+        gross_amount=1000.0,
+        discount_amount=0.0,
+        amount_received=1200.0,
+        store_invoice_number="SI-101B",
+    )
+
+    assert voucher.cash_movement_amount == 1200.0
+    # Excess ₹200 stays as customer credit (negative balance).
+    assert accounts["customer"].current_balance == -200.0
+    assert accounts["cash"].current_balance == 1200.0
+    from vaybooks.bms.domain.finance.accounting.sales_parsing import (
+        sales_amounts_from_lines,
+    )
+
+    amounts = sales_amounts_from_lines(voucher.lines)
+    assert amounts["net"] == 1000.0
+    assert amounts["collected"] == 1200.0
+    assert amounts["outstanding"] == 0.0
+    assert amounts["payment_status"] == "paid"
+
+
 def test_cash_sales_invoice_with_discount():
     service = _service()
     accounts = _seed_accounts(service._account_repo)
@@ -133,19 +161,24 @@ def test_cash_sales_invoice_zero_payment_leaves_full_customer_balance():
     assert accounts["cash"].current_balance == 0.0
 
 
-def test_cash_sales_invoice_rejects_overpayment():
+def test_cash_sales_invoice_allows_overpay_with_discount():
     service = _service()
     accounts = _seed_accounts(service._account_repo)
 
-    with pytest.raises(Exception):
-        service.create_cash_sales_invoice(
-            accounts["customer"].id,
-            accounts["cash"].id,
-            gross_amount=1000.0,
-            discount_amount=100.0,
-            amount_received=950.0,
-            store_invoice_number="SI-103",
-        )
+    voucher = service.create_cash_sales_invoice(
+        accounts["customer"].id,
+        accounts["cash"].id,
+        gross_amount=1000.0,
+        discount_amount=100.0,
+        amount_received=950.0,
+        store_invoice_number="SI-103",
+    )
+
+    # Net due 900; received 950 → ₹50 customer credit.
+    assert voucher.cash_movement_amount == 950.0
+    assert accounts["customer"].current_balance == -50.0
+    assert accounts["cash"].current_balance == 950.0
+    assert accounts["discount"].current_balance == 100.0
 
 
 def test_cash_sales_invoice_with_gst_lines():
@@ -192,3 +225,151 @@ def test_cash_sales_invoice_with_gst_lines():
     customer_debit = voucher.lines[0]
     assert customer_debit.debit_amount == 1180.0
     assert accounts["sales"].current_balance == -1000.0
+
+    from vaybooks.bms.domain.finance.accounting.sales_parsing import (
+        sales_amounts_from_lines,
+    )
+
+    amounts = sales_amounts_from_lines(voucher.lines)
+    assert amounts["taxable"] == 1000.0
+    assert amounts["tax"] == 180.0
+    assert amounts["gross"] == 1180.0
+    assert amounts["net"] == 1180.0
+    assert amounts["outstanding"] == 0.0
+    assert amounts["payment_status"] == "paid"
+
+
+def test_gst_invoice_outstanding_uses_grand_total():
+    service = _service()
+    accounts = _seed_accounts(service._account_repo)
+    for name in (
+        CGST_OUTPUT_ACCOUNT_NAME,
+        SGST_OUTPUT_ACCOUNT_NAME,
+        IGST_OUTPUT_ACCOUNT_NAME,
+    ):
+        service._account_repo.save(
+            Account(account_name=name, account_type=AccountType.LIABILITY)
+        )
+
+    voucher = service.create_cash_sales_invoice(
+        accounts["customer"].id,
+        accounts["cash"].id,
+        gross_amount=1180.0,
+        discount_amount=0.0,
+        amount_received=0.0,
+        store_invoice_number="SI-GST-OPEN",
+        sales_lines=[
+            {
+                "product_id": "p1",
+                "description": "Item",
+                "qty": 1,
+                "rate": 1000,
+                "taxable_amount": 1000.0,
+                "cgst_amount": 90.0,
+                "sgst_amount": 90.0,
+                "igst_amount": 0.0,
+                "utgst_amount": 0.0,
+                "line_total": 1180.0,
+            }
+        ],
+    )
+
+    from vaybooks.bms.domain.finance.accounting.sales_parsing import (
+        sales_amounts_from_lines,
+    )
+
+    amounts = sales_amounts_from_lines(voucher.lines)
+    assert amounts["gross"] == 1180.0
+    assert amounts["outstanding"] == 1180.0
+    assert amounts["payment_status"] == "unpaid"
+
+    row = service.enrich_sales_invoice_row(voucher)
+    assert row["outstanding"] == 1180.0
+    assert row["payment_status"] == "unpaid"
+    service = _service()
+    accounts = _seed_accounts(service._account_repo)
+    service.create_advance_receipt(
+        accounts["cash"].id,
+        accounts["customer"].id,
+        4000.0,
+        "General advance",
+    )
+
+    voucher = service.create_cash_sales_invoice(
+        accounts["customer"].id,
+        accounts["cash"].id,
+        gross_amount=10000.0,
+        discount_amount=0.0,
+        amount_received=6000.0,
+        store_invoice_number="SI-ADV",
+        advance_applied=4000.0,
+    )
+
+    advance_line = next(
+        line
+        for line in voucher.lines
+        if line.description == "Advance applied" and line.debit_amount > 0
+    )
+    assert advance_line.debit_amount == 4000.0
+    assert accounts["advance"].current_balance == 0.0
+    assert accounts["customer"].current_balance == 0.0
+    assert (
+        service.get_customer_unapplied_advance(
+            accounts["customer"].id, general_only=True
+        )
+        == 0.0
+    )
+
+    from vaybooks.bms.domain.finance.accounting.sales_parsing import (
+        sales_amounts_from_lines,
+    )
+
+    amounts = sales_amounts_from_lines(voucher.lines)
+    assert amounts["collected"] == 10000.0
+    assert amounts["outstanding"] == 0.0
+    assert amounts["payment_status"] == "paid"
+
+
+def test_cash_sales_invoice_rejects_order_tagged_advance():
+    service = _service()
+    accounts = _seed_accounts(service._account_repo)
+    service.create_advance_receipt(
+        accounts["cash"].id,
+        accounts["customer"].id,
+        5000.0,
+        "Order advance",
+        reference_order_id="order-only",
+    )
+
+    with pytest.raises(ValueError, match="available customer advance"):
+        service.create_cash_sales_invoice(
+            accounts["customer"].id,
+            accounts["cash"].id,
+            gross_amount=3000.0,
+            discount_amount=0.0,
+            amount_received=0.0,
+            store_invoice_number="SI-ORD-ADV",
+            advance_applied=1000.0,
+        )
+
+
+def test_cash_sales_invoice_rejects_advance_above_available():
+    service = _service()
+    accounts = _seed_accounts(service._account_repo)
+    service.create_advance_receipt(
+        accounts["cash"].id,
+        accounts["customer"].id,
+        500.0,
+        "General",
+    )
+
+    with pytest.raises(ValueError, match="available customer advance"):
+        service.create_cash_sales_invoice(
+            accounts["customer"].id,
+            accounts["cash"].id,
+            gross_amount=2000.0,
+            discount_amount=0.0,
+            amount_received=0.0,
+            store_invoice_number="SI-OVER-ADV",
+            advance_applied=1000.0,
+        )

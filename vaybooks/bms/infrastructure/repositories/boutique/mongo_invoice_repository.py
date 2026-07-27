@@ -40,6 +40,7 @@ class MongoInvoiceRepository:
             "igst_amount": invoice.igst_amount,
             "utgst_amount": invoice.utgst_amount,
             "invoice_kind": invoice.invoice_kind,
+            "financial_year": invoice.financial_year or "",
             "created_at": invoice.created_at,
             "updated_at": invoice.updated_at,
         }
@@ -73,6 +74,7 @@ class MongoInvoiceRepository:
             igst_amount=float(doc.get("igst_amount") or 0),
             utgst_amount=float(doc.get("utgst_amount") or 0),
             invoice_kind=doc.get("invoice_kind", "standard"),
+            financial_year=doc.get("financial_year", "") or "",
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
         )

@@ -423,6 +423,7 @@ STATUS_BADGE_COLORS = {
     "Cancelled": "red",
     "Paid": "green",
     "Unpaid": "red",
+    "Partially paid": "orange",
     "Sent": "blue",
     "Accepted": "green",
     "Rejected": "red",

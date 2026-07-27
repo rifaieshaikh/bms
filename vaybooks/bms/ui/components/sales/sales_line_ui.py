@@ -2,9 +2,42 @@
 
 from __future__ import annotations
 
-from vaybooks.bms.domain.shared.india import compute_sales_gst
+from vaybooks.bms.domain.shared.india import UTGST_STATE_CODES, compute_sales_gst
 from vaybooks.bms.domain.shared.item_tax import ItemTaxProfile
 from vaybooks.bms.domain.sales.sales_line_resolver import effective_sales_gst_rate
+
+
+def sales_tax_display_mode(
+    *,
+    business_registered: bool,
+    business_state_code: str = "",
+    customer_state_code: str = "",
+) -> str:
+    """Which GST columns to show in sales line UI.
+
+    Returns one of: ``none``, ``igst``, ``cgst_sgst``, ``cgst_utgst``.
+    Matches `_compute_supply_gst` place-of-supply rules.
+    """
+    if not business_registered:
+        return "none"
+    biz = (business_state_code or "").strip().zfill(2) if business_state_code else ""
+    party = (customer_state_code or "").strip().zfill(2) if customer_state_code else ""
+    if not biz or not party or biz != party:
+        return "igst"
+    if biz in UTGST_STATE_CODES:
+        return "cgst_utgst"
+    return "cgst_sgst"
+
+
+def sales_tax_column_labels(mode: str) -> list[str]:
+    """GST amount column headers for a display mode (excluding GST %)."""
+    if mode == "cgst_sgst":
+        return ["CGST", "SGST"]
+    if mode == "cgst_utgst":
+        return ["CGST", "UTGST"]
+    if mode == "igst":
+        return ["IGST"]
+    return []
 
 
 def line_tax_profile(item) -> ItemTaxProfile:

@@ -1,15 +1,39 @@
-import logging
+﻿import logging
 from datetime import date, datetime
 from typing import List, Optional
 
 from vaybooks.bms.domain.finance.accounting.entities import Account, Voucher, VoucherLine
-from vaybooks.bms.domain.finance.accounting.repository import AccountRepository, CounterRepository, VoucherRepository
+from vaybooks.bms.domain.finance.accounting.repository import (
+    AccountRepository,
+    CounterRepository,
+    VoucherRepository,
+)
+from vaybooks.bms.domain.finance.accounting.sales_parsing import (
+    sales_amounts_from_lines,
+    sales_row_from_voucher,
+)
 from vaybooks.bms.domain.finance.accounting.services import (
     ADVANCE_FROM_CUSTOMERS_ACCOUNT_NAME,
+    SETTLEMENT_ACCOUNT_NAME,
+    SETTLEMENT_EXPENSE_ACCOUNT_NAME,
     AccountingDomainService,
+)
+from vaybooks.bms.domain.finance.accounting.settlement import (
+    ALLOC_INVOICE_TAG,
+    CREDIT_APPLIED_TAG,
+    CUSTOMER_SETTLEMENT_TAG,
+    PAYMENT_TOLERANCE,
+    append_meta,
+    allocated_total,
+    allocation_rows_from_meta,
+    fifo_allocations,
+    parse_meta,
+    resolve_receipt_allocations,
+    strip_meta,
 )
 from vaybooks.bms.domain.shared.enums import AccountType, VoucherType
 from vaybooks.bms.domain.shared.date_utils import utc_now
+from vaybooks.bms.domain.shared.financial_year import resolve_financial_year
 from vaybooks.bms.domain.sales.invoice_lock import assert_invoice_editable
 from vaybooks.bms.domain.shared.india import (
     CGST_INPUT_ACCOUNT_NAME,
@@ -34,16 +58,68 @@ class AccountingAppService:
         voucher_repo: VoucherRepository,
         counter_repo: CounterRepository,
         crm_event_sink=None,
+        business_service=None,
     ):
         self._account_repo = account_repo
         self._voucher_repo = voucher_repo
         self._counter_repo = counter_repo
         self._crm_event_sink = crm_event_sink
+        self._business_service = business_service
         self._domain = AccountingDomainService(account_repo, voucher_repo)
 
     def set_crm_event_sink(self, sink) -> None:
         """Attach CRM integration after service composition."""
         self._crm_event_sink = sink
+
+    def set_business_service(self, business_service) -> None:
+        """Attach business settings after bootstrap (FY start month, etc.)."""
+        self._business_service = business_service
+
+    def _fy_start_month(self) -> int:
+        if not self._business_service:
+            return 4
+        profile = self._business_service.get_profile()
+        try:
+            month = int(getattr(profile, "fy_start_month", 4) or 4)
+        except (TypeError, ValueError):
+            month = 4
+        if month < 1 or month > 12:
+            return 4
+        return month
+
+    def resolve_voucher_financial_year(
+        self, voucher_date: Optional[date] = None
+    ) -> str:
+        return resolve_financial_year(
+            voucher_date or date.today(), self._fy_start_month()
+        )
+
+    def _apply_financial_year(
+        self, voucher: Voucher, financial_year: str = ""
+    ) -> None:
+        """Ensure voucher.financial_year is set from explicit value or bill date."""
+        fy = (financial_year or "").strip() or (voucher.financial_year or "").strip()
+        if not fy:
+            v_date = voucher.voucher_date
+            if hasattr(v_date, "date") and callable(getattr(v_date, "date", None)):
+                try:
+                    v_date = v_date.date()
+                except Exception:
+                    pass
+            fy = self.resolve_voucher_financial_year(v_date)
+        voucher.financial_year = fy
+
+    def _save_voucher(
+        self, voucher: Voucher, *, financial_year: str = ""
+    ) -> Voucher:
+        self._apply_financial_year(voucher, financial_year)
+        return self._domain.save_voucher(voucher)
+
+    def _update_voucher(
+        self, voucher: Voucher, *, financial_year: str = ""
+    ) -> Voucher:
+        self._apply_financial_year(voucher, financial_year)
+        return self._domain.update_voucher(voucher)
 
     def _emit_crm_event(self, event_type: str, **payload) -> None:
         sink = self._crm_event_sink
@@ -127,6 +203,8 @@ class AccountingAppService:
         "customization",
         "discount allowed",
         ADVANCE_FROM_CUSTOMERS_ACCOUNT_NAME.lower(),
+        SETTLEMENT_ACCOUNT_NAME.lower(),
+        SETTLEMENT_EXPENSE_ACCOUNT_NAME.lower(),
     }
 
     def is_protected_account(self, account: Account) -> bool:
@@ -270,7 +348,7 @@ class AccountingAppService:
             amount=amount,
             reference_order_id=reference_order_id,
         )
-        return self._domain.save_voucher(voucher)
+        return self._save_voucher(voucher)
 
     def update_advance_receipt(
         self,
@@ -304,7 +382,260 @@ class AccountingAppService:
             reference_order_id=old.reference_order_id,
         )
         voucher.id = old.id
-        return self._domain.update_voucher(voucher)
+        return self._update_voucher(voucher)
+
+    def _voucher_touches_account(self, voucher: Voucher, account_id: str) -> bool:
+        return any(line.account_id == account_id for line in voucher.lines)
+
+    def _invoice_cash_outstanding(
+        self,
+        voucher: Voucher,
+        *,
+        discount_account_id: Optional[str] = None,
+        exclude_receipt_id: Optional[str] = None,
+    ) -> float:
+        """Outstanding from voucher lines only (before receipt/CN allocations)."""
+        amounts = sales_amounts_from_lines(voucher.lines, discount_account_id)
+        from vaybooks.bms.domain.finance.accounting.settlement import (
+            credit_applied_from_description,
+        )
+
+        credit_applied = credit_applied_from_description(voucher.description or "")
+        collected = round(
+            float(amounts.get("collected") or 0) + credit_applied, 2
+        )
+        return round(max(0.0, float(amounts.get("net") or 0) - collected), 2)
+
+    def invoice_settlement_map(
+        self, *, exclude_receipt_id: Optional[str] = None
+    ) -> dict:
+        """Map invoice_id -> {receipt_allocated, credit_note_allocated, settlement_allocated}."""
+        totals: dict = {}
+
+        def _bump(invoice_id: str, field: str, amount: float) -> None:
+            if not invoice_id or amount <= PAYMENT_TOLERANCE:
+                return
+            bucket = totals.setdefault(
+                invoice_id,
+                {
+                    "receipt_allocated": 0.0,
+                    "credit_note_allocated": 0.0,
+                    "settlement_allocated": 0.0,
+                },
+            )
+            bucket[field] = round(float(bucket.get(field) or 0) + amount, 2)
+
+        for voucher in self.list_vouchers_by_type(VoucherType.RECEIPT):
+            if exclude_receipt_id and voucher.id == exclude_receipt_id:
+                continue
+            for row in allocation_rows_from_meta(voucher.description or ""):
+                _bump(row["invoice_id"], "receipt_allocated", row["amount"])
+
+        for voucher in self.list_vouchers_by_type(VoucherType.CREDIT_NOTE):
+            invoice_id = (getattr(voucher, "reference_invoice_id", None) or "").strip()
+            if not invoice_id:
+                continue
+            cn_amount = 0.0
+            for line in voucher.lines:
+                desc = (line.description or "").strip()
+                if desc == "Customer credit note" and line.credit_amount > 0:
+                    cn_amount = float(line.credit_amount)
+                    break
+            if cn_amount <= 0:
+                # Vendor notes ignored; customer CN credits the party account.
+                for line in voucher.lines:
+                    if line.credit_amount > 0 and self._account_repo.find_by_id(
+                        line.account_id
+                    ):
+                        acct = self._account_repo.find_by_id(line.account_id)
+                        if acct and getattr(acct, "linked_customer_id", None):
+                            cn_amount = float(line.credit_amount)
+                            break
+            _bump(invoice_id, "credit_note_allocated", cn_amount)
+
+        # Parked customer settlements FIFO-allocate open invoices (ALLOC_INVOICE).
+        for voucher in self.list_vouchers_by_type(VoucherType.JOURNAL):
+            meta = parse_meta(voucher.description or "", CUSTOMER_SETTLEMENT_TAG)
+            if (meta.get("phase") or "").strip().lower() != "park":
+                continue
+            for row in allocation_rows_from_meta(voucher.description or ""):
+                _bump(row["invoice_id"], "settlement_allocated", row["amount"])
+
+        return totals
+
+    def enrich_sales_invoice_row(
+        self,
+        voucher: Voucher,
+        *,
+        discount_account_id: Optional[str] = None,
+        settlement_map: Optional[dict] = None,
+    ) -> dict:
+        settlements = (settlement_map or {}).get(voucher.id) or {}
+        return sales_row_from_voucher(
+            voucher,
+            discount_account_id,
+            receipt_allocated=float(settlements.get("receipt_allocated") or 0),
+            credit_note_allocated=float(
+                settlements.get("credit_note_allocated") or 0
+            ),
+            settlement_allocated=float(
+                settlements.get("settlement_allocated") or 0
+            ),
+        )
+
+    def list_open_sales_invoices_for_customer(
+        self,
+        customer_account_id: str,
+        *,
+        exclude_receipt_id: Optional[str] = None,
+    ) -> list:
+        """Open sales invoices for a customer account, oldest first."""
+        discount = self.get_discount_account()
+        discount_id = discount.id if discount else None
+        settlement_map = self.invoice_settlement_map(
+            exclude_receipt_id=exclude_receipt_id
+        )
+        rows = []
+        for voucher in self.list_vouchers_by_type(VoucherType.SALES_INVOICE):
+            if not self._voucher_touches_account(voucher, customer_account_id):
+                continue
+            row = self.enrich_sales_invoice_row(
+                voucher,
+                discount_account_id=discount_id,
+                settlement_map=settlement_map,
+            )
+            if float(row.get("outstanding") or 0) <= PAYMENT_TOLERANCE:
+                continue
+            rows.append(row)
+        rows.sort(
+            key=lambda r: (r.get("sale_date") or date.min, r.get("id") or "")
+        )
+        return rows
+
+    def _description_with_receipt_allocations(
+        self,
+        description: str,
+        *,
+        amount: float,
+        customer_account_id: str,
+        allocation_invoice_id: Optional[str] = None,
+        allocations: Optional[list] = None,
+        auto_allocate: bool = True,
+        exclude_receipt_id: Optional[str] = None,
+    ) -> str:
+        base = strip_meta(description or "", ALLOC_INVOICE_TAG).strip()
+        open_invoices = []
+        if auto_allocate or allocation_invoice_id or allocations:
+            open_invoices = self.list_open_sales_invoices_for_customer(
+                customer_account_id,
+                exclude_receipt_id=exclude_receipt_id,
+            )
+        if not auto_allocate and not allocation_invoice_id and not allocations:
+            return base
+
+        selected_outstanding = None
+        invoice_id = (allocation_invoice_id or "").strip() or None
+        if invoice_id:
+            selected_outstanding = next(
+                (
+                    float(inv.get("outstanding") or 0)
+                    for inv in open_invoices
+                    if inv.get("id") == invoice_id
+                ),
+                None,
+            )
+            if selected_outstanding is None:
+                voucher = self.get_voucher(invoice_id)
+                if voucher:
+                    discount = self.get_discount_account()
+                    selected_outstanding = self._invoice_cash_outstanding(
+                        voucher,
+                        discount_account_id=discount.id if discount else None,
+                    )
+
+        try:
+            rows, unallocated = resolve_receipt_allocations(
+                amount,
+                allocation_invoice_id=invoice_id,
+                allocations=allocations,
+                open_invoices=open_invoices if not invoice_id and not allocations else open_invoices,
+                selected_outstanding=selected_outstanding,
+            )
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
+
+        # Cap each row against live outstanding when explicit allocations passed.
+        if allocations and open_invoices:
+            outstanding_by_id = {
+                inv["id"]: float(inv.get("outstanding") or 0) for inv in open_invoices
+            }
+            capped = []
+            for row in rows:
+                cap = outstanding_by_id.get(row["invoice_id"])
+                if cap is None:
+                    capped.append(row)
+                    continue
+                amt = round(min(float(row["amount"]), cap), 2)
+                if amt > PAYMENT_TOLERANCE:
+                    capped.append({"invoice_id": row["invoice_id"], "amount": amt})
+            rows = capped
+            unallocated = round(max(0.0, float(amount) - allocated_total(rows)), 2)
+
+        if not rows and unallocated <= PAYMENT_TOLERANCE and float(amount or 0) <= PAYMENT_TOLERANCE:
+            return base
+        return append_meta(
+            base,
+            ALLOC_INVOICE_TAG,
+            {
+                "allocations": rows,
+                "unallocated": unallocated,
+            },
+        )
+
+    def customer_credit_balance(self, customer_account_id: str) -> float:
+        """Positive amount we owe the customer (ledger credit)."""
+        account = self._account_repo.find_by_id(customer_account_id)
+        if not account:
+            return 0.0
+        balance = float(getattr(account, "current_balance", 0) or 0)
+        return round(max(0.0, -balance), 2)
+
+    def allocate_customer_credit_to_advance(
+        self,
+        customer_account_id: str,
+        amount: float,
+        reference_order_id: Optional[str] = None,
+        description: str = "",
+        voucher_date: Optional[date] = None,
+    ) -> Voucher:
+        """Reclassify customer credit into Advance From Customers (no cash)."""
+        customer = self._account_repo.find_by_id(customer_account_id)
+        if not customer:
+            raise ValueError("Customer account not found")
+        amount = round(float(amount or 0), 2)
+        if amount <= 0:
+            raise ValueError("Advance amount must be greater than zero")
+        available = self.customer_credit_balance(customer_account_id)
+        if amount > available + PAYMENT_TOLERANCE:
+            raise ValueError(
+                f"Amount exceeds available customer credit (₹{available:,.2f})"
+            )
+        advance = self.get_advance_from_customers_account()
+        voucher_number = self._counter_repo.next("voucher_number")
+        v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
+        desc = (description or "").strip() or "Allocate customer credit to advance"
+        voucher = self._domain.build_allocate_credit_to_advance_voucher(
+            voucher_number=voucher_number,
+            voucher_date=v_date,
+            description=desc,
+            customer_account_id=customer.id,
+            customer_account_name=customer.account_name,
+            advance_account_id=advance.id,
+            advance_account_name=advance.account_name,
+            amount=amount,
+            reference_order_id=reference_order_id,
+        )
+        return self._save_voucher(voucher)
 
     def create_customer_payment(
         self,
@@ -314,17 +645,29 @@ class AccountingAppService:
         description: str,
         voucher_date: Optional[date] = None,
         reference_order_id: Optional[str] = None,
+        allocation_invoice_id: Optional[str] = None,
+        allocations: Optional[list] = None,
+        *,
+        auto_allocate: bool = True,
     ) -> Voucher:
         receiving = self._account_repo.find_by_id(receiving_account_id)
         customer = self._account_repo.find_by_id(customer_account_id)
         if not receiving or not customer:
             raise ValueError("Receiving or customer account not found")
+        final_description = self._description_with_receipt_allocations(
+            description,
+            amount=amount,
+            customer_account_id=customer.id,
+            allocation_invoice_id=allocation_invoice_id,
+            allocations=allocations,
+            auto_allocate=auto_allocate,
+        )
         voucher_number = self._counter_repo.next("voucher_number")
         v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
         voucher = self._domain.build_customer_payment_voucher(
             voucher_number=voucher_number,
             voucher_date=v_date,
-            description=description,
+            description=final_description,
             receiving_account_id=receiving.id,
             receiving_account_name=receiving.account_name,
             customer_account_id=customer.id,
@@ -332,7 +675,7 @@ class AccountingAppService:
             amount=amount,
             reference_order_id=reference_order_id,
         )
-        voucher = self._domain.save_voucher(voucher)
+        voucher = self._save_voucher(voucher)
         self._emit_crm_event(
             "payment_received",
             source_module="finance",
@@ -353,6 +696,10 @@ class AccountingAppService:
         amount: float,
         description: str,
         voucher_date: Optional[date] = None,
+        allocation_invoice_id: Optional[str] = None,
+        allocations: Optional[list] = None,
+        *,
+        auto_allocate: bool = True,
     ) -> Voucher:
         old = self._voucher_repo.find_by_id(voucher_id)
         if not old or old.voucher_type != VoucherType.RECEIPT:
@@ -361,11 +708,20 @@ class AccountingAppService:
         customer = self._account_repo.find_by_id(customer_account_id)
         if not receiving or not customer:
             raise ValueError("Receiving or customer account not found")
+        final_description = self._description_with_receipt_allocations(
+            description,
+            amount=amount,
+            customer_account_id=customer.id,
+            allocation_invoice_id=allocation_invoice_id,
+            allocations=allocations,
+            auto_allocate=auto_allocate,
+            exclude_receipt_id=old.id,
+        )
         v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
         voucher = self._domain.build_customer_payment_voucher(
             voucher_number=old.voucher_number,
             voucher_date=v_date,
-            description=description,
+            description=final_description,
             receiving_account_id=receiving.id,
             receiving_account_name=receiving.account_name,
             customer_account_id=customer.id,
@@ -374,7 +730,7 @@ class AccountingAppService:
             reference_order_id=old.reference_order_id,
         )
         voucher.id = old.id
-        voucher = self._domain.update_voucher(voucher)
+        voucher = self._update_voucher(voucher)
         self._emit_crm_event(
             "payment_received",
             source_module="finance",
@@ -395,6 +751,10 @@ class AccountingAppService:
         description: str,
         voucher_date: Optional[date] = None,
         reference_order_id: Optional[str] = None,
+        allocation_invoice_id: Optional[str] = None,
+        allocations: Optional[list] = None,
+        *,
+        auto_allocate: bool = True,
     ) -> Voucher:
         """Alias for customer payment (Accounts page and receipt tab)."""
         return self.create_customer_payment(
@@ -404,6 +764,9 @@ class AccountingAppService:
             description,
             voucher_date,
             reference_order_id,
+            allocation_invoice_id=allocation_invoice_id,
+            allocations=allocations,
+            auto_allocate=auto_allocate,
         )
 
     def update_receipt(
@@ -414,6 +777,10 @@ class AccountingAppService:
         amount: float,
         description: str,
         voucher_date: Optional[date] = None,
+        allocation_invoice_id: Optional[str] = None,
+        allocations: Optional[list] = None,
+        *,
+        auto_allocate: bool = True,
     ) -> Voucher:
         """Alias for customer payment update."""
         return self.update_customer_payment(
@@ -423,6 +790,9 @@ class AccountingAppService:
             amount,
             description,
             voucher_date,
+            allocation_invoice_id=allocation_invoice_id,
+            allocations=allocations,
+            auto_allocate=auto_allocate,
         )
 
     def create_vendor_payment(
@@ -456,7 +826,7 @@ class AccountingAppService:
             reference_order_id=reference_order_id,
             reference_service_id=service_id,
         )
-        return self._domain.save_voucher(voucher)
+        return self._save_voucher(voucher)
 
     def update_vendor_payment(
         self,
@@ -493,7 +863,7 @@ class AccountingAppService:
             else old.reference_service_id,
         )
         voucher.id = old.id
-        return self._domain.update_voucher(voucher)
+        return self._update_voucher(voucher)
 
     def get_salary_accounts(self) -> List[Account]:
         return [a for a in self._account_repo.list_all() if a.is_salary_account]
@@ -532,7 +902,7 @@ class AccountingAppService:
             paying_account_name=paying.account_name,
             amount=amount,
         )
-        return self._domain.save_voucher(voucher)
+        return self._save_voucher(voucher)
 
     def update_salary_payment(
         self,
@@ -565,7 +935,7 @@ class AccountingAppService:
             amount=amount,
         )
         voucher.id = old.id
-        return self._domain.update_voucher(voucher)
+        return self._update_voucher(voucher)
 
     def get_vendor_account(self, vendor_id: str) -> Optional[Account]:
         return self._account_repo.find_vendor_account(vendor_id)
@@ -644,6 +1014,406 @@ class AccountingAppService:
     def get_advance_from_customers_account(self) -> Account:
         return self._domain.get_advance_from_customers_account()
 
+    def get_settlement_account(self) -> Account:
+        return self._domain.get_settlement_account()
+
+    def get_settlement_expense_account(self) -> Account:
+        return self._domain.get_settlement_expense_account()
+
+    def customer_receivable_balance(self, customer_account_id: str) -> float:
+        """Positive amount the customer owes (ledger debit)."""
+        account = self._account_repo.find_by_id(customer_account_id)
+        if not account:
+            return 0.0
+        balance = float(getattr(account, "current_balance", 0) or 0)
+        return round(max(0.0, balance), 2)
+
+    def get_customer_parked_settlement(self, customer_account_id: str) -> float:
+        """Net amount parked in Settlement asset for this customer (park − expense)."""
+        if not (customer_account_id or "").strip():
+            return 0.0
+        parked = 0.0
+        for voucher in self.list_vouchers_by_type(VoucherType.JOURNAL):
+            meta = parse_meta(voucher.description or "", CUSTOMER_SETTLEMENT_TAG)
+            if (meta.get("customer_account_id") or "") != customer_account_id:
+                continue
+            amount = round(float(meta.get("amount") or 0), 2)
+            phase = (meta.get("phase") or "").strip().lower()
+            if phase == "park":
+                parked += amount
+            elif phase == "expense":
+                parked -= amount
+        return round(max(parked, 0.0), 2)
+
+    def park_customer_receivable_to_settlement(
+        self,
+        customer_account_id: str,
+        amount: float,
+        reason: str = "",
+        voucher_date: Optional[date] = None,
+    ) -> Voucher:
+        """Step 1: Dr Settlement (asset) / Cr Customer; FIFO-allocate open invoices.
+
+        Creates a pending settlement that must be approved (expensed) in Accounts.
+        """
+        customer = self._account_repo.find_by_id(customer_account_id)
+        if not customer:
+            raise ValueError("Customer account not found")
+        amount = round(float(amount or 0), 2)
+        if amount <= 0:
+            raise ValueError("Settlement amount must be greater than zero")
+        receivable = self.customer_receivable_balance(customer_account_id)
+        if amount > receivable + PAYMENT_TOLERANCE:
+            raise ValueError(
+                f"Amount exceeds customer receivable (₹{receivable:,.2f})"
+            )
+        settlement = self.get_settlement_account()
+        reason_text = (reason or "").strip() or "Customer balance settlement"
+        description = append_meta(
+            f"Customer settlement park — {reason_text}",
+            CUSTOMER_SETTLEMENT_TAG,
+            {
+                "customer_account_id": customer.id,
+                "amount": amount,
+                "phase": "park",
+                "status": "pending",
+            },
+        )
+        open_invoices = self.list_open_sales_invoices_for_customer(customer.id)
+        alloc_rows = fifo_allocations(amount, open_invoices)
+        unallocated = round(max(0.0, amount - allocated_total(alloc_rows)), 2)
+        if alloc_rows or unallocated > PAYMENT_TOLERANCE:
+            description = append_meta(
+                description,
+                ALLOC_INVOICE_TAG,
+                {
+                    "allocations": alloc_rows,
+                    "unallocated": unallocated,
+                },
+            )
+        return self.create_journal_entry(
+            description,
+            [
+                {
+                    "account_id": settlement.id,
+                    "account_name": settlement.account_name,
+                    "debit_amount": amount,
+                    "credit_amount": 0,
+                    "description": reason_text,
+                },
+                {
+                    "account_id": customer.id,
+                    "account_name": customer.account_name,
+                    "debit_amount": 0,
+                    "credit_amount": amount,
+                    "description": reason_text,
+                },
+            ],
+            voucher_date=voucher_date,
+        )
+
+    def expense_customer_settlement(
+        self,
+        customer_account_id: str,
+        amount: float,
+        reason: str = "",
+        voucher_date: Optional[date] = None,
+        *,
+        park_voucher_id: Optional[str] = None,
+    ) -> Voucher:
+        """Step 2: Dr Settlement Expense / Cr Settlement (asset).
+
+        Prefer ``approve_customer_settlement`` so expense is tied to a park voucher.
+        """
+        customer = self._account_repo.find_by_id(customer_account_id)
+        if not customer:
+            raise ValueError("Customer account not found")
+        amount = round(float(amount or 0), 2)
+        if amount <= 0:
+            raise ValueError("Settlement amount must be greater than zero")
+        parked = self.get_customer_parked_settlement(customer_account_id)
+        if amount > parked + PAYMENT_TOLERANCE:
+            raise ValueError(
+                f"Amount exceeds parked settlement (₹{parked:,.2f})"
+            )
+        park_id = (park_voucher_id or "").strip()
+        if park_id:
+            remaining = self._park_settlement_remaining(park_id)
+            if amount > remaining + PAYMENT_TOLERANCE:
+                raise ValueError(
+                    f"Amount exceeds pending park remaining (₹{remaining:,.2f})"
+                )
+        settlement = self.get_settlement_account()
+        expense = self.get_settlement_expense_account()
+        reason_text = (reason or "").strip() or "Customer settlement expense"
+        meta = {
+            "customer_account_id": customer.id,
+            "amount": amount,
+            "phase": "expense",
+            "status": "approved",
+        }
+        if park_id:
+            meta["park_voucher_id"] = park_id
+        description = append_meta(
+            f"Customer settlement expense — {reason_text}",
+            CUSTOMER_SETTLEMENT_TAG,
+            meta,
+        )
+        return self.create_journal_entry(
+            description,
+            [
+                {
+                    "account_id": expense.id,
+                    "account_name": expense.account_name,
+                    "debit_amount": amount,
+                    "credit_amount": 0,
+                    "description": reason_text,
+                },
+                {
+                    "account_id": settlement.id,
+                    "account_name": settlement.account_name,
+                    "debit_amount": 0,
+                    "credit_amount": amount,
+                    "description": reason_text,
+                },
+            ],
+            voucher_date=voucher_date,
+        )
+
+    def _park_settlement_remaining(self, park_voucher_id: str) -> float:
+        park = self._voucher_repo.find_by_id(park_voucher_id)
+        if not park:
+            return 0.0
+        meta = parse_meta(park.description or "", CUSTOMER_SETTLEMENT_TAG)
+        if (meta.get("phase") or "").strip().lower() != "park":
+            return 0.0
+        parked_amt = round(float(meta.get("amount") or 0), 2)
+        expended = 0.0
+        for voucher in self.list_vouchers_by_type(VoucherType.JOURNAL):
+            exp = parse_meta(voucher.description or "", CUSTOMER_SETTLEMENT_TAG)
+            if (exp.get("phase") or "").strip().lower() != "expense":
+                continue
+            if (exp.get("park_voucher_id") or "").strip() != park_voucher_id:
+                continue
+            expended = round(expended + float(exp.get("amount") or 0), 2)
+        return round(max(0.0, parked_amt - expended), 2)
+
+    def list_customer_settlements(
+        self, *, status: Optional[str] = "pending"
+    ) -> list[dict]:
+        """Customer settlement parks with remaining amount and status.
+
+        ``status``: ``pending`` (default), ``approved`` (fully expensed), or
+        ``None``/``all`` for both.
+        """
+        status_key = (status or "all").strip().lower()
+        parks: list[dict] = []
+        linked_expense_by_park: dict[str, float] = {}
+        unlinked_expense_by_customer: dict[str, float] = {}
+
+        for voucher in self.list_vouchers_by_type(VoucherType.JOURNAL):
+            meta = parse_meta(voucher.description or "", CUSTOMER_SETTLEMENT_TAG)
+            phase = (meta.get("phase") or "").strip().lower()
+            amount = round(float(meta.get("amount") or 0), 2)
+            if amount <= PAYMENT_TOLERANCE:
+                continue
+            customer_account_id = (meta.get("customer_account_id") or "").strip()
+            if phase == "expense":
+                park_id = (meta.get("park_voucher_id") or "").strip()
+                if park_id:
+                    linked_expense_by_park[park_id] = round(
+                        linked_expense_by_park.get(park_id, 0.0) + amount, 2
+                    )
+                elif customer_account_id:
+                    unlinked_expense_by_customer[customer_account_id] = round(
+                        unlinked_expense_by_customer.get(customer_account_id, 0.0)
+                        + amount,
+                        2,
+                    )
+                continue
+            if phase != "park":
+                continue
+            parks.append(
+                {
+                    "id": voucher.id,
+                    "voucher_number": voucher.voucher_number,
+                    "voucher_date": voucher.voucher_date,
+                    "customer_account_id": customer_account_id,
+                    "amount": amount,
+                    "reason": strip_meta(
+                        strip_meta(voucher.description or "", CUSTOMER_SETTLEMENT_TAG),
+                        ALLOC_INVOICE_TAG,
+                    )
+                    .replace("Customer settlement park — ", "")
+                    .strip(),
+                    "allocations": allocation_rows_from_meta(
+                        voucher.description or ""
+                    ),
+                    "_voucher": voucher,
+                }
+            )
+
+        parks.sort(
+            key=lambda r: (
+                r.get("voucher_date") or date.min,
+                r.get("voucher_number") or "",
+            )
+        )
+        # Apply unlinked expenses FIFO against parks per customer.
+        unlinked_left = dict(unlinked_expense_by_customer)
+        rows: list[dict] = []
+        for park in parks:
+            park_id = park["id"]
+            customer_account_id = park["customer_account_id"]
+            remaining = round(
+                park["amount"] - linked_expense_by_park.get(park_id, 0.0), 2
+            )
+            leftover = unlinked_left.get(customer_account_id, 0.0)
+            if leftover > PAYMENT_TOLERANCE and remaining > PAYMENT_TOLERANCE:
+                take = round(min(leftover, remaining), 2)
+                remaining = round(remaining - take, 2)
+                unlinked_left[customer_account_id] = round(leftover - take, 2)
+            remaining = round(max(0.0, remaining), 2)
+            if remaining <= PAYMENT_TOLERANCE:
+                row_status = "approved"
+            else:
+                row_status = "pending"
+            if status_key not in ("all", "") and row_status != status_key:
+                continue
+            account = (
+                self._account_repo.find_by_id(customer_account_id)
+                if customer_account_id
+                else None
+            )
+            rows.append(
+                {
+                    "id": park_id,
+                    "voucher_number": park["voucher_number"],
+                    "voucher_date": park["voucher_date"],
+                    "customer_account_id": customer_account_id,
+                    "customer_name": (
+                        account.account_name if account else customer_account_id
+                    ),
+                    "amount": park["amount"],
+                    "remaining": remaining,
+                    "status": row_status,
+                    "reason": park["reason"],
+                    "allocations": park["allocations"],
+                }
+            )
+        return rows
+
+    def approve_customer_settlement(
+        self,
+        park_voucher_id: str,
+        *,
+        amount: Optional[float] = None,
+        reason: str = "",
+        voucher_date: Optional[date] = None,
+    ) -> Voucher:
+        """Approve a pending park by posting Settlement Expense against it."""
+        park = self._voucher_repo.find_by_id(park_voucher_id)
+        if not park:
+            raise ValueError("Settlement park voucher not found")
+        meta = parse_meta(park.description or "", CUSTOMER_SETTLEMENT_TAG)
+        if (meta.get("phase") or "").strip().lower() != "park":
+            raise ValueError("Voucher is not a customer settlement park")
+        customer_account_id = (meta.get("customer_account_id") or "").strip()
+        if not customer_account_id:
+            raise ValueError("Park voucher missing customer account")
+        remaining = self._park_settlement_remaining(park_voucher_id)
+        # Fold in unlinked expenses via list row remaining.
+        pending_rows = {
+            r["id"]: r for r in self.list_customer_settlements(status="pending")
+        }
+        if park_voucher_id in pending_rows:
+            remaining = float(pending_rows[park_voucher_id]["remaining"])
+        if remaining <= PAYMENT_TOLERANCE:
+            raise ValueError("Settlement park is already fully approved")
+        approve_amount = (
+            remaining if amount is None else round(float(amount or 0), 2)
+        )
+        if approve_amount <= 0:
+            raise ValueError("Approval amount must be greater than zero")
+        if approve_amount > remaining + PAYMENT_TOLERANCE:
+            raise ValueError(
+                f"Amount exceeds pending settlement (₹{remaining:,.2f})"
+            )
+        reason_text = (reason or "").strip() or (
+            meta.get("reason")
+            or strip_meta(
+                strip_meta(park.description or "", CUSTOMER_SETTLEMENT_TAG),
+                ALLOC_INVOICE_TAG,
+            )
+            .replace("Customer settlement park — ", "")
+            .strip()
+            or "Approved customer settlement"
+        )
+        return self.expense_customer_settlement(
+            customer_account_id,
+            approve_amount,
+            reason=reason_text,
+            voucher_date=voucher_date,
+            park_voucher_id=park_voucher_id,
+        )
+
+    def reject_customer_settlement(self, park_voucher_id: str) -> None:
+        """Reject a pending park: reverse balances and delete the park voucher."""
+        park = self._voucher_repo.find_by_id(park_voucher_id)
+        if not park:
+            raise ValueError("Settlement park voucher not found")
+        meta = parse_meta(park.description or "", CUSTOMER_SETTLEMENT_TAG)
+        if (meta.get("phase") or "").strip().lower() != "park":
+            raise ValueError("Voucher is not a customer settlement park")
+        parked_amt = round(float(meta.get("amount") or 0), 2)
+        for row in self.list_customer_settlements(status="all"):
+            if row["id"] != park_voucher_id:
+                continue
+            if row["status"] != "pending":
+                raise ValueError("Cannot reject an approved settlement")
+            if abs(float(row["remaining"]) - parked_amt) > PAYMENT_TOLERANCE:
+                raise ValueError(
+                    "Cannot reject a partially approved settlement"
+                )
+            break
+        else:
+            raise ValueError("Settlement park not found in settlement list")
+        self.void_voucher(park_voucher_id)
+
+    def settle_customer_balance(
+        self,
+        customer_account_id: str,
+        amount: float,
+        *,
+        mode: str = "park",
+        reason: str = "",
+        voucher_date: Optional[date] = None,
+    ) -> list[Voucher]:
+        """Customer settlement helper.
+
+        ``mode``:
+          - ``park`` / ``full`` — park receivable (pending Accounts approval)
+          - ``expense`` — expense already-parked Settlement (prefer approve API)
+        """
+        mode_key = (mode or "park").strip().lower()
+        vouchers: list[Voucher] = []
+        if mode_key in ("park", "full"):
+            # Full no longer auto-expenses — approval is required in Accounts.
+            vouchers.append(
+                self.park_customer_receivable_to_settlement(
+                    customer_account_id, amount, reason, voucher_date
+                )
+            )
+        elif mode_key == "expense":
+            vouchers.append(
+                self.expense_customer_settlement(
+                    customer_account_id, amount, reason, voucher_date
+                )
+            )
+        else:
+            raise ValueError("Settlement mode must be park, expense, or full")
+        return vouchers
+
     @staticmethod
     def _voucher_cash_amount(voucher: Voucher) -> float:
         return voucher.cash_movement_amount
@@ -666,14 +1436,19 @@ class AccountingAppService:
         order_id: str,
         exclude_invoice_id: Optional[str] = None,
     ) -> float:
-        """Advance pool for an order: ADVANCE receipts minus advance refunds, applied, released."""
+        """Advance pool for an order: ADVANCE credits minus refunds, applied, released."""
         advance_account = self.get_advance_from_customers_account()
         vouchers = self.list_vouchers_by_order(order_id)
-        advances = sum(
-            self._voucher_cash_amount(v)
-            for v in vouchers
-            if v.voucher_type == VoucherType.ADVANCE
-        )
+        advances = 0.0
+        for v in vouchers:
+            if v.voucher_type != VoucherType.ADVANCE:
+                continue
+            for line in v.lines:
+                if (
+                    line.account_id == advance_account.id
+                    and float(line.credit_amount or 0) > 0
+                ):
+                    advances += float(line.credit_amount)
         advance_refunds = sum(
             self._voucher_cash_amount(v)
             for v in vouchers
@@ -691,6 +1466,72 @@ class AccountingAppService:
                     applied += line.debit_amount
         released = self._order_advance_released(order_id)
         return round(advances - advance_refunds - applied - released, 2)
+
+    @staticmethod
+    def _is_general_advance_voucher(voucher: Voucher) -> bool:
+        """True when the voucher is not tagged to a boutique order."""
+        return not (getattr(voucher, "reference_order_id", None) or "").strip()
+
+    def get_customer_unapplied_advance(
+        self,
+        customer_account_id: str,
+        *,
+        general_only: bool = False,
+        exclude_voucher_id: Optional[str] = None,
+    ) -> float:
+        """Unapplied Advance From Customers for a customer account.
+
+        When ``general_only`` is True, only movements on vouchers without a
+        boutique ``reference_order_id`` are counted (sales-invoice pool).
+        """
+        if not (customer_account_id or "").strip():
+            return 0.0
+        try:
+            advance_account = self.get_advance_from_customers_account()
+        except Exception:
+            return 0.0
+        advance_id = advance_account.id
+        invoice_types = (VoucherType.SALES_INVOICE, VoucherType.CUSTOMIZATION_INVOICE)
+        relevant_types = (
+            VoucherType.ADVANCE,
+            VoucherType.REFUND,
+            VoucherType.SALES_INVOICE,
+            VoucherType.CUSTOMIZATION_INVOICE,
+            VoucherType.JOURNAL,
+        )
+        advances = 0.0
+        advance_refunds = 0.0
+        applied = 0.0
+        released = 0.0
+        for voucher in self.list_vouchers_by_types(list(relevant_types)):
+            if exclude_voucher_id and voucher.id == exclude_voucher_id:
+                continue
+            if not self._voucher_touches_account(voucher, customer_account_id):
+                continue
+            if general_only and not self._is_general_advance_voucher(voucher):
+                continue
+            if voucher.voucher_type == VoucherType.ADVANCE:
+                for line in voucher.lines:
+                    if (
+                        line.account_id == advance_id
+                        and float(line.credit_amount or 0) > 0
+                    ):
+                        advances += float(line.credit_amount)
+            elif voucher.voucher_type == VoucherType.REFUND and voucher.is_advance_refund:
+                advance_refunds += self._voucher_cash_amount(voucher)
+            elif voucher.voucher_type in invoice_types:
+                for line in voucher.lines:
+                    if line.account_id == advance_id and float(line.debit_amount or 0) > 0:
+                        applied += float(line.debit_amount)
+            elif voucher.voucher_type == VoucherType.JOURNAL:
+                if not (voucher.description or "").startswith(
+                    ADVANCE_RELEASE_DESCRIPTION_PREFIX
+                ):
+                    continue
+                for line in voucher.lines:
+                    if line.account_id == advance_id and float(line.debit_amount or 0) > 0:
+                        released += float(line.debit_amount)
+        return round(max(advances - advance_refunds - applied - released, 0.0), 2)
 
     def get_order_customer_payments(
         self,
@@ -791,7 +1632,7 @@ class AccountingAppService:
             amount=amount,
             reference_order_id=order_id,
         )
-        return self._domain.save_voucher(voucher)
+        return self._save_voucher(voucher)
 
     def find_sales_voucher_by_invoice(self, invoice_id: str) -> Optional[Voucher]:
         return self._voucher_repo.find_by_invoice(invoice_id)
@@ -839,7 +1680,7 @@ class AccountingAppService:
             advance_applied=advance_applied,
             voucher_type=voucher_type,
         )
-        return self._domain.save_voucher(voucher)
+        return self._save_voucher(voucher)
 
     def update_sales_invoice(
         self,
@@ -886,7 +1727,7 @@ class AccountingAppService:
             voucher_type=voucher_type or old.voucher_type,
         )
         voucher.id = old.id
-        return self._domain.update_voucher(voucher)
+        return self._update_voucher(voucher)
 
     def create_customization_gst_invoice(
         self,
@@ -931,7 +1772,7 @@ class AccountingAppService:
             gst_output_accounts=self.get_gst_output_accounts(),
             voucher_type=VoucherType.CUSTOMIZATION_INVOICE,
         )
-        return self._domain.save_voucher(voucher)
+        return self._save_voucher(voucher)
 
     def update_customization_gst_invoice(
         self,
@@ -978,7 +1819,7 @@ class AccountingAppService:
             voucher_type=old.voucher_type,
         )
         voucher.id = old.id
-        return self._domain.update_voucher(voucher)
+        return self._update_voucher(voucher)
 
     def create_cash_sales_invoice(
         self,
@@ -994,6 +1835,9 @@ class AccountingAppService:
         reference_dn_id: Optional[str] = None,
         sales_lines: Optional[list[dict]] = None,
         gst_output_accounts: Optional[dict] = None,
+        financial_year: str = "",
+        credit_applied: float = 0.0,
+        advance_applied: float = 0.0,
     ) -> Voucher:
         customer = self._account_repo.find_by_id(customer_account_id)
         store = self._account_repo.find_by_id(store_account_id)
@@ -1013,10 +1857,48 @@ class AccountingAppService:
         description = f"Store invoice {number}"
         if line_items_note.strip():
             description = f"{description}\n{line_items_note.strip()}"
+        credit_applied = round(max(float(credit_applied or 0), 0.0), 2)
+        advance_applied = round(max(float(advance_applied or 0), 0.0), 2)
+        net_for_settlement = round(
+            float(gross_amount or 0) - float(discount_amount or 0), 2
+        )
+        if sales_lines:
+            net_for_settlement = round(
+                sum(float(raw.get("line_total") or 0) for raw in sales_lines), 2
+            )
+        if credit_applied + advance_applied > net_for_settlement + PAYMENT_TOLERANCE:
+            raise ValueError(
+                "Credit and advance applied together cannot exceed the invoice amount"
+            )
+        if credit_applied > 0:
+            available = self.customer_credit_balance(customer.id)
+            if credit_applied > available + PAYMENT_TOLERANCE:
+                raise ValueError(
+                    f"Credit applied exceeds available customer credit "
+                    f"(₹{available:,.2f})"
+                )
+            description = append_meta(
+                description,
+                CREDIT_APPLIED_TAG,
+                {"amount": credit_applied},
+            )
+        advance = None
+        if advance_applied > 0:
+            available_adv = self.get_customer_unapplied_advance(
+                customer.id, general_only=True
+            )
+            if advance_applied > available_adv + PAYMENT_TOLERANCE:
+                raise ValueError(
+                    f"Advance applied exceeds available customer advance "
+                    f"(₹{available_adv:,.2f})"
+                )
+            advance = self.get_advance_from_customers_account()
         voucher_number = self._counter_repo.next("voucher_number")
         v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
         if sales_lines and not gst_output_accounts:
             gst_output_accounts = self.get_gst_output_accounts()
+        # Cash collected is remainder after applying customer credit / advance.
+        cash_received = round(max(float(amount_received or 0), 0.0), 2)
         voucher = self._domain.build_cash_sales_invoice_voucher(
             voucher_number=voucher_number,
             voucher_date=v_date,
@@ -1029,15 +1911,19 @@ class AccountingAppService:
             store_account_name=store.account_name,
             gross_amount=gross_amount,
             discount_amount=discount_amount,
-            amount_received=amount_received,
+            amount_received=cash_received,
             discount_account_id=discount_account.id if discount_account else None,
             discount_account_name=discount_account.account_name if discount_account else None,
             reference_so_id=reference_so_id,
             reference_dn_id=reference_dn_id,
             sales_lines=sales_lines,
             gst_output_accounts=gst_output_accounts,
+            advance_account_id=advance.id if advance else None,
+            advance_account_name=advance.account_name if advance else None,
+            advance_applied=advance_applied,
         )
-        return self._domain.save_voucher(voucher)
+        voucher.financial_year = (financial_year or "").strip()
+        return self._save_voucher(voucher)
 
     def update_cash_sales_invoice(
         self,
@@ -1052,6 +1938,9 @@ class AccountingAppService:
         voucher_date: Optional[date] = None,
         sales_lines: Optional[list[dict]] = None,
         allow_erp_linked: bool = False,
+        financial_year: str = "",
+        credit_applied: float = 0.0,
+        advance_applied: float = 0.0,
     ) -> Voucher:
         old = self._voucher_repo.find_by_id(voucher_id)
         if not old or old.voucher_type != VoucherType.SALES_INVOICE:
@@ -1082,6 +1971,53 @@ class AccountingAppService:
         description = f"Store invoice {number}"
         if line_items_note.strip():
             description = f"{description}\n{line_items_note.strip()}"
+        credit_applied = round(max(float(credit_applied or 0), 0.0), 2)
+        advance_applied = round(max(float(advance_applied or 0), 0.0), 2)
+        net_for_settlement = round(
+            float(gross_amount or 0) - float(discount_amount or 0), 2
+        )
+        if sales_lines:
+            net_for_settlement = round(
+                sum(float(raw.get("line_total") or 0) for raw in sales_lines), 2
+            )
+        if credit_applied + advance_applied > net_for_settlement + PAYMENT_TOLERANCE:
+            raise ValueError(
+                "Credit and advance applied together cannot exceed the invoice amount"
+            )
+        if credit_applied > 0:
+            # Credit already on this voucher is restored when the voucher is rebuilt;
+            # available = current credit balance + previous credit on this voucher.
+            from vaybooks.bms.domain.finance.accounting.settlement import (
+                credit_applied_from_description,
+            )
+
+            previous_credit = credit_applied_from_description(old.description or "")
+            available = round(
+                self.customer_credit_balance(customer.id) + previous_credit, 2
+            )
+            if credit_applied > available + PAYMENT_TOLERANCE:
+                raise ValueError(
+                    f"Credit applied exceeds available customer credit "
+                    f"(₹{available:,.2f})"
+                )
+            description = append_meta(
+                description,
+                CREDIT_APPLIED_TAG,
+                {"amount": credit_applied},
+            )
+        advance = None
+        if advance_applied > 0:
+            available_adv = self.get_customer_unapplied_advance(
+                customer.id,
+                general_only=True,
+                exclude_voucher_id=old.id,
+            )
+            if advance_applied > available_adv + PAYMENT_TOLERANCE:
+                raise ValueError(
+                    f"Advance applied exceeds available customer advance "
+                    f"(₹{available_adv:,.2f})"
+                )
+            advance = self.get_advance_from_customers_account()
         v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
         voucher = self._domain.build_cash_sales_invoice_voucher(
             voucher_number=old.voucher_number,
@@ -1095,7 +2031,7 @@ class AccountingAppService:
             store_account_name=store.account_name,
             gross_amount=gross_amount,
             discount_amount=discount_amount,
-            amount_received=amount_received,
+            amount_received=round(max(float(amount_received or 0), 0.0), 2),
             discount_account_id=discount_account.id if discount_account else None,
             discount_account_name=discount_account.account_name if discount_account else None,
             reference_so_id=old.reference_so_id,
@@ -1104,9 +2040,15 @@ class AccountingAppService:
             gst_output_accounts=(
                 self.get_gst_output_accounts() if sales_lines else None
             ),
+            advance_account_id=advance.id if advance else None,
+            advance_account_name=advance.account_name if advance else None,
+            advance_applied=advance_applied,
         )
         voucher.id = old.id
-        return self._domain.update_voucher(voucher)
+        voucher.financial_year = (financial_year or "").strip() or (
+            old.financial_year or ""
+        )
+        return self._update_voucher(voucher)
 
     def create_advance_refund(
         self,
@@ -1125,7 +2067,7 @@ class AccountingAppService:
             available = self.get_order_unapplied_advance(reference_order_id)
             if amount > available:
                 raise ValueError(
-                    f"Refund amount exceeds unapplied advance (₹{available:,.2f} available)"
+                    f"Refund amount exceeds unapplied advance (â‚¹{available:,.2f} available)"
                 )
         advance = self.get_advance_from_customers_account()
         voucher_number = self._counter_repo.next("voucher_number")
@@ -1143,7 +2085,7 @@ class AccountingAppService:
             amount=amount,
             reference_order_id=reference_order_id,
         )
-        return self._domain.save_voucher(voucher)
+        return self._save_voucher(voucher)
 
     def update_advance_refund(
         self,
@@ -1166,7 +2108,7 @@ class AccountingAppService:
             available += old.cash_movement_amount
             if amount > available:
                 raise ValueError(
-                    f"Refund amount exceeds unapplied advance (₹{available:,.2f} available)"
+                    f"Refund amount exceeds unapplied advance (â‚¹{available:,.2f} available)"
                 )
         advance = self.get_advance_from_customers_account()
         v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
@@ -1184,7 +2126,7 @@ class AccountingAppService:
             reference_order_id=old.reference_order_id,
         )
         voucher.id = old.id
-        return self._domain.update_voucher(voucher)
+        return self._update_voucher(voucher)
 
     def create_customer_payment_refund(
         self,
@@ -1203,7 +2145,7 @@ class AccountingAppService:
             available = self.get_order_refundable_customer_payments(reference_order_id)
             if amount > available:
                 raise ValueError(
-                    f"Refund exceeds refundable customer payments (₹{available:,.2f} available)"
+                    f"Refund exceeds refundable customer payments (â‚¹{available:,.2f} available)"
                 )
         voucher_number = self._counter_repo.next("voucher_number")
         v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
@@ -1218,7 +2160,7 @@ class AccountingAppService:
             amount=amount,
             reference_order_id=reference_order_id,
         )
-        return self._domain.save_voucher(voucher)
+        return self._save_voucher(voucher)
 
     def update_customer_payment_refund(
         self,
@@ -1242,7 +2184,7 @@ class AccountingAppService:
             )
             if amount > available:
                 raise ValueError(
-                    f"Refund exceeds refundable customer payments (₹{available:,.2f} available)"
+                    f"Refund exceeds refundable customer payments (â‚¹{available:,.2f} available)"
                 )
         v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
         voucher = self._domain.build_customer_payment_refund_voucher(
@@ -1257,7 +2199,7 @@ class AccountingAppService:
             reference_order_id=old.reference_order_id,
         )
         voucher.id = old.id
-        return self._domain.update_voucher(voucher)
+        return self._update_voucher(voucher)
 
     def create_refund(
         self,
@@ -1376,7 +2318,7 @@ class AccountingAppService:
             lines=voucher_lines,
         )
         voucher.reference_production_batch_id = reference_production_batch_id
-        return self._domain.save_voucher(voucher)
+        return self._save_voucher(voucher)
 
     def get_account_ledger(self, account_id: str) -> List[dict]:
         vouchers = self._voucher_repo.list_by_account(account_id)
@@ -1425,6 +2367,7 @@ class AccountingAppService:
         stock_lines: Optional[list[dict]] = None,
         landed_cost_lines: Optional[list[dict]] = None,
         stock_reference_id: Optional[str] = None,
+        financial_year: str = "",
     ) -> Voucher:
         from vaybooks.bms.domain.finance.accounting.purchase_parsing import (
             build_purchase_description,
@@ -1495,7 +2438,8 @@ class AccountingAppService:
             reference_grn_id=reference_grn_id,
             gst_input_accounts=gst_input_accounts,
         )
-        saved = self._domain.save_voucher(voucher)
+        voucher.financial_year = (financial_year or "").strip()
+        saved = self._save_voucher(voucher)
         return saved
 
     def update_purchase_bill(
@@ -1508,6 +2452,7 @@ class AccountingAppService:
         paying_account_id: Optional[str] = None,
         voucher_date: Optional[date] = None,
         reference_service_id: Optional[str] = None,
+        financial_year: str = "",
     ) -> Voucher:
         from vaybooks.bms.domain.finance.accounting.purchase_parsing import (
             build_purchase_description,
@@ -1583,7 +2528,10 @@ class AccountingAppService:
             gst_input_accounts=gst_input_accounts,
         )
         voucher.id = old.id
-        return self._domain.update_voucher(voucher)
+        voucher.financial_year = (financial_year or "").strip() or (
+            old.financial_year or ""
+        )
+        return self._update_voucher(voucher)
 
     def delete_purchase_bill(self, voucher_id: str) -> None:
         old = self._voucher_repo.find_by_id(voucher_id)
@@ -1640,7 +2588,7 @@ class AccountingAppService:
             refund_account_name=refund.account_name if refund else None,
             reference_grn_id=reference_grn_id,
         )
-        return self._domain.save_voucher(voucher)
+        return self._save_voucher(voucher)
 
     def create_sales_return_voucher(
         self,
@@ -1683,7 +2631,7 @@ class AccountingAppService:
             reference_dn_id=reference_dn_id,
             source_invoice_id=source_invoice_id,
         )
-        return self._domain.save_voucher(voucher)
+        return self._save_voucher(voucher)
 
     def _resolve_note_party_and_contra(
         self,
@@ -1755,7 +2703,7 @@ class AccountingAppService:
             settle_account_name=settle.account_name if settle else None,
             reference_invoice_id=reference_invoice_id,
         )
-        return self._domain.save_voucher(voucher)
+        return self._save_voucher(voucher)
 
     def create_debit_note(
         self,
@@ -1796,7 +2744,7 @@ class AccountingAppService:
             settle_account_name=settle.account_name if settle else None,
             reference_invoice_id=reference_invoice_id,
         )
-        return self._domain.save_voucher(voucher)
+        return self._save_voucher(voucher)
 
     def get_store_accounts(self) -> List[Account]:
         """Accounts flagged as store accounts (cash drawer, bank, etc.)."""

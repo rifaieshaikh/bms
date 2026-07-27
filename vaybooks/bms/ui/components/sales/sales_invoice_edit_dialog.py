@@ -10,6 +10,13 @@ from vaybooks.bms.domain.shared.enums import PartyRegistrationType
 from vaybooks.bms.ui.components.common.document_custom_fields import (
     render_document_custom_fields,
 )
+from vaybooks.bms.ui.components.sales.discount_controls import (
+    eligible_invoice_discount_base,
+    render_invoice_level_discount,
+)
+from vaybooks.bms.ui.components.sales.invoice_number_field import (
+    render_store_invoice_number_field,
+)
 from vaybooks.bms.ui.components.sales.sales_lines_entry_table import (
     entry_table_focus_chain,
     entry_table_focus_columns,
@@ -98,17 +105,12 @@ def _invoice_edit_dialog(
         st.error("Need at least one cash/bank store account.")
         return
     store_index = store_ids.index(current_store) if current_store in store_ids else 0
-    edit_store_id = st.selectbox(
-        "Cash / Bank account",
-        store_ids,
-        index=store_index,
-        format_func=lambda item_id: store_by_id[item_id].account_name,
-        key=f"{INVOICE_EDIT_DIALOG}_store",
-    )
-    edit_number = st.text_input(
-        "Store invoice number",
-        value=row.get("store_invoice_number") or "",
+    edit_number = render_store_invoice_number_field(
+        sales,
         key=f"{INVOICE_EDIT_DIALOG}_number",
+        voucher_date=None,
+        existing_number=row.get("store_invoice_number") or "",
+        editable_existing=True,
     )
     edit_date = st.date_input(
         "Invoice date",
@@ -122,6 +124,13 @@ def _invoice_edit_dialog(
             "qty": float(item.get("qty") or 0),
             "rate": float(item.get("rate") or 0),
             "discount": float(item.get("discount") or 0),
+            "discount_mode": item.get("discount_mode") or "flat",
+            "discount_input": float(
+                item.get("discount_input")
+                if item.get("discount_input") is not None
+                else item.get("discount")
+                or 0
+            ),
         }
         for item in line_items
     ]
@@ -141,13 +150,91 @@ def _invoice_edit_dialog(
         qty_field="qty",
         focus_restore_key=INVOICE_EDIT_FOCUS_KEY,
     )
-    edit_received = st.number_input(
-        "Amount received",
-        min_value=0.0,
-        value=float(row.get("collected") or 0),
-        key=f"{INVOICE_EDIT_DIALOG}_received",
+    inv_disc_value_key = f"{INVOICE_EDIT_DIALOG}_inv_disc_flat"
+    if inv_disc_value_key not in st.session_state:
+        st.session_state[inv_disc_value_key] = float(invoice_discount or 0)
+    effective_invoice_discount = render_invoice_level_discount(
+        key_prefix=f"{INVOICE_EDIT_DIALOG}_inv_disc",
+        base_amount=eligible_invoice_discount_base(updated_items),
     )
+
     voucher = accounting.get_voucher(voucher_id)
+    from vaybooks.bms.domain.finance.accounting.sales_parsing import (
+        sales_amounts_from_lines,
+    )
+    from vaybooks.bms.domain.finance.accounting.settlement import (
+        credit_applied_from_description,
+    )
+
+    line_amounts = sales_amounts_from_lines(voucher.lines if voucher else [])
+    existing_credit = credit_applied_from_description(
+        voucher.description if voucher else ""
+    )
+    existing_advance = float(line_amounts.get("advance_applied") or 0)
+    existing_cash = float(line_amounts.get("cash_received") or 0)
+    net_preview = float(line_amounts.get("net") or 0)
+
+    credit_available = accounting.customer_credit_balance(customer_account_id)
+    credit_ceiling = round(credit_available + existing_credit, 2)
+    advance_available = accounting.get_customer_unapplied_advance(
+        customer_account_id,
+        general_only=True,
+        exclude_voucher_id=voucher_id,
+    )
+
+    credit_key = f"{INVOICE_EDIT_DIALOG}_credit"
+    if credit_key not in st.session_state:
+        st.session_state[credit_key] = float(existing_credit)
+    credit_applied = 0.0
+    if credit_ceiling > 0.01 or existing_credit > 0:
+        credit_applied = st.number_input(
+            "Apply customer credit",
+            min_value=0.0,
+            max_value=float(min(credit_ceiling, net_preview)) if net_preview > 0 else 0.0,
+            key=credit_key,
+            help=f"Available credit ₹{credit_ceiling:,.2f} (includes amount on this invoice)",
+        )
+
+    after_credit = round(max(net_preview - float(credit_applied or 0), 0.0), 2)
+    advance_key = f"{INVOICE_EDIT_DIALOG}_advance"
+    if advance_key not in st.session_state:
+        st.session_state[advance_key] = float(existing_advance)
+    advance_applied = 0.0
+    if advance_available > 0.01 or existing_advance > 0:
+        advance_applied = st.number_input(
+            "Apply customer advance",
+            min_value=0.0,
+            max_value=float(min(advance_available, after_credit))
+            if after_credit > 0
+            else 0.0,
+            key=advance_key,
+            help=f"Available advance ₹{advance_available:,.2f}",
+        )
+
+    cash_due = round(
+        max(net_preview - float(credit_applied or 0) - float(advance_applied or 0), 0.0),
+        2,
+    )
+    received_key = f"{INVOICE_EDIT_DIALOG}_received"
+    if received_key not in st.session_state:
+        st.session_state[received_key] = float(existing_cash)
+
+    pay_cols = st.columns(2)
+    with pay_cols[0]:
+        edit_received = st.number_input(
+            "Amount received",
+            min_value=0.0,
+            key=received_key,
+            help=f"Cash due after credit/advance: ₹{cash_due:,.2f}",
+        )
+    with pay_cols[1]:
+        edit_store_id = st.selectbox(
+            "Cash / Bank account",
+            store_ids,
+            index=store_index,
+            format_func=lambda item_id: store_by_id[item_id].account_name,
+            key=f"{INVOICE_EDIT_DIALOG}_store",
+        )
     current_content = parse_sales_document_content(
         voucher.description if voucher else ""
     )
@@ -200,10 +287,12 @@ def _invoice_edit_dialog(
                 line_items=updated_items,
                 amount_received=edit_received,
                 voucher_date=edit_date,
-                invoice_discount=invoice_discount,
+                invoice_discount=effective_invoice_discount,
                 custom_values=custom_values,
                 bank_account_id=edit_bank,
                 terms_and_conditions=edit_terms,
+                credit_applied=float(credit_applied or 0),
+                advance_applied=float(advance_applied or 0),
             )
             _clear()
             st.rerun()

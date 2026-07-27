@@ -95,6 +95,9 @@ class OrderAppService:
         address: str = "",
         expected_delivery_date: Optional[date] = None,
         customer_id: Optional[str] = None,
+        *,
+        require_name: bool = True,
+        require_phone: bool = True,
     ) -> CustomizationOrder:
         if customer_id:
             customer = self._customer_domain._customer_repo.find_by_id(customer_id)
@@ -106,6 +109,8 @@ class OrderAppService:
                 phone_number=phone_number,
                 alternate_phone_number=alternate_phone_number,
                 address=address,
+                require_name=require_name,
+                require_phone=require_phone,
             )
         account_name = CustomerDomainService.build_account_name(customer)
         self._accounting_domain.ensure_customer_account(customer.id, account_name)
@@ -178,6 +183,44 @@ class OrderAppService:
             return None
         return sorted(advances, key=lambda v: v.created_at or utc_now())[-1]
 
+    def apply_customer_credit_as_order_advance(
+        self,
+        order_id: str,
+        amount: Optional[float] = None,
+    ) -> tuple[CustomizationOrder, Optional[Voucher]]:
+        """Move customer ledger credit into this order's advance pool (no cash)."""
+        order = self._order_repo.find_by_id(order_id)
+        if not order:
+            raise ValidationError("Order not found")
+        if not self._accounting_service:
+            raise ValidationError("Accounting service is unavailable")
+        customer_account = self._accounting_service.get_customer_account(
+            order.customer_id
+        )
+        if not customer_account:
+            raise ValidationError("Customer account not found")
+        available = self._accounting_service.customer_credit_balance(
+            customer_account.id
+        )
+        if available <= 0:
+            return order, None
+        apply_amount = available if amount is None else float(amount or 0)
+        apply_amount = round(min(max(apply_amount, 0.0), available), 2)
+        if apply_amount <= 0:
+            return order, None
+        voucher = self._accounting_service.allocate_customer_credit_to_advance(
+            customer_account_id=customer_account.id,
+            amount=apply_amount,
+            reference_order_id=order.id,
+            description=f"Credit to advance for {order.order_number}",
+        )
+        order.advance_amount = round(
+            float(order.advance_amount or 0) + apply_amount, 2
+        )
+        order.updated_at = utc_now()
+        saved = self._order_repo.save(order)
+        return saved, voucher
+
     def save_order_advance(
         self,
         order_id: str,
@@ -224,6 +267,43 @@ class OrderAppService:
                     description=description,
                     reference_order_id=saved.id,
                 )
+        return saved, voucher
+
+    def record_cash_order_advance(
+        self,
+        order_id: str,
+        cash_amount: float,
+        receiving_account_id: str,
+    ) -> tuple[CustomizationOrder, Optional[Voucher]]:
+        """Post an additional cash advance without wiping credit-based advance."""
+        order = self._order_repo.find_by_id(order_id)
+        if not order:
+            raise ValidationError("Order not found")
+        amount = round(float(cash_amount or 0), 2)
+        if amount <= 0:
+            return order, None
+        if not receiving_account_id:
+            raise ValidationError(
+                "Receiving account is required when cash advance is greater than zero"
+            )
+        if not self._accounting_service:
+            raise ValidationError("Accounting service is unavailable")
+        customer_account = self._accounting_service.get_customer_account(
+            order.customer_id
+        )
+        if not customer_account:
+            raise ValidationError("Customer account not found")
+        description = f"Advance for {order.order_number}"
+        voucher = self._accounting_service.create_advance_receipt(
+            receiving_account_id=receiving_account_id,
+            customer_account_id=customer_account.id,
+            amount=amount,
+            description=description,
+            reference_order_id=order.id,
+        )
+        order.advance_amount = round(float(order.advance_amount or 0) + amount, 2)
+        order.updated_at = utc_now()
+        saved = self._order_repo.save(order)
         return saved, voucher
 
     def allocate_measurement_bill_number(self, measurement_number: str) -> str:

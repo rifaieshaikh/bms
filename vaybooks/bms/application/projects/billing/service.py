@@ -122,6 +122,15 @@ class ProjectBillingAppService:
             raise ValidationError("Customer account not found for project")
         return account
 
+    def _resolve_financial_year(self, voucher_date: Optional[date] = None) -> str:
+        if self._accounting is not None and hasattr(
+            self._accounting, "resolve_voucher_financial_year"
+        ):
+            return self._accounting.resolve_voucher_financial_year(voucher_date)
+        from vaybooks.bms.domain.shared.financial_year import resolve_financial_year
+
+        return resolve_financial_year(voucher_date or today())
+
     def _list_project_vouchers(self, project_id: str) -> List[Voucher]:
         if self._accounting:
             return self._accounting.list_vouchers_by_project(project_id)
@@ -137,19 +146,15 @@ class ProjectBillingAppService:
 
     @staticmethod
     def _append_meta(description: str, tag: str, payload: dict) -> str:
-        base = (description or "").strip()
-        return f"{base}\n<!--{tag}:{json.dumps(payload, separators=(',', ':'))}-->"
+        from vaybooks.bms.domain.finance.accounting.settlement import append_meta
+
+        return append_meta(description, tag, payload)
 
     @staticmethod
     def _parse_meta(description: str, tag: str) -> dict:
-        pattern = re.compile(rf"\n<!--{tag}:(\{{.*?\}})-->", re.DOTALL)
-        match = pattern.search(description or "")
-        if not match:
-            return {}
-        try:
-            return json.loads(match.group(1))
-        except json.JSONDecodeError:
-            return {}
+        from vaybooks.bms.domain.finance.accounting.settlement import parse_meta
+
+        return parse_meta(description, tag)
 
     def _invoice_net_amount(self, voucher: Voucher) -> float:
         discount = self._accounting.get_discount_account() if self._accounting else None
@@ -625,6 +630,7 @@ class ProjectBillingAppService:
             retention_pct=effective_retention,
             retention_amount_claimed=retention_amount,
             work_order_id=(work_order_id or "").strip(),
+            financial_year=self._resolve_financial_year(ra_date or today()),
         )
         return self._ra_repo.save(ra_bill)
 
@@ -730,6 +736,7 @@ class ProjectBillingAppService:
             other_deductions=float(other_deductions or 0.0),
             description=(description or "").strip(),
             work_order_id=(work_order_id or "").strip(),
+            financial_year=self._resolve_financial_year(ra_date or today()),
         )
         ra_bill.retention_amount_claimed = round(
             ra_bill.gross_claimed * effective_retention / 100.0, 2
@@ -951,6 +958,7 @@ class ProjectBillingAppService:
             amount=float(total),
             description=(description or "").strip(),
             lines=parsed_lines,
+            financial_year=self._resolve_financial_year(proforma_date or today()),
         )
         return self._proforma_repo.save(proforma)
 

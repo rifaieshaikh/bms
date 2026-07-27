@@ -11,6 +11,8 @@ from vaybooks.bms.domain.shared.enums import PartyRegistrationType
 from vaybooks.bms.ui.components.sales.sales_line_ui import (
     line_tax_profile,
     preview_sales_line_gst,
+    sales_tax_column_labels,
+    sales_tax_display_mode,
     tax_summary_from_previews,
 )
 
@@ -50,7 +52,7 @@ def _default_rate_for_product(
     return round(float(getattr(product, "selling_rate", 0) or 0), 2)
 
 
-def _blank_row(*, show_discount: bool) -> dict[str, Any]:
+def _blank_row(*, show_discount: bool, tax_mode: str = "none") -> dict[str, Any]:
     row: dict[str, Any] = {
         "SKU": "",
         "Product": "",
@@ -60,17 +62,12 @@ def _blank_row(*, show_discount: bool) -> dict[str, Any]:
     }
     if show_discount:
         row["Discount"] = 0.0
-    row.update(
-        {
-            "Taxable": 0.0,
-            "GST %": 0.0,
-            "CGST": 0.0,
-            "SGST": 0.0,
-            "UTGST": 0.0,
-            "IGST": 0.0,
-            "Line Total": 0.0,
-        }
-    )
+    row["Taxable"] = 0.0
+    if tax_mode != "none":
+        row["GST %"] = 0.0
+        for label in sales_tax_column_labels(tax_mode):
+            row[label] = 0.0
+    row["Line Total"] = 0.0
     return row
 
 
@@ -81,6 +78,7 @@ def _rows_from_initial(
     label_by_id: dict[str, str],
     qty_field: str,
     show_discount: bool,
+    tax_mode: str = "none",
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for raw in initial_lines or []:
@@ -92,13 +90,15 @@ def _rows_from_initial(
             raw.get(qty_field) or raw.get("qty") or raw.get("qty_ordered") or 1
         )
         rate = float(raw.get("rate") or 0)
-        row: dict[str, Any] = _blank_row(show_discount=show_discount)
+        row: dict[str, Any] = _blank_row(
+            show_discount=show_discount, tax_mode=tax_mode
+        )
         row.update({"SKU": label, "Qty": qty, "Rate": rate})
         if show_discount:
             row["Discount"] = float(raw.get("discount") or 0)
         rows.append(row)
     if not rows:
-        rows.append(_blank_row(show_discount=show_discount))
+        rows.append(_blank_row(show_discount=show_discount, tax_mode=tax_mode))
     return rows
 
 
@@ -119,6 +119,12 @@ def render_sales_lines_editor(
     qty_field: str = "qty",
 ) -> tuple[list[dict], list[str]]:
     """Render an editable SKU/qty/rate table and return normalized lines + GST errors."""
+    tax_mode = sales_tax_display_mode(
+        business_registered=business_registered,
+        business_state_code=business_state_code,
+        customer_state_code=customer_state_code,
+    )
+    tax_labels = sales_tax_column_labels(tax_mode)
     product_by_id = {item.id: item for item in products}
     label_by_id = {item.id: _sku_label(item) for item in products}
     product_by_label = {_sku_label(item): item for item in products}
@@ -135,6 +141,7 @@ def render_sales_lines_editor(
             label_by_id=label_by_id,
             qty_field=qty_field,
             show_discount=show_discount,
+            tax_mode=tax_mode,
         )
         st.session_state[df_key] = seeded
         st.session_state[snapshot_key] = [
@@ -159,29 +166,26 @@ def render_sales_lines_editor(
         "Taxable": st.column_config.NumberColumn(
             "Taxable", format="₹ %.2f"
         ),
-        "GST %": st.column_config.NumberColumn(
-            "GST %", format="%.2f"
-        ),
-        "CGST": st.column_config.NumberColumn(
-            "CGST", format="₹ %.2f"
-        ),
-        "SGST": st.column_config.NumberColumn(
-            "SGST", format="₹ %.2f"
-        ),
-        "UTGST": st.column_config.NumberColumn(
-            "UTGST", format="₹ %.2f"
-        ),
-        "IGST": st.column_config.NumberColumn(
-            "IGST", format="₹ %.2f"
-        ),
         "Line Total": st.column_config.NumberColumn(
             "Line Total", format="₹ %.2f"
         ),
     }
     if show_discount:
         column_config["Discount"] = st.column_config.NumberColumn(
-            "Discount", min_value=0.0, step=0.01, format="%.2f"
+            "Discount", min_value=0.0, step=0.01, format="%.2f", width="medium"
         )
+    if tax_mode != "none":
+        column_config["GST %"] = st.column_config.NumberColumn(
+            "GST %", format="%.2f"
+        )
+        for label in tax_labels:
+            column_config[label] = st.column_config.NumberColumn(
+                label, format="₹ %.2f"
+            )
+
+    disabled_cols = ["Product", "HSN/SAC", "Taxable", "Line Total"]
+    if tax_mode != "none":
+        disabled_cols.extend(["GST %", *tax_labels])
 
     edited_df = st.data_editor(
         pd.DataFrame(st.session_state[df_key]),
@@ -190,17 +194,7 @@ def render_sales_lines_editor(
         hide_index=True,
         key=editor_key,
         column_config=column_config,
-        disabled=[
-            "Product",
-            "HSN/SAC",
-            "Taxable",
-            "GST %",
-            "CGST",
-            "SGST",
-            "UTGST",
-            "IGST",
-            "Line Total",
-        ],
+        disabled=disabled_cols,
     )
     edited_rows = edited_df.to_dict("records") if edited_df is not None else []
     previous = list(st.session_state.get(snapshot_key) or [])
@@ -243,7 +237,7 @@ def render_sales_lines_editor(
             business_state_code=business_state_code,
             customer_state_code=customer_state_code,
         )
-        display_row = _blank_row(show_discount=show_discount)
+        display_row = _blank_row(show_discount=show_discount, tax_mode=tax_mode)
         display_row.update(
             {
                 "SKU": label,
@@ -252,28 +246,25 @@ def render_sales_lines_editor(
                 "Qty": qty,
                 "Rate": rate,
                 "Taxable": preview["taxable_amount"],
-                "GST %": preview["gst_rate"],
+                "Line Total": preview["line_total"],
+            }
+        )
+        if tax_mode != "none":
+            display_row["GST %"] = preview["gst_rate"]
+            amount_by_label = {
                 "CGST": preview["cgst_amount"],
                 "SGST": preview["sgst_amount"],
                 "UTGST": preview["utgst_amount"],
                 "IGST": preview["igst_amount"],
-                "Line Total": preview["line_total"],
             }
-        )
+            for label_tax in tax_labels:
+                display_row[label_tax] = amount_by_label[label_tax]
         if show_discount:
             display_row["Discount"] = discount
-        for computed_key in (
-            "Product",
-            "HSN/SAC",
-            "Taxable",
-            "GST %",
-            "CGST",
-            "SGST",
-            "UTGST",
-            "IGST",
-            "Line Total",
-        ):
-            if raw.get(computed_key) != display_row[computed_key]:
+        for computed_key in list(display_row.keys()):
+            if computed_key in {"SKU", "Qty", "Rate", "Discount"}:
+                continue
+            if raw.get(computed_key) != display_row.get(computed_key):
                 force_refresh = True
                 break
         display_rows.append(display_row)
@@ -313,7 +304,7 @@ def render_sales_lines_editor(
                 )
 
     if not display_rows:
-        display_rows = [_blank_row(show_discount=show_discount)]
+        display_rows = [_blank_row(show_discount=show_discount, tax_mode=tax_mode)]
         next_snapshot = [{"sku": "", "rate": 0.0}]
 
     st.session_state[df_key] = display_rows
@@ -325,17 +316,23 @@ def render_sales_lines_editor(
     if gst_previews:
         summary = tax_summary_from_previews(gst_previews)
         with st.container(border=True):
-            if business_registered:
-                metrics = st.columns(4)
+            if tax_mode != "none":
+                metrics = st.columns(3 + len(tax_labels))
                 metrics[0].metric("Taxable", f"₹{summary['taxable']:,.2f}")
-                if summary["igst"]:
-                    metrics[1].metric("IGST", f"₹{summary['igst']:,.2f}")
-                else:
-                    metrics[1].metric("CGST", f"₹{summary['cgst']:,.2f}")
-                metrics[2].metric(
+                key_by_label = {
+                    "CGST": "cgst",
+                    "SGST": "sgst",
+                    "UTGST": "utgst",
+                    "IGST": "igst",
+                }
+                for i, label in enumerate(tax_labels):
+                    metrics[1 + i].metric(
+                        label, f"₹{summary[key_by_label[label]]:,.2f}"
+                    )
+                metrics[-2].metric(
                     "Total GST", f"₹{summary['total_tax']:,.2f}"
                 )
-                metrics[3].metric(
+                metrics[-1].metric(
                     "Grand total", f"₹{summary['grand_total']:,.2f}"
                 )
             else:

@@ -12,17 +12,25 @@ import streamlit as st
 
 from vaybooks.bms.domain.shared.enums import PartyRegistrationType
 from vaybooks.bms.ui.components.common.dialog_state import ensure_selectbox_option
+from vaybooks.bms.ui.components.sales.discount_controls import resolve_line_discount
 from vaybooks.bms.ui.components.sales.sales_line_ui import (
     line_tax_profile,
     preview_sales_line_gst,
+    sales_tax_column_labels,
+    sales_tax_display_mode,
     tax_summary_from_previews,
 )
 
 _COL_WEIGHTS_BASE = [2.4, 0.7, 0.8]
-_COL_WEIGHTS_DISCOUNT = [0.7]
+_COL_WEIGHTS_DISCOUNT = [1.0, 0.85]
 _COL_WEIGHTS_MID = [0.8, 0.9]
-_COL_WEIGHTS_GST = [0.6, 0.7, 0.7, 0.7, 0.7]
+_COL_WEIGHTS_GST_RATE = [0.6]
+_COL_WEIGHTS_GST_AMOUNT = [0.85]
 _COL_WEIGHTS_TAIL = [0.9, 0.55]
+
+_DISC_MODE_FLAT = "₹"
+_DISC_MODE_PCT = "%"
+_DISC_MODE_OPTIONS = [_DISC_MODE_FLAT, _DISC_MODE_PCT]
 
 
 def _money(value: float) -> str:
@@ -117,13 +125,15 @@ div[class*="st-key-"][class*="_discount"] button {
     )
 
 
-def _col_weights(*, show_gst: bool, show_discount: bool) -> list[float]:
+def _col_weights(*, tax_mode: str, show_discount: bool) -> list[float]:
     weights = list(_COL_WEIGHTS_BASE)
     if show_discount:
         weights.extend(_COL_WEIGHTS_DISCOUNT)
     weights.extend(_COL_WEIGHTS_MID)
-    if show_gst:
-        weights.extend(_COL_WEIGHTS_GST)
+    if tax_mode != "none":
+        weights.extend(_COL_WEIGHTS_GST_RATE)
+        n_tax = len(sales_tax_column_labels(tax_mode))
+        weights.extend([_COL_WEIGHTS_GST_AMOUNT[0]] * n_tax)
     weights.extend(_COL_WEIGHTS_TAIL)
     return weights
 
@@ -138,6 +148,8 @@ def _blank_row(*, show_discount: bool) -> dict[str, Any]:
     }
     if show_discount:
         row["discount"] = 0.0
+        row["discount_mode"] = "flat"
+        row["discount_input"] = 0.0
     return row
 
 
@@ -155,6 +167,25 @@ def _rate_key(key_prefix: str, uid: str) -> str:
 
 def _discount_key(key_prefix: str, uid: str) -> str:
     return f"{key_prefix}_r{uid}_discount"
+
+
+def _discount_mode_key(key_prefix: str, uid: str) -> str:
+    return f"{key_prefix}_r{uid}_disc_mode"
+
+
+def _normalize_discount_mode(raw) -> str:
+    text = str(raw or "flat").strip().lower()
+    if text in {"percent", "%", "pct"}:
+        return "percent"
+    return "flat"
+
+
+def _mode_label(mode: str) -> str:
+    return _DISC_MODE_PCT if mode == "percent" else _DISC_MODE_FLAT
+
+
+def _mode_from_label(label: str) -> str:
+    return "percent" if label == _DISC_MODE_PCT else "flat"
 
 
 def _seed_rows(
@@ -186,7 +217,22 @@ def _seed_rows(
             }
         )
         if show_discount:
-            row["discount"] = float(raw.get("discount") or 0)
+            mode = _normalize_discount_mode(raw.get("discount_mode"))
+            if "discount_input" in raw:
+                disc_input = float(raw.get("discount_input") or 0)
+            elif mode == "percent":
+                disc_input = float(raw.get("discount_input") or 0)
+            else:
+                disc_input = float(raw.get("discount") or 0)
+            resolved = resolve_line_discount(
+                qty=qty if qty > 0 else 1.0,
+                rate=rate,
+                value=disc_input,
+                mode=mode,
+            )
+            row["discount_mode"] = mode
+            row["discount_input"] = disc_input
+            row["discount"] = resolved
         rows.append(row)
     rows.append(_blank_row(show_discount=show_discount))
     return rows
@@ -198,6 +244,8 @@ def _recompute_line(
     qty: float,
     rate: float,
     discount: float,
+    discount_mode: str = "flat",
+    discount_input: float = 0.0,
     qty_field: str,
     show_discount: bool,
     business_registered: bool,
@@ -234,6 +282,8 @@ def _recompute_line(
     }
     if show_discount:
         line["discount"] = discount
+        line["discount_mode"] = discount_mode
+        line["discount_input"] = discount_input
     if qty_field != "qty":
         line["qty"] = qty
     return line
@@ -282,6 +332,7 @@ def _clear_row_widget_keys(key_prefix: str, uid: str, *, show_discount: bool) ->
     ]
     if show_discount:
         keys.append(_discount_key(key_prefix, uid))
+        keys.append(_discount_mode_key(key_prefix, uid))
     for key in keys:
         st.session_state.pop(key, None)
 
@@ -304,7 +355,13 @@ def render_sales_lines_entry_table(
     focus_restore_key: Optional[str] = None,
 ) -> tuple[list[dict], list[str]]:
     """Render header + repeating product rows; empty product rows are ignored on save."""
-    show_gst = bool(business_registered)
+    tax_mode = sales_tax_display_mode(
+        business_registered=business_registered,
+        business_state_code=business_state_code,
+        customer_state_code=customer_state_code,
+    )
+    show_gst = tax_mode != "none"
+    tax_labels = sales_tax_column_labels(tax_mode)
     rows_key = f"{key_prefix}_rows"
     rate_cache_key = f"{key_prefix}_rate_cache"
     gst_history_cache_key = f"{key_prefix}_gst_history_cache"
@@ -385,7 +442,7 @@ def render_sales_lines_entry_table(
 
     product_options = [_sku_label(p) for p in products]
     lookup = _product_lookup_map(products)
-    weights = _col_weights(show_gst=show_gst, show_discount=show_discount)
+    weights = _col_weights(tax_mode=tax_mode, show_discount=show_discount)
 
     if not products:
         st.warning("No active products in inventory. Add a product before creating lines.")
@@ -394,10 +451,11 @@ def render_sales_lines_entry_table(
 
     header_labels = ["Product", "Qty", "Rate"]
     if show_discount:
-        header_labels.append("Discount")
+        header_labels.extend(["₹/%", "Disc"])
     header_labels.extend(["HSN", "Taxable"])
     if show_gst:
-        header_labels.extend(["GST %", "CGST", "SGST", "IGST", "UTGST"])
+        header_labels.append("GST %")
+        header_labels.extend(tax_labels)
     header_labels.extend(["Total", ""])
     header_cols = st.columns(weights)
     for col, title in zip(header_cols, header_labels):
@@ -416,6 +474,9 @@ def render_sales_lines_entry_table(
         product_widget_key = _product_key(key_prefix, uid)
         qty_widget_key = _qty_key(key_prefix, uid)
         rate_widget_key = _rate_key(key_prefix, uid)
+        discount_mode_key = (
+            _discount_mode_key(key_prefix, uid) if show_discount else None
+        )
         discount_widget_key = _discount_key(key_prefix, uid) if show_discount else None
 
         row_keys = [product_widget_key, qty_widget_key, rate_widget_key]
@@ -435,8 +496,17 @@ def render_sales_lines_entry_table(
             st.session_state[qty_widget_key] = float(row.get("qty") or 1.0)
         if rate_widget_key not in st.session_state:
             st.session_state[rate_widget_key] = float(row.get("rate") or 0.0)
+        if discount_mode_key and discount_mode_key not in st.session_state:
+            st.session_state[discount_mode_key] = _mode_label(
+                _normalize_discount_mode(row.get("discount_mode"))
+            )
         if discount_widget_key and discount_widget_key not in st.session_state:
-            st.session_state[discount_widget_key] = float(row.get("discount") or 0.0)
+            st.session_state[discount_widget_key] = float(
+                row.get("discount_input")
+                if row.get("discount_input") is not None
+                else row.get("discount")
+                or 0.0
+            )
 
         cols = st.columns(weights)
         with cols[0]:
@@ -493,17 +563,38 @@ def render_sales_lines_entry_table(
 
         c = 3
         discount = 0.0
-        if show_discount and discount_widget_key:
+        discount_mode = "flat"
+        discount_input = 0.0
+        if show_discount and discount_widget_key and discount_mode_key:
             with cols[c]:
-                discount = st.number_input(
+                mode_label = st.selectbox(
+                    f"Disc type {index + 1}",
+                    options=_DISC_MODE_OPTIONS,
+                    key=discount_mode_key,
+                    label_visibility="collapsed",
+                )
+            discount_mode = _mode_from_label(mode_label)
+            with cols[c + 1]:
+                discount_input = st.number_input(
                     f"Discount {index + 1}",
                     min_value=0.0,
                     step=0.01,
                     format="%.2f",
                     key=discount_widget_key,
                     label_visibility="collapsed",
+                    help=(
+                        "Percent of line gross (qty × rate)"
+                        if discount_mode == "percent"
+                        else "Flat discount in rupees (default 0)"
+                    ),
                 )
-            c += 1
+            discount = resolve_line_discount(
+                qty=float(qty or 0),
+                rate=float(rate or 0),
+                value=float(discount_input or 0),
+                mode=discount_mode,
+            )
+            c += 2
 
         if product is not None:
             preview = preview_sales_line_gst(
@@ -533,11 +624,16 @@ def render_sales_lines_entry_table(
         c += 2
         if show_gst:
             cols[c].markdown(f"{float(preview.get('gst_rate') or 0):.2f}")
-            cols[c + 1].markdown(_money(float(preview.get("cgst_amount") or 0)))
-            cols[c + 2].markdown(_money(float(preview.get("sgst_amount") or 0)))
-            cols[c + 3].markdown(_money(float(preview.get("igst_amount") or 0)))
-            cols[c + 4].markdown(_money(float(preview.get("utgst_amount") or 0)))
-            c += 5
+            c += 1
+            for label in tax_labels:
+                key = {
+                    "CGST": "cgst_amount",
+                    "SGST": "sgst_amount",
+                    "UTGST": "utgst_amount",
+                    "IGST": "igst_amount",
+                }[label]
+                cols[c].markdown(_money(float(preview.get(key) or 0)))
+                c += 1
         cols[c].markdown(_money(float(preview.get("line_total") or 0)))
 
         if cols[c + 1].button(
@@ -556,6 +652,8 @@ def render_sales_lines_entry_table(
         row["rate"] = float(rate or 0)
         if show_discount:
             row["discount"] = float(discount or 0)
+            row["discount_mode"] = discount_mode
+            row["discount_input"] = float(discount_input or 0)
         rows[index] = row
 
     st.session_state[rows_key] = rows
@@ -594,6 +692,13 @@ def render_sales_lines_entry_table(
             qty=qty,
             rate=float(row.get("rate") or 0),
             discount=float(row.get("discount") or 0),
+            discount_mode=_normalize_discount_mode(row.get("discount_mode")),
+            discount_input=float(
+                row.get("discount_input")
+                if row.get("discount_input") is not None
+                else row.get("discount")
+                or 0
+            ),
             qty_field=qty_field,
             show_discount=show_discount,
             business_registered=business_registered,
@@ -625,15 +730,19 @@ def render_sales_lines_entry_table(
     if previews:
         summary = tax_summary_from_previews(previews)
         with st.container(border=True):
-            if business_registered:
-                metrics = st.columns(4)
+            if show_gst:
+                metrics = st.columns(3 + len(tax_labels))
                 metrics[0].metric("Taxable", _money(summary["taxable"]))
-                if summary["igst"]:
-                    metrics[1].metric("IGST", _money(summary["igst"]))
-                else:
-                    metrics[1].metric("CGST", _money(summary["cgst"]))
-                metrics[2].metric("Total GST", _money(summary["total_tax"]))
-                metrics[3].metric("Grand total", _money(summary["grand_total"]))
+                for i, label in enumerate(tax_labels):
+                    key = {
+                        "CGST": "cgst",
+                        "SGST": "sgst",
+                        "UTGST": "utgst",
+                        "IGST": "igst",
+                    }[label]
+                    metrics[1 + i].metric(label, _money(summary[key]))
+                metrics[-2].metric("Total GST", _money(summary["total_tax"]))
+                metrics[-1].metric("Grand total", _money(summary["grand_total"]))
             else:
                 st.metric("Total", _money(summary["grand_total"]))
 

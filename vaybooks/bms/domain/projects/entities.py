@@ -302,6 +302,7 @@ class ProjectProforma:
     description: str = ""
     status: str = "Draft"
     lines: List[ProjectQuotationLine] = field(default_factory=list)
+    financial_year: str = ""
     id: str = field(default_factory=lambda: uuid4().hex)
     created_at: datetime = field(default_factory=utc_now)
 

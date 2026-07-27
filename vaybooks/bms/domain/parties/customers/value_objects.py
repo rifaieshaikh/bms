@@ -8,6 +8,8 @@ class CustomerAccountName:
 
     @property
     def formatted(self) -> str:
-        if (self.phone_number or "").strip():
-            return f"Customer - {self.customer_name} - {self.phone_number}"
-        return f"Customer - {self.customer_name}"
+        name = (self.customer_name or "").strip() or "Unnamed"
+        phone = (self.phone_number or "").strip()
+        if phone:
+            return f"Customer - {name} - {phone}"
+        return f"Customer - {name}"

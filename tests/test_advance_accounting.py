@@ -341,3 +341,83 @@ def test_payment_refund_cash_movement():
     )
     assert refund.total_debit == 1500.0
     assert refund.cash_movement_amount == 1500.0
+
+
+def test_customer_unapplied_advance_general_vs_order():
+    service = _service()
+    accounts = _seed_accounts(service._account_repo)
+    cust = accounts["customer"].id
+
+    service.create_advance_receipt(
+        accounts["cash"].id,
+        cust,
+        3000.0,
+        "General advance",
+    )
+    service.create_advance_receipt(
+        accounts["cash"].id,
+        cust,
+        7000.0,
+        "Order advance",
+        reference_order_id="order-cust-adv",
+    )
+
+    assert service.get_customer_unapplied_advance(cust) == 10000.0
+    assert service.get_customer_unapplied_advance(cust, general_only=True) == 3000.0
+
+
+def test_customer_unapplied_advance_order_apply_does_not_reduce_general():
+    service = _service()
+    accounts = _seed_accounts(service._account_repo)
+    cust = accounts["customer"].id
+
+    service.create_advance_receipt(
+        accounts["cash"].id,
+        cust,
+        2000.0,
+        "General advance",
+    )
+    service.create_advance_receipt(
+        accounts["cash"].id,
+        cust,
+        5000.0,
+        "Order advance",
+        reference_order_id="order-apply",
+    )
+    service.create_sales_invoice(
+        cust,
+        accounts["customization"].id,
+        4000.0,
+        "Invoice",
+        reference_order_id="order-apply",
+        reference_invoice_id="inv-apply",
+        advance_applied=4000.0,
+        voucher_type=VoucherType.CUSTOMIZATION_INVOICE,
+    )
+
+    assert service.get_customer_unapplied_advance(cust) == 3000.0
+    assert service.get_customer_unapplied_advance(cust, general_only=True) == 2000.0
+    assert service.get_order_unapplied_advance("order-apply") == 1000.0
+
+
+def test_customer_unapplied_advance_release_clears_order_pool():
+    service = _service()
+    accounts = _seed_accounts(service._account_repo)
+    cust = accounts["customer"].id
+    service.create_advance_receipt(
+        accounts["cash"].id,
+        cust,
+        1500.0,
+        "General",
+    )
+    service.create_advance_receipt(
+        accounts["cash"].id,
+        cust,
+        2500.0,
+        "Order",
+        reference_order_id="order-rel",
+    )
+    service.release_order_advance("order-rel", cust, "CO-REL")
+
+    assert service.get_customer_unapplied_advance(cust) == 1500.0
+    assert service.get_customer_unapplied_advance(cust, general_only=True) == 1500.0

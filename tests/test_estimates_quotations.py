@@ -149,6 +149,38 @@ def test_estimate_and_quotation_conversion_to_order():
         sales.convert_quotation_to_sales_order(quotation.id)
 
 
+def test_quotation_status_change_then_convert_to_sales_order():
+    sales, product, _, _ = _stack()
+    quotation = sales.create_quotation(
+        customer_id="c1",
+        quotation_date=date(2026, 7, 1),
+        lines=[{"product_id": product.id, "qty": 1, "rate": 50}],
+    )
+    assert quotation.status == QuotationStatus.DRAFT
+
+    sent = sales.set_quotation_status(quotation.id, QuotationStatus.SENT)
+    assert sent.status == QuotationStatus.SENT
+
+    accepted = sales.set_quotation_status(quotation.id, QuotationStatus.ACCEPTED)
+    assert accepted.status == QuotationStatus.ACCEPTED
+
+    order = sales.convert_quotation_to_sales_order(quotation.id)
+    assert order.so_number
+    assert sales.get_quotation(quotation.id).status == QuotationStatus.CONVERTED
+
+    with pytest.raises(ValueError, match="converted"):
+        sales.set_quotation_status(quotation.id, QuotationStatus.DRAFT)
+
+    rejected = sales.create_quotation(
+        customer_id="c1",
+        quotation_date=date(2026, 7, 1),
+        lines=[{"product_id": product.id, "qty": 1, "rate": 50}],
+        status=QuotationStatus.REJECTED,
+    )
+    reopened = sales.set_quotation_status(rejected.id, QuotationStatus.DRAFT)
+    assert reopened.status == QuotationStatus.DRAFT
+
+
 def test_registered_estimate_snapshots_gst_components():
     sales, product, _, _ = _stack(
         business=_registered_business(),

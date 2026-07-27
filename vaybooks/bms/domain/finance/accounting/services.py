@@ -13,6 +13,8 @@ from vaybooks.bms.domain.shared.exceptions import (
 
 
 ADVANCE_FROM_CUSTOMERS_ACCOUNT_NAME = "Advance From Customers"
+SETTLEMENT_ACCOUNT_NAME = "Settlement"
+SETTLEMENT_EXPENSE_ACCOUNT_NAME = "Settlement Expense"
 
 
 class AccountingDomainService:
@@ -67,6 +69,24 @@ class AccountingDomainService:
         if not account:
             raise ValidationError(
                 f'No "{ADVANCE_FROM_CUSTOMERS_ACCOUNT_NAME}" account found. '
+                "Restart the app to seed defaults or create the account in Accounts."
+            )
+        return account
+
+    def get_settlement_account(self) -> Account:
+        account = self._account_repo.find_by_name(SETTLEMENT_ACCOUNT_NAME)
+        if not account:
+            raise ValidationError(
+                f'No "{SETTLEMENT_ACCOUNT_NAME}" account found. '
+                "Restart the app to seed defaults or create the account in Accounts."
+            )
+        return account
+
+    def get_settlement_expense_account(self) -> Account:
+        account = self._account_repo.find_by_name(SETTLEMENT_EXPENSE_ACCOUNT_NAME)
+        if not account:
+            raise ValidationError(
+                f'No "{SETTLEMENT_EXPENSE_ACCOUNT_NAME}" account found. '
                 "Restart the app to seed defaults or create the account in Accounts."
             )
         return account
@@ -215,6 +235,46 @@ class AccountingDomainService:
                 debit_amount=amount,
                 credit_amount=0,
                 description="Reclassify as advance",
+            ),
+            VoucherLine(
+                account_id=advance_account_id,
+                account_name=advance_account_name,
+                debit_amount=0,
+                credit_amount=amount,
+                description=description,
+            ),
+        ]
+        return Voucher(
+            voucher_number=voucher_number,
+            voucher_type=VoucherType.ADVANCE,
+            voucher_date=voucher_date,
+            description=description,
+            lines=lines,
+            reference_order_id=reference_order_id,
+        )
+
+    def build_allocate_credit_to_advance_voucher(
+        self,
+        voucher_number: str,
+        voucher_date,
+        description: str,
+        customer_account_id: str,
+        customer_account_name: str,
+        advance_account_id: str,
+        advance_account_name: str,
+        amount: float,
+        reference_order_id: Optional[str] = None,
+    ) -> Voucher:
+        """Move existing customer credit into Advance From Customers (no cash)."""
+        if amount <= 0:
+            raise ValidationError("Advance amount must be positive")
+        lines = [
+            VoucherLine(
+                account_id=customer_account_id,
+                account_name=customer_account_name,
+                debit_amount=amount,
+                credit_amount=0,
+                description="Reclassify credit as advance",
             ),
             VoucherLine(
                 account_id=advance_account_id,
@@ -860,12 +920,16 @@ class AccountingDomainService:
         reference_dn_id: Optional[str] = None,
         sales_lines: Optional[list[dict]] = None,
         gst_output_accounts: Optional[dict] = None,
+        advance_account_id: Optional[str] = None,
+        advance_account_name: Optional[str] = None,
+        advance_applied: float = 0.0,
     ) -> Voucher:
-        """Cash sale: book revenue, optional GST output, discount, and payment."""
+        """Cash sale: book revenue, optional GST output, discount, advance, and payment."""
         from vaybooks.bms.domain.shared.enums import VoucherType
 
         discount_amount = round(discount_amount or 0.0, 2)
         amount_received = round(amount_received, 2)
+        advance_applied = round(max(advance_applied or 0.0, 0.0), 2)
         if amount_received < 0:
             raise ValidationError("Amount received cannot be negative")
         if discount_amount > 0 and not discount_account_id:
@@ -897,8 +961,7 @@ class AccountingDomainService:
                     "Invoice discount must be applied to line taxable before posting"
                 )
             net_amount = grand_total
-            if amount_received > net_amount:
-                raise ValidationError("Amount received cannot exceed net due")
+            # Overpay is allowed: excess remains as customer credit on the ledger.
 
             lines = [
                 VoucherLine(
@@ -951,8 +1014,7 @@ class AccountingDomainService:
             if discount_amount >= gross_amount:
                 raise ValidationError("Discount cannot equal or exceed the invoice amount")
             net_amount = round(gross_amount - discount_amount, 2)
-            if amount_received > net_amount:
-                raise ValidationError("Amount received cannot exceed net due")
+            # Overpay is allowed: excess remains as customer credit on the ledger.
 
             lines = [
                 VoucherLine(
@@ -989,6 +1051,32 @@ class AccountingDomainService:
                         ),
                     ]
                 )
+
+        if advance_applied > net_amount:
+            raise ValidationError("Advance applied cannot exceed the net invoice amount")
+        if advance_applied > 0 and not advance_account_id:
+            raise ValidationError(
+                f'An "{ADVANCE_FROM_CUSTOMERS_ACCOUNT_NAME}" account is required to apply advance'
+            )
+        if advance_applied > 0:
+            lines.extend(
+                [
+                    VoucherLine(
+                        account_id=advance_account_id,
+                        account_name=advance_account_name or ADVANCE_FROM_CUSTOMERS_ACCOUNT_NAME,
+                        debit_amount=advance_applied,
+                        credit_amount=0,
+                        description="Advance applied",
+                    ),
+                    VoucherLine(
+                        account_id=customer_account_id,
+                        account_name=customer_account_name,
+                        debit_amount=0,
+                        credit_amount=advance_applied,
+                        description="Advance applied",
+                    ),
+                ]
+            )
 
         if amount_received > 0:
             lines.extend(

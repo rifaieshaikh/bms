@@ -7,6 +7,9 @@ import streamlit as st
 from vaybooks.bms.ui.components.common.document_custom_fields import (
     render_document_custom_fields,
 )
+from vaybooks.bms.ui.components.sales.invoice_number_field import (
+    render_store_invoice_number_field,
+)
 from vaybooks.bms.ui.dialog_utils import make_dismiss_handler, register_armed_dialog
 from vaybooks.bms.ui.keyboard.dialog_actions import consume_submit, open_dialog
 from vaybooks.bms.ui.keyboard.focus.registry import get_strategy
@@ -168,10 +171,16 @@ def _dn_invoice_dialog(services: dict, *, default_received: float = 0.0) -> None
         list(store_opts.keys()),
         key=f"{DN_INVOICE_DIALOG}_store",
     )
-    inv_no = st.text_input(
-        "Invoice number",
-        value=dn.dn_number,
+    inv_no = render_store_invoice_number_field(
+        sales,
         key=f"{DN_INVOICE_DIALOG}_number",
+        existing_number=(
+            ""
+            if sales.sales_invoice_numbering_mode() == "app"
+            else (dn.dn_number or "")
+        ),
+        label="Invoice number",
+        editable_existing=True,
     )
     received = st.number_input(
         "Amount received",
@@ -187,6 +196,11 @@ def _dn_invoice_dialog(services: dict, *, default_received: float = 0.0) -> None
     )
     if st.button("Post invoice", type="primary", key=f"{DN_INVOICE_DIALOG}_save"):
         try:
+            if (
+                sales.sales_invoice_numbering_mode() == "external"
+                and not (inv_no or "").strip()
+            ):
+                raise ValueError("Invoice number is required")
             sales.create_sales_invoice_from_dn(
                 dn_id=dn.id,
                 store_account_id=store_opts[store_name],

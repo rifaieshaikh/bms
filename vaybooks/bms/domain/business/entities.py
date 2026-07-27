@@ -28,6 +28,11 @@ class BusinessProfile:
     pan: str = ""
     registration_type: VendorRegistrationType = VendorRegistrationType.UNREGISTERED
     composition_tax_rate: float = 1.0
+    require_customer_name: bool = True
+    require_customer_phone: bool = True
+    invoice_numbering_mode: str = "app"
+    invoice_number_prefix: str = "INV/{FY}/"
+    fy_start_month: int = 4
     bank_accounts: list[BankAccount] = field(default_factory=list)
     document_templates: dict[str, DocumentTemplateSettings] = field(
         default_factory=default_document_templates

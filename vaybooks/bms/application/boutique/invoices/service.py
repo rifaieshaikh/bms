@@ -45,6 +45,24 @@ class InvoiceAppService:
         self._domain = InvoiceDomainService(invoice_repo)
         self._order_domain = OrderDomainService(order_repo, None)
 
+    def _stamp_financial_year(
+        self, invoice: Invoice, invoice_date: Optional[date] = None
+    ) -> None:
+        if invoice.financial_year:
+            return
+        if self._accounting is not None and hasattr(
+            self._accounting, "resolve_voucher_financial_year"
+        ):
+            invoice.financial_year = self._accounting.resolve_voucher_financial_year(
+                invoice_date or invoice.invoice_date
+            )
+            return
+        from vaybooks.bms.domain.shared.financial_year import resolve_financial_year
+
+        invoice.financial_year = resolve_financial_year(
+            invoice_date or invoice.invoice_date
+        )
+
     @staticmethod
     def _customer_is_registered(customer) -> bool:
         if not customer:
@@ -356,6 +374,7 @@ class InvoiceAppService:
             business_state_code=getattr(business, "state_code", "") if business else "",
             business=business,
         )
+        self._stamp_financial_year(invoice, inv_date)
         saved = self._invoice_repo.save(invoice)
 
         self._sync_sales_posting(order, saved, post_entry)
@@ -414,6 +433,7 @@ class InvoiceAppService:
             item_amounts=item_amounts,
             item_discounts=item_discounts,
         )
+        self._stamp_financial_year(invoice, inv_date)
         saved = self._invoice_repo.save(invoice)
 
         self._sync_sales_posting(order, saved, post_entry)
@@ -530,6 +550,8 @@ class InvoiceAppService:
         invoice.invoice_amount = invoice_amount
         invoice.discount_amount = discount_amount
         invoice.invoice_date = invoice_date or invoice.invoice_date
+        invoice.financial_year = ""
+        self._stamp_financial_year(invoice)
         invoice.total_expense_purchase_price = mph["total_expense_purchase_price"]
         invoice.total_expense_selling_price = mph["total_expense_selling_price"]
         invoice.total_in_house_hours = mph["total_in_house_hours"]

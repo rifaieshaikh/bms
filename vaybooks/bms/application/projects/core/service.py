@@ -359,6 +359,12 @@ class ProjectAppService:
             return self._project_repo.list_all()
         return self._project_repo.search(query)
 
+    def count_by_customer(self, customer_id: str) -> int:
+        return self._project_repo.count_by_customer(customer_id)
+
+    def get_customer_summary(self, customer_id: str) -> dict:
+        return self._project_repo.get_customer_summary(customer_id)
+
     def update_project_settings(
         self,
         project_id: str,

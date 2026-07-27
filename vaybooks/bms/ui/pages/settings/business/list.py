@@ -66,6 +66,70 @@ def render(services: dict):
             help="Applied to sales when Registration type is Composition.",
         )
 
+        st.subheader("Customer identity")
+        st.caption(
+            "Controls whether name and phone are mandatory when creating customers "
+            "(including quick-create on sales and boutique orders)."
+        )
+        require_customer_name = st.checkbox(
+            "Customer name is required",
+            value=bool(getattr(business, "require_customer_name", True)),
+        )
+        require_customer_phone = st.checkbox(
+            "Customer phone is required",
+            value=bool(getattr(business, "require_customer_phone", True)),
+        )
+
+        st.subheader("Invoice numbering")
+        st.caption(
+            "App mode auto-generates sales invoice numbers using the prefix and "
+            "financial year. External mode requires entering the store invoice number."
+        )
+        mode_options = ["app", "external"]
+        current_mode = (getattr(business, "invoice_numbering_mode", None) or "external")
+        if current_mode not in mode_options:
+            current_mode = "external"
+        invoice_numbering_mode = st.radio(
+            "Sales invoice numbering",
+            mode_options,
+            index=mode_options.index(current_mode),
+            format_func=lambda m: (
+                "App (auto-generate)" if m == "app" else "External (enter manually)"
+            ),
+            horizontal=True,
+        )
+        invoice_number_prefix = st.text_input(
+            "Invoice number prefix",
+            value=getattr(business, "invoice_number_prefix", None) or "INV/{FY}/",
+            help="Use {FY} for the financial year label, e.g. INV/{FY}/ → INV/2026-27/0001",
+        )
+        month_labels = [
+            (1, "January"),
+            (2, "February"),
+            (3, "March"),
+            (4, "April"),
+            (5, "May"),
+            (6, "June"),
+            (7, "July"),
+            (8, "August"),
+            (9, "September"),
+            (10, "October"),
+            (11, "November"),
+            (12, "December"),
+        ]
+        fy_month = int(getattr(business, "fy_start_month", 4) or 4)
+        fy_idx = next(
+            (i for i, (m, _) in enumerate(month_labels) if m == fy_month), 3
+        )
+        fy_choice = st.selectbox(
+            "Financial year start month",
+            month_labels,
+            index=fy_idx,
+            format_func=lambda item: item[1],
+            help="Default April for India (Apr–Mar). Applied to sales invoices and purchase bills.",
+        )
+        fy_start_month = fy_choice[0]
+
         if st.form_submit_button("Save business settings", type="primary"):
             try:
                 services["business"].update_profile(
@@ -83,6 +147,11 @@ def render(services: dict):
                     pan=pan,
                     registration_type=VendorRegistrationType(registration),
                     composition_tax_rate=composition_tax_rate,
+                    require_customer_name=require_customer_name,
+                    require_customer_phone=require_customer_phone,
+                    invoice_numbering_mode=invoice_numbering_mode,
+                    invoice_number_prefix=invoice_number_prefix,
+                    fy_start_month=fy_start_month,
                 )
                 st.success("Business settings saved.")
                 st.rerun()

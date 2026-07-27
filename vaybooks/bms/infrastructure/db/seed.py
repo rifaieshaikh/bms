@@ -83,6 +83,8 @@ DEFAULT_ACCOUNTS = [
     ("Embroidery Expense", AccountType.EXPENSE, False),
     ("Salary Expense", AccountType.EXPENSE, False),
     ("Advance From Customers", AccountType.LIABILITY, False),
+    ("Settlement", AccountType.ASSET, False),
+    ("Settlement Expense", AccountType.EXPENSE, False),
     ("CGST Input", AccountType.ASSET, False),
     ("SGST Input", AccountType.ASSET, False),
     ("IGST Input", AccountType.ASSET, False),

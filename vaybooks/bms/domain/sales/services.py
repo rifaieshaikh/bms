@@ -88,6 +88,18 @@ class SalesDomainService:
                     product_name=(raw.get("product_name") or "").strip(),
                     qty_ordered=round(qty, 2),
                     rate=round(float(raw.get("rate") or 0), 2),
+                    discount=round(max(float(raw.get("discount") or 0), 0), 2),
+                    discount_mode=(raw.get("discount_mode") or "flat").strip()
+                    or "flat",
+                    discount_input=round(
+                        float(
+                            raw.get("discount_input")
+                            if raw.get("discount_input") is not None
+                            else raw.get("discount")
+                            or 0
+                        ),
+                        2,
+                    ),
                     **self._so_line_tax_fields(raw),
                 )
             )
@@ -146,6 +158,18 @@ class SalesDomainService:
                     product_name=(raw.get("product_name") or "").strip(),
                     qty_ordered=round(qty, 2),
                     rate=round(float(raw.get("rate") or 0), 2),
+                    discount=round(max(float(raw.get("discount") or 0), 0), 2),
+                    discount_mode=(raw.get("discount_mode") or "flat").strip()
+                    or "flat",
+                    discount_input=round(
+                        float(
+                            raw.get("discount_input")
+                            if raw.get("discount_input") is not None
+                            else raw.get("discount")
+                            or 0
+                        ),
+                        2,
+                    ),
                     qty_delivered=round(
                         next(
                             (
@@ -617,7 +641,6 @@ class SalesDomainService:
         terminal = (
             QuotationStatus.CONVERTED,
             QuotationStatus.CANCELLED,
-            QuotationStatus.REJECTED,
             QuotationStatus.EXPIRED,
         )
         if quotation.status in terminal:
