@@ -29,8 +29,12 @@ def _customer_name(party_name: str) -> str:
     return rest or "Customer"
 
 
-def _payment_badge_tuple(outstanding: float) -> tuple[str, str | None]:
-    return ("Unpaid", None) if outstanding > 0.01 else ("Paid", None)
+def _payment_badge_tuple(balance: float) -> tuple[str, str]:
+    if abs(balance) <= 0.01:
+        return ("Paid", "green")
+    if balance > 0:
+        return ("Unpaid", "red")
+    return ("Credit", "blue")
 
 
 def _sales_card(row: dict, suffix: str) -> None:
@@ -49,6 +53,18 @@ def _sales_card(row: dict, suffix: str) -> None:
         project_line = ""
 
     sale_id = row.get("id")
+    status_label = (row.get("payment_status_label") or "").strip()
+    if status_label:
+        outstanding = float(row.get("outstanding") or 0)
+        collected = float(row.get("collected") or 0)
+        if outstanding <= 0.01:
+            badge = (status_label, "green")
+        elif collected > 0.01:
+            badge = (status_label, "orange")
+        else:
+            badge = (status_label, "red")
+    else:
+        badge = _payment_badge_tuple(balance)
 
     def _on_view() -> None:
         if sale_id:
@@ -59,15 +75,24 @@ def _sales_card(row: dict, suffix: str) -> None:
             store_no,
             amount=f"₹{net:,.0f}",
             amount_style=f"color:{_SALES_AMOUNT_COLOR}",
-            badges=[_payment_badge_tuple(balance)],
+            badges=[badge],
             caption_lines=[
                 _customer_name(row.get("party_name") or ""),
                 project_line,
                 _fmt_date(row.get("sale_date")),
             ],
-            actions=[CardAction("View", key=f"{suffix}_view_{sale_id}", kind="secondary", on_click=_on_view)]
-            if sale_id
-            else [],
+            actions=(
+                [
+                    CardAction(
+                        "View",
+                        key=f"{suffix}_view_{sale_id}",
+                        kind="secondary",
+                        on_click=_on_view,
+                    )
+                ]
+                if sale_id
+                else []
+            ),
         )
 
 

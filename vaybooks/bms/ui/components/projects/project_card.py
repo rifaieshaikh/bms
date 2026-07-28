@@ -26,7 +26,14 @@ def project_card(project, key_prefix: str) -> None:
                 f"Contract ₹{float(project.contract_value or 0):,.0f}",
                 f"Site: {project.site_state_code}" if project.site_state_code else "",
             ],
-            actions=[CardAction("View", key=f"{key_prefix}_view", kind="secondary", on_click=_on_view)],
+            actions=[
+                CardAction(
+                    "View",
+                    key=f"{key_prefix}_view",
+                    kind="secondary",
+                    on_click=_on_view,
+                )
+            ],
         )
 
 

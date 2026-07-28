@@ -25,18 +25,42 @@ def customer_card(
     def _on_view() -> None:
         navigation.go_to_detail("customer_detail", customer.id)
 
+    display_name = (customer.customer_name or "").strip() or (
+        (customer.phone_number or "").strip() or "Unnamed customer"
+    )
+    phone = (customer.phone_number or "").strip()
+    captions = []
+    if phone:
+        captions.append(f"\U0001f4de {phone}")
+    else:
+        captions.append("No phone on file")
+    if customer.gstin:
+        captions.append(f"GSTIN: {customer.gstin}")
+
+    badges = [
+        (f"{order_count} orders", "blue"),
+        (_format_balance(balance), color),
+    ]
+    if customer.is_blacklisted:
+        badges.append(("Blacklisted", "red"))
+
     with st.container(border=True):
         card(
-            customer.customer_name,
-            badges=[
-                (f"{order_count} orders", "blue"),
-                (_format_balance(balance), color),
-            ],
-            caption_lines=[("phone", customer.phone_number)]
-            + ([f"GSTIN: {customer.gstin}"] if customer.gstin else []),
+            display_name,
+            badges=badges,
+            caption_lines=captions,
             actions=[
-                CardAction("Edit", key=f"{key_prefix}_edit", kind="secondary", on_click=_on_edit),
-                CardAction("View", key=f"{key_prefix}_view", on_click=_on_view),
+                CardAction(
+                    "Edit",
+                    key=f"{key_prefix}_edit",
+                    kind="secondary",
+                    on_click=_on_edit,
+                ),
+                CardAction(
+                    "View",
+                    key=f"{key_prefix}_view",
+                    on_click=_on_view,
+                ),
             ],
         )
 
