@@ -85,7 +85,7 @@ def _inject_page_css() -> None:
             padding: 0.5rem 0.75rem;
           }
           div[class*="st-key-vend_rel_row"] {
-            border-bottom: 1px solid rgba(49, 51, 63, 0.12);
+            border-bottom: 1px solid var(--color-divider-subtle);
             padding: 0.45rem 0.15rem;
             min-height: 44px;
             transition: background-color 0.15s ease;
@@ -94,7 +94,7 @@ def _inject_page_css() -> None:
             border-bottom: none;
           }
           div[class*="st-key-vend_rel_row"]:hover {
-            background-color: rgba(49, 51, 63, 0.04);
+            background-color: var(--color-surface-hover);
             border-radius: 0.35rem;
           }
           div[class*="st-key-vend_rel_tx"] div.stButton > button {
@@ -114,7 +114,7 @@ def _inject_page_css() -> None:
           }
           div[class*="st-key-vend_bal_card"] .vend-bal-label {
             font-size: 0.875rem;
-            color: rgba(49, 51, 63, 0.6);
+            color: var(--color-text-faint);
             margin-bottom: 0.15rem;
           }
           div[class*="st-key-vend_bal_card"] .vend-bal-value {
@@ -468,7 +468,7 @@ def _render_recent_payments(services, vendor, vendor_account) -> None:
         if not payments:
             st.markdown(
                 "<div style='text-align:center;padding:1.25rem 0.5rem;"
-                "color:#5B5560;'>No payments recorded yet.</div>",
+                "color:var(--color-text-muted);'>No payments recorded yet.</div>",
                 unsafe_allow_html=True,
             )
         else:
@@ -626,7 +626,7 @@ def render(services: dict):
             if not recent:
                 st.markdown(
                     "<div style='text-align:center;padding:1.25rem 0.5rem;"
-                    "color:#5B5560;'>No purchase orders yet.</div>",
+                    "color:var(--color-text-muted);'>No purchase orders yet.</div>",
                     unsafe_allow_html=True,
                 )
             else:

@@ -1162,7 +1162,7 @@ def render(services: dict):
                 if not recent:
                     st.markdown(
                         "<div style='text-align:center;padding:1.25rem 0.5rem;"
-                        "color:#5B5560;'>No customization orders yet.</div>",
+                        "color:var(--color-text-muted);'>No customization orders yet.</div>",
                         unsafe_allow_html=True,
                     )
                 else:

@@ -8,8 +8,9 @@ import streamlit as st
 
 from vaybooks.bms.domain.finance.accounting.entities import Voucher, VoucherLine
 from vaybooks.bms.domain.shared.enums import VoucherType
+from vaybooks.bms.ui.components.shared import CardAction, card
 from vaybooks.bms.ui.dialog_utils import clear_all_dialog_flags, register_armed_dialog
-from vaybooks.bms.ui.styles import render_card_grid, status_badge
+from vaybooks.bms.ui.styles import render_card_grid
 
 
 def _fmt_date(value) -> str:
@@ -214,15 +215,9 @@ def _journal_line_summary(lines: Sequence[VoucherLine], max_lines: int = 2) -> l
     return rows
 
 
-def _render_journal_block(lines: Sequence[VoucherLine]) -> None:
+def _journal_note(lines: Sequence[VoucherLine]) -> str | None:
     rows = _journal_line_summary(lines)
-    if not rows:
-        return
-    body = "<br>".join(rows)
-    st.markdown(
-        f'<div class="z-card-journal">{body}</div>',
-        unsafe_allow_html=True,
-    )
+    return "<br>".join(rows) if rows else None
 
 
 @dataclass(frozen=True)
@@ -235,12 +230,12 @@ class VoucherEditAction:
 
 
 _AMOUNT_TEXT_COLORS = {
-    "green": "#2E7D46",
-    "red": "#B03636",
-    "violet": "#6B3FA0",
-    "plum": "#7B2D4E",
-    "blue": "#2C5AA8",
-    "gray": "#5B5560",
+    "green": "var(--color-success-text)",
+    "red": "var(--color-danger-text)",
+    "violet": "var(--color-violet-text)",
+    "plum": "var(--color-primary)",
+    "blue": "var(--color-info-text)",
+    "gray": "var(--color-neutral-text)",
 }
 
 
@@ -262,58 +257,27 @@ def voucher_card(
         party_name = default_party
     description = (voucher.description or "").strip()
 
-    with st.container(border=True):
-        st.markdown(
-            f'<p class="z-card-title">{voucher.voucher_number}</p>',
-            unsafe_allow_html=True,
-        )
-        if show_type_badge:
-            st.markdown(
-                status_badge(
-                    voucher_type_label(voucher, short=True), "blue", compact=True
-                ),
-                unsafe_allow_html=True,
-            )
+    amount_color = voucher_amount_color(vtype)
+    text_color = _AMOUNT_TEXT_COLORS.get(amount_color, "var(--color-text)")
 
-        amount_color = voucher_amount_color(vtype)
-        text_color = _AMOUNT_TEXT_COLORS.get(amount_color, "#2A1E24")
-        st.markdown(
-            f'<p class="z-card-amount" style="color:{text_color}">'
-            f"₹{amount:,.0f}</p>",
-            unsafe_allow_html=True,
-        )
+    caption_lines = [_fmt_date(voucher.voucher_date)]
+    if party_name and not _party_redundant(party_name, description):
+        caption_lines.append(_party_display_name(voucher, party_name))
 
-        st.caption(_fmt_date(voucher.voucher_date))
+    receiving_account = voucher_receiving_account(voucher)
+    link_label = "Order linked" if voucher.reference_order_id else "Not linked"
+    link_color = "blue" if voucher.reference_order_id else "gray"
 
-        if party_name and not _party_redundant(party_name, description):
-            st.caption(_party_display_name(voucher, party_name))
+    note = (
+        _journal_note(voucher.lines)
+        if show_journal_lines and vtype == VoucherType.JOURNAL
+        else None
+    )
 
-        badges = ""
-        receiving_account = voucher_receiving_account(voucher)
-        if receiving_account:
-            badges += status_badge(receiving_account, "orange", compact=True)
-        if service_label:
-            badges += (" " if badges else "") + status_badge(
-                service_label, "orange", compact=True
-            )
-        if show_order_linked:
-            link_label = "Order linked" if voucher.reference_order_id else "Not linked"
-            link_color = "blue" if voucher.reference_order_id else "gray"
-            badges += (" " if badges else "") + status_badge(
-                link_label, link_color, compact=True
-            )
-        if badges:
-            st.markdown(badges, unsafe_allow_html=True)
+    actions = []
+    if edit:
 
-        if show_journal_lines and vtype == VoucherType.JOURNAL:
-            _render_journal_block(voucher.lines)
-
-        if edit and st.button(
-            "Edit",
-            key=edit.button_key,
-            type="primary",
-            width="stretch",
-        ):
+        def _on_edit() -> None:
             if edit.before_edit:
                 edit.before_edit()
             if edit.clear_dialogs:
@@ -322,6 +286,26 @@ def voucher_card(
             if edit.register_dialog:
                 register_armed_dialog(edit.flag_key)
             st.rerun()
+
+        actions.append(CardAction("Edit", key=edit.button_key, on_click=_on_edit))
+
+    with st.container(border=True):
+        card(
+            voucher.voucher_number,
+            amount=f"₹{amount:,.0f}",
+            amount_style=f"color:{text_color}",
+            badges=[
+                show_type_badge and (voucher_type_label(voucher, short=True), "blue"),
+            ],
+            caption_lines=caption_lines,
+            note=note,
+            footer_badges=[
+                receiving_account and (receiving_account, "orange"),
+                service_label and (service_label, "orange"),
+                show_order_linked and (link_label, link_color),
+            ],
+            actions=actions,
+        )
 
 
 def voucher_cards(

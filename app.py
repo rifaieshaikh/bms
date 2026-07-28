@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import streamlit as st
 
 from vaybooks.bms.version import __version__
@@ -5,6 +7,8 @@ from vaybooks.bms.infrastructure.config.runtime import is_desktop
 from vaybooks.bms.infrastructure.logging.setup import setup_logging
 from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.bootstrap import get_services
+from vaybooks.bms.ui.components.shared.page_loader import page_loader
+from vaybooks.bms.ui.components.shared.topbar import render_topbar
 from vaybooks.bms.ui.styles import inject_global_css
 from vaybooks.bms.ui.pages.finance.accounts import list as accounts
 from vaybooks.bms.ui.pages.settings.services import list as vendor_services
@@ -161,11 +165,20 @@ from vaybooks.bms.ui.pages.schedulers import (
 
 setup_logging()
 
+# Placeholder branding (assets/) — swap logo.svg/logo.png/favicon.svg/favicon.ico
+# for the final artwork when available; every reference to the brand mark lives
+# here and in the sidebar block below.
+ASSETS_DIR = Path(__file__).parent / "assets"
+
 st.set_page_config(
     page_title="VayBooks",
-    page_icon="👗",
+    page_icon=str(ASSETS_DIR / "favicon.svg"),
     layout="wide",
     initial_sidebar_state="expanded",
+)
+st.logo(
+    str(ASSETS_DIR / "logo.svg"),
+    icon_image=str(ASSETS_DIR / "favicon.svg"),
 )
 
 inject_global_css()
@@ -1036,6 +1049,38 @@ _services = get_services()
 try_restore_session(_services)
 sync_entitlement_cache(_services)
 
+
+def _sidebar_active_link_css(current_page) -> str:
+    """CSS that highlights the current page's sidebar row.
+
+    Standalone st.page_link has no "active" DOM attribute/class to hook (no
+    aria-current, and the only differentiator between rows is a
+    content-hashed emotion class — unsafe to hardcode, see theme.css's
+    nav-item comment). We know the current page from st.navigation() though,
+    so key the highlight off its rendered href instead. The default page is
+    a special case: st.page_link always renders its href as "" regardless of
+    its configured url_path (same quirk sidebar_icons.css documents for the
+    icon overlay), so mirror that here or the highlight lands on nothing.
+    """
+    href = (
+        ""
+        if current_page.url_path == dashboard_page.url_path
+        else current_page.url_path
+    )
+    return f"""
+    <style>
+    section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"][href="{href}"] {{
+      background: var(--color-primary-subtle);
+    }}
+    section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"][href="{href}"] [data-testid="stIconMaterial"],
+    section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"][href="{href}"] [data-testid="stMarkdownContainer"] p {{
+      color: var(--color-primary) !important;
+      font-weight: var(--font-weight-medium) !important;
+    }}
+    </style>
+    """
+
+
 if not is_authenticated():
     with st.sidebar:
         st.markdown("## VayBooks")
@@ -1068,29 +1113,33 @@ else:
     nav_pages["_hidden"] = list(hidden_pages)
 
     # Hide the built-in menu (Streamlit pins it to the very top of the sidebar) and
-    # draw our own below the branding so "VayBooks" sits on top.
+    # draw our own below the branding — st.logo() renders the brand mark above this.
     nav = st.navigation(nav_pages, position="hidden")
 
-    with st.sidebar:
-        st.markdown("## VayBooks")
-        st.divider()
-        for header, pages in visible_groups.items():
-            if header:
-                st.caption(header)
-            for page in pages:
-                st.page_link(page)
-        st.divider()
-        st.caption(f"v{__version__}")
+    with page_loader():
+        with st.sidebar:
+            st.markdown(_sidebar_active_link_css(nav), unsafe_allow_html=True)
+            for header, pages in visible_groups.items():
+                if header:
+                    st.caption(header)
+                for page in pages:
+                    st.page_link(page)
+            st.divider()
+            st.markdown(
+                f'<p class="z-sidebar-version">v{__version__}</p>',
+                unsafe_allow_html=True,
+            )
 
-    render_app_header(
-        _services,
-        business_pages=page_groups["Business"],
-        settings_pages=page_groups["Settings"],
-        access_pages=page_groups["Access"],
-        migration_pages=page_groups["Migration"],
-        scheduler_pages=page_groups["Schedulers"],
-    )
+        render_app_header(
+            _services,
+            business_pages=page_groups["Business"],
+            settings_pages=page_groups["Settings"],
+            access_pages=page_groups["Access"],
+            migration_pages=page_groups["Migration"],
+            scheduler_pages=page_groups["Schedulers"],
+        )
+        render_topbar()
 
-    # Parents navigate here; action chords only set session flags for page render.
-    resolve_pressed_shortcuts()
-    nav.run()
+        # Parents navigate here; action chords only set session flags for page render.
+        resolve_pressed_shortcuts()
+        nav.run()

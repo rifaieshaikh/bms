@@ -2,7 +2,7 @@ import streamlit as st
 
 from vaybooks.bms.domain.parties.customers.entities import Customer
 from vaybooks.bms.ui import navigation
-from vaybooks.bms.ui.styles import status_badge
+from vaybooks.bms.ui.components.shared import CardAction, card
 
 
 def _format_balance(balance: float) -> str:
@@ -16,43 +16,52 @@ def _format_balance(balance: float) -> str:
 def customer_card(
     customer: Customer, order_count: int, balance: float, key_prefix: str
 ) -> bool:
+    color = "red" if balance > 0.01 else ("green" if balance < -0.01 else "gray")
+    clicked = {"edit": False}
+
+    def _on_edit() -> None:
+        clicked["edit"] = True
+
+    def _on_view() -> None:
+        navigation.go_to_detail("customer_detail", customer.id)
+
+    display_name = (customer.customer_name or "").strip() or (
+        (customer.phone_number or "").strip() or "Unnamed customer"
+    )
+    phone = (customer.phone_number or "").strip()
+    captions = []
+    if phone:
+        captions.append(f"\U0001f4de {phone}")
+    else:
+        captions.append("No phone on file")
+    if customer.gstin:
+        captions.append(f"GSTIN: {customer.gstin}")
+
+    badges = [
+        (f"{order_count} orders", "blue"),
+        (_format_balance(balance), color),
+    ]
+    if customer.is_blacklisted:
+        badges.append(("Blacklisted", "red"))
+
     with st.container(border=True):
-        display_name = (customer.customer_name or "").strip() or (
-            (customer.phone_number or "").strip() or "Unnamed customer"
+        card(
+            display_name,
+            badges=badges,
+            caption_lines=captions,
+            actions=[
+                CardAction(
+                    "Edit",
+                    key=f"{key_prefix}_edit",
+                    kind="secondary",
+                    on_click=_on_edit,
+                ),
+                CardAction(
+                    "View",
+                    key=f"{key_prefix}_view",
+                    on_click=_on_view,
+                ),
+            ],
         )
-        st.markdown(f"### {display_name}")
-        phone = (customer.phone_number or "").strip()
-        if phone:
-            st.write(f"\U0001f4de {phone}")
-        else:
-            st.caption("No phone on file")
-        if customer.gstin:
-            st.caption(f"GSTIN: {customer.gstin}")
 
-        color = "red" if balance > 0.01 else ("green" if balance < -0.01 else "gray")
-        badges = (
-            status_badge(f"{order_count} orders", "blue")
-            + " "
-            + status_badge(_format_balance(balance), color)
-        )
-        if customer.is_blacklisted:
-            badges += " " + status_badge("Blacklisted", "red")
-        st.markdown(badges, unsafe_allow_html=True)
-
-        col1, col2 = st.columns(2)
-        with col1:
-            edit_clicked = st.button(
-                "Edit",
-                key=f"{key_prefix}_edit",
-                width="stretch",
-            )
-        with col2:
-            if st.button(
-                "View",
-                key=f"{key_prefix}_view",
-                type="primary",
-                width="stretch",
-            ):
-                navigation.go_to_detail("customer_detail", customer.id)
-
-    return edit_clicked
+    return clicked["edit"]
