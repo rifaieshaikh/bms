@@ -321,46 +321,30 @@ div[class*="st-key-card_grid"] div[data-testid="stVerticalBlockBorderWrapper"]:h
   border-color: var(--color-accent-border);
 }
 
-/* ---- Sidebar: shell ------------------------------------------------------ */
+/* ---- Sidebar: shell ------------------------------------------------------
+ * Visual chrome only. Collapse is an app-owned icon rail (session flag),
+ * not Streamlit's native full hide — see app.py `_inject_shell_chrome`. */
 section[data-testid="stSidebar"] {
   background: var(--color-surface);
   border-right: 1px solid var(--color-sidebar-border);
-  width: 250px !important;
-  min-width: 250px !important;
-  max-width: 250px !important;
+  /* Above the fixed topbar (z-index 999990). */
+  z-index: 1000000 !important;
 }
 
-section[data-testid="stSidebar"]>div {
-  width: 250px !important;
-  padding: 0;
-  overflow: initial;
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
+section[data-testid="stSidebar"][aria-expanded="true"] {
+  min-width: 250px;
+}
+
+/* Native collapse hidden — rail toggle replaces it (injected CSS reinforces). */
+[data-testid="stSidebarCollapseButton"] {
+  display: none !important;
 }
 
 /* ---- Sidebar: logo/header section (st.logo(), native collapse button) --- */
-/* st.logo() renders the brand mark + collapse chevron into
- * [data-testid="stSidebarHeader"] natively — we only add spacing/border here,
- * the collapse control itself stays native (fragile to reimplement in HTML
- * since toggling the sidebar needs Streamlit's own JS/session wiring). Its
- * ancestor chain insets it 30px short of the sidebar's true edges (measured
- * against streamlit==1.59.2 — not just stSidebarContent's own 20px padding,
- * some of it comes from another ancestor in the chain); negative-margin it
- * back out to full width, then use the header's own padding for the 12px
- * content inset, so the border-bottom lands flush on both edges without
- * touching the nav items below (which rely on that ambient padding for
- * their own alignment — out of scope here). */
 [data-testid="stSidebarHeader"] {
   display: flex;
   align-items: center;
-  /* !important: Streamlit's own emotion-generated class sets a fixed height
-   * on this element too, and its cascade position isn't guaranteed to lose
-   * to ours (same 0,1,0 specificity as our attribute selector). flex-shrink:0
-   * is load-bearing — this element is a flex item in the sidebar's
-   * column flex layout (height:100vh), which otherwise compresses it below
-   * 60px to fit the nav content beneath it. */
-  height: 60px !important;
+  min-height: 60px;
   flex-shrink: 0;
   padding: var(--space-6);
   border-bottom: 1px solid var(--color-sidebar-border);
@@ -390,16 +374,16 @@ section[data-testid="stSidebar"]>div {
 /* ---- Sidebar: section headers (st.caption group labels) ----------------- */
 section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] {
   margin: var(--space-7) 0 var(--space-3);
-  padding: 0 var(--space-7);
+  padding: 0;
 }
 
 section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {
   margin: 0;
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--color-text-subtle);
+  color: var(--color-text-muted);
 }
 
 /* ---- Sidebar: nav menu items (st.page_link) ------------------------------
@@ -433,8 +417,9 @@ section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] [data-testi
 }
 
 section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] [data-testid="stMarkdownContainer"] p {
-  color: var(--color-nav-text) !important;
+  color: var(--color-text) !important;
   font-weight: var(--font-weight-regular) !important;
+  font-size: var(--font-size-sm) !important;
   transition: color var(--transition-fast);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -561,10 +546,8 @@ div[data-testid="stSpinner"] {
 
 /* ---- Page loader ------------------------------------------------------------
  * Centered loading dots over a solid #F4F6F5 cover shown while a page's data
- * is fetched (see components/shared/page_loader.py). `inset: 0` + a very high
- * z-index cover the full viewport — sidebar included, not just the main
- * content column — so neither the nav nor stale body content is visible
- * until the page is done rendering. */
+ * is fetched (see components/shared/page_loader.py). z-index stays below the
+ * sidebar so the left nav remains visible during page transitions. */
 .z-page-loader-wrap {
   position: fixed;
   inset: 0;
@@ -572,7 +555,7 @@ div[data-testid="stSpinner"] {
   align-items: center;
   justify-content: center;
   background: #F4F6F5;
-  z-index: 2147483647;
+  z-index: 999995;
 }
 
 .z-page-loader {
@@ -600,35 +583,205 @@ div[data-testid="stExpander"] summary {
   border-radius: var(--radius-md);
 }
 
-/* ---- Top header: fixed bar right of the sidebar --------------------------
- * Custom replacement for Streamlit's native stHeader chrome (its hamburger
- * "..." menu / deploy button are hidden via .streamlit/config.toml's
- * toolbarMode="minimal", not via CSS here). Left offset matches the
- * sidebar's fixed 250px width (see "Sidebar: shell" above) so the bar starts
- * exactly where the content column begins; stMain gets matching top padding
- * so page content clears the fixed bar. The collapsed-sidebar "expand" logo
- * (st.logo()'s icon_image, rendered by Streamlit inside stHeader) sits at
- * the far left (~0-60px) — well outside this bar's left:250px start — so it
- * stays reachable even though this bar's z-index sits above stHeader's. */
+/* ---- Headers -------------------------------------------------------------
+ * Redesign topbar pinned at viewport top, flush with sidebar logo row.
+ * left is overridden per-run (250px expanded / 72px icon rail). */
 section[data-testid="stMain"] {
   padding-top: 60px;
 }
 
-.z-topbar {
-  position: fixed;
+div[class*="st-key-ztopbar"]:not([class*="ztopbar_"]) {
+  position: fixed !important;
   top: 0;
   left: 250px;
   right: 0;
   height: 60px;
+  z-index: 999990;
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-sidebar-border);
+  margin: 0 !important;
+  padding: 0 1rem;
+  box-sizing: border-box;
+  pointer-events: auto !important;
+  overflow: visible;
+}
+
+/* Vertically center Streamlit's nested columns inside the 60px bar. */
+div[class*="st-key-ztopbar"]:not([class*="ztopbar_"]) > div,
+div[class*="st-key-ztopbar"]:not([class*="ztopbar_"]) > div > div[data-testid="stVerticalBlock"],
+div[class*="st-key-ztopbar"]:not([class*="ztopbar_"]) [data-testid="stHorizontalBlock"] {
+  height: 100%;
+  min-height: 0;
+  align-items: center !important;
+}
+
+/* Don't leave a tall empty slot where the fixed bar sits in the DOM. */
+section[data-testid="stMain"]
+  div[data-testid="stElementContainer"]:has(
+    > div > div[class*="st-key-ztopbar"]:not([class*="ztopbar_"])
+  ),
+section[data-testid="stMain"]
+  div[data-testid="element-container"]:has(
+    div[class*="st-key-ztopbar"]:not([class*="ztopbar_"])
+  ) {
+  height: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  border: none !important;
+}
+
+/* Rail toggle in sidebar */
+div[class*="st-key-sidebar_rail_toggle"] button {
+  min-height: 2rem;
+  padding: 0.25rem !important;
+}
+
+div[class*="st-key-ztopbar"] div[data-testid="stVerticalBlock"] {
+  gap: 0 !important;
+}
+
+div[class*="st-key-ztopbar"] [data-testid="stElementContainer"],
+div[class*="st-key-ztopbar"] [data-testid="element-container"] {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+div[class*="st-key-ztopbar_actions"] {
+  display: flex !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  width: 100%;
+}
+
+div[class*="st-key-ztopbar"] div[data-testid="stPopover"],
+div[class*="st-key-ztopbar_actions"] div[data-testid="stPopover"] {
+  pointer-events: auto !important;
+}
+
+/* Default icon popovers */
+div[class*="st-key-ztopbar"] div[data-testid="stPopover"] > div > button,
+div[class*="st-key-ztopbar"] div[data-testid="stPopover"] button {
+  border-radius: var(--radius-md);
+  border-color: var(--color-border);
+  background: var(--color-surface);
+  min-height: 2.1rem;
+  height: 2.1rem;
+  min-width: 2.1rem;
+  padding: 0.2rem 0.45rem;
+  white-space: nowrap;
+  pointer-events: auto !important;
+  position: relative;
+  z-index: 2;
+}
+
+div[class*="st-key-ztopbar"] div[data-testid="stPopover"] > div > button:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+/* + New — primary green */
+div[class*="st-key-ztopbar_new"] div[data-testid="stPopover"] > div > button,
+div[class*="st-key-ztopbar_new"] div[data-testid="stPopover"] button {
+  background: var(--color-primary) !important;
+  color: var(--color-text-on-primary) !important;
+  border-color: var(--color-primary) !important;
+  min-width: auto !important;
+  padding: 0 0.85rem !important;
+  font-weight: var(--font-weight-medium);
+}
+
+div[class*="st-key-ztopbar_new"] div[data-testid="stPopover"] > div > button:hover,
+div[class*="st-key-ztopbar_new"] div[data-testid="stPopover"] button:hover {
+  background: var(--color-primary-hover) !important;
+  border-color: var(--color-primary-hover) !important;
+  color: var(--color-text-on-primary) !important;
+}
+
+/* Export — secondary outline */
+div[class*="st-key-ztopbar_export"] div[data-testid="stPopover"] > div > button,
+div[class*="st-key-ztopbar_export"] div[data-testid="stPopover"] button {
+  background: var(--color-surface) !important;
+  color: var(--color-text) !important;
+  border-color: var(--color-border) !important;
+  min-width: auto !important;
+  padding: 0 0.85rem !important;
+  font-weight: var(--font-weight-medium);
+}
+
+div[class*="st-key-ztopbar_export"] div[data-testid="stPopover"] > div > button:hover,
+div[class*="st-key-ztopbar_export"] div[data-testid="stPopover"] button:hover {
+  border-color: var(--color-primary) !important;
+  color: var(--color-primary) !important;
+}
+
+/* Account chip — wider, name visible */
+div[class*="st-key-ztopbar_account"] div[data-testid="stPopover"] > div > button,
+div[class*="st-key-ztopbar_account"] div[data-testid="stPopover"] button {
+  min-width: auto !important;
+  max-width: 12rem;
+  padding: 0 0.65rem !important;
+  gap: 0.35rem;
+  background: var(--color-bg-alt) !important;
+  border-color: transparent !important;
+}
+
+div[class*="st-key-ztopbar_account"] div[data-testid="stPopover"] > div > button:hover,
+div[class*="st-key-ztopbar_account"] div[data-testid="stPopover"] button:hover {
+  background: var(--color-surface-hover) !important;
+  border-color: transparent !important;
+  color: var(--color-text) !important;
+}
+
+.z-topbar-account-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-7);
-  padding: 0 16px;
-  box-sizing: border-box;
-  z-index: 999999;
+  gap: var(--space-5);
+  margin-bottom: 0.25rem;
+}
+
+.z-topbar-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-sm);
+  flex-shrink: 0;
+}
+
+.z-topbar-user-role {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.z-topbar-divider {
+  width: 1px;
+  height: 24px;
+  margin: 0 auto;
+  background: var(--color-border);
+}
+
+div[class*="st-key-ztopbar"]:not([class*="ztopbar_"])
+  > div
+  > div[data-testid="stHorizontalBlock"]
+  > div[data-testid="stColumn"]:first-child {
+  flex: 1 1 auto !important;
+  width: auto !important;
+}
+
+div[class*="st-key-ztopbar"]:not([class*="ztopbar_"])
+  > div
+  > div[data-testid="stHorizontalBlock"]
+  > div[data-testid="stColumn"]:last-child {
+  flex: 0 0 auto !important;
+  width: auto !important;
+  min-width: fit-content !important;
 }
 
 .z-topbar-search {
@@ -671,210 +824,9 @@ section[data-testid="stMain"] {
   background: var(--color-surface);
 }
 
-.z-topbar-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-6);
-  flex-shrink: 0;
-}
-
-.z-topbar-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-3);
-  height: 32px;
-  padding: 0 var(--space-7);
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  font-family: var(--font-family-base);
-  border: 1px solid transparent;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all var(--transition-fast);
-  box-sizing: border-box;
-}
-
-.z-topbar-btn i {
-  font-size: 14px;
-}
-
-.z-topbar-btn-primary {
-  background: var(--color-primary);
-  color: var(--color-text-on-primary);
-}
-
-.z-topbar-btn-primary:hover {
-  background: var(--color-primary-hover);
-}
-
-.z-topbar-btn-secondary {
-  background: var(--color-surface);
-  border-color: var(--color-border);
-  color: var(--color-text);
-}
-
-.z-topbar-btn-secondary:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-}
-
-.z-topbar-divider {
-  width: 1px;
-  height: 24px;
-  background: var(--color-border);
-}
-
-.z-topbar-icon-btn {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: none;
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--color-nav-text);
-  cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast);
-}
-
-.z-topbar-icon-btn i {
-  font-size: 18px;
-}
-
-.z-topbar-icon-btn:hover {
-  background: var(--color-primary-hover-bg);
-  color: var(--color-primary);
-}
-
-.z-topbar-badge {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 8px;
-  height: 8px;
-  border-radius: var(--radius-pill);
-  background: var(--color-danger);
-  border: 1.5px solid var(--color-surface);
-}
-
-/* ---- Top header: user menu (native <details>/<summary> disclosure, no JS
- * needed — opening/closing is handled entirely client-side by the browser,
- * so it survives fine as static markup re-rendered on every Streamlit rerun,
- * it just won't stay open across a rerun triggered by something else). ---- */
-.z-topbar-user {
-  position: relative;
-}
-
-.z-topbar-user summary {
-  display: flex;
-  align-items: center;
-  gap: var(--space-5);
-  cursor: pointer;
-  list-style: none;
-  padding: var(--space-3) var(--space-5);
-  border-radius: var(--radius-md);
-  transition: background var(--transition-fast);
-}
-
-.z-topbar-user summary::-webkit-details-marker {
-  display: none;
-}
-
-.z-topbar-user summary:hover {
-  background: var(--color-surface-hover);
-}
-
-.z-topbar-avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-pill);
-  background: var(--color-primary-subtle);
-  color: var(--color-primary);
-  font-weight: var(--font-weight-bold);
-  font-size: var(--font-size-sm);
-  flex-shrink: 0;
-}
-
-.z-topbar-user-info {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.25;
-}
-
-.z-topbar-user-name {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text);
-}
-
-.z-topbar-user-role {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-}
-
-.z-topbar-user>summary>i {
-  font-size: 16px;
-  color: var(--color-text-muted);
-  transition: transform var(--transition-fast);
-}
-
-.z-topbar-user[open]>summary>i {
-  transform: rotate(180deg);
-}
-
-.z-topbar-menu {
-  position: absolute;
-  top: calc(100% + var(--space-4));
-  right: 0;
-  min-width: 200px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-hover);
-  padding: var(--space-4);
-  z-index: 1000000;
-}
-
-/* Streamlit's own markdown-link styling ([data-testid="stMarkdownContainer"]
- * a) outranks a single class selector on specificity — !important here
- * overrides it rather than fighting to out-specify a moving framework
- * target. */
-a.z-topbar-menu-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-5);
-  padding: var(--space-5) var(--space-6);
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
-  color: var(--color-text) !important;
-  text-decoration: none !important;
-  transition: background var(--transition-fast);
-}
-
-.z-topbar-menu-item i {
-  font-size: 16px;
-  color: var(--color-text-muted);
-}
-
-.z-topbar-menu-item:hover {
-  background: var(--color-surface-hover);
-}
-
-a.z-topbar-menu-item.z-topbar-menu-danger,
-a.z-topbar-menu-item.z-topbar-menu-danger i {
-  color: var(--color-danger) !important;
-}
-
-.z-topbar-menu-divider {
-  height: 1px;
-  background: var(--color-border);
-  margin: var(--space-4) 0;
+.z-topbar-search-input:disabled {
+  cursor: default;
+  opacity: 0.9;
 }
 
 /* ---- Responsive ----------------------------------------------------------- */
@@ -884,12 +836,7 @@ a.z-topbar-menu-item.z-topbar-menu-danger i {
     padding-right: var(--space-6);
   }
 
-  .z-topbar {
+  div[class*="st-key-ztopbar"]:not([class*="ztopbar_"]) {
     left: 0;
-    padding: 12px var(--space-6);
-  }
-
-  .z-topbar-user-info {
-    display: none;
   }
 }

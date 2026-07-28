@@ -5,6 +5,9 @@ Streamlit streams elements to the frontend as the script executes, so the
 manager is entered and disappears the moment ``.empty()`` is called after the
 wrapped block finishes — no JS event wiring needed. Styling lives in
 ``ui/theme/theme.css`` under ``.z-page-loader``.
+
+Do not wrap ``st.sidebar`` content in this context manager: the loader overlay
+covers the main column and must leave the left nav visible.
 """
 
 from __future__ import annotations

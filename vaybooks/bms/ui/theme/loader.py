@@ -4,10 +4,11 @@ Streamlit's own CSS injection path is this same trick (plain .css files read
 at runtime and injected via ``st.markdown(..., unsafe_allow_html=True)`` —
 there's no native external-stylesheet API for app-authored CSS). This module
 provides that read step. ``vaybooks.bms.ui.styles.inject_global_css`` calls
-``theme_css()`` on every page render — ``tokens.css`` (primitives),
-``theme.css`` (semantic tokens + components), and ``sidebar_icons.css`` (the
-Tabler icon overlay for the sidebar, see that file's docstring) are the
-single source of styling for the app.
+``theme_css()`` on every page render — ``tokens.css`` (primitives) and
+``theme.css`` (semantic tokens + components) are the single source of styling.
+
+``sidebar_icons.css`` (Tabler overlay that hid Material glyphs) is omitted on
+Streamlit 1.58 — it left blank sidebar icons when the overlay missed.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from __future__ import annotations
 from pathlib import Path
 
 _THEME_DIR = Path(__file__).parent
-_CSS_FILES = ("tokens.css", "theme.css", "sidebar_icons.css")
+_CSS_FILES = ("tokens.css", "theme.css")
 
 
 def theme_css() -> str:

@@ -113,7 +113,6 @@ from vaybooks.bms.ui.auth.session import (
 )
 from vaybooks.bms.ui.auth.dialogs import open_sign_in_dialog_if_needed
 from vaybooks.bms.ui.scheduler_hook import maybe_start_schedulers
-from vaybooks.bms.ui.components.common.app_header import render_app_header
 from vaybooks.bms.ui.auth.guard import require_page_access
 from vaybooks.bms.ui.pages.migration import hub as data_migration
 from vaybooks.bms.ui.keyboard.resolve import resolve_pressed_shortcuts
@@ -165,10 +164,9 @@ from vaybooks.bms.ui.pages.schedulers import (
 
 setup_logging()
 
-# Placeholder branding (assets/) — swap logo.svg/logo.png/favicon.svg/favicon.ico
-# for the final artwork when available; every reference to the brand mark lives
-# here and in the sidebar block below.
+# Assets (favicon/logo) — keep paths in sync with page_config and st.logo.
 ASSETS_DIR = Path(__file__).parent / "assets"
+SESSION_SIDEBAR_RAIL = "sidebar_rail"
 
 st.set_page_config(
     page_title="VayBooks",
@@ -183,6 +181,139 @@ st.logo(
 
 inject_global_css()
 ensure_defaults_loaded(force=True)
+
+
+def _sidebar_is_rail() -> bool:
+    return bool(st.session_state.get(SESSION_SIDEBAR_RAIL, False))
+
+
+def _toggle_sidebar_rail() -> None:
+    st.session_state[SESSION_SIDEBAR_RAIL] = not _sidebar_is_rail()
+
+
+def _keep_native_sidebar_open() -> None:
+    """Native Streamlit collapse hides the whole pane — reopen so the icon rail can show."""
+    import streamlit.components.v1 as components
+
+    components.html(
+        """
+        <script>
+        (function () {
+          var win = window.parent || window;
+          var doc = win.document;
+          try {
+            Object.keys(win.localStorage)
+              .filter(function (k) { return k.indexOf('stSidebarCollapsed-') === 0; })
+              .forEach(function (k) { win.localStorage.setItem(k, 'false'); });
+          } catch (e) {}
+          function expand() {
+            var sidebar = doc.querySelector('[data-testid="stSidebar"]');
+            if (sidebar && sidebar.getAttribute('aria-expanded') === 'false') {
+              var btn = doc.querySelector('[data-testid="stExpandSidebarButton"]');
+              if (btn) btn.click();
+            }
+          }
+          expand();
+          setTimeout(expand, 50);
+          setTimeout(expand, 200);
+        })();
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
+
+
+def _inject_shell_chrome(rail: bool) -> None:
+    """Hide native collapse; size topbar + optional icon-rail chrome."""
+    topbar_left = "72px" if rail else "250px"
+    rail_css = ""
+    if rail:
+        rail_css = """
+        section[data-testid="stSidebar"] {
+          min-width: 72px !important;
+          max-width: 72px !important;
+          width: 72px !important;
+        }
+        section[data-testid="stSidebar"] > div {
+          width: 72px !important;
+          padding-left: 0 !important;
+          padding-right: 0 !important;
+        }
+        section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] {
+          padding: 0.5rem 0.35rem !important;
+        }
+        section[data-testid="stSidebar"] [data-testid="stCaptionContainer"],
+        section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p.z-sidebar-version,
+        section[data-testid="stSidebar"] hr {
+          display: none !important;
+        }
+        section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] {
+          justify-content: center !important;
+          padding: 0.45rem 0 !important;
+          gap: 0 !important;
+        }
+        section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] [data-testid="stMarkdownContainer"] {
+          display: none !important;
+        }
+        section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] > span:last-child {
+          display: none !important;
+        }
+        [data-testid="stSidebarHeader"] {
+          justify-content: center !important;
+          padding: 0.5rem 0.25rem !important;
+        }
+        [data-testid="stSidebarHeader"] img {
+          max-width: 36px !important;
+          max-height: 28px !important;
+        }
+        """
+    st.markdown(
+        f"""
+        <style>
+        /* App-owned rail: never use Streamlit's full sidebar hide. */
+        [data-testid="stSidebarCollapseButton"] {{
+          display: none !important;
+        }}
+        div[class*="st-key-ztopbar"]:not([class*="ztopbar_"]) {{
+          left: {topbar_left} !important;
+        }}
+        {rail_css}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_rail_toggle(rail: bool) -> None:
+    """Collapse to icon rail / expand to full labels."""
+    help_text = "Expand navigation" if rail else "Collapse to icons"
+    icon = (
+        ":material/keyboard_double_arrow_right:"
+        if rail
+        else ":material/keyboard_double_arrow_left:"
+    )
+    with st.container(key="sidebar_rail_toggle"):
+        if st.button(icon, help=help_text, use_container_width=True):
+            _toggle_sidebar_rail()
+            st.rerun()
+
+
+def _render_sidebar_nav(nav, visible_groups: dict, *, rail: bool) -> None:
+    """Logo from st.logo(); page links under it (icons-only when rail)."""
+    st.markdown(_sidebar_active_link_css(nav), unsafe_allow_html=True)
+    for header, pages in visible_groups.items():
+        if header and not rail:
+            st.caption(header)
+        for page in pages:
+            title = getattr(page, "title", "") or ""
+            st.page_link(page, help=title or None)
+    if not rail:
+        st.divider()
+        st.markdown(
+            f'<p class="z-sidebar-version">v{__version__}</p>',
+            unsafe_allow_html=True,
+        )
 
 
 def _page(module, *, url_path: str = "", require_auth: bool = True):
@@ -1082,9 +1213,8 @@ def _sidebar_active_link_css(current_page) -> str:
 
 
 if not is_authenticated():
+    _keep_native_sidebar_open()
     with st.sidebar:
-        st.markdown("## VayBooks")
-        st.divider()
         st.caption("Sign in to continue")
         st.caption(f"v{__version__}")
     st.markdown("## Welcome to VayBooks")
@@ -1096,7 +1226,7 @@ else:
     maybe_start_schedulers(_services)
 
     # Settings / Access / Migration / Schedulers stay registered with st.navigation
-    # (deep links keep working) but are surfaced from the header.
+    # (deep links keep working) but are surfaced from the topbar.
     visible_groups = {}
     for group, pages in page_groups.items():
         if group in ("Business", "Settings", "Access", "Migration", "Schedulers"):
@@ -1112,25 +1242,19 @@ else:
     nav_pages = {group: list(pages) for group, pages in page_groups.items()}
     nav_pages["_hidden"] = list(hidden_pages)
 
-    # Hide the built-in menu (Streamlit pins it to the very top of the sidebar) and
-    # draw our own below the branding — st.logo() renders the brand mark above this.
+    # Built-in menu hidden; st.logo() + custom page_links draw the left nav.
+    # Collapse is app-owned icon rail (native hide removed).
     nav = st.navigation(nav_pages, position="hidden")
+    _keep_native_sidebar_open()
+
+    rail = _sidebar_is_rail()
+    _inject_shell_chrome(rail)
+    with st.sidebar:
+        _render_rail_toggle(rail)
+        _render_sidebar_nav(nav, visible_groups, rail=rail)
 
     with page_loader():
-        with st.sidebar:
-            st.markdown(_sidebar_active_link_css(nav), unsafe_allow_html=True)
-            for header, pages in visible_groups.items():
-                if header:
-                    st.caption(header)
-                for page in pages:
-                    st.page_link(page)
-            st.divider()
-            st.markdown(
-                f'<p class="z-sidebar-version">v{__version__}</p>',
-                unsafe_allow_html=True,
-            )
-
-        render_app_header(
+        render_topbar(
             _services,
             business_pages=page_groups["Business"],
             settings_pages=page_groups["Settings"],
@@ -1138,7 +1262,6 @@ else:
             migration_pages=page_groups["Migration"],
             scheduler_pages=page_groups["Schedulers"],
         )
-        render_topbar()
 
         # Parents navigate here; action chords only set session flags for page render.
         resolve_pressed_shortcuts()
