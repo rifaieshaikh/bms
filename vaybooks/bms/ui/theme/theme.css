@@ -1,25 +1,5 @@
-/*
- * Global theme — semantic tokens + reusable component styles, built
- * entirely on the primitive palette in tokens.css.
- *
- * Layering:
- *   tokens.css  -> raw color primitives (black/white/primary/status scales)
- *   theme.css   -> semantic roles (this file) + component-level rules
- * Page and component code should only ever reference the semantic
- * `--color-*` / `--space-*` / `--radius-*` / `--shadow-*` / `--font-*`
- * variables below, never the primitives directly.
- *
- * Tone mapping note: the previous ad-hoc badge palette had 8 tones
- * (gray/blue/orange/violet/green/red/plum/gold). `gray` maps to `neutral`,
- * `gold` maps to `accent` (yellow scale), and `plum` maps to `primary`
- * (plum was always derived from --primary-color via color-mix, never a
- * fixed hex). `violet` is visually distinct from `primary` — a fixed,
- * separately-used tone — so it keeps its own scale/semantic role instead
- * of folding into primary.
- */
-
 :root {
-  /* ---- Brand / primary ------------------------------------------------ */
+
   --color-primary: var(--primary-color);
   --color-primary-subtle: var(--primary-1);
   --color-primary-muted: var(--primary-3);
@@ -28,7 +8,6 @@
   --color-primary-active: var(--primary-8);
   --color-primary-emphasis: var(--primary-9);
 
-  /* ---- Surfaces & structure -------------------------------------------- */
   --color-bg: var(--white-975);
   --color-bg-alt: var(--white-900);
   --color-surface: var(--white);
@@ -36,14 +15,12 @@
   --color-border: var(--white-600);
   --color-border-strong: var(--white-400);
 
-  /* ---- Text -------------------------------------------------------------- */
   --color-text: var(--black-500);
   --color-text-muted: var(--black-975);
   --color-text-subtle: var(--white-050);
   --color-text-inverse: var(--white);
   --color-text-on-primary: var(--white);
 
-  /* ---- Status tones (each: base / bg / border / text) -------------------- */
   --color-success: var(--green-6);
   --color-success-bg: var(--green-1);
   --color-success-border: var(--green-3);
@@ -85,13 +62,11 @@
 
   --color-teal-text: var(--teal-9);
 
-  /* ---- Overlay tints (translucent, for use over arbitrary surfaces) ---- */
   --color-primary-hover-bg: var(--primary-a08);
   --color-divider-subtle: var(--slate-500-a12);
   --color-surface-hover: var(--slate-500-a04);
   --color-text-faint: var(--slate-500-a60);
 
-  /* ---- Typography ---------------------------------------------------- */
   --font-family-base: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-size-xs: 0.7rem;
   --font-size-sm: 0.78rem;
@@ -105,7 +80,6 @@
   --line-height-tight: 1.2;
   --line-height-base: 1.45;
 
-  /* ---- Spacing scale --------------------------------------------------- */
   --space-1: 0.15rem;
   --space-2: 0.25rem;
   --space-3: 0.35rem;
@@ -115,7 +89,6 @@
   --space-7: 1rem;
   --space-8: 1.5rem;
 
-  /* ---- Radius scale ------------------------------------------------------ */
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 10px;
@@ -123,26 +96,16 @@
   --radius-pill: 999px;
   --radius-base: 0.6rem;
 
-  /* ---- Elevation --------------------------------------------------------- */
   --shadow-resting: 0 1px 3px var(--black-500-a06);
   --shadow-hover: 0 6px 18px var(--black-500-a14);
   --shadow-focus: 0 2px 8px var(--primary-a35);
 
-  /* ---- Motion -------------------------------------------------------------- */
   --transition-fast: 0.15s ease;
   --transition-base: 0.18s ease;
 
-  /* ---- Breakpoints (for reference in comments; CSS can't read these) ---- */
   --breakpoint-phone: 640px;
 }
 
-/* =====================================================================
- * Reusable component styles — the live, single-source styling for every
- * page. Injected via ui/theme/loader.py::theme_css(), consumed by
- * ui/styles.py::inject_global_css() on every page render.
- * ===================================================================== */
-
-/* ---- Buttons + popover triggers ---------------------------------------- */
 div.stButton>button,
 div.stDownloadButton>button,
 div[data-testid="stPopover"]>div>button,
@@ -173,14 +136,12 @@ div.stButton>button[kind="secondary"]:hover {
   color: var(--color-primary);
 }
 
-/* ---- Headings ------------------------------------------------------------ */
 h1,
 h2,
 h3 {
   color: var(--color-text);
 }
 
-/* ---- Cards: elevation, accent edge, hover lift ------------------------ */
 div[class*="st-key-card_grid"] div[data-testid="stVerticalBlockBorderWrapper"] {
   padding: var(--space-5) var(--space-6);
   border: 1px solid var(--color-border);
@@ -200,7 +161,6 @@ div[class*="st-key-card_grid"] div[data-testid="stVerticalBlockBorderWrapper"] d
   gap: var(--space-3);
 }
 
-/* Nested bordered blocks inside grid cards: no double chrome */
 div[class*="st-key-card_grid"] div[data-testid="stVerticalBlockBorderWrapper"]>div[data-testid="stVerticalBlock"]>div[data-testid="stVerticalBlockBorderWrapper"] {
   border: none !important;
   box-shadow: none !important;
@@ -262,7 +222,6 @@ div[class*="st-key-card_grid"] div[data-testid="stVerticalBlockBorderWrapper"]:h
   color: var(--color-text);
 }
 
-/* ---- Status badge chips ---------------------------------------------- */
 .z-badge {
   display: inline-block;
   padding: var(--space-1) var(--space-5);
@@ -321,26 +280,27 @@ div[class*="st-key-card_grid"] div[data-testid="stVerticalBlockBorderWrapper"]:h
   border-color: var(--color-accent-border);
 }
 
-/* ---- Sidebar: shell ------------------------------------------------------
- * Visual chrome only. Collapse is an app-owned icon rail (session flag),
- * not Streamlit's native full hide — see app.py `_inject_shell_chrome`. */
 section[data-testid="stSidebar"] {
   background: var(--color-surface);
   border-right: 1px solid var(--color-sidebar-border);
-  /* Above the fixed topbar (z-index 999990). */
-  z-index: 1000000 !important;
+  width: 250px !important;
+  min-width: 250px !important;
+  max-width: 250px !important;
 }
 
-section[data-testid="stSidebar"][aria-expanded="true"] {
-  min-width: 250px;
+section[data-testid="stSidebar"]>div {
+  width: 250px !important;
+  padding: 0;
+  overflow: initial;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
 }
 
-/* Native collapse hidden — rail toggle replaces it (injected CSS reinforces). */
 [data-testid="stSidebarCollapseButton"] {
   display: none !important;
 }
 
-/* ---- Sidebar: logo/header section (st.logo(), native collapse button) --- */
 [data-testid="stSidebarHeader"] {
   display: flex;
   align-items: center;
@@ -352,14 +312,15 @@ section[data-testid="stSidebar"][aria-expanded="true"] {
   box-sizing: border-box;
 }
 
-[data-testid="stSidebarUserContent"] {
-  padding: var(--space-6);
-  overflow: auto;
-}
-
 [data-testid="stSidebarHeader"] img {
   max-height: 28px;
   width: auto;
+}
+
+[data-testid="stSidebarUserContent"] {
+  position: relative;
+  padding: var(--space-6);
+  overflow: visible;
 }
 
 [data-testid="stSidebarCollapseButton"] button {
@@ -371,56 +332,130 @@ section[data-testid="stSidebar"][aria-expanded="true"] {
   background: var(--color-surface-hover);
 }
 
-/* ---- Sidebar: section headers (st.caption group labels) ----------------- */
+div[class*="st-key-sidebar_rail_toggle"] {
+  position: absolute;
+  top: -46px;
+  right: var(--space-6);
+  z-index: 5;
+  width: auto;
+}
+
+div[class*="st-key-sidebar_rail_toggle"] button {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-text-muted);
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+div[class*="st-key-sidebar_rail_toggle"] button:hover {
+  background: var(--color-primary-hover-bg);
+  border-color: var(--color-primary-muted);
+  color: var(--color-primary);
+}
+
+div[class*="st-key-sidebar_rail_toggle"] button:active {
+  background: var(--color-primary-subtle);
+  border-color: var(--color-primary);
+  color: var(--color-primary-active);
+}
+
+div[class*="st-key-sidebar_rail_toggle"] button:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-focus);
+}
+
+div[class*="st-key-sidebar_rail_toggle"] button [data-testid="stIconMaterial"] {
+  position: relative;
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  font-size: 16px;
+  line-height: 16px;
+  color: transparent;
+}
+
+div[class*="st-key-sidebar_rail_toggle"] button [data-testid="stIconMaterial"]::before {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "tabler-icons" !important;
+  font-style: normal;
+  font-weight: normal;
+  font-variant: normal;
+  text-transform: none;
+  font-size: 16px;
+  line-height: 1;
+  speak: none;
+  color: currentColor;
+}
+
+div[class*="st-key-sidebar_rail_toggle_expanded"] button [data-testid="stIconMaterial"]::before {
+  content: "\ea60";
+
+}
+
+div[class*="st-key-sidebar_rail_toggle_collapsed"] button [data-testid="stIconMaterial"]::before {
+  content: "\ea61";
+
+}
+
+div[class*="st-key-sidebar_nav_scroll"] {
+  overflow-y: auto;
+  overflow-x: hidden;
+  max-height: calc(100vh - 60px - (var(--space-6) * 2));
+  gap: var(--space-2);
+}
+
 section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] {
-  margin: var(--space-7) 0 var(--space-3);
+  margin: 20px 0 8px;
   padding: 0;
 }
 
 section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {
   margin: 0;
-  font-size: var(--font-size-xs);
+  font-size: 11px;
   font-weight: var(--font-weight-medium);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--color-text-muted);
-}
-
-/* ---- Sidebar: nav menu items (st.page_link) ------------------------------
- * Streamlit's standalone st.page_link doesn't expose an "active" DOM
- * attribute/class we can rely on (verified against streamlit==1.59.2 — no
- * aria-current, and the only differentiator is a content-hashed emotion
- * class that isn't safe to hardcode). The active item's highlight rule
- * (background + primary color, keyed by the current page's href) is instead
- * generated per-render in app.py's `_sidebar_active_link_css()` — mirrors
- * the href="" default-page quirk already documented in sidebar_icons.css.
- * Icon/text color needs !important here and there: Streamlit sets it via an
- * emotion class of equal specificity, and cascade order between that and
- * this stylesheet isn't guaranteed. */
-section[data-testid="stSidebar"] div[data-testid="stPageLink"] {
-  margin-bottom: 2px;
+  color: var(--color-nav-icon);
 }
 
 section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] {
   display: flex;
   align-items: center;
-  gap: var(--space-6);
-  min-height: 36px;
-  padding: 0 var(--space-7);
+  gap: 10px;
+  height: 36px;
+  padding: 0 12px;
   border-radius: var(--radius-nav);
-  transition: background var(--transition-fast);
+  transition: background 0.2s ease, color 0.2s ease;
+  margin: 0;
+}
+
+.stVerticalBlock .stElementContainer {
+  margin: 0;
 }
 
 section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] [data-testid="stIconMaterial"] {
   color: var(--color-nav-icon) !important;
-  transition: color var(--transition-fast);
+  transition: color 0.2s ease;
 }
 
 section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] [data-testid="stMarkdownContainer"] p {
-  color: var(--color-text) !important;
-  font-weight: var(--font-weight-regular) !important;
-  font-size: var(--font-size-sm) !important;
-  transition: color var(--transition-fast);
+  color: var(--color-nav-text) !important;
+  font-size: 14px !important;
+  transition: color 0.2s ease;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -431,10 +466,6 @@ section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] [data-testi
   min-width: 0;
 }
 
-/* The label's wrapping <span> (icon span is the anchor's other flex child)
- * needs min-width: 0 too — flex items default to min-width: auto, which
- * would keep the row as wide as the longest label instead of letting the
- * ellipsis above do its job. */
 section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]>span:last-child {
   min-width: 0;
   overflow: hidden;
@@ -444,9 +475,11 @@ section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]:hover {
   background: var(--color-surface-hover);
 }
 
-/* Optional trailing count/status pill for a nav item — not wired to any
- * page_link yet (st.page_link's label is plain text, no HTML), styled here
- * so a future custom nav row can drop it in. */
+section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]:hover [data-testid="stIconMaterial"],
+section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]:hover [data-testid="stMarkdownContainer"] p {
+  color: var(--color-primary) !important;
+}
+
 .z-nav-badge {
   margin-left: auto;
   display: inline-flex;
@@ -466,7 +499,6 @@ section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]:hover {
   color: var(--color-text-subtle);
 }
 
-/* ---- Metric tiles -------------------------------------------------------- */
 div[data-testid="stMetric"] {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -474,9 +506,6 @@ div[data-testid="stMetric"] {
   padding: var(--space-5) var(--space-6);
 }
 
-/* ---- Detail panels: single bordered cards on detail pages --------------- */
-/* Same plum accent + elevation as grid cards, but no hover lift (they are  */
-/* full-width sections, not clickable tiles).                               */
 div[class*="st-key-zpanel"]>div[data-testid="stVerticalBlockBorderWrapper"],
 div[class*="st-key-zpanel"] div[data-testid="stExpander"] {
   border: 1px solid var(--color-border);
@@ -486,7 +515,6 @@ div[class*="st-key-zpanel"] div[data-testid="stExpander"] {
   box-shadow: var(--shadow-resting);
 }
 
-/* ---- Form inputs: consistent radius + focus ring ------------------------ */
 div[data-testid="stTextInput"] input,
 div[data-testid="stTextArea"] textarea,
 div[data-testid="stNumberInput"] input,
@@ -506,7 +534,6 @@ div[data-testid="stTimeInput"] input:focus {
   box-shadow: var(--shadow-focus);
 }
 
-/* ---- Checkbox / radio / toggle ------------------------------------------ */
 div[data-testid="stCheckbox"] label span[data-testid="stMarkdownContainer"],
 div[data-testid="stRadio"] label span[data-testid="stMarkdownContainer"] {
   font-size: var(--font-size-sm);
@@ -516,7 +543,6 @@ div[data-testid="stToggle"] label div[data-baseweb="checkbox"] div[aria-checked=
   background: var(--color-primary) !important;
 }
 
-/* ---- Tabs ----------------------------------------------------------------- */
 div[data-testid="stTabs"] button[data-baseweb="tab"] {
   font-size: var(--font-size-sm);
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
@@ -526,28 +552,21 @@ div[data-testid="stTabs"] div[data-baseweb="tab-highlight"] {
   background-color: var(--color-primary);
 }
 
-/* ---- File uploader -------------------------------------------------------- */
 div[data-testid="stFileUploaderDropzone"] {
   border-radius: var(--radius-md);
   border-color: var(--color-border);
   background: var(--color-bg-alt);
 }
 
-/* ---- Progress bar ---------------------------------------------------------- */
 div[data-testid="stProgress"] div[role="progressbar"]>div {
   background-color: var(--color-primary);
   border-radius: var(--radius-pill);
 }
 
-/* ---- Spinner --------------------------------------------------------------- */
 div[data-testid="stSpinner"] {
   color: var(--color-text-muted);
 }
 
-/* ---- Page loader ------------------------------------------------------------
- * Centered loading dots over a solid #F4F6F5 cover shown while a page's data
- * is fetched (see components/shared/page_loader.py). z-index stays below the
- * sidebar so the left nav remains visible during page transitions. */
 .z-page-loader-wrap {
   position: fixed;
   inset: 0;
@@ -578,14 +597,10 @@ div[data-testid="stSpinner"] {
   }
 }
 
-/* ---- Accordion (expander) -------------------------------------------------- */
 div[data-testid="stExpander"] summary {
   border-radius: var(--radius-md);
 }
 
-/* ---- Headers -------------------------------------------------------------
- * Redesign topbar pinned at viewport top, flush with sidebar logo row.
- * left is overridden per-run (250px expanded / 72px icon rail). */
 section[data-testid="stMain"] {
   padding-top: 60px;
 }
@@ -604,38 +619,26 @@ div[class*="st-key-ztopbar"]:not([class*="ztopbar_"]) {
   box-sizing: border-box;
   pointer-events: auto !important;
   overflow: visible;
+  width: auto;
+  ;
 }
 
-/* Vertically center Streamlit's nested columns inside the 60px bar. */
-div[class*="st-key-ztopbar"]:not([class*="ztopbar_"]) > div,
-div[class*="st-key-ztopbar"]:not([class*="ztopbar_"]) > div > div[data-testid="stVerticalBlock"],
+div[class*="st-key-ztopbar"]:not([class*="ztopbar_"])>div,
+div[class*="st-key-ztopbar"]:not([class*="ztopbar_"])>div>div[data-testid="stVerticalBlock"],
 div[class*="st-key-ztopbar"]:not([class*="ztopbar_"]) [data-testid="stHorizontalBlock"] {
   height: 100%;
   min-height: 0;
   align-items: center !important;
 }
 
-/* Don't leave a tall empty slot where the fixed bar sits in the DOM. */
-section[data-testid="stMain"]
-  div[data-testid="stElementContainer"]:has(
-    > div > div[class*="st-key-ztopbar"]:not([class*="ztopbar_"])
-  ),
-section[data-testid="stMain"]
-  div[data-testid="element-container"]:has(
-    div[class*="st-key-ztopbar"]:not([class*="ztopbar_"])
-  ) {
+section[data-testid="stMain"] div[data-testid="stElementContainer"]:has(> div > div[class*="st-key-ztopbar"]:not([class*="ztopbar_"])),
+section[data-testid="stMain"] div[data-testid="element-container"]:has(div[class*="st-key-ztopbar"]:not([class*="ztopbar_"])) {
   height: 0 !important;
   min-height: 0 !important;
   margin: 0 !important;
   padding: 0 !important;
   overflow: visible !important;
   border: none !important;
-}
-
-/* Rail toggle in sidebar */
-div[class*="st-key-sidebar_rail_toggle"] button {
-  min-height: 2rem;
-  padding: 0.25rem !important;
 }
 
 div[class*="st-key-ztopbar"] div[data-testid="stVerticalBlock"] {
@@ -660,8 +663,7 @@ div[class*="st-key-ztopbar_actions"] div[data-testid="stPopover"] {
   pointer-events: auto !important;
 }
 
-/* Default icon popovers */
-div[class*="st-key-ztopbar"] div[data-testid="stPopover"] > div > button,
+div[class*="st-key-ztopbar"] div[data-testid="stPopover"]>div>button,
 div[class*="st-key-ztopbar"] div[data-testid="stPopover"] button {
   border-radius: var(--radius-md);
   border-color: var(--color-border);
@@ -676,13 +678,12 @@ div[class*="st-key-ztopbar"] div[data-testid="stPopover"] button {
   z-index: 2;
 }
 
-div[class*="st-key-ztopbar"] div[data-testid="stPopover"] > div > button:hover {
+div[class*="st-key-ztopbar"] div[data-testid="stPopover"]>div>button:hover {
   border-color: var(--color-primary);
   color: var(--color-primary);
 }
 
-/* + New — primary green */
-div[class*="st-key-ztopbar_new"] div[data-testid="stPopover"] > div > button,
+div[class*="st-key-ztopbar_new"] div[data-testid="stPopover"]>div>button,
 div[class*="st-key-ztopbar_new"] div[data-testid="stPopover"] button {
   background: var(--color-primary) !important;
   color: var(--color-text-on-primary) !important;
@@ -692,15 +693,14 @@ div[class*="st-key-ztopbar_new"] div[data-testid="stPopover"] button {
   font-weight: var(--font-weight-medium);
 }
 
-div[class*="st-key-ztopbar_new"] div[data-testid="stPopover"] > div > button:hover,
+div[class*="st-key-ztopbar_new"] div[data-testid="stPopover"]>div>button:hover,
 div[class*="st-key-ztopbar_new"] div[data-testid="stPopover"] button:hover {
   background: var(--color-primary-hover) !important;
   border-color: var(--color-primary-hover) !important;
   color: var(--color-text-on-primary) !important;
 }
 
-/* Export — secondary outline */
-div[class*="st-key-ztopbar_export"] div[data-testid="stPopover"] > div > button,
+div[class*="st-key-ztopbar_export"] div[data-testid="stPopover"]>div>button,
 div[class*="st-key-ztopbar_export"] div[data-testid="stPopover"] button {
   background: var(--color-surface) !important;
   color: var(--color-text) !important;
@@ -710,14 +710,13 @@ div[class*="st-key-ztopbar_export"] div[data-testid="stPopover"] button {
   font-weight: var(--font-weight-medium);
 }
 
-div[class*="st-key-ztopbar_export"] div[data-testid="stPopover"] > div > button:hover,
+div[class*="st-key-ztopbar_export"] div[data-testid="stPopover"]>div>button:hover,
 div[class*="st-key-ztopbar_export"] div[data-testid="stPopover"] button:hover {
   border-color: var(--color-primary) !important;
   color: var(--color-primary) !important;
 }
 
-/* Account chip — wider, name visible */
-div[class*="st-key-ztopbar_account"] div[data-testid="stPopover"] > div > button,
+div[class*="st-key-ztopbar_account"] div[data-testid="stPopover"]>div>button,
 div[class*="st-key-ztopbar_account"] div[data-testid="stPopover"] button {
   min-width: auto !important;
   max-width: 12rem;
@@ -727,7 +726,7 @@ div[class*="st-key-ztopbar_account"] div[data-testid="stPopover"] button {
   border-color: transparent !important;
 }
 
-div[class*="st-key-ztopbar_account"] div[data-testid="stPopover"] > div > button:hover,
+div[class*="st-key-ztopbar_account"] div[data-testid="stPopover"]>div>button:hover,
 div[class*="st-key-ztopbar_account"] div[data-testid="stPopover"] button:hover {
   background: var(--color-surface-hover) !important;
   border-color: transparent !important;
@@ -767,18 +766,12 @@ div[class*="st-key-ztopbar_account"] div[data-testid="stPopover"] button:hover {
   background: var(--color-border);
 }
 
-div[class*="st-key-ztopbar"]:not([class*="ztopbar_"])
-  > div
-  > div[data-testid="stHorizontalBlock"]
-  > div[data-testid="stColumn"]:first-child {
+div[class*="st-key-ztopbar"]:not([class*="ztopbar_"])>div>div[data-testid="stHorizontalBlock"]>div[data-testid="stColumn"]:first-child {
   flex: 1 1 auto !important;
   width: auto !important;
 }
 
-div[class*="st-key-ztopbar"]:not([class*="ztopbar_"])
-  > div
-  > div[data-testid="stHorizontalBlock"]
-  > div[data-testid="stColumn"]:last-child {
+div[class*="st-key-ztopbar"]:not([class*="ztopbar_"])>div>div[data-testid="stHorizontalBlock"]>div[data-testid="stColumn"]:last-child {
   flex: 0 0 auto !important;
   width: auto !important;
   min-width: fit-content !important;
@@ -829,7 +822,6 @@ div[class*="st-key-ztopbar"]:not([class*="ztopbar_"])
   opacity: 0.9;
 }
 
-/* ---- Responsive ----------------------------------------------------------- */
 @media (max-width: 640px) {
   .block-container {
     padding-left: var(--space-6);

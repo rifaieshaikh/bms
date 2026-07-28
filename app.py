@@ -267,6 +267,14 @@ def _inject_shell_chrome(rail: bool) -> None:
           max-width: 36px !important;
           max-height: 28px !important;
         }
+        /* Icon rail is too narrow for the toggle to float on the right of the
+           centered logo — drop it back into normal flow, centered below. */
+        div[class*="st-key-sidebar_rail_toggle"] {
+          position: static !important;
+          top: auto !important;
+          right: auto !important;
+          margin: 0.35rem auto 0.15rem !important;
+        }
         """
     st.markdown(
         f"""
@@ -286,34 +294,50 @@ def _inject_shell_chrome(rail: bool) -> None:
 
 
 def _render_rail_toggle(rail: bool) -> None:
-    """Collapse to icon rail / expand to full labels."""
+    """Collapse to icon rail / expand to full labels.
+
+    Rendered into its own container, then pinned into the logo section by CSS
+    (see theme.css "Sidebar: logo section toggle button") — Streamlit's
+    ``st.logo()`` header has no slot for custom widgets, so the button lives
+    in ``stSidebarUserContent`` and is visually docked onto the header above
+    it. The container key carries the rail state (``_expanded``/``_collapsed``)
+    so theme.css can swap the Tabler chevron per state, same href-keyed
+    overlay trick as sidebar_icons.css.
+    """
     help_text = "Expand navigation" if rail else "Collapse to icons"
     icon = (
         ":material/keyboard_double_arrow_right:"
         if rail
         else ":material/keyboard_double_arrow_left:"
     )
-    with st.container(key="sidebar_rail_toggle"):
-        if st.button(icon, help=help_text, use_container_width=True):
+    key = "sidebar_rail_toggle_collapsed" if rail else "sidebar_rail_toggle_expanded"
+    with st.container(key=key):
+        if st.button(icon, help=help_text):
             _toggle_sidebar_rail()
             st.rerun()
 
 
 def _render_sidebar_nav(nav, visible_groups: dict, *, rail: bool) -> None:
-    """Logo from st.logo(); page links under it (icons-only when rail)."""
+    """Logo from st.logo(); page links under it (icons-only when rail).
+
+    Wrapped in its own scroll container (theme.css) so ``stSidebarUserContent``
+    can stay ``overflow: visible`` — required for the rail toggle button to sit
+    absolutely positioned in the logo section without being clipped.
+    """
     st.markdown(_sidebar_active_link_css(nav), unsafe_allow_html=True)
-    for header, pages in visible_groups.items():
-        if header and not rail:
-            st.caption(header)
-        for page in pages:
-            title = getattr(page, "title", "") or ""
-            st.page_link(page, help=title or None)
-    if not rail:
-        st.divider()
-        st.markdown(
-            f'<p class="z-sidebar-version">v{__version__}</p>',
-            unsafe_allow_html=True,
-        )
+    with st.container(key="sidebar_nav_scroll"):
+        for header, pages in visible_groups.items():
+            if header and not rail:
+                st.caption(header)
+            for page in pages:
+                title = getattr(page, "title", "") or ""
+                st.page_link(page, help=title or None)
+        if not rail:
+            st.divider()
+            st.markdown(
+                f'<p class="z-sidebar-version">v{__version__}</p>',
+                unsafe_allow_html=True,
+            )
 
 
 def _page(module, *, url_path: str = "", require_auth: bool = True):
