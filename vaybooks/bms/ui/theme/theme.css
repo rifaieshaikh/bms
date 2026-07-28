@@ -1,0 +1,895 @@
+/*
+ * Global theme — semantic tokens + reusable component styles, built
+ * entirely on the primitive palette in tokens.css.
+ *
+ * Layering:
+ *   tokens.css  -> raw color primitives (black/white/primary/status scales)
+ *   theme.css   -> semantic roles (this file) + component-level rules
+ * Page and component code should only ever reference the semantic
+ * `--color-*` / `--space-*` / `--radius-*` / `--shadow-*` / `--font-*`
+ * variables below, never the primitives directly.
+ *
+ * Tone mapping note: the previous ad-hoc badge palette had 8 tones
+ * (gray/blue/orange/violet/green/red/plum/gold). `gray` maps to `neutral`,
+ * `gold` maps to `accent` (yellow scale), and `plum` maps to `primary`
+ * (plum was always derived from --primary-color via color-mix, never a
+ * fixed hex). `violet` is visually distinct from `primary` — a fixed,
+ * separately-used tone — so it keeps its own scale/semantic role instead
+ * of folding into primary.
+ */
+
+:root {
+  /* ---- Brand / primary ------------------------------------------------ */
+  --color-primary: var(--primary-color);
+  --color-primary-subtle: var(--primary-1);
+  --color-primary-muted: var(--primary-3);
+  --color-primary-strong: var(--primary-5);
+  --color-primary-hover: var(--primary-7);
+  --color-primary-active: var(--primary-8);
+  --color-primary-emphasis: var(--primary-9);
+
+  /* ---- Surfaces & structure -------------------------------------------- */
+  --color-bg: var(--white-975);
+  --color-bg-alt: var(--white-900);
+  --color-surface: var(--white);
+  --color-surface-muted: var(--white-900);
+  --color-border: var(--white-600);
+  --color-border-strong: var(--white-400);
+
+  /* ---- Text -------------------------------------------------------------- */
+  --color-text: var(--black-500);
+  --color-text-muted: var(--black-975);
+  --color-text-subtle: var(--white-050);
+  --color-text-inverse: var(--white);
+  --color-text-on-primary: var(--white);
+
+  /* ---- Status tones (each: base / bg / border / text) -------------------- */
+  --color-success: var(--green-6);
+  --color-success-bg: var(--green-1);
+  --color-success-border: var(--green-3);
+  --color-success-text: var(--green-9);
+
+  --color-danger: var(--red-6);
+  --color-danger-bg: var(--red-1);
+  --color-danger-border: var(--red-3);
+  --color-danger-text: var(--red-9);
+
+  --color-warning: var(--orange-6);
+  --color-warning-bg: var(--orange-1);
+  --color-warning-border: var(--orange-3);
+  --color-warning-text: var(--orange-9);
+
+  --color-info: var(--blue-6);
+  --color-info-bg: var(--blue-1);
+  --color-info-border: var(--blue-3);
+  --color-info-text: var(--blue-9);
+
+  --color-accent: var(--yellow-6);
+  --color-accent-bg: var(--yellow-1);
+  --color-accent-border: var(--yellow-3);
+  --color-accent-text: var(--yellow-9);
+
+  --color-neutral: var(--neutral-4);
+  --color-neutral-bg: var(--neutral-1);
+  --color-neutral-border: var(--neutral-2);
+  --color-neutral-text: var(--neutral-7);
+
+  --color-nav-icon: var(--nav-icon-default);
+  --color-nav-text: var(--nav-text-default);
+  --color-sidebar-border: var(--sidebar-border);
+
+  --color-violet: var(--violet-9);
+  --color-violet-bg: var(--violet-1);
+  --color-violet-border: var(--violet-3);
+  --color-violet-text: var(--violet-9);
+
+  --color-teal-text: var(--teal-9);
+
+  /* ---- Overlay tints (translucent, for use over arbitrary surfaces) ---- */
+  --color-primary-hover-bg: var(--primary-a08);
+  --color-divider-subtle: var(--slate-500-a12);
+  --color-surface-hover: var(--slate-500-a04);
+  --color-text-faint: var(--slate-500-a60);
+
+  /* ---- Typography ---------------------------------------------------- */
+  --font-family-base: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-size-xs: 0.7rem;
+  --font-size-sm: 0.78rem;
+  --font-size-base: 0.875rem;
+  --font-size-md: 0.95rem;
+  --font-size-lg: 1.1rem;
+  --font-size-xl: 1.3rem;
+  --font-weight-regular: 400;
+  --font-weight-medium: 600;
+  --font-weight-bold: 700;
+  --line-height-tight: 1.2;
+  --line-height-base: 1.45;
+
+  /* ---- Spacing scale --------------------------------------------------- */
+  --space-1: 0.15rem;
+  --space-2: 0.25rem;
+  --space-3: 0.35rem;
+  --space-4: 0.5rem;
+  --space-5: 0.6rem;
+  --space-6: 0.75rem;
+  --space-7: 1rem;
+  --space-8: 1.5rem;
+
+  /* ---- Radius scale ------------------------------------------------------ */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-nav: 10px;
+  --radius-pill: 999px;
+  --radius-base: 0.6rem;
+
+  /* ---- Elevation --------------------------------------------------------- */
+  --shadow-resting: 0 1px 3px var(--black-500-a06);
+  --shadow-hover: 0 6px 18px var(--black-500-a14);
+  --shadow-focus: 0 2px 8px var(--primary-a35);
+
+  /* ---- Motion -------------------------------------------------------------- */
+  --transition-fast: 0.15s ease;
+  --transition-base: 0.18s ease;
+
+  /* ---- Breakpoints (for reference in comments; CSS can't read these) ---- */
+  --breakpoint-phone: 640px;
+}
+
+/* =====================================================================
+ * Reusable component styles — the live, single-source styling for every
+ * page. Injected via ui/theme/loader.py::theme_css(), consumed by
+ * ui/styles.py::inject_global_css() on every page render.
+ * ===================================================================== */
+
+/* ---- Buttons + popover triggers ---------------------------------------- */
+div.stButton>button,
+div.stDownloadButton>button,
+div[data-testid="stPopover"]>div>button,
+div[data-testid="stPopover"] button {
+  padding: var(--space-1) var(--space-5);
+  min-height: 1.75rem;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-tight);
+  white-space: nowrap;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+div.stButton>button[kind="primary"] {
+  background: linear-gradient(135deg,
+      var(--color-primary),
+      color-mix(in srgb, var(--color-primary) 80%, var(--black)));
+  border: none;
+}
+
+div.stButton>button[kind="primary"]:hover {
+  filter: brightness(1.08);
+  box-shadow: var(--shadow-focus);
+}
+
+div.stButton>button[kind="secondary"]:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+/* ---- Headings ------------------------------------------------------------ */
+h1,
+h2,
+h3 {
+  color: var(--color-text);
+}
+
+/* ---- Cards: elevation, accent edge, hover lift ------------------------ */
+div[class*="st-key-card_grid"] div[data-testid="stVerticalBlockBorderWrapper"] {
+  padding: var(--space-5) var(--space-6);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-resting);
+  transition: box-shadow var(--transition-base), transform var(--transition-base);
+}
+
+div[class*="st-key-card_grid"] div[data-testid="stVerticalBlockBorderWrapper"]:hover {
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-2px);
+}
+
+div[class*="st-key-card_grid"] div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stVerticalBlock"] {
+  gap: var(--space-3);
+}
+
+/* Nested bordered blocks inside grid cards: no double chrome */
+div[class*="st-key-card_grid"] div[data-testid="stVerticalBlockBorderWrapper"]>div[data-testid="stVerticalBlock"]>div[data-testid="stVerticalBlockBorderWrapper"] {
+  border: none !important;
+  box-shadow: none !important;
+  border-left: none !important;
+  padding: 0;
+  background: transparent;
+}
+
+div[class*="st-key-card_grid"] div[data-testid="stVerticalBlockBorderWrapper"]:hover>div[data-testid="stVerticalBlock"]>div[data-testid="stVerticalBlockBorderWrapper"] {
+  transform: none;
+  box-shadow: none;
+}
+
+.z-card-amount {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+  margin: 0.1rem 0 0.3rem 0;
+  color: var(--color-text);
+}
+
+.z-card-journal {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  background: var(--color-bg-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem var(--space-4);
+  margin: 0.2rem 0 0.35rem 0;
+  line-height: var(--line-height-base);
+}
+
+.z-badge.z-amount {
+  font-size: 0.82rem;
+  padding: 0.15rem var(--space-6);
+}
+
+.z-icon-caption {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  line-height: var(--line-height-tight);
+  margin: 0.25rem 0;
+}
+
+.z-badge.z-compact {
+  white-space: nowrap;
+  font-size: 0.68rem;
+  padding: 0.06rem var(--space-4);
+}
+
+.z-card-title {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.25;
+  margin: 0 0 0.2rem 0;
+  color: var(--color-text);
+}
+
+/* ---- Status badge chips ---------------------------------------------- */
+.z-badge {
+  display: inline-block;
+  padding: var(--space-1) var(--space-5);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+}
+
+.z-badge.gray {
+  background: var(--color-neutral-bg);
+  color: var(--color-neutral-text);
+  border-color: var(--color-neutral-border);
+}
+
+.z-badge.blue {
+  background: var(--color-info-bg);
+  color: var(--color-info-text);
+  border-color: var(--color-info-border);
+}
+
+.z-badge.orange {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  border-color: var(--color-warning-border);
+}
+
+.z-badge.violet {
+  background: var(--color-violet-bg);
+  color: var(--color-violet-text);
+  border-color: var(--color-violet-border);
+}
+
+.z-badge.green {
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+  border-color: var(--color-success-border);
+}
+
+.z-badge.red {
+  background: var(--color-danger-bg);
+  color: var(--color-danger-text);
+  border-color: var(--color-danger-border);
+}
+
+.z-badge.plum {
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--white));
+  color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 28%, var(--white));
+}
+
+.z-badge.gold {
+  background: var(--color-accent-bg);
+  color: var(--color-accent-text);
+  border-color: var(--color-accent-border);
+}
+
+/* ---- Sidebar: shell ------------------------------------------------------ */
+section[data-testid="stSidebar"] {
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-sidebar-border);
+  width: 250px !important;
+  min-width: 250px !important;
+  max-width: 250px !important;
+}
+
+section[data-testid="stSidebar"]>div {
+  width: 250px !important;
+  padding: 0;
+  overflow: initial;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* ---- Sidebar: logo/header section (st.logo(), native collapse button) --- */
+/* st.logo() renders the brand mark + collapse chevron into
+ * [data-testid="stSidebarHeader"] natively — we only add spacing/border here,
+ * the collapse control itself stays native (fragile to reimplement in HTML
+ * since toggling the sidebar needs Streamlit's own JS/session wiring). Its
+ * ancestor chain insets it 30px short of the sidebar's true edges (measured
+ * against streamlit==1.59.2 — not just stSidebarContent's own 20px padding,
+ * some of it comes from another ancestor in the chain); negative-margin it
+ * back out to full width, then use the header's own padding for the 12px
+ * content inset, so the border-bottom lands flush on both edges without
+ * touching the nav items below (which rely on that ambient padding for
+ * their own alignment — out of scope here). */
+[data-testid="stSidebarHeader"] {
+  display: flex;
+  align-items: center;
+  /* !important: Streamlit's own emotion-generated class sets a fixed height
+   * on this element too, and its cascade position isn't guaranteed to lose
+   * to ours (same 0,1,0 specificity as our attribute selector). flex-shrink:0
+   * is load-bearing — this element is a flex item in the sidebar's
+   * column flex layout (height:100vh), which otherwise compresses it below
+   * 60px to fit the nav content beneath it. */
+  height: 60px !important;
+  flex-shrink: 0;
+  padding: var(--space-6);
+  border-bottom: 1px solid var(--color-sidebar-border);
+  margin-bottom: 0;
+  box-sizing: border-box;
+}
+
+[data-testid="stSidebarUserContent"] {
+  padding: var(--space-6);
+  overflow: auto;
+}
+
+[data-testid="stSidebarHeader"] img {
+  max-height: 28px;
+  width: auto;
+}
+
+[data-testid="stSidebarCollapseButton"] button {
+  border-radius: var(--radius-pill);
+  transition: background var(--transition-fast);
+}
+
+[data-testid="stSidebarCollapseButton"] button:hover {
+  background: var(--color-surface-hover);
+}
+
+/* ---- Sidebar: section headers (st.caption group labels) ----------------- */
+section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] {
+  margin: var(--space-7) 0 var(--space-3);
+  padding: 0 var(--space-7);
+}
+
+section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+
+/* ---- Sidebar: nav menu items (st.page_link) ------------------------------
+ * Streamlit's standalone st.page_link doesn't expose an "active" DOM
+ * attribute/class we can rely on (verified against streamlit==1.59.2 — no
+ * aria-current, and the only differentiator is a content-hashed emotion
+ * class that isn't safe to hardcode). The active item's highlight rule
+ * (background + primary color, keyed by the current page's href) is instead
+ * generated per-render in app.py's `_sidebar_active_link_css()` — mirrors
+ * the href="" default-page quirk already documented in sidebar_icons.css.
+ * Icon/text color needs !important here and there: Streamlit sets it via an
+ * emotion class of equal specificity, and cascade order between that and
+ * this stylesheet isn't guaranteed. */
+section[data-testid="stSidebar"] div[data-testid="stPageLink"] {
+  margin-bottom: 2px;
+}
+
+section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  min-height: 36px;
+  padding: 0 var(--space-7);
+  border-radius: var(--radius-nav);
+  transition: background var(--transition-fast);
+}
+
+section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] [data-testid="stIconMaterial"] {
+  color: var(--color-nav-icon) !important;
+  transition: color var(--transition-fast);
+}
+
+section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] [data-testid="stMarkdownContainer"] p {
+  color: var(--color-nav-text) !important;
+  font-weight: var(--font-weight-regular) !important;
+  transition: color var(--transition-fast);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] [data-testid="stMarkdownContainer"] {
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* The label's wrapping <span> (icon span is the anchor's other flex child)
+ * needs min-width: 0 too — flex items default to min-width: auto, which
+ * would keep the row as wide as the longest label instead of letting the
+ * ellipsis above do its job. */
+section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]>span:last-child {
+  min-width: 0;
+  overflow: hidden;
+}
+
+section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]:hover {
+  background: var(--color-surface-hover);
+}
+
+/* Optional trailing count/status pill for a nav item — not wired to any
+ * page_link yet (st.page_link's label is plain text, no HTML), styled here
+ * so a future custom nav row can drop it in. */
+.z-nav-badge {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem var(--space-5);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  background: var(--color-neutral-bg);
+  color: var(--color-neutral-text);
+}
+
+.z-sidebar-version {
+  margin: 0;
+  padding: 0 var(--space-7);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-subtle);
+}
+
+/* ---- Metric tiles -------------------------------------------------------- */
+div[data-testid="stMetric"] {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5) var(--space-6);
+}
+
+/* ---- Detail panels: single bordered cards on detail pages --------------- */
+/* Same plum accent + elevation as grid cards, but no hover lift (they are  */
+/* full-width sections, not clickable tiles).                               */
+div[class*="st-key-zpanel"]>div[data-testid="stVerticalBlockBorderWrapper"],
+div[class*="st-key-zpanel"] div[data-testid="stExpander"] {
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-resting);
+}
+
+/* ---- Form inputs: consistent radius + focus ring ------------------------ */
+div[data-testid="stTextInput"] input,
+div[data-testid="stTextArea"] textarea,
+div[data-testid="stNumberInput"] input,
+div[data-baseweb="select"]>div,
+div[data-testid="stDateInput"] input,
+div[data-testid="stTimeInput"] input {
+  border-radius: var(--radius-md) !important;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+div[data-testid="stTextInput"] input:focus,
+div[data-testid="stTextArea"] textarea:focus,
+div[data-testid="stNumberInput"] input:focus,
+div[data-testid="stDateInput"] input:focus,
+div[data-testid="stTimeInput"] input:focus {
+  border-color: var(--color-primary) !important;
+  box-shadow: var(--shadow-focus);
+}
+
+/* ---- Checkbox / radio / toggle ------------------------------------------ */
+div[data-testid="stCheckbox"] label span[data-testid="stMarkdownContainer"],
+div[data-testid="stRadio"] label span[data-testid="stMarkdownContainer"] {
+  font-size: var(--font-size-sm);
+}
+
+div[data-testid="stToggle"] label div[data-baseweb="checkbox"] div[aria-checked="true"] {
+  background: var(--color-primary) !important;
+}
+
+/* ---- Tabs ----------------------------------------------------------------- */
+div[data-testid="stTabs"] button[data-baseweb="tab"] {
+  font-size: var(--font-size-sm);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+div[data-testid="stTabs"] div[data-baseweb="tab-highlight"] {
+  background-color: var(--color-primary);
+}
+
+/* ---- File uploader -------------------------------------------------------- */
+div[data-testid="stFileUploaderDropzone"] {
+  border-radius: var(--radius-md);
+  border-color: var(--color-border);
+  background: var(--color-bg-alt);
+}
+
+/* ---- Progress bar ---------------------------------------------------------- */
+div[data-testid="stProgress"] div[role="progressbar"]>div {
+  background-color: var(--color-primary);
+  border-radius: var(--radius-pill);
+}
+
+/* ---- Spinner --------------------------------------------------------------- */
+div[data-testid="stSpinner"] {
+  color: var(--color-text-muted);
+}
+
+/* ---- Page loader ------------------------------------------------------------
+ * Centered loading dots over a solid #F4F6F5 cover shown while a page's data
+ * is fetched (see components/shared/page_loader.py). `inset: 0` + a very high
+ * z-index cover the full viewport — sidebar included, not just the main
+ * content column — so neither the nav nor stale body content is visible
+ * until the page is done rendering. */
+.z-page-loader-wrap {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #F4F6F5;
+  z-index: 2147483647;
+}
+
+.z-page-loader {
+  color: var(--color-primary);
+  width: 4px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  box-shadow: 19px 0 0 7px, 38px 0 0 3px, 57px 0 0 0;
+  transform: translateX(-38px);
+  animation: z-page-loader-spin 0.5s infinite alternate linear;
+}
+
+@keyframes z-page-loader-spin {
+  50% {
+    box-shadow: 19px 0 0 3px, 38px 0 0 7px, 57px 0 0 3px;
+  }
+
+  100% {
+    box-shadow: 19px 0 0 0, 38px 0 0 3px, 57px 0 0 7px;
+  }
+}
+
+/* ---- Accordion (expander) -------------------------------------------------- */
+div[data-testid="stExpander"] summary {
+  border-radius: var(--radius-md);
+}
+
+/* ---- Top header: fixed bar right of the sidebar --------------------------
+ * Custom replacement for Streamlit's native stHeader chrome (its hamburger
+ * "..." menu / deploy button are hidden via .streamlit/config.toml's
+ * toolbarMode="minimal", not via CSS here). Left offset matches the
+ * sidebar's fixed 250px width (see "Sidebar: shell" above) so the bar starts
+ * exactly where the content column begins; stMain gets matching top padding
+ * so page content clears the fixed bar. The collapsed-sidebar "expand" logo
+ * (st.logo()'s icon_image, rendered by Streamlit inside stHeader) sits at
+ * the far left (~0-60px) — well outside this bar's left:250px start — so it
+ * stays reachable even though this bar's z-index sits above stHeader's. */
+section[data-testid="stMain"] {
+  padding-top: 60px;
+}
+
+.z-topbar {
+  position: fixed;
+  top: 0;
+  left: 250px;
+  right: 0;
+  height: 60px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-sidebar-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-7);
+  padding: 0 16px;
+  box-sizing: border-box;
+  z-index: 999999;
+}
+
+.z-topbar-search {
+  position: relative;
+  flex: 1;
+  max-width: 420px;
+  display: flex;
+  align-items: center;
+}
+
+.z-topbar-search>i {
+  position: absolute;
+  left: 14px;
+  font-size: 16px;
+  color: var(--color-text-subtle);
+  pointer-events: none;
+}
+
+.z-topbar-search-input {
+  width: 100%;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-alt);
+  padding: 0 14px 0 40px;
+  font-size: var(--font-size-base);
+  font-family: var(--font-family-base);
+  color: var(--color-text);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.z-topbar-search-input::placeholder {
+  color: var(--color-text-subtle);
+}
+
+.z-topbar-search-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-focus);
+  background: var(--color-surface);
+}
+
+.z-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  flex-shrink: 0;
+}
+
+.z-topbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 32px;
+  padding: 0 var(--space-7);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  font-family: var(--font-family-base);
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+  box-sizing: border-box;
+}
+
+.z-topbar-btn i {
+  font-size: 14px;
+}
+
+.z-topbar-btn-primary {
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+}
+
+.z-topbar-btn-primary:hover {
+  background: var(--color-primary-hover);
+}
+
+.z-topbar-btn-secondary {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.z-topbar-btn-secondary:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.z-topbar-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--color-border);
+}
+
+.z-topbar-icon-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-nav-text);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.z-topbar-icon-btn i {
+  font-size: 18px;
+}
+
+.z-topbar-icon-btn:hover {
+  background: var(--color-primary-hover-bg);
+  color: var(--color-primary);
+}
+
+.z-topbar-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-danger);
+  border: 1.5px solid var(--color-surface);
+}
+
+/* ---- Top header: user menu (native <details>/<summary> disclosure, no JS
+ * needed — opening/closing is handled entirely client-side by the browser,
+ * so it survives fine as static markup re-rendered on every Streamlit rerun,
+ * it just won't stay open across a rerun triggered by something else). ---- */
+.z-topbar-user {
+  position: relative;
+}
+
+.z-topbar-user summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  cursor: pointer;
+  list-style: none;
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-md);
+  transition: background var(--transition-fast);
+}
+
+.z-topbar-user summary::-webkit-details-marker {
+  display: none;
+}
+
+.z-topbar-user summary:hover {
+  background: var(--color-surface-hover);
+}
+
+.z-topbar-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-sm);
+  flex-shrink: 0;
+}
+
+.z-topbar-user-info {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.z-topbar-user-name {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+}
+
+.z-topbar-user-role {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.z-topbar-user>summary>i {
+  font-size: 16px;
+  color: var(--color-text-muted);
+  transition: transform var(--transition-fast);
+}
+
+.z-topbar-user[open]>summary>i {
+  transform: rotate(180deg);
+}
+
+.z-topbar-menu {
+  position: absolute;
+  top: calc(100% + var(--space-4));
+  right: 0;
+  min-width: 200px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-hover);
+  padding: var(--space-4);
+  z-index: 1000000;
+}
+
+/* Streamlit's own markdown-link styling ([data-testid="stMarkdownContainer"]
+ * a) outranks a single class selector on specificity — !important here
+ * overrides it rather than fighting to out-specify a moving framework
+ * target. */
+a.z-topbar-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-5) var(--space-6);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text) !important;
+  text-decoration: none !important;
+  transition: background var(--transition-fast);
+}
+
+.z-topbar-menu-item i {
+  font-size: 16px;
+  color: var(--color-text-muted);
+}
+
+.z-topbar-menu-item:hover {
+  background: var(--color-surface-hover);
+}
+
+a.z-topbar-menu-item.z-topbar-menu-danger,
+a.z-topbar-menu-item.z-topbar-menu-danger i {
+  color: var(--color-danger) !important;
+}
+
+.z-topbar-menu-divider {
+  height: 1px;
+  background: var(--color-border);
+  margin: var(--space-4) 0;
+}
+
+/* ---- Responsive ----------------------------------------------------------- */
+@media (max-width: 640px) {
+  .block-container {
+    padding-left: var(--space-6);
+    padding-right: var(--space-6);
+  }
+
+  .z-topbar {
+    left: 0;
+    padding: 12px var(--space-6);
+  }
+
+  .z-topbar-user-info {
+    display: none;
+  }
+}

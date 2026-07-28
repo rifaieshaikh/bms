@@ -1,0 +1,136 @@
+/*
+ * Primitive design tokens — the master color palette.
+ * Do not use these variables directly in component/page CSS; reference the
+ * semantic tokens in theme.css instead so a palette swap only touches this
+ * file plus the mapping in theme.css.
+ */
+
+
+:root {
+
+  --primary-color: #185C4C;
+  --primary-1: color-mix(in srgb, var(--primary-color) 8%, white);
+  --primary-2: color-mix(in srgb, var(--primary-color) 16%, white);
+  --primary-3: color-mix(in srgb, var(--primary-color) 35%, white);
+  --primary-4: color-mix(in srgb, var(--primary-color) 55%, white);
+  --primary-5: color-mix(in srgb, var(--primary-color) 75%, white);
+  --primary-7: color-mix(in srgb, var(--primary-color) 85%, black);
+  --primary-8: color-mix(in srgb, var(--primary-color) 70%, black);
+  --primary-9: color-mix(in srgb, var(--primary-color) 55%, black);
+  --primary-10: color-mix(in srgb, var(--primary-color) 40%, black);
+  --primary-a35: color-mix(in srgb, var(--primary-color) 35%, transparent);
+  --primary-a08: color-mix(in srgb, var(--primary-color) 8%, transparent);
+
+  --black: #000000;
+  --white: #ffffff;
+
+  --black-975: #5B5560;
+  --black-950: #5e5b5b;
+  --black-900: #524f4f;
+  --black-800: #4a4747;
+  --black-700: #424040;
+  --black-600: #383636;
+  --black-500: #2A1E24;
+  --black-400: #212020;
+  --black-300: #1f1e1e;
+  --black-200: #1a1919;
+  --black-100: #121211;
+  --black-500-a06: color-mix(in srgb, var(--black-500) 6%, transparent);
+  --black-500-a14: color-mix(in srgb, var(--black-500) 14%, transparent);
+
+  --slate-500: #31333f;
+  --slate-500-a60: color-mix(in srgb, var(--slate-500) 60%, transparent);
+  --slate-500-a12: color-mix(in srgb, var(--slate-500) 12%, transparent);
+  --slate-500-a04: color-mix(in srgb, var(--slate-500) 4%, transparent);
+
+  --white-975: #fcfbfa;
+  --white-950: #f8f7f7;
+  --white-900: #f3f2f2;
+  --white-800: #f1f0ee;
+  --white-700: #e6e6e5;
+  --white-600: #d8dada;
+  --white-500: #c9c8c8;
+  --white-400: #c4c1c1;
+  --white-300: #b7b4b4;
+  --white-200: #a9a9a7;
+  --white-100: #949492;
+  --white-050: #7c7a79;
+
+  --green-1: #e2f2e6;
+  --green-2: #c3f0dd;
+  --green-3: #c7e6cf;
+  --green-4: #63d9a6;
+  --green-5: #34cd8b;
+  --green-6: #07c271;
+  --green-7: #06a560;
+  --green-8: #058a50;
+  --green-9: #2e7d46;
+  --green-10: #035733;
+
+  --red-1: #fbe6e6;
+  --red-2: #ffd0d0;
+  --red-3: #f3c9c9;
+  --red-4: #ff8484;
+  --red-5: #ff5e5f;
+  --red-6: #ff3b3c;
+  --red-7: #d93233;
+  --red-8: #b52a2b;
+  --red-9: #b03636;
+  --red-10: #731b1b;
+
+  --blue-1: #e5edfb;
+  --blue-2: #d1e8ff;
+  --blue-3: #cbdcf5;
+  --blue-4: #87c2ff;
+  --blue-5: #62afff;
+  --blue-6: #409eff;
+  --blue-7: #3686d9;
+  --blue-8: #2d70b5;
+  --blue-9: #2c5aa8;
+  --blue-10: #1d4773;
+
+  --yellow-1: #f7efd9;
+  --yellow-2: #fff6c8;
+  --yellow-3: #ebddb4;
+  --yellow-4: #ffe86f;
+  --yellow-5: #ffe143;
+  --yellow-6: #ffdb1a;
+  --yellow-7: #d9ba16;
+  --yellow-8: #b59b12;
+  --yellow-9: #8a6d1f;
+  --yellow-10: #73630c;
+
+  --orange-1: #fbeedd;
+  --orange-2: #feddc7;
+  --orange-3: #f3dbbb;
+  --orange-4: #fba76c;
+  --orange-5: #fa8c40;
+  --orange-6: #f97316;
+  --orange-7: #d46213;
+  --orange-8: #b15210;
+  --orange-9: #b4711a;
+  --orange-10: #70340a;
+
+  --neutral-1: #eee9ec;
+  --neutral-2: #ded6db;
+  --neutral-3: #a3a3a3;
+  --neutral-4: #797979;
+  --neutral-5: #505050;
+  --neutral-6: #2a2a2a;
+  --neutral-7: #5b5560;
+  --neutral-8: #1e1e1e;
+  --neutral-9: #181818;
+  --neutral-10: #131313;
+
+  --violet-1: #efe6f7;
+  --violet-3: #e0cef0;
+  --violet-9: #6b3fa0;
+
+  --teal-9: #0f766e;
+
+  /* Sidebar nav — exact spec-mandated defaults, not part of the neutral
+   * scale above (closest neutral steps don't match precisely enough). */
+  --nav-icon-default: #a1a4a1;
+  --nav-text-default: #696969;
+  --sidebar-border: #e7e7e7;
+}

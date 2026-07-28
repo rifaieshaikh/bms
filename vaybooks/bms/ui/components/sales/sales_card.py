@@ -7,9 +7,10 @@ from datetime import date, datetime
 import streamlit as st
 
 from vaybooks.bms.ui import navigation
-from vaybooks.bms.ui.styles import render_card_grid, status_badge
+from vaybooks.bms.ui.components.shared import CardAction, card
+from vaybooks.bms.ui.styles import render_card_grid
 
-_SALES_AMOUNT_COLOR = "#6B3FA0"
+_SALES_AMOUNT_COLOR = "var(--color-violet-text)"
 
 
 def _fmt_date(value) -> str:
@@ -28,10 +29,8 @@ def _customer_name(party_name: str) -> str:
     return rest or "Customer"
 
 
-def _payment_badge(outstanding: float) -> str:
-    if outstanding > 0.01:
-        return status_badge("Unpaid", compact=True)
-    return status_badge("Paid", compact=True)
+def _payment_badge_tuple(outstanding: float) -> tuple[str, str | None]:
+    return ("Unpaid", None) if outstanding > 0.01 else ("Paid", None)
 
 
 def _sales_card(row: dict, suffix: str) -> None:
@@ -40,33 +39,36 @@ def _sales_card(row: dict, suffix: str) -> None:
     net = float(row.get("net") or gross)
     balance = float(row.get("outstanding") or 0)
 
-    with st.container(border=True):
-        st.markdown(
-            f'<p class="z-card-title">{store_no}</p>',
-            unsafe_allow_html=True,
-        )
-        st.caption(_customer_name(row.get("party_name") or ""))
-        project_id = row.get("reference_project_id") or ""
-        project_name = (row.get("project_name") or "").strip()
-        if project_name:
-            st.caption(f"Project: {project_name}")
-        elif project_id:
-            st.caption(f"Project: {project_id[:8]}…")
-        st.caption(_fmt_date(row.get("sale_date")))
-        st.markdown(
-            f'<p class="z-card-amount" style="color:{_SALES_AMOUNT_COLOR}">'
-            f"₹{net:,.0f}</p>",
-            unsafe_allow_html=True,
-        )
-        st.markdown(_payment_badge(balance), unsafe_allow_html=True)
+    project_id = row.get("reference_project_id") or ""
+    project_name = (row.get("project_name") or "").strip()
+    if project_name:
+        project_line = f"Project: {project_name}"
+    elif project_id:
+        project_line = f"Project: {project_id[:8]}…"
+    else:
+        project_line = ""
 
-        sale_id = row.get("id")
-        if sale_id and st.button(
-            "View",
-            key=f"{suffix}_view_{sale_id}",
-            use_container_width=True,
-        ):
+    sale_id = row.get("id")
+
+    def _on_view() -> None:
+        if sale_id:
             navigation.go_to_detail("sales_detail", sale_id)
+
+    with st.container(border=True):
+        card(
+            store_no,
+            amount=f"₹{net:,.0f}",
+            amount_style=f"color:{_SALES_AMOUNT_COLOR}",
+            badges=[_payment_badge_tuple(balance)],
+            caption_lines=[
+                _customer_name(row.get("party_name") or ""),
+                project_line,
+                _fmt_date(row.get("sale_date")),
+            ],
+            actions=[CardAction("View", key=f"{suffix}_view_{sale_id}", kind="secondary", on_click=_on_view)]
+            if sale_id
+            else [],
+        )
 
 
 def sales_cards(rows: list[dict], *, suffix: str = "store_sales") -> None:

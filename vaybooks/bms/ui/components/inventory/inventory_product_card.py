@@ -6,12 +6,13 @@ import streamlit as st
 
 from vaybooks.bms.application.finance.reports.services.inventory_report_service import LOW_STOCK_THRESHOLD
 from vaybooks.bms.ui import navigation
-from vaybooks.bms.ui.styles import render_card_grid, status_badge
+from vaybooks.bms.ui.components.shared import CardAction, card, empty_state
+from vaybooks.bms.ui.styles import render_card_grid
 
-_STOCK_COLOR = "#2E7D46"
-_LOW_COLOR = "#B4711A"
-_OUT_COLOR = "#B03636"
-_RATE_COLOR = "#5B5560"
+_STOCK_COLOR = "var(--color-success-text)"
+_LOW_COLOR = "var(--color-warning-text)"
+_OUT_COLOR = "var(--color-danger-text)"
+_RATE_COLOR = "var(--color-text-muted)"
 
 
 def _format_categories(product) -> str:
@@ -25,18 +26,16 @@ def _format_categories(product) -> str:
     return f"{names[0]} · {names[1]} +{len(names) - 2} more"
 
 
-def _stock_badge(qty: float, threshold: float = LOW_STOCK_THRESHOLD) -> str:
+def _stock_badge_tuple(qty: float, threshold: float = LOW_STOCK_THRESHOLD) -> tuple[str, str]:
     if qty <= 0:
-        return status_badge("Out of stock", "red", compact=True)
+        return ("Out of stock", "red")
     if qty <= threshold:
-        return status_badge("Low stock", "orange", compact=True)
-    return status_badge("In stock", "green", compact=True)
+        return ("Low stock", "orange")
+    return ("In stock", "green")
 
 
-def _status_badge(is_active: bool) -> str:
-    if is_active:
-        return status_badge("Active", "green", compact=True)
-    return status_badge("Inactive", "gray", compact=True)
+def _status_badge_tuple(is_active: bool) -> tuple[str, str]:
+    return ("Active", "green") if is_active else ("Inactive", "gray")
 
 
 def inventory_product_card(
@@ -51,85 +50,99 @@ def inventory_product_card(
     rate = float(getattr(product, "selling_rate", 0) or 0)
     qty_color = _OUT_COLOR if qty <= 0 else (_LOW_COLOR if qty <= LOW_STOCK_THRESHOLD else _STOCK_COLOR)
 
+    clicks = {"view": False, "edit": False}
+
+    def _on_view() -> None:
+        clicks["view"] = True
+
+    def _on_edit() -> None:
+        clicks["edit"] = True
+
     with st.container(border=True):
-        st.markdown(
-            f'<p class="z-card-title">{product.name}</p>',
-            unsafe_allow_html=True,
+        card(
+            product.name,
+            amount=f"{qty:g} {unit}" if show_qty else None,
+            amount_style=f"color:{qty_color}",
+            badges=[_stock_badge_tuple(qty)] if show_qty else [],
+            caption_lines=[
+                f"{product.sku} · {_format_categories(product)}",
+                f"Rate ₹{rate:,.0f}",
+            ],
+            actions=[
+                CardAction(
+                    "View",
+                    key=f"{key_prefix}_view_{product.id}",
+                    kind="secondary",
+                    on_click=_on_view,
+                ),
+                CardAction(
+                    "Edit",
+                    key=f"{key_prefix}_edit_{product.id}",
+                    kind="secondary",
+                    on_click=_on_edit,
+                ),
+            ],
         )
-        st.caption(f"{product.sku} · {_format_categories(product)}")
-        if show_qty:
-            st.markdown(
-                f'<p class="z-card-amount" style="color:{qty_color}">'
-                f"{qty:g} {unit}</p>",
-                unsafe_allow_html=True,
-            )
-            st.markdown(_stock_badge(qty), unsafe_allow_html=True)
-        st.caption(f"Rate ₹{rate:,.0f}")
-        cols = st.columns(2)
-        view = cols[0].button(
-            "View",
-            key=f"{key_prefix}_view_{product.id}",
-            use_container_width=True,
-        )
-        edit = cols[1].button(
-            "Edit",
-            key=f"{key_prefix}_edit_{product.id}",
-            use_container_width=True,
-        )
-    return view, edit
+    return clicks["view"], clicks["edit"]
 
 
 def inventory_category_card(category, *, product_count: int = 0, path: str = "") -> bool:
     """Render a category card. Returns True if edit was clicked."""
+    clicked = {"edit": False}
+
+    def _on_edit() -> None:
+        clicked["edit"] = True
+
+    desc = (category.description or "").strip()
+    if len(desc) > 72:
+        desc = desc[:69] + "…"
+
     with st.container(border=True):
-        st.markdown(
-            f'<p class="z-card-title">{path or category.name}</p>',
-            unsafe_allow_html=True,
+        card(
+            path or category.name,
+            badges=[_status_badge_tuple(category.is_active)],
+            caption_lines=[
+                desc,
+                f"{product_count} product{'s' if product_count != 1 else ''}",
+            ],
+            actions=[
+                CardAction(
+                    "Edit",
+                    key=f"edit_inv_cat_btn_{category.id}",
+                    kind="secondary",
+                    on_click=_on_edit,
+                )
+            ],
         )
-        st.markdown(_status_badge(category.is_active), unsafe_allow_html=True)
-        if category.description:
-            desc = category.description.strip()
-            if len(desc) > 72:
-                desc = desc[:69] + "…"
-            st.caption(desc)
-        st.caption(f"{product_count} product{'s' if product_count != 1 else ''}")
-        return st.button(
-            "Edit",
-            key=f"edit_inv_cat_btn_{category.id}",
-            use_container_width=True,
-        )
+    return clicked["edit"]
 
 
 def inventory_low_stock_cards(items: list[dict], *, key_prefix: str = "inv_low") -> None:
     """Dashboard-style cards for low / out-of-stock products."""
     if not items:
-        st.caption("No low-stock alerts right now.")
+        empty_state("No low-stock alerts right now.")
         return
 
     def _render(item, _i):
         qty = float(item.get("current_qty") or 0)
         unit = item.get("unit") or "pcs"
-        with st.container(border=True):
-            st.markdown(
-                f'<p class="z-card-title">{item.get("name", "—")}</p>',
-                unsafe_allow_html=True,
-            )
-            st.caption(f"{item.get('sku', '')} · {item.get('category_name', '—')}")
-            color = _OUT_COLOR if qty <= 0 else _LOW_COLOR
-            st.markdown(
-                f'<p class="z-card-amount" style="color:{color}">{qty:g} {unit}</p>',
-                unsafe_allow_html=True,
-            )
-            st.markdown(
-                status_badge(item.get("stock_status", "Low stock"), "orange", compact=True),
-                unsafe_allow_html=True,
-            )
-            product_id = item.get("id")
-            if product_id and st.button(
-                "View →",
-                key=f"{key_prefix}_{product_id}",
-                use_container_width=True,
-            ):
+        color = _OUT_COLOR if qty <= 0 else _LOW_COLOR
+        product_id = item.get("id")
+
+        def _on_view() -> None:
+            if product_id:
                 navigation.go_to_detail("inventory_product_detail", product_id)
+
+        with st.container(border=True):
+            card(
+                item.get("name", "—"),
+                amount=f"{qty:g} {unit}",
+                amount_style=f"color:{color}",
+                badges=[(item.get("stock_status", "Low stock"), "orange")],
+                caption_lines=[f"{item.get('sku', '')} · {item.get('category_name', '—')}"],
+                actions=[CardAction("View →", key=f"{key_prefix}_{product_id}", kind="secondary", on_click=_on_view)]
+                if product_id
+                else [],
+            )
 
     render_card_grid(items, _render, suffix=key_prefix, card_min_width=220)

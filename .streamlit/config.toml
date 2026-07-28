@@ -1,9 +1,12 @@
 [theme]
 base = "light"
-primaryColor = "#7B2D4E"
-backgroundColor = "#FBF8F6"
-secondaryBackgroundColor = "#F3ECEF"
-textColor = "#2A1E24"
-linkColor = "#7B2D4E"
-font = "sans-serif"
+primaryColor = "#185C4C"
+backgroundColor = "#F4F6F5"
+secondaryBackgroundColor = "#F7F7F7"
+textColor = "#1B1D1C"
+linkColor = "#185C4C"
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap, sans-serif"
 baseRadius = "0.6rem"
+
+[client]
+toolbarMode = "minimal"

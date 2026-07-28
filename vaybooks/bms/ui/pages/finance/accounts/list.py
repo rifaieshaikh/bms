@@ -21,6 +21,7 @@ from vaybooks.bms.ui.pagination import (
     render_page_controls,
 )
 from vaybooks.bms.ui.styles import render_card_grid
+from vaybooks.bms.ui.theme.icons import icon_caption
 
 CREATE_ACC = "acc_create_dialog"
 EDIT_ACC = "acc_edit_dialog"
@@ -674,9 +675,10 @@ def _render_ledger_tab(accounting_service):
         total_debit = round(sum(r["debit"] for r in trial), 2)
         total_credit = round(sum(r["credit"] for r in trial), 2)
         balanced = abs(total_debit - total_credit) < 0.01
-        st.caption(
+        icon_caption(
             f"Trial balance: ₹{total_debit:,.2f} Dr / ₹{total_credit:,.2f} Cr"
-            + (" — Balanced ✓" if balanced else " — Unbalanced ✗")
+            + (" — Balanced" if balanced else " — Unbalanced"),
+            icon="check" if balanced else "x",
         )
 
     ledger = sorted(

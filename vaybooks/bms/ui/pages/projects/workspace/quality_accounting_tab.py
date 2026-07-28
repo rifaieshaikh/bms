@@ -9,6 +9,7 @@ import streamlit as st
 from vaybooks.bms.domain.shared.enums import ProjectRecognitionMethod
 from vaybooks.bms.ui.dialog_utils import make_dismiss_handler
 from vaybooks.bms.ui.pages.projects.workspace import helpers as H
+from vaybooks.bms.ui.theme.icons import icon_caption
 
 QI_DIALOG = "prj_qi_add_dialog"
 DPR_DIALOG = "prj_dpr_add_dialog"
@@ -212,17 +213,19 @@ def render_accounting(services: dict, project) -> None:
             match_result = None
     if match_result is not None:
         all_match = match_result.get("books_match", match_result.get("all_match"))
-        st.caption(
+        icon_caption(
             f"Books match ({match_source}): "
-            f"{'✓ matched' if all_match else '✗ attention needed'}"
+            f"{'matched' if all_match else 'attention needed'}",
+            icon="check" if all_match else "x",
         )
         for check in match_result.get("checks") or []:
             name = check.get("name") or check.get("label") or "Check"
             ok = check.get("match", check.get("ok", True))
             pv = check.get("project_value", check.get("project", ""))
             bv = check.get("books_value", check.get("books", ""))
-            st.caption(
-                f"{'✓' if ok else '✗'} {name} — project={pv} · books={bv}"
+            icon_caption(
+                f"{name} — project={pv} · books={bv}",
+                icon="check" if ok else "x",
             )
 
     for recon in recog.list_reconciliations(project.id):
@@ -235,9 +238,10 @@ def render_accounting(services: dict, project) -> None:
             f"GL {H.fmt_money(recon.gl_balance)} · Δ {H.fmt_money(delta)}"
         )
         for exc in recon.exceptions or []:
-            st.caption(
-                f"  ↳ {exc.category}: {exc.description} "
-                f"({H.fmt_money(exc.amount)}) [{exc.source_ref}]"
+            icon_caption(
+                f"{exc.category}: {exc.description} "
+                f"({H.fmt_money(exc.amount)}) [{exc.source_ref}]",
+                icon="corner-down-right",
             )
 
     st.subheader("Petty cash")

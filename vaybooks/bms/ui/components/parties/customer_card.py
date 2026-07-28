@@ -2,7 +2,7 @@ import streamlit as st
 
 from vaybooks.bms.domain.parties.customers.entities import Customer
 from vaybooks.bms.ui import navigation
-from vaybooks.bms.ui.styles import status_badge
+from vaybooks.bms.ui.components.shared import CardAction, card
 
 
 def _format_balance(balance: float) -> str:
@@ -16,34 +16,28 @@ def _format_balance(balance: float) -> str:
 def customer_card(
     customer: Customer, order_count: int, balance: float, key_prefix: str
 ) -> bool:
+    color = "red" if balance > 0.01 else ("green" if balance < -0.01 else "gray")
+    clicked = {"edit": False}
+
+    def _on_edit() -> None:
+        clicked["edit"] = True
+
+    def _on_view() -> None:
+        navigation.go_to_detail("customer_detail", customer.id)
+
     with st.container(border=True):
-        st.markdown(f"### {customer.customer_name}")
-        st.write(f"\U0001f4de {customer.phone_number}")
-        if customer.gstin:
-            st.caption(f"GSTIN: {customer.gstin}")
-
-        color = "red" if balance > 0.01 else ("green" if balance < -0.01 else "gray")
-        badges = (
-            status_badge(f"{order_count} orders", "blue")
-            + " "
-            + status_badge(_format_balance(balance), color)
+        card(
+            customer.customer_name,
+            badges=[
+                (f"{order_count} orders", "blue"),
+                (_format_balance(balance), color),
+            ],
+            caption_lines=[("phone", customer.phone_number)]
+            + ([f"GSTIN: {customer.gstin}"] if customer.gstin else []),
+            actions=[
+                CardAction("Edit", key=f"{key_prefix}_edit", kind="secondary", on_click=_on_edit),
+                CardAction("View", key=f"{key_prefix}_view", on_click=_on_view),
+            ],
         )
-        st.markdown(badges, unsafe_allow_html=True)
 
-        col1, col2 = st.columns(2)
-        with col1:
-            edit_clicked = st.button(
-                "Edit",
-                key=f"{key_prefix}_edit",
-                use_container_width=True,
-            )
-        with col2:
-            if st.button(
-                "View",
-                key=f"{key_prefix}_view",
-                type="primary",
-                use_container_width=True,
-            ):
-                navigation.go_to_detail("customer_detail", customer.id)
-
-    return edit_clicked
+    return clicked["edit"]

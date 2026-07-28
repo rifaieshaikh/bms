@@ -7,9 +7,10 @@ from datetime import date, datetime
 import streamlit as st
 
 from vaybooks.bms.ui import navigation
-from vaybooks.bms.ui.styles import render_card_grid, status_badge
+from vaybooks.bms.ui.components.shared import CardAction, card
+from vaybooks.bms.ui.styles import render_card_grid
 
-_PURCHASE_COLOR = "#0F766E"
+_PURCHASE_COLOR = "var(--color-teal-text)"
 
 
 def _fmt_date(value) -> str:
@@ -18,10 +19,8 @@ def _fmt_date(value) -> str:
     return str(value) if value else "—"
 
 
-def _payment_badge(outstanding: float) -> str:
-    if outstanding > 0.01:
-        return status_badge("Credit", compact=True)
-    return status_badge("Paid", compact=True)
+def _payment_badge_tuple(outstanding: float) -> tuple[str, str | None]:
+    return ("Credit", None) if outstanding > 0.01 else ("Paid", None)
 
 
 def _purchase_card(row: dict, suffix: str) -> None:
@@ -30,18 +29,25 @@ def _purchase_card(row: dict, suffix: str) -> None:
     outstanding = float(row.get("outstanding") or 0)
     vtype = row.get("voucher_type") or "Purchase Bill"
 
+    def _on_view() -> None:
+        navigation.go_to_detail("purchase_detail", row.get("id"))
+
     with st.container(border=True):
-        st.markdown(f'<p class="z-card-title">{bill_no}</p>', unsafe_allow_html=True)
-        st.caption(row.get("vendor_name") or "Vendor")
-        st.caption(_fmt_date(row.get("bill_date")))
-        st.caption(vtype)
-        st.markdown(
-            f'<p style="color:{_PURCHASE_COLOR};font-weight:600;">₹{total:,.0f}</p>',
-            unsafe_allow_html=True,
+        card(
+            bill_no,
+            amount=f"₹{total:,.0f}",
+            amount_style=f"color:{_PURCHASE_COLOR};font-weight:600;",
+            badges=[_payment_badge_tuple(outstanding)],
+            caption_lines=[row.get("vendor_name") or "Vendor", _fmt_date(row.get("bill_date")), vtype],
+            actions=[
+                CardAction(
+                    "View",
+                    key=f"purchase_view_{suffix}_{row.get('id')}",
+                    kind="secondary",
+                    on_click=_on_view,
+                )
+            ],
         )
-        st.markdown(_payment_badge(outstanding), unsafe_allow_html=True)
-        if st.button("View", key=f"purchase_view_{suffix}_{row.get('id')}", use_container_width=True):
-            navigation.go_to_detail("purchase_detail", row.get("id"))
 
 
 def purchase_cards(rows: list[dict], suffix: str = "purchases") -> None:
