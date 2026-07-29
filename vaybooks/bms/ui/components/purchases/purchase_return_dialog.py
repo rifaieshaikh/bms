@@ -94,7 +94,12 @@ def purchase_return_dialog(services: dict) -> None:
     pre_vendor = st.session_state.get(f"{RETURN_DIALOG}_pre_vendor_id")
     seed_lines = st.session_state.get(f"{RETURN_DIALOG}_seed_lines")
 
-    vendor_list = vendors.list_all_vendors()
+    from vaybooks.bms.domain.identity.location_access import location_ids_mongo_filter
+    from vaybooks.bms.ui.auth.session import working_location_list_context
+
+    working, accessible = working_location_list_context(services)
+    filt = location_ids_mongo_filter(working, accessible)
+    vendor_list = vendors.list_all_vendors(location_filter=filt)
     if not vendor_list:
         st.error("Add a vendor first.")
         return
@@ -204,6 +209,11 @@ def purchase_return_dialog(services: dict) -> None:
             ]
             if not lines:
                 raise ValueError("Add at least one product line")
+            from vaybooks.bms.ui.components.common.location_fields import (
+                require_location_name,
+            )
+
+            location_id, _location_name = require_location_name(services)
             purchases.create_purchase_return(
                 vendor_id=vendor_id,
                 return_date=return_date,
@@ -211,6 +221,7 @@ def purchase_return_dialog(services: dict) -> None:
                 source_bill_id=source_bill_id,
                 amount_refunded=refund,
                 refund_account_id=refund_acct,
+                location_id=location_id,
             )
             _clear()
             st.rerun()

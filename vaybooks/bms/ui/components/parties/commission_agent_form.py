@@ -11,6 +11,9 @@ from vaybooks.bms.domain.parties.commission_agents.entities import (
     CommissionAgentInput,
 )
 from vaybooks.bms.domain.shared.enums import PartyRegistrationType
+from vaybooks.bms.ui.components.common.location_fields import (
+    render_party_location_multiselect,
+)
 from vaybooks.bms.ui.components.common.party_form_fields import render_party_address_tax_fields
 
 
@@ -28,6 +31,8 @@ def _agent_has_banking(agent: Optional[CommissionAgent]) -> bool:
 def render_commission_agent_form(
     key_prefix: str,
     agent: Optional[CommissionAgent] = None,
+    *,
+    services: dict | None = None,
 ) -> CommissionAgentInput:
     col_name, col_contact = st.columns(2)
     agent_name = col_name.text_input(
@@ -115,6 +120,17 @@ def render_commission_agent_form(
             height=68,
         )
 
+    if services is not None:
+        location_ids = render_party_location_multiselect(
+            key_prefix,
+            services,
+            agent.location_ids if agent else None,
+        )
+    elif agent:
+        location_ids = list(agent.location_ids or [])
+    else:
+        location_ids = []
+
     return CommissionAgentInput(
         agent_name=agent_name,
         phone_number=phone_number,
@@ -140,4 +156,5 @@ def render_commission_agent_form(
         default_commission_rate=commission_rate,
         segment_ids=list(agent.segment_ids or []) if agent else [],
         source_customer_id=agent.source_customer_id if agent else "",
+        location_ids=location_ids,
     )

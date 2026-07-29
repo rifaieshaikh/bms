@@ -94,7 +94,11 @@ def test_create_commission_agent_creates_liability_account():
     agent_repo = FakeCommissionAgentRepository()
     service = CommissionAgentAppService(agent_repo, account_repo)
     agent = service.create_agent(
-        CommissionAgentInput(agent_name="Ravi Broker", phone_number="9876500011")
+        CommissionAgentInput(
+            agent_name="Ravi Broker",
+            phone_number="9876500011",
+            location_ids=["loc-test"],
+        )
     )
     account = account_repo.find_agent_account(agent.id)
     assert account is not None
@@ -117,6 +121,7 @@ def test_customer_flag_creates_linked_agent():
             customer_name="Dual Role",
             phone_number="9876500022",
             is_commission_agent=True,
+            location_ids=["loc-test"],
         )
     )
     assert customer.is_commission_agent
@@ -175,6 +180,8 @@ def test_sales_invoice_unpaid_commission_nets_sales():
         commission_amount=50.0,
         agent_account_id=accounts["agent"].id,
         commission_paid=False,
+        location_id="loc-test",
+        location_name="Test",
     )
     assert voucher.is_balanced
     sales_line = next(l for l in voucher.lines if l.description == "Sales invoice")
@@ -204,6 +211,8 @@ def test_sales_invoice_paid_commission_reduces_cash():
         agent_account_id=accounts["agent"].id,
         commission_paid=True,
         commission_pay_account_id=accounts["cash"].id,
+        location_id="loc-test",
+        location_name="Test",
     )
     assert voucher.is_balanced
     assert accounts["sales"].current_balance == -950.0
@@ -230,6 +239,8 @@ def test_commission_payment_settles_payable():
         commission_amount=50.0,
         agent_account_id=accounts["agent"].id,
         commission_paid=False,
+        location_id="loc-test",
+        location_name="Test",
     )
     assert accounts["agent"].current_balance == -50.0
     pay = service.create_commission_payment(
@@ -277,6 +288,8 @@ def test_sales_return_reverses_agent_commission():
         commission_amount=50.0,
         agent_account_id=accounts["agent"].id,
         commission_paid=False,
+        location_id="loc-test",
+        location_name="Test",
     )
     assert accounts["agent"].current_balance == -50.0
     ret = service.create_sales_return_voucher(
@@ -341,6 +354,8 @@ def test_commission_agent_metrics_include_sales_and_returns():
         commission_amount=50.0,
         agent_account_id=accounts["agent"].id,
         commission_paid=False,
+        location_id="loc-test",
+        location_name="Test",
     )
 
     returns = InMemorySalesReturnRepository()

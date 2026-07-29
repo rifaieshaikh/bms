@@ -26,13 +26,16 @@ def ensure_indexes(db):
     _create_index(db.customers, "phone_number", unique=True, sparse=True)
     _create_index(db.customers, "gstin", unique=True, sparse=True)
     _create_index(db.customers, "segment_ids")
+    _create_index(db.customers, "location_ids")
     _create_index(db.vendors, "phone_number", unique=True, sparse=True)
     _create_index(db.vendors, "gstin", unique=True, sparse=True)
     _create_index(db.vendors, "segment_ids")
+    _create_index(db.vendors, "location_ids")
     _create_index(db.commission_agents, "phone_number", unique=True, sparse=True)
     _create_index(db.commission_agents, "gstin", unique=True, sparse=True)
     _create_index(db.commission_agents, "segment_ids")
     _create_index(db.commission_agents, "source_customer_id", sparse=True)
+    _create_index(db.commission_agents, "location_ids")
     _create_index(db.party_segments, "name", unique=True)
     _create_index(db.party_segments, "applies_to")
     _create_index(db.party_segments, "is_active")
@@ -62,6 +65,12 @@ def ensure_indexes(db):
         unique=True,
         partialFilterExpression={"linked_agent_id": {"$type": "string"}},
     )
+    _create_index(
+        db.accounts,
+        [("linked_delivery_partner_id", 1)],
+        unique=True,
+        partialFilterExpression={"linked_delivery_partner_id": {"$type": "string"}},
+    )
 
     _create_index(db.customization_orders, "order_number", unique=True)
     _create_index(db.customization_orders, "customer_id")
@@ -70,6 +79,7 @@ def ensure_indexes(db):
     _create_index(db.customization_orders, "expected_delivery_date")
     _create_index(db.customization_orders, "order_date")
     _create_index(db.customization_orders, "delivery_date")
+    _create_index(db.customization_orders, "location_id")
     _create_index(db.customization_orders, "customization_items.mph_snapshot_at")
     _create_index(db.customization_orders, [("customer_id", 1), ("order_date", -1)])
     _create_index(
@@ -104,6 +114,7 @@ def ensure_indexes(db):
     _create_index(db.workers, "worker_name")
     _create_index(db.workers, "is_active")
     _create_index(db.workers, "activity_ids")
+    _create_index(db.workers, "location_ids")
     _create_index(
         db.workers,
         [("activity_refs.activity_id", 1), ("activity_refs.source", 1)],
@@ -126,21 +137,25 @@ def ensure_indexes(db):
     _create_index(db.expenses, "activity_id")
     _create_index(db.expenses, "bill_id")
     _create_index(db.expenses, "expense_date")
+    _create_index(db.expenses, "location_id")
     _create_index(db.expenses, [("expense_date", 1), ("expense_source", 1)])
 
     _create_index(db.invoices, "order_id")
     _create_index(db.invoices, "bill_ids")
     _create_index(db.invoices, "invoice_number", unique=True, sparse=True)
     _create_index(db.invoices, "invoice_date")
+    _create_index(db.invoices, "location_id")
 
     _create_index(db.deliveries, "order_id")
     _create_index(db.deliveries, "bill_ids")
     _create_index(db.deliveries, "delivery_date")
+    _create_index(db.deliveries, "location_id")
 
     _create_index(db.vouchers, "voucher_number", unique=True)
     _create_index(db.vouchers, "voucher_date")
     _create_index(db.vouchers, "reference_order_id")
     _create_index(db.vouchers, "reference_production_batch_id")
+    _create_index(db.vouchers, "location_id")
 
     _create_index(db.product_categories, [("parent_id", 1), ("name", 1)], unique=True)
     _create_index(db.product_categories, "name")
@@ -179,6 +194,7 @@ def ensure_indexes(db):
     _create_index(db.production_batches, "recipe_id")
     _create_index(db.production_batches, "status")
     _create_index(db.production_batches, "batch_date")
+    _create_index(db.production_batches, "location_id")
     _create_index(db.production_batches, "updated_at")
 
     _create_index(db.purchase_orders, "po_number", unique=True)
@@ -186,6 +202,7 @@ def ensure_indexes(db):
     _create_index(db.purchase_orders, "order_date")
     _create_index(db.purchase_orders, "status")
     _create_index(db.purchase_orders, "project_id")
+    _create_index(db.purchase_orders, "location_id")
 
     _create_index(db.goods_receipts, "grn_number", unique=True)
     _create_index(db.goods_receipts, "purchase_order_id")
@@ -197,6 +214,7 @@ def ensure_indexes(db):
     _create_index(db.purchase_returns, "return_number", unique=True)
     _create_index(db.purchase_returns, "vendor_id")
     _create_index(db.purchase_returns, "return_date")
+    _create_index(db.purchase_returns, "location_id")
 
     _create_index(db.sales_orders, "so_number", unique=True)
     _create_index(db.sales_orders, "customer_id")
@@ -206,9 +224,20 @@ def ensure_indexes(db):
 
     _create_index(db.delivery_notes, "dn_number", unique=True)
     _create_index(db.delivery_notes, "sales_order_id")
+    _create_index(db.delivery_notes, "sales_invoice_id")
     _create_index(db.delivery_notes, "customer_id")
     _create_index(db.delivery_notes, "delivery_date")
     _create_index(db.delivery_notes, "location_id")
+    _create_index(db.delivery_notes, "delivery_partner_id")
+    _create_index(db.delivery_notes, "status")
+    _create_index(db.delivery_notes, "vehicle_number")
+    _create_index(db.delivery_notes, "reference_type")
+
+    _create_index(db.delivery_partners, "partner_name")
+    _create_index(db.delivery_partners, "phone_number")
+    _create_index(db.delivery_partners, "gstin")
+    _create_index(db.delivery_partners, "is_active")
+    _create_index(db.delivery_partners, "location_ids")
 
     _create_index(db.sales_returns, "return_number", unique=True)
     _create_index(db.sales_returns, "customer_id")
@@ -219,11 +248,13 @@ def ensure_indexes(db):
     _create_index(db.estimates, "customer_id")
     _create_index(db.estimates, "estimate_date")
     _create_index(db.estimates, "status")
+    _create_index(db.estimates, "location_id")
 
     _create_index(db.quotations, "quotation_number", unique=True)
     _create_index(db.quotations, "customer_id")
     _create_index(db.quotations, "quotation_date")
     _create_index(db.quotations, "status")
+    _create_index(db.quotations, "location_id")
 
     _create_index(
         db.purchase_price_history,
@@ -248,6 +279,7 @@ def ensure_indexes(db):
     _create_index(db.projects, "project_number", unique=True)
     _create_index(db.projects, "customer_id")
     _create_index(db.projects, "status")
+    _create_index(db.projects, "location_id")
     _create_index(db.projects, "created_at")
     _create_index(db.project_documents, "project_id")
     _create_index(db.project_documents, [("project_id", 1), ("category", 1)])
@@ -310,6 +342,7 @@ def ensure_indexes(db):
     _create_index(db.crm_leads, "source")
     _create_index(db.crm_leads, "created_at")
     _create_index(db.crm_leads, "import_batch_id")
+    _create_index(db.crm_leads, "location_id")
     _create_index(
         db.crm_leads,
         "lead_number",
@@ -354,6 +387,7 @@ def ensure_indexes(db):
     _create_index(db.crm_activities, "assigned_user_id")
     _create_index(db.crm_activities, "scheduled_at")
     _create_index(db.crm_activities, "status")
+    _create_index(db.crm_activities, "location_id")
     _create_index(
         db.crm_notifications,
         [("dedupe_key", 1)],

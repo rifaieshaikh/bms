@@ -78,6 +78,8 @@ class ExpenseAppService:
         notes: str = "",
         linked_time_minutes: int = 0,
         linked_time_hours: float = 0.0,
+        location_id: str = "",
+        location_name: str = "",
     ) -> Expense:
         if purchase_price <= 0 or selling_price <= 0:
             raise ValidationError(_POSITIVE_PRICE_MSG)
@@ -118,6 +120,8 @@ class ExpenseAppService:
             linked_time_hours=linked_time_hours,
             vendor_or_worker_name=vendor_or_worker_name,
             notes=notes,
+            location_id=location_id or order.location_id,
+            location_name=location_name or order.location_name,
         )
         self._refresh_mph(order.id, bill_id)
         return expense

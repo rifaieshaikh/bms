@@ -318,16 +318,18 @@ def test_settings_defaults_seeded():
 
 def test_create_lead_and_duplicate_detection(lead_svc):
     svc, *_ = lead_svc
-    lead = svc.create_lead(name="Acme", phone="9876543210", source="Walk-in")
+    lead = svc.create_lead(
+        name="Acme", phone="9876543210", source="Walk-in", location_id="loc-test"
+    )
     assert lead.status == LeadStatus.NEW.value
     assert lead.phone_normalized == "9876543210"
     with pytest.raises(ValidationError, match="Duplicate"):
-        svc.create_lead(name="Acme 2", phone="9876543210")
+        svc.create_lead(name="Acme 2", phone="9876543210", location_id="loc-test")
 
 
 def test_assign_status_lost_reopen(lead_svc):
     svc, _, activities, audits, _ = lead_svc
-    lead = svc.create_lead(name="Beta", phone="9876543211")
+    lead = svc.create_lead(name="Beta", phone="9876543211", location_id="loc-test")
     assigned = svc.assign_lead(lead.id, "u1", "Alice", actor_id="mgr", actor_name="Mgr")
     assert assigned.assigned_user_id == "u1"
     assert any(a.action == "assign" for a in audits.entries)
@@ -340,14 +342,16 @@ def test_assign_status_lost_reopen(lead_svc):
 
 def test_convert_and_link_customer(lead_svc):
     svc, _, _, _, customers = lead_svc
-    lead = svc.create_lead(name="Gamma Traders", phone="9876543212", city="Chennai")
+    lead = svc.create_lead(
+        name="Gamma Traders", phone="9876543212", city="Chennai", location_id="loc-test"
+    )
     converted = svc.convert_to_customer(lead.id, actor_id="u1", actor_name="Rep")
     assert converted.status == LeadStatus.CONVERTED.value
     assert converted.customer_id
     assert customers.get_customer_detail(converted.customer_id)
 
     lead2 = svc.create_lead(
-        name="Other", phone="9876543213", allow_duplicate=True
+        name="Other", phone="9876543213", allow_duplicate=True, location_id="loc-test"
     )
     linked = svc.link_to_customer(
         lead2.id, converted.customer_id, actor_id="u1", actor_name="Rep"
@@ -365,7 +369,9 @@ def test_enquiry_lifecycle_and_manual_activity_outcome():
     activities = FakeActivityRepo()
     settings = FakeSettingsRepo()
     lead_svc = CrmLeadAppService(leads)
-    lead = lead_svc.create_lead(name="Delta", phone="9876543214")
+    lead = lead_svc.create_lead(
+        name="Delta", phone="9876543214", location_id="loc-test"
+    )
     enq_svc = CrmEnquiryAppService(
         enquiries, activity_repo=activities, lead_repo=leads
     )
@@ -379,6 +385,7 @@ def test_enquiry_lifecycle_and_manual_activity_outcome():
         lead_id=lead.id,
         enquiry_id=enquiry.id,
         assigned_user_id="u1",
+        location_id="loc-test",
     )
     with pytest.raises(ValidationError, match="Outcome"):
         act_svc.complete(activity.id)
@@ -455,7 +462,11 @@ def test_payment_reminder_preview_includes_open_invoices():
     )
     customers = FakeCustomerService()
     cust = customers.create_customer(
-        CustomerInput(customer_name="Payee", phone_number="9876543215")
+        CustomerInput(
+            customer_name="Payee",
+            phone_number="9876543215",
+            location_ids=["loc-test"],
+        )
     )
 
     def _invoice(voucher_id, number, day, amount):
@@ -519,7 +530,11 @@ def test_payment_reminder_preview_and_schedule():
     from vaybooks.bms.domain.parties.customers.entities import CustomerInput
 
     cust = customers.create_customer(
-        CustomerInput(customer_name="Payee", phone_number="9876543215")
+        CustomerInput(
+            customer_name="Payee",
+            phone_number="9876543215",
+            location_ids=["loc-test"],
+        )
     )
     svc = CrmPaymentReminderService(
         settings, activity_repo=activities, customer_service=customers
@@ -552,7 +567,9 @@ def test_report_catalog_has_34_and_runs():
     assert len(CRM_REPORT_DEFINITIONS) == 34
     leads = FakeLeadRepo()
     lead_svc = CrmLeadAppService(leads)
-    lead_svc.create_lead(name="R1", phone="9876543216", source="Website")
+    lead_svc.create_lead(
+        name="R1", phone="9876543216", source="Website", location_id="loc-test"
+    )
     reports = CrmReportService(leads)
     assert len(reports.list_reports()) == 34
     funnel = reports.run_report("lead_conversion_funnel")
@@ -581,10 +598,10 @@ def test_leads_import_schema_template_and_fingerprint_idempotency(lead_svc):
     svc, leads, _, _, _ = lead_svc
     fp = lead_row_fingerprint(rows[0])
     first = svc.upsert_from_import_row(
-        rows[0], policy="skip", batch_id="b1", fingerprint=fp
+        rows[0], policy="skip", batch_id="b1", fingerprint=fp, location_id="loc-test"
     )
     second = svc.upsert_from_import_row(
-        rows[0], policy="skip", batch_id="b1", fingerprint=fp
+        rows[0], policy="skip", batch_id="b1", fingerprint=fp, location_id="loc-test"
     )
     assert first["outcome"] == "created"
     assert second["outcome"] == "skipped"

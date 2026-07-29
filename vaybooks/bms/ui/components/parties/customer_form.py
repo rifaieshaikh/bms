@@ -8,6 +8,9 @@ import streamlit as st
 
 from vaybooks.bms.domain.parties.customers.entities import Customer, CustomerInput
 from vaybooks.bms.domain.shared.enums import PartyRegistrationType
+from vaybooks.bms.ui.components.common.location_fields import (
+    render_party_location_multiselect,
+)
 from vaybooks.bms.ui.components.common.party_form_fields import render_party_address_tax_fields
 
 
@@ -18,6 +21,7 @@ def render_customer_form(
     *,
     require_name: bool = True,
     require_phone: bool = True,
+    services: dict | None = None,
 ) -> CustomerInput:
     """Render customer fields.
 
@@ -98,6 +102,17 @@ def render_customer_form(
             height=68,
         )
 
+    if services is not None:
+        location_ids = render_party_location_multiselect(
+            key_prefix,
+            services,
+            customer.location_ids if customer else None,
+        )
+    elif customer:
+        location_ids = list(customer.location_ids or [])
+    else:
+        location_ids = []
+
     return CustomerInput(
         customer_name=customer_name,
         phone_number=phone_number,
@@ -116,5 +131,6 @@ def render_customer_form(
         msme_number=tax_fields["msme_number"],
         notes=notes,
         segment_ids=segment_ids,
+        location_ids=location_ids,
         is_commission_agent=is_commission_agent,
     )

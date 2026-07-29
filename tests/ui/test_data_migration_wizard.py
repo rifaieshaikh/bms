@@ -43,7 +43,9 @@ class _StubMigration:
             can_import=True,
         )
 
-    def run_import(self, entity_type, df, mapping, duplicate_policy=None) -> ImportResult:
+    def run_import(
+        self, entity_type, df, mapping, duplicate_policy=None, **kwargs
+    ) -> ImportResult:
         self.imports.append(duplicate_policy)
         return ImportResult(entity_type=entity_type.value, created=len(df))
 

@@ -42,10 +42,10 @@ class InMemoryCustomerRepository:
                 return customer
         return None
 
-    def search(self, query: str) -> List[Customer]:
+    def search(self, query: str, location_filter: dict | None = None) -> List[Customer]:
         return list(self._store.values())
 
-    def list_all(self) -> List[Customer]:
+    def list_all(self, location_filter: dict | None = None) -> List[Customer]:
         return list(self._store.values())
 
 
@@ -57,6 +57,7 @@ def _customer_input(**kwargs) -> CustomerInput:
         "city": "Mumbai",
         "state_code": "27",
         "pincode": "400001",
+        "location_ids": ["loc-main"],
     }
     defaults.update(kwargs)
     return CustomerInput(**defaults)
@@ -75,7 +76,11 @@ def test_minimal_customer_name_phone_only_succeeds():
     repo = InMemoryCustomerRepository()
     service = CustomerDomainService(repo)
     customer = service.create(
-        CustomerInput(customer_name="Ravi Kumar", phone_number="9876543210")
+        CustomerInput(
+            customer_name="Ravi Kumar",
+            phone_number="9876543210",
+            location_ids=["loc-main"],
+        )
     )
     assert customer.customer_name == "Ravi Kumar"
     assert not customer.address_line1
@@ -152,7 +157,11 @@ def test_create_phone_only_when_name_optional():
     repo = InMemoryCustomerRepository()
     service = CustomerDomainService(repo)
     customer = service.create(
-        CustomerInput(customer_name="", phone_number="9876543210"),
+        CustomerInput(
+            customer_name="",
+            phone_number="9876543210",
+            location_ids=["loc-main"],
+        ),
         require_name=False,
         require_phone=True,
     )
@@ -164,7 +173,11 @@ def test_create_name_only_when_phone_optional():
     repo = InMemoryCustomerRepository()
     service = CustomerDomainService(repo)
     customer = service.create(
-        CustomerInput(customer_name="Walk-in", phone_number=""),
+        CustomerInput(
+            customer_name="Walk-in",
+            phone_number="",
+            location_ids=["loc-main"],
+        ),
         require_name=True,
         require_phone=False,
     )
@@ -176,13 +189,16 @@ def test_create_rejects_blank_identity_even_when_both_optional():
     repo = InMemoryCustomerRepository()
     service = CustomerDomainService(repo)
     customer = service.create(
-        CustomerInput(customer_name="", phone_number=""),
+        CustomerInput(
+            customer_name="",
+            phone_number="",
+            location_ids=["loc-main"],
+        ),
         require_name=False,
         require_phone=False,
     )
     assert customer.customer_name == ""
     assert customer.phone_number == ""
-
 
 
 def test_find_or_create_creates_when_phone_unknown_and_name_empty():
@@ -193,6 +209,7 @@ def test_find_or_create_creates_when_phone_unknown_and_name_empty():
         "9000000002",
         require_name=False,
         require_phone=True,
+        location_ids=["loc-main"],
     )
     assert customer.phone_number == "9000000002"
     assert customer.customer_name == ""
@@ -213,11 +230,19 @@ def test_multiple_customers_without_phone_allowed():
     repo = InMemoryCustomerRepository()
     service = CustomerDomainService(repo)
     a = service.create(
-        CustomerInput(customer_name="A", phone_number=""),
+        CustomerInput(
+            customer_name="A",
+            phone_number="",
+            location_ids=["loc-main"],
+        ),
         require_phone=False,
     )
     b = service.create(
-        CustomerInput(customer_name="B", phone_number=""),
+        CustomerInput(
+            customer_name="B",
+            phone_number="",
+            location_ids=["loc-main"],
+        ),
         require_phone=False,
     )
     assert a.id != b.id

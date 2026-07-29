@@ -15,7 +15,15 @@ from vaybooks.bms.ui.session_keys import filters_key
 
 def _load(services, filters, sort):
     try:
-        return [_grn_row(g) for g in services["purchases"].list_goods_receipts()]
+        from vaybooks.bms.domain.identity.location_access import location_id_mongo_filter
+        from vaybooks.bms.ui.auth.session import working_location_list_context
+
+        working, accessible = working_location_list_context(services)
+        filt = location_id_mongo_filter(working, accessible)
+        return [
+            _grn_row(g)
+            for g in services["purchases"].list_goods_receipts(location_filter=filt)
+        ]
     except Exception:
         return []
 

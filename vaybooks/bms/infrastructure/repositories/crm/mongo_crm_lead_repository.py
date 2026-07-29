@@ -75,7 +75,10 @@ class MongoCrmLeadRepository:
         include_deleted: bool = False,
         search: str = "",
         limit: int = 500,
+        location_filter: dict | None = None,
     ) -> List[CrmLead]:
+        from vaybooks.bms.domain.identity.location_access import merge_mongo_filters
+
         query: dict = dict(not_deleted_filter(include_deleted))
         if status:
             query["status"] = status
@@ -107,6 +110,7 @@ class MongoCrmLeadRepository:
                 query = {"$and": [query, search_clause]}
             else:
                 query.update(search_clause)
+        query = merge_mongo_filters(query, location_filter or {})
         docs = self._collection.find(query).sort("created_at", -1).limit(limit)
         return [lead_from_doc(d) for d in docs]
 

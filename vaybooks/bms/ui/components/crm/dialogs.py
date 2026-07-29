@@ -125,7 +125,14 @@ def _owner_choice(
 def _customer_options(services: dict) -> list:
     customers = services.get("customers")
     try:
-        return list(customers.list_all_customers()) if customers else []
+        if not customers:
+            return []
+        from vaybooks.bms.domain.identity.location_access import location_ids_mongo_filter
+        from vaybooks.bms.ui.auth.session import working_location_list_context
+
+        working, accessible = working_location_list_context(services)
+        filt = location_ids_mongo_filter(working, accessible)
+        return list(customers.list_all_customers(location_filter=filt))
     except Exception:
         return []
 
@@ -170,8 +177,20 @@ def lead_add_dialog(adapter: CrmAdapter) -> None:
 
     cols = st.columns(2)
     if cols[0].button("Create Lead", type="primary", width="stretch"):
+        from vaybooks.bms.ui.components.common.location_fields import (
+            require_location_name,
+        )
+
+        def _create():
+            location_id, location_name = require_location_name(
+                getattr(adapter, "_services", None) or {}
+            )
+            payload["location_id"] = location_id
+            payload["location_name"] = location_name
+            return adapter.create_lead(payload)
+
         _apply(
-            lambda: adapter.create_lead(payload),
+            _create,
             flag=LEAD_ADD,
             success=f"Created lead: {payload.get('name', '')}",
         )
@@ -523,8 +542,18 @@ def activity_add_dialog(
     )
     cols = st.columns(2)
     if cols[0].button("Create Activity", type="primary", width="stretch"):
+        from vaybooks.bms.ui.components.common.location_fields import (
+            require_location_name,
+        )
+
+        def _create():
+            location_id, location_name = require_location_name(services)
+            payload["location_id"] = location_id
+            payload["location_name"] = location_name
+            return adapter.create_activity(payload)
+
         _apply(
-            lambda: adapter.create_activity(payload),
+            _create,
             flag=ACTIVITY_ADD,
             success="Activity created",
         )

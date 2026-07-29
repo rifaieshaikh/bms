@@ -91,6 +91,7 @@ def _render_customer_step(services: dict) -> None:
         customer_service,
         key_prefix="ws_cust",
         initial_customer=initial_customer,
+        services=services,
     )
     notes = st.text_area("Order notes", key="ws_new_order_notes")
     etd = st.date_input(
@@ -114,6 +115,11 @@ def _render_customer_step(services: dict) -> None:
             st.error("Customer name or mobile is required")
             return
         try:
+            from vaybooks.bms.ui.components.common.location_fields import (
+                require_location_name,
+            )
+
+            location_id, location_name = require_location_name(services)
             order = order_service.create_draft_order(
                 customer_name=name,
                 phone_number=phone,
@@ -122,6 +128,8 @@ def _render_customer_step(services: dict) -> None:
                 customer_id=selection.customer_id or None,
                 require_name=require_name,
                 require_phone=require_phone,
+                location_id=location_id,
+                location_name=location_name,
             )
             st.session_state[WORKSPACE_ORDER_ID] = order.id
             _set_step("Measurements")

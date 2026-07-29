@@ -71,6 +71,18 @@ class InMemoryDeliveryNoteRepository:
     def list_by_so(self, sales_order_id):
         return [d for d in self._store.values() if d.sales_order_id == sales_order_id]
 
+    def list_by_invoice(self, sales_invoice_id):
+        return [
+            d for d in self._store.values() if d.sales_invoice_id == sales_invoice_id
+        ]
+
+    def list_by_partner(self, delivery_partner_id):
+        return [
+            d
+            for d in self._store.values()
+            if d.delivery_partner_id == delivery_partner_id
+        ]
+
     def delete(self, dn_id):
         self._store.pop(dn_id, None)
 

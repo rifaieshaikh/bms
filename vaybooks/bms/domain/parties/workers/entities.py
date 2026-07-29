@@ -63,6 +63,7 @@ class Worker:
     default_hourly_rate: float = 0.0
     # Optional link to identity User for system login.
     linked_user_id: str = ""
+    location_ids: List[str] = field(default_factory=list)
     id: str = field(default_factory=lambda: uuid4().hex)
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
@@ -94,6 +95,7 @@ class Worker:
         is_active: bool,
         default_hourly_rate: float = 0.0,
         linked_user_id: str | None = None,
+        location_ids: Iterable[str] | None = None,
     ) -> None:
         self.worker_name = (worker_name or "").strip()
         self.activity_refs = normalize_activity_refs(activity_refs)
@@ -101,4 +103,8 @@ class Worker:
         self.default_hourly_rate = float(default_hourly_rate or 0.0)
         if linked_user_id is not None:
             self.linked_user_id = (linked_user_id or "").strip()
+        if location_ids is not None:
+            self.location_ids = [
+                str(i).strip() for i in location_ids if str(i).strip()
+            ]
         self.updated_at = utc_now()

@@ -78,7 +78,12 @@ def test_customer_detail_route_renders_from_query_id():
             ),
             "measurements": MagicMock(list_by_customer=MagicMock(return_value=[])),
             "accounting": MagicMock(
-                get_customer_account=MagicMock(return_value=account)
+                get_customer_account=MagicMock(return_value=account),
+                customer_credit_balance=MagicMock(return_value=0.0),
+                get_customer_unapplied_advance=MagicMock(return_value=0.0),
+                get_customer_parked_settlement=MagicMock(return_value=0.0),
+                customer_receivable_balance=MagicMock(return_value=0.0),
+                list_open_sales_invoices_for_customer=MagicMock(return_value=[]),
             ),
             "sales": sales,
         }
@@ -98,7 +103,7 @@ def test_customer_detail_route_renders_from_query_id():
     assert "Quick Actions" in _text(at)
     assert "Sales Order" in buttons
     assert "Invoice" in buttons
-    assert "Record Receipt" in buttons
+    assert "Receipt" in buttons
     assert "Measurements" in _text(at)
     assert "Customization Orders" in _text(at)
     assert "Customer Ledger" in _text(at)

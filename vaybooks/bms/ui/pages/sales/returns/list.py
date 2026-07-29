@@ -21,9 +21,14 @@ from vaybooks.bms.ui.sales_list_schemas import SALES_RETURNS
 
 def _load(services, filters, sort):
     try:
+        from vaybooks.bms.domain.identity.location_access import location_id_mongo_filter
+        from vaybooks.bms.ui.auth.session import working_location_list_context
+
+        working, accessible = working_location_list_context(services)
+        filt = location_id_mongo_filter(working, accessible)
         sales = services["sales"]
         rows = []
-        for sales_return in sales.list_sales_returns():
+        for sales_return in sales.list_sales_returns(location_filter=filt):
             row = _return_row(sales_return)
             if (
                 not row.get("source_invoice_number")

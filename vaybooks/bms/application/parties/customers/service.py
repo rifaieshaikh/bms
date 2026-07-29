@@ -58,10 +58,12 @@ class CustomerAppService:
         self._accounting_domain.ensure_customer_account(customer.id, account_name)
         return self._sync_commission_agent(customer)
 
-    def search_customers(self, query: str) -> List[Customer]:
+    def search_customers(
+        self, query: str, *, location_filter: dict | None = None
+    ) -> List[Customer]:
         if not query.strip():
-            return self._customer_repo.list_all()
-        return self._customer_repo.search(query)
+            return self._customer_repo.list_all(location_filter=location_filter)
+        return self._customer_repo.search(query, location_filter=location_filter)
 
     def get_customer_detail(self, customer_id: str) -> Optional[Customer]:
         return self._customer_repo.find_by_id(customer_id)
@@ -114,8 +116,10 @@ class CustomerAppService:
     def lookup_customer_by_phone(self, phone_number: str) -> Optional[Customer]:
         return self._customer_repo.find_by_phone(phone_number)
 
-    def list_all_customers(self) -> List[Customer]:
-        return self._customer_repo.list_all()
+    def list_all_customers(
+        self, *, location_filter: dict | None = None
+    ) -> List[Customer]:
+        return self._customer_repo.list_all(location_filter=location_filter)
 
     def _apply_segment_names(self, customer: Customer) -> Customer:
         if self._segments:
@@ -163,6 +167,7 @@ class CustomerAppService:
             msme_number=customer.msme_number,
             notes=customer.notes,
             source_customer_id=customer.id,
+            location_ids=list(customer.location_ids or []),
         )
         try:
             agent = self._commission_agents.create_agent(agent_input)

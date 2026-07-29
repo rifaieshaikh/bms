@@ -40,7 +40,14 @@ def _vendor_payables_total(services: dict) -> float:
     if reports is None:
         return 0.0
     try:
-        rows = reports.vendor_payables_report(OutstandingFilter())
+        from vaybooks.bms.domain.identity.location_access import ALL_LOCATIONS
+        from vaybooks.bms.ui.auth.session import current_working_location_id
+
+        working = (current_working_location_id(services) or "").strip()
+        location_id = working if working and working != ALL_LOCATIONS else ""
+        rows = reports.vendor_payables_report(
+            OutstandingFilter(location_id=location_id)
+        )
     except Exception:
         return 0.0
     return sum(float(r.get("payable") or 0) for r in rows)

@@ -46,8 +46,11 @@ from vaybooks.bms.domain.shared.financial_year import (
     resolve_financial_year,
 )
 from vaybooks.bms.domain.shared.enums import (
+    DeliveryChargePaymentStatus,
     DeliveryNoteStatus,
+    DeliveryReferenceType,
     EstimateStatus,
+    InvoiceDeliveryStatus,
     QuotationStatus,
     PartyRegistrationType,
     SalesOrderStatus,
@@ -339,8 +342,10 @@ class SalesAppService:
             enriched.append(row)
         return enriched, supply_type
 
-    def list_estimates(self) -> List[Estimate]:
-        return self._estimate_repo.list_all() if self._estimate_repo else []
+    def list_estimates(self, *, location_filter: dict | None = None) -> List[Estimate]:
+        if not self._estimate_repo:
+            return []
+        return self._estimate_repo.list_all(location_filter=location_filter)
 
     def get_estimate(self, estimate_id: str) -> Optional[Estimate]:
         return self._estimate_repo.find_by_id(estimate_id) if self._estimate_repo else None
@@ -356,8 +361,10 @@ class SalesAppService:
         custom_values: Optional[dict] = None,
         bank_account_id: Optional[str] = None,
         terms_and_conditions: Optional[str] = None,
+        location_id: str = "",
     ) -> Estimate:
         enriched, supply_type = self._enrich_so_lines(customer_id, lines)
+        location_name = self._location_name(location_id)
         return self._domain.create_estimate(
             estimate_number=self._counter_repo.next("estimate_number"),
             customer_id=customer_id,
@@ -368,6 +375,8 @@ class SalesAppService:
             notes=notes,
             status=status,
             supply_type=supply_type,
+            location_id=location_id,
+            location_name=location_name,
             document_content=self.build_document_content(
                 "estimate",
                 custom_values,
@@ -410,8 +419,10 @@ class SalesAppService:
             changes["status"] = status
         return self._domain.update_estimate(estimate_id, **changes)
 
-    def list_quotations(self) -> List[Quotation]:
-        return self._quotation_repo.list_all() if self._quotation_repo else []
+    def list_quotations(self, *, location_filter: dict | None = None) -> List[Quotation]:
+        if not self._quotation_repo:
+            return []
+        return self._quotation_repo.list_all(location_filter=location_filter)
 
     def get_quotation(self, quotation_id: str) -> Optional[Quotation]:
         return (
@@ -431,8 +442,10 @@ class SalesAppService:
         custom_values: Optional[dict] = None,
         bank_account_id: Optional[str] = None,
         terms_and_conditions: Optional[str] = None,
+        location_id: str = "",
     ) -> Quotation:
         enriched, supply_type = self._enrich_so_lines(customer_id, lines)
+        location_name = self._location_name(location_id)
         quotation = self._domain.create_quotation(
             quotation_number=self._counter_repo.next("quotation_number"),
             customer_id=customer_id,
@@ -443,6 +456,8 @@ class SalesAppService:
             notes=notes,
             status=status,
             supply_type=supply_type,
+            location_id=location_id,
+            location_name=location_name,
             document_content=self.build_document_content(
                 "quotation",
                 custom_values,
@@ -709,8 +724,8 @@ class SalesAppService:
         self._estimate_repo.save(estimate)
         return voucher
 
-    def list_sales_orders(self) -> List[SalesOrder]:
-        return self._so_repo.list_all()
+    def list_sales_orders(self, *, location_filter: dict | None = None) -> List[SalesOrder]:
+        return self._so_repo.list_all(location_filter=location_filter)
 
     def get_sales_order(self, order_id: str) -> Optional[SalesOrder]:
         return self._so_repo.find_by_id(order_id)
@@ -831,11 +846,116 @@ class SalesAppService:
     def close_sales_order(self, order_id: str) -> SalesOrder:
         return self._domain.close_sales_order(order_id)
 
-    def list_delivery_notes(self) -> List[DeliveryNote]:
-        return self._dn_repo.list_all()
+    def list_delivery_notes(self, *, location_filter: dict | None = None) -> List[DeliveryNote]:
+        return self._dn_repo.list_all(location_filter=location_filter)
 
     def get_delivery_note(self, dn_id: str) -> Optional[DeliveryNote]:
         return self._dn_repo.find_by_id(dn_id)
+
+    def list_delivery_notes_by_partner(self, delivery_partner_id: str) -> List[DeliveryNote]:
+        return self._dn_repo.list_by_partner(delivery_partner_id)
+
+    def list_unpaid_delivery_charges(
+        self, delivery_partner_id: str | None = None
+    ) -> List[DeliveryNote]:
+        """DNs with business-paid delivery charge still unpaid."""
+        notes = (
+            self._dn_repo.list_by_partner(delivery_partner_id)
+            if delivery_partner_id
+            else self._dn_repo.list_all()
+        )
+        unpaid = []
+        for dn in notes:
+            if dn.status == DeliveryNoteStatus.CANCELLED:
+                continue
+            ch = dn.charges
+            if not ch.paid_by_us or ch.amount <= 0:
+                continue
+            if ch.payment_voucher_id or ch.payment_status == DeliveryChargePaymentStatus.PAID:
+                continue
+            unpaid.append(dn)
+        return unpaid
+
+    def list_delivery_notes_by_invoice(self, sales_invoice_id: str) -> List[DeliveryNote]:
+        return self._dn_repo.list_by_invoice(sales_invoice_id)
+
+    def invoice_delivered_qty_by_product(self, sales_invoice_id: str) -> dict[str, float]:
+        totals: dict[str, float] = {}
+        for dn in self._dn_repo.list_by_invoice(sales_invoice_id):
+            if dn.status == DeliveryNoteStatus.CANCELLED:
+                continue
+            for line in dn.lines:
+                totals[line.product_id] = round(
+                    totals.get(line.product_id, 0.0) + line.qty_delivered, 2
+                )
+        return totals
+
+    def invoice_pending_delivery_qty(self, sales_invoice_id: str) -> dict[str, float]:
+        voucher = self._accounting.get_voucher(sales_invoice_id)
+        if not voucher:
+            return {}
+        items, _, _ = parse_sales_line_items_note(voucher.description)
+        delivered = self.invoice_delivered_qty_by_product(sales_invoice_id)
+        pending: dict[str, float] = {}
+        for item in items:
+            product_id = str(item.get("product_id") or "")
+            if not product_id:
+                continue
+            qty = float(item.get("qty") or 0)
+            left = round(max(qty - delivered.get(product_id, 0.0), 0.0), 2)
+            if left > 0:
+                pending[product_id] = left
+        return pending
+
+    def _refresh_invoice_delivery_status(self, sales_invoice_id: str) -> None:
+        voucher = self._accounting.get_voucher(sales_invoice_id)
+        if not voucher or voucher.voucher_type != VoucherType.SALES_INVOICE:
+            return
+        items, _, _ = parse_sales_line_items_note(voucher.description)
+        if not items:
+            return
+        delivered = self.invoice_delivered_qty_by_product(sales_invoice_id)
+        total_qty = 0.0
+        total_delivered = 0.0
+        updated_items = []
+        for item in items:
+            product_id = str(item.get("product_id") or "")
+            qty = float(item.get("qty") or 0)
+            qty_delivered = round(delivered.get(product_id, 0.0), 2)
+            item = dict(item)
+            item["qty_delivered"] = qty_delivered
+            updated_items.append(item)
+            total_qty += qty
+            total_delivered += min(qty_delivered, qty)
+        if total_delivered <= 0:
+            status = InvoiceDeliveryStatus.NOT_DELIVERED.value
+        elif total_delivered + 0.001 >= total_qty:
+            status = InvoiceDeliveryStatus.FULLY_DELIVERED.value
+        else:
+            status = InvoiceDeliveryStatus.PARTIALLY_DELIVERED.value
+        # Rewrite description JSON preserving header line
+        header = voucher.description.split("\n", 1)[0]
+        invoice_discount = 0.0
+        tax_summary = None
+        try:
+            _, rest = voucher.description.split("\n", 1)
+            data = __import__("json").loads(rest.strip())
+            invoice_discount = float(data.get("invoice_discount") or 0)
+            tax_summary = data.get("tax_summary")
+            document_content = data.get("document_content")
+            commission = data.get("commission")
+        except Exception:
+            document_content = None
+            commission = None
+        voucher.description = header + "\n" + serialize_sales_line_items(
+            updated_items,
+            invoice_discount=invoice_discount,
+            tax_summary=tax_summary,
+            document_content=document_content,
+            commission=commission,
+        )
+        voucher.delivery_status = status
+        self._accounting.save_voucher(voucher)
 
     def create_delivery_note(
         self,
@@ -843,20 +963,68 @@ class SalesAppService:
         delivery_date: date,
         lines: list[dict],
         sales_order_id: Optional[str] = None,
+        sales_invoice_id: Optional[str] = None,
         notes: str = "",
-        confirm: bool = True,
+        confirm: bool = False,
         custom_values: Optional[dict] = None,
         terms_and_conditions: Optional[str] = None,
         location_id: str = "",
+        billing_address: str = "",
+        delivery_address: str = "",
+        contact_person: str = "",
+        contact_phone: str = "",
+        gstin: str = "",
+        expected_delivery_date: Optional[date] = None,
+        delivery_partner_id: str = "",
+        delivery_partner_name: str = "",
+        vehicle_number: str = "",
+        driver_name: str = "",
+        driver_phone: str = "",
+        lr_consignment_number: str = "",
+        eway_bill_number: str = "",
+        number_of_packages: float = 0.0,
+        gross_weight: float = 0.0,
+        net_weight: float = 0.0,
+        charges: Optional[dict] = None,
+        attachments: Optional[list] = None,
+        allow_override: bool = False,
+        override_qty_reason: str = "",
+        dn_number: Optional[str] = None,
     ) -> DeliveryNote:
         so_number = ""
         so_location_id = ""
+        invoice_number = ""
+        invoice_pending = None
+        stock_source = ""
         if sales_order_id:
             so = self._so_repo.find_by_id(sales_order_id)
             so_number = so.so_number if so else ""
             so_location_id = so.location_id if so else ""
+        if sales_invoice_id:
+            voucher = self._accounting.get_voucher(sales_invoice_id)
+            if not voucher or voucher.voucher_type != VoucherType.SALES_INVOICE:
+                raise ValueError("Sales invoice not found")
+            invoice_number = voucher.voucher_number
+            invoice_pending = self.invoice_pending_delivery_qty(sales_invoice_id)
+            # Invoice without DN already issued stock
+            if not voucher.reference_dn_id:
+                stock_source = "invoice"
         location_id = location_id or so_location_id
-        dn_number = self._counter_repo.next("dn_number")
+        if not dn_number:
+            dn_number = self._counter_repo.next("dn_number")
+        customer = None
+        if self._customer_service:
+            customer = self._customer_service.get_customer_detail(customer_id)
+        if customer and not billing_address:
+            billing_address = getattr(customer, "formatted_address", "") or ""
+        if customer and not delivery_address:
+            delivery_address = billing_address
+        if customer and not contact_person:
+            contact_person = getattr(customer, "contact_person", "") or ""
+        if customer and not contact_phone:
+            contact_phone = getattr(customer, "phone_number", "") or ""
+        if customer and not gstin:
+            gstin = getattr(customer, "gstin", "") or ""
         dn = self._domain.create_delivery_note(
             dn_number=dn_number,
             customer_id=customer_id,
@@ -865,9 +1033,33 @@ class SalesAppService:
             lines=lines,
             sales_order_id=sales_order_id,
             so_number=so_number,
+            sales_invoice_id=sales_invoice_id,
+            invoice_number=invoice_number,
             notes=notes,
             location_id=location_id,
             location_name=self._location_name(location_id),
+            billing_address=billing_address,
+            delivery_address=delivery_address,
+            contact_person=contact_person,
+            contact_phone=contact_phone,
+            gstin=gstin,
+            expected_delivery_date=expected_delivery_date,
+            delivery_partner_id=delivery_partner_id,
+            delivery_partner_name=delivery_partner_name,
+            vehicle_number=vehicle_number,
+            driver_name=driver_name,
+            driver_phone=driver_phone,
+            lr_consignment_number=lr_consignment_number,
+            eway_bill_number=eway_bill_number,
+            number_of_packages=number_of_packages,
+            gross_weight=gross_weight,
+            net_weight=net_weight,
+            charges=charges,
+            attachments=attachments,
+            allow_override=allow_override,
+            override_qty_reason=override_qty_reason,
+            invoice_pending=invoice_pending,
+            stock_source=stock_source,
         )
         dn.document_content = self.build_document_content(
             "delivery_note",
@@ -876,20 +1068,92 @@ class SalesAppService:
         )
         self._dn_repo.save(dn)
         if confirm:
-            return self.confirm_delivery_note(dn.id)
+            # Backward-compatible: confirm=True completes dispatch+deliver (issues stock).
+            return self.deliver_delivery_note(dn.id)
         return dn
 
     def confirm_delivery_note(self, dn_id: str) -> DeliveryNote:
         dn = self._dn_repo.find_by_id(dn_id)
         if not dn:
             raise ValueError("Delivery note not found")
-        if dn.status == DeliveryNoteStatus.DELIVERED:
+        if dn.status != DeliveryNoteStatus.DRAFT:
             return dn
-        stock_lines = self._domain.dn_to_stock_lines(dn)
-        self._inventory.apply_delivery_note_issue(
-            dn.id, stock_lines, dn.delivery_date
+        saved = self._domain.confirm_delivery_note(dn_id)
+        if saved.sales_invoice_id:
+            self._refresh_invoice_delivery_status(saved.sales_invoice_id)
+        self._post_delivery_charges_if_needed(saved.id)
+        return self._dn_repo.find_by_id(saved.id) or saved
+
+    def dispatch_delivery_note(self, dn_id: str) -> DeliveryNote:
+        dn = self._dn_repo.find_by_id(dn_id)
+        if not dn:
+            raise ValueError("Delivery note not found")
+        if dn.status == DeliveryNoteStatus.DRAFT:
+            self.confirm_delivery_note(dn_id)
+            dn = self._dn_repo.find_by_id(dn_id)
+        if not dn.stock_issued:
+            if dn.stock_source == "invoice":
+                self._domain.mark_stock_issued(dn.id, stock_source="invoice")
+            else:
+                stock_lines = self._domain.dn_to_stock_lines(dn)
+                self._inventory.apply_delivery_note_issue(
+                    dn.id, stock_lines, dn.delivery_date
+                )
+                self._domain.mark_stock_issued(dn.id, stock_source="delivery_note")
+        return self._domain.dispatch_delivery_note(dn_id)
+
+    def deliver_delivery_note(
+        self,
+        dn_id: str,
+        *,
+        partially: bool = False,
+        receiver_name: str = "",
+        receiver_phone: str = "",
+        receiver_acknowledgement: str = "",
+        attachments: Optional[list] = None,
+    ) -> DeliveryNote:
+        dn = self._dn_repo.find_by_id(dn_id)
+        if not dn:
+            raise ValueError("Delivery note not found")
+        if dn.status in (DeliveryNoteStatus.DRAFT, DeliveryNoteStatus.CONFIRMED):
+            self.dispatch_delivery_note(dn_id)
+        saved = self._domain.deliver_delivery_note(
+            dn_id,
+            partially=partially,
+            receiver_name=receiver_name,
+            receiver_phone=receiver_phone,
+            receiver_acknowledgement=receiver_acknowledgement,
+            attachments=attachments,
         )
-        return self._domain.confirm_delivery_note(dn_id)
+        if saved.sales_invoice_id:
+            self._refresh_invoice_delivery_status(saved.sales_invoice_id)
+        return saved
+
+    def cancel_delivery_note(self, dn_id: str) -> DeliveryNote:
+        dn = self._dn_repo.find_by_id(dn_id)
+        if not dn:
+            raise ValueError("Delivery note not found")
+        if dn.status == DeliveryNoteStatus.CANCELLED:
+            return dn
+        if dn.charges.payment_voucher_id and dn.charges.payment_status == DeliveryChargePaymentStatus.PAID:
+            raise ValueError(
+                "Cannot cancel: delivery partner payment already settled; reverse payment first"
+            )
+        if dn.stock_issued and dn.stock_source == "delivery_note":
+            self._inventory.reverse_movements_by_reference(dn.id)
+            dn.stock_issued = False
+            self._dn_repo.save(dn)
+        if dn.charges.expense_voucher_id and not dn.charges.payment_voucher_id:
+            try:
+                self._accounting.void_voucher(dn.charges.expense_voucher_id)
+            except Exception:
+                logger.exception("Failed to void delivery expense voucher")
+            dn.charges.expense_voucher_id = None
+            self._dn_repo.save(dn)
+        saved = self._domain.cancel_delivery_note(dn_id)
+        if saved.sales_invoice_id:
+            self._refresh_invoice_delivery_status(saved.sales_invoice_id)
+        return saved
 
     def update_delivery_note(
         self,
@@ -901,10 +1165,24 @@ class SalesAppService:
         custom_values: Optional[dict] = None,
         terms_and_conditions: Optional[str] = None,
         location_id: Optional[str] = None,
+        allow_edit_delivered: bool = False,
+        allow_override: bool = False,
+        override_qty_reason: str = "",
+        **extra,
     ) -> DeliveryNote:
         location_name = (
             self._location_name(location_id) if location_id is not None else None
         )
+        dn = self._dn_repo.find_by_id(dn_id)
+        invoice_pending = None
+        if dn and dn.sales_invoice_id:
+            # Exclude this DN's qty from pending when editing
+            pending = self.invoice_pending_delivery_qty(dn.sales_invoice_id)
+            for line in dn.lines:
+                pending[line.product_id] = round(
+                    pending.get(line.product_id, 0.0) + line.qty_delivered, 2
+                )
+            invoice_pending = pending
         return self._domain.update_delivery_note(
             dn_id,
             delivery_date=delivery_date,
@@ -917,7 +1195,185 @@ class SalesAppService:
             ),
             location_id=location_id,
             location_name=location_name,
+            allow_edit_delivered=allow_edit_delivered,
+            allow_override=allow_override,
+            override_qty_reason=override_qty_reason,
+            invoice_pending=invoice_pending,
+            **{k: v for k, v in extra.items() if v is not None},
         )
+
+    def _post_delivery_charges_if_needed(self, dn_id: str) -> DeliveryNote:
+        dn = self._dn_repo.find_by_id(dn_id)
+        if not dn:
+            raise ValueError("Delivery note not found")
+        charges = dn.charges
+        if not charges.paid_by_us or charges.amount <= 0:
+            return dn
+        if charges.expense_voucher_id:
+            return dn
+        expense_account = self._accounting.ensure_delivery_expense_account()
+        partner_account = None
+        if dn.delivery_partner_id:
+            partner_account = self._accounting.get_delivery_partner_account(
+                dn.delivery_partner_id
+            )
+        amount = round(charges.amount + charges.tax_amount, 2)
+        if charges.payment_mode and charges.paid_from_account_id and charges.payment_status != DeliveryChargePaymentStatus.UNPAID:
+            paying = self._accounting.get_account(charges.paid_from_account_id)
+            if not paying:
+                raise ValueError("Paid-from account not found")
+            voucher = self._accounting.create_journal_entry(
+                description=f"Delivery charges for {dn.dn_number}",
+                lines=[
+                    {
+                        "account_id": expense_account.id,
+                        "account_name": expense_account.account_name,
+                        "debit_amount": amount,
+                        "credit_amount": 0,
+                        "description": "Delivery Expenses",
+                    },
+                    {
+                        "account_id": paying.id,
+                        "account_name": paying.account_name,
+                        "debit_amount": 0,
+                        "credit_amount": amount,
+                        "description": charges.payment_reference or "Delivery charge paid",
+                    },
+                ],
+                voucher_date=charges.payment_date or dn.delivery_date,
+            )
+            charges.expense_voucher_id = voucher.id
+            charges.payment_voucher_id = voucher.id
+            charges.payment_status = DeliveryChargePaymentStatus.PAID
+            charges.partner_payable_amount = 0.0
+        else:
+            if not partner_account:
+                raise ValueError(
+                    "Select a delivery partner (or pay immediately) to record delivery charges"
+                )
+            voucher = self._accounting.create_journal_entry(
+                description=f"Delivery charges payable for {dn.dn_number}",
+                lines=[
+                    {
+                        "account_id": expense_account.id,
+                        "account_name": expense_account.account_name,
+                        "debit_amount": amount,
+                        "credit_amount": 0,
+                        "description": "Delivery Expenses",
+                    },
+                    {
+                        "account_id": partner_account.id,
+                        "account_name": partner_account.account_name,
+                        "debit_amount": 0,
+                        "credit_amount": amount,
+                        "description": "Delivery Partner Payable",
+                    },
+                ],
+                voucher_date=dn.delivery_date,
+            )
+            charges.expense_voucher_id = voucher.id
+            charges.partner_payable_amount = amount
+            charges.payment_status = DeliveryChargePaymentStatus.UNPAID
+        if charges.recoverable_from_customer and charges.customer_recoverable_amount <= 0:
+            charges.customer_recoverable_amount = amount
+        dn.charges = charges
+        dn.updated_at = datetime.utcnow()
+        return self._dn_repo.save(dn)
+
+    def update_delivery_logistics(
+        self,
+        dn_id: str,
+        *,
+        vehicle_number: str = "",
+        driver_name: str = "",
+        driver_phone: str = "",
+        lr_consignment_number: str = "",
+        eway_bill_number: str = "",
+        receiver_name: str = "",
+        receiver_phone: str = "",
+        attachments: list | None = None,
+    ) -> DeliveryNote:
+        dn = self._dn_repo.find_by_id(dn_id)
+        if not dn:
+            raise ValueError("Delivery note not found")
+        if dn.status == DeliveryNoteStatus.CANCELLED:
+            raise ValueError("Cannot update a cancelled delivery note")
+        if vehicle_number != dn.vehicle_number:
+            dn.append_change("vehicle_number", dn.vehicle_number, vehicle_number)
+        dn.vehicle_number = (vehicle_number or "").strip()
+        dn.driver_name = (driver_name or "").strip()
+        dn.driver_phone = (driver_phone or "").strip()
+        dn.lr_consignment_number = (lr_consignment_number or "").strip()
+        dn.eway_bill_number = (eway_bill_number or "").strip()
+        dn.receiver_name = (receiver_name or "").strip()
+        dn.receiver_phone = (receiver_phone or "").strip()
+        if attachments is not None:
+            dn.attachments = list(attachments)
+        dn.updated_at = datetime.utcnow()
+        return self._dn_repo.save(dn)
+
+    def record_delivery_partner_payment(
+        self,
+        dn_id: str,
+        *,
+        paid_from_account_id: str,
+        payment_date: Optional[date] = None,
+        payment_reference: str = "",
+        payment_mode: str = "",
+        amount: Optional[float] = None,
+    ) -> DeliveryNote:
+        dn = self._dn_repo.find_by_id(dn_id)
+        if not dn:
+            raise ValueError("Delivery note not found")
+        charges = dn.charges
+        if charges.payment_voucher_id:
+            raise ValueError("Delivery partner payment already recorded")
+        if not charges.expense_voucher_id:
+            self._post_delivery_charges_if_needed(dn_id)
+            dn = self._dn_repo.find_by_id(dn_id)
+            charges = dn.charges
+        partner_account = self._accounting.get_delivery_partner_account(
+            dn.delivery_partner_id
+        )
+        if not partner_account:
+            raise ValueError("Delivery partner account not found")
+        paying = self._accounting.get_account(paid_from_account_id)
+        if not paying:
+            raise ValueError("Paid-from account not found")
+        pay_amount = round(float(amount if amount is not None else charges.partner_payable_amount or charges.amount), 2)
+        if pay_amount <= 0:
+            raise ValueError("Payment amount must be positive")
+        voucher = self._accounting.create_journal_entry(
+            description=f"Delivery partner payment for {dn.dn_number}",
+            lines=[
+                {
+                    "account_id": partner_account.id,
+                    "account_name": partner_account.account_name,
+                    "debit_amount": pay_amount,
+                    "credit_amount": 0,
+                    "description": "Settle delivery partner payable",
+                },
+                {
+                    "account_id": paying.id,
+                    "account_name": paying.account_name,
+                    "debit_amount": 0,
+                    "credit_amount": pay_amount,
+                    "description": payment_reference or "Payment",
+                },
+            ],
+            voucher_date=payment_date or date.today(),
+        )
+        charges.payment_voucher_id = voucher.id
+        charges.paid_from_account_id = paid_from_account_id
+        charges.payment_reference = payment_reference
+        charges.payment_mode = payment_mode
+        charges.payment_date = payment_date or date.today()
+        charges.payment_status = DeliveryChargePaymentStatus.PAID
+        charges.partner_payable_amount = round(
+            max((charges.partner_payable_amount or pay_amount) - pay_amount, 0.0), 2
+        )
+        dn.charges = charges
+        return self._dn_repo.save(dn)
 
     def _invoice_numbering_settings(self) -> tuple[str, str, int]:
         """Return (mode, prefix, fy_start_month).
@@ -1005,6 +1461,7 @@ class SalesAppService:
         credit_applied: float = 0.0,
         advance_applied: float = 0.0,
         commission: Optional[dict] = None,
+        location_id: str = "",
     ) -> Voucher:
         sales_lines = None
         note = line_items_note
@@ -1026,6 +1483,12 @@ class SalesAppService:
             gross_amount = grand_total
             discount_amount = 0.0
             amount_received = round(max(float(amount_received or 0), 0.0), 2)
+            if not location_id:
+                for raw in line_items:
+                    lid = str(raw.get("location_id") or "").strip()
+                    if lid:
+                        location_id = lid
+                        break
 
         resolved_number, financial_year = self._resolve_store_invoice_number(
             store_invoice_number,
@@ -1067,6 +1530,8 @@ class SalesAppService:
             agent_account_id=agent_account_id,
             commission_paid=commission_paid,
             commission_pay_account_id=commission_pay_account_id,
+            location_id=location_id,
+            location_name=self._location_name(location_id),
         )
         if reference_dn_id:
             dn = self._dn_repo.find_by_id(reference_dn_id)
@@ -1232,54 +1697,95 @@ class SalesAppService:
         amount_received: float = 0.0,
         voucher_date: Optional[date] = None,
         line_items_note: str = "",
+        extra_dn_ids: Optional[List[str]] = None,
+        include_delivery_charges: bool = True,
     ) -> Voucher:
-        dn = self._dn_repo.find_by_id(dn_id)
-        if not dn:
-            raise ValueError("Delivery note not found")
-        if dn.status != DeliveryNoteStatus.DELIVERED:
-            raise ValueError("Invoice can only be created from a delivered note")
-        if dn.voucher_id:
-            raise ValueError("This delivery note is already invoiced")
-        customer_account = self._accounting.get_customer_account(dn.customer_id)
+        dn_ids = [dn_id] + list(extra_dn_ids or [])
+        dns: List[DeliveryNote] = []
+        for did in dn_ids:
+            dn = self._dn_repo.find_by_id(did)
+            if not dn:
+                raise ValueError(f"Delivery note not found: {did}")
+            if dn.status not in (
+                DeliveryNoteStatus.DELIVERED,
+                DeliveryNoteStatus.PARTIALLY_DELIVERED,
+                DeliveryNoteStatus.DISPATCHED,
+                DeliveryNoteStatus.CONFIRMED,
+            ):
+                raise ValueError(
+                    f"Invoice can only be created from confirmed/dispatched/delivered notes ({dn.dn_number})"
+                )
+            if dn.voucher_id:
+                raise ValueError(f"Delivery note {dn.dn_number} is already invoiced")
+            dns.append(dn)
+        primary = dns[0]
+        if any(d.customer_id != primary.customer_id for d in dns):
+            raise ValueError("All delivery notes must belong to the same customer")
+        customer_account = self._accounting.get_customer_account(primary.customer_id)
         if not customer_account:
             raise ValueError("Customer account not found")
-        raw_lines = [
-            {
-                "product_id": line.product_id,
-                "qty": line.qty_delivered,
-                "rate": line.rate,
-                "description": line.product_name,
-            }
-            for line in dn.lines
-        ]
+        raw_lines: list[dict] = []
+        for dn in dns:
+            for line in dn.lines:
+                raw_lines.append(
+                    {
+                        "product_id": line.product_id,
+                        "qty": line.qty_delivered,
+                        "rate": line.rate,
+                        "description": line.product_name,
+                    }
+                )
+            if (
+                include_delivery_charges
+                and dn.charges.recoverable_from_customer
+                and dn.charges.customer_recoverable_amount > 0
+            ):
+                raw_lines.append(
+                    {
+                        "product_id": "",
+                        "qty": 1,
+                        "rate": dn.charges.customer_recoverable_amount,
+                        "description": "Delivery Charges",
+                    }
+                )
         if not line_items_note:
             line_items_note = "\n".join(
                 f"{line.product_name or line.product_id}: {line.qty_delivered:g} @ {line.rate:g}"
+                for dn in dns
                 for line in dn.lines
             )
         source_values = {
-            item.key: item.value for item in dn.document_content.custom_fields
+            item.key: item.value for item in primary.document_content.custom_fields
         }
-        return self.create_sales_invoice(
+        voucher = self.create_sales_invoice(
             customer_account_id=customer_account.id,
             store_account_id=store_account_id,
-            gross_amount=dn.total_amount,
+            gross_amount=sum(dn.total_amount for dn in dns)
+            + sum(
+                dn.charges.customer_recoverable_amount
+                for dn in dns
+                if include_delivery_charges and dn.charges.recoverable_from_customer
+            ),
             discount_amount=discount_amount,
             amount_received=amount_received,
             store_invoice_number=store_invoice_number,
             line_items_note=line_items_note,
-            voucher_date=voucher_date or dn.delivery_date,
-            reference_so_id=dn.sales_order_id,
-            reference_dn_id=dn.id,
+            voucher_date=voucher_date or primary.delivery_date,
+            reference_so_id=primary.sales_order_id,
+            reference_dn_id=primary.id,
             line_items=raw_lines,
             invoice_discount=discount_amount,
             document_content=self.build_document_content(
                 "sales_invoice", custom_values=source_values
             ),
         )
+        for dn in dns:
+            dn.voucher_id = voucher.id
+            self._dn_repo.save(dn)
+        return voucher
 
-    def list_sales_returns(self) -> List[SalesReturn]:
-        return self._return_repo.list_all()
+    def list_sales_returns(self, *, location_filter: dict | None = None) -> List[SalesReturn]:
+        return self._return_repo.list_all(location_filter=location_filter)
 
     def get_sales_return(self, return_id: str) -> Optional[SalesReturn]:
         return self._return_repo.find_by_id(return_id)
@@ -2105,12 +2611,14 @@ class SalesAppService:
         )
         return self._return_repo.save(sales_return)
 
-    def list_sales_invoices(self) -> list[dict]:
+    def list_sales_invoices(self, *, location_filter: dict | None = None) -> list[dict]:
         discount = self._accounting.get_discount_account()
         discount_id = discount.id if discount else None
         settlement_map = self._accounting.invoice_settlement_map()
         rows = []
-        for voucher in self._accounting.list_vouchers_by_type(VoucherType.SALES_INVOICE):
+        for voucher in self._accounting.list_vouchers_by_type(
+            VoucherType.SALES_INVOICE, location_filter=location_filter
+        ):
             row = self._accounting.enrich_sales_invoice_row(
                 voucher,
                 discount_account_id=discount_id,

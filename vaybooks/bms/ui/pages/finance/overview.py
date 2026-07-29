@@ -72,10 +72,32 @@ def _render_quick_actions() -> None:
         navigation.go_to_list("reports")
 
 
-def _render_charts(reports, start: date, end: date) -> None:
+def _working_report_location_id(services: dict | None = None) -> str:
+    """Concrete working location id, or empty for ALL aggregate."""
+    try:
+        from vaybooks.bms.domain.identity.location_access import ALL_LOCATIONS
+        from vaybooks.bms.ui.auth.session import (
+            current_working_location_id,
+            get_working_location_id,
+        )
+
+        if services is not None:
+            working = (current_working_location_id(services) or "").strip()
+        else:
+            working = (get_working_location_id() or "").strip()
+        if working and working != ALL_LOCATIONS:
+            return working
+    except Exception:
+        pass
+    return ""
+
+
+def _render_charts(reports, start: date, end: date, *, location_id: str = "") -> None:
     st.markdown("#### Charts")
     dr = _date_range(start, end)
-    cash_rows = reports.cash_movement_report(CashMovementFilter(date_range=dr))
+    cash_rows = reports.cash_movement_report(
+        CashMovementFilter(date_range=dr, location_id=location_id)
+    )
     expense_rows = reports.expense_by_source_report(
         ExpenseBySourceFilter(date_range=dr)
     )
@@ -128,15 +150,19 @@ def _render_charts(reports, start: date, end: date) -> None:
     )
 
 
-def _render_queues(reports) -> None:
+def _render_queues(reports, *, location_id: str = "") -> None:
     try:
         receivables = sorted(
-            reports.customer_outstanding_report(OutstandingFilter()),
+            reports.customer_outstanding_report(
+                OutstandingFilter(location_id=location_id)
+            ),
             key=lambda r: float(r.get("balance_due") or 0),
             reverse=True,
         )[:QUEUE_LIMIT]
         payables = sorted(
-            reports.vendor_payables_report(OutstandingFilter()),
+            reports.vendor_payables_report(
+                OutstandingFilter(location_id=location_id)
+            ),
             key=lambda r: float(r.get("payable") or 0),
             reverse=True,
         )[:QUEUE_LIMIT]
@@ -189,16 +215,23 @@ def render(services: dict) -> None:
         title="Finance Overview",
     )
     start, end = _resolved_range(bar["filters"])
+    location_id = _working_report_location_id(services)
     st.caption(f"Period: **{start:%d %b %Y}** → **{end:%d %b %Y}**")
 
     _render_quick_actions()
 
     try:
-        summary = reports.get_period_summary(start, end)
-        ar_rows = reports.customer_outstanding_report(OutstandingFilter())
-        ap_rows = reports.vendor_payables_report(OutstandingFilter())
+        summary = reports.get_period_summary(start, end, location_id=location_id)
+        ar_rows = reports.customer_outstanding_report(
+            OutstandingFilter(location_id=location_id)
+        )
+        ap_rows = reports.vendor_payables_report(
+            OutstandingFilter(location_id=location_id)
+        )
         cash_rows = reports.cash_movement_report(
-            CashMovementFilter(date_range=_date_range(start, end))
+            CashMovementFilter(
+                date_range=_date_range(start, end), location_id=location_id
+            )
         )
     except Exception as exc:
         st.error(f"Could not load finance overview: {exc}")
@@ -257,5 +290,5 @@ def render(services: dict) -> None:
         "Invoiced, receipts, expenses, margin, and cash use the Filters period."
     )
 
-    _render_charts(reports, start, end)
-    _render_queues(reports)
+    _render_charts(reports, start, end, location_id=location_id)
+    _render_queues(reports, location_id=location_id)

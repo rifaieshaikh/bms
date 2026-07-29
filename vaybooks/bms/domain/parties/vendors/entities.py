@@ -31,6 +31,7 @@ class VendorInput:
     bank_name: str = ""
     notes: str = ""
     segment_ids: List[str] = field(default_factory=list)
+    location_ids: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -58,6 +59,7 @@ class Vendor:
     notes: str = ""
     segment_ids: List[str] = field(default_factory=list)
     segment_names: List[str] = field(default_factory=list)
+    location_ids: List[str] = field(default_factory=list)
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
 
@@ -106,6 +108,7 @@ class Vendor:
             bank_name=vendor_input.bank_name.strip(),
             notes=vendor_input.notes,
             segment_ids=list(vendor_input.segment_ids or []),
+            location_ids=list(vendor_input.location_ids or []),
         )
 
     def apply_input(self, vendor_input: VendorInput) -> None:
@@ -131,4 +134,5 @@ class Vendor:
             bank_name=vendor_input.bank_name.strip(),
             notes=vendor_input.notes,
             segment_ids=list(vendor_input.segment_ids or []),
+            location_ids=list(vendor_input.location_ids or []),
         )

@@ -3,6 +3,7 @@
 from vaybooks.bms.domain.finance.accounting.repository import AccountRepository
 from vaybooks.bms.domain.finance.accounting.services import AccountingDomainService
 from vaybooks.bms.domain.shared.exceptions import ValidationError
+from vaybooks.bms.domain.shared.party_location import require_location_ids
 from vaybooks.bms.domain.parties.workers.entities import (
     SOURCE_CUSTOMIZATION,
     Worker,
@@ -23,8 +24,15 @@ class WorkerAppService:
         self._accounting_domain = AccountingDomainService(account_repo, None)
         self._users = user_service
 
-    def list_workers(self, active_only: bool = True) -> List[Worker]:
-        return self._repo.list_all(active_only=active_only)
+    def list_workers(
+        self,
+        active_only: bool = True,
+        *,
+        location_filter: dict | None = None,
+    ) -> List[Worker]:
+        return self._repo.list_all(
+            active_only=active_only, location_filter=location_filter
+        )
 
     def list_workers_by_activity(
         self,
@@ -54,6 +62,7 @@ class WorkerAppService:
         name = (worker_name or "").strip()
         if not name:
             raise ValidationError("Employee name is required")
+        party_location_ids = require_location_ids(location_ids)
 
         linked_user_id = ""
         if create_login:
@@ -62,7 +71,7 @@ class WorkerAppService:
                 username=username,
                 password=password,
                 role_ids=role_ids,
-                location_ids=location_ids,
+                location_ids=party_location_ids,
             )
 
         worker = Worker(
@@ -70,6 +79,7 @@ class WorkerAppService:
             activity_refs=normalize_activity_refs(activity_refs),
             default_hourly_rate=float(default_hourly_rate or 0.0),
             linked_user_id=linked_user_id,
+            location_ids=party_location_ids,
         )
         saved = self._repo.save(worker)
         account_name = WorkerDomainService.build_salary_account_name(saved)
@@ -96,6 +106,9 @@ class WorkerAppService:
         name = (worker_name or "").strip()
         if not name:
             raise ValidationError("Employee name is required")
+        party_location_ids = require_location_ids(
+            location_ids if location_ids is not None else worker.location_ids
+        )
         rate = (
             worker.default_hourly_rate
             if default_hourly_rate is None
@@ -111,7 +124,7 @@ class WorkerAppService:
                 username=username,
                 password=password,
                 role_ids=role_ids,
-                location_ids=location_ids,
+                location_ids=party_location_ids,
             )
 
         worker.update(
@@ -120,6 +133,7 @@ class WorkerAppService:
             is_active=is_active,
             default_hourly_rate=rate,
             linked_user_id=linked_user_id,
+            location_ids=party_location_ids,
         )
         saved = self._repo.save(worker)
         self._accounting_domain.sync_worker_salary_account(

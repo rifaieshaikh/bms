@@ -98,7 +98,12 @@ class OrderAppService:
         *,
         require_name: bool = True,
         require_phone: bool = True,
+        location_id: str = "",
+        location_name: str = "",
     ) -> CustomizationOrder:
+        from vaybooks.bms.domain.shared.party_location import require_location_id
+
+        location_id = require_location_id(location_id)
         if customer_id:
             customer = self._customer_domain._customer_repo.find_by_id(customer_id)
             if not customer:
@@ -126,6 +131,8 @@ class OrderAppService:
             advance_amount=0.0,
             notes=(notes or "").strip(),
             order_status=OrderStatus.DRAFT,
+            location_id=location_id,
+            location_name=(location_name or "").strip(),
         )
         self._order_domain.validate_order(order)
         return self._order_repo.save(order)
@@ -359,6 +366,10 @@ class OrderAppService:
         return item
 
     def create_customization_order(self, request: CreateOrderRequest) -> CustomizationOrder:
+        from vaybooks.bms.domain.shared.party_location import require_location_id
+
+        location_id = require_location_id(request.location_id)
+        location_name = (request.location_name or "").strip()
         customer = self._customer_domain.find_or_create(
             customer_name=request.customer_name,
             phone_number=request.phone_number,
@@ -383,6 +394,8 @@ class OrderAppService:
             or (today() + timedelta(days=7)),
             advance_amount=request.advance_amount,
             notes=request.notes,
+            location_id=location_id,
+            location_name=location_name,
         )
 
         item_rows = request.customization_items or []
@@ -435,10 +448,12 @@ class OrderAppService:
         self._sync_etd_tasks(saved)
         return saved
 
-    def search_customization_orders(self, query: str) -> List[CustomizationOrder]:
+    def search_customization_orders(
+        self, query: str, *, location_filter: dict | None = None
+    ) -> List[CustomizationOrder]:
         if not query.strip():
-            return self._order_repo.list_all()
-        return self._order_repo.search(query)
+            return self._order_repo.list_all(location_filter=location_filter)
+        return self._order_repo.search(query, location_filter=location_filter)
 
     def get_order_detail(self, order_id: str) -> Optional[CustomizationOrder]:
         return self._order_repo.find_by_id(order_id)

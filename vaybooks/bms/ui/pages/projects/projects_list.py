@@ -40,10 +40,20 @@ PROJECTS = ListSchema(
 
 def _load_projects(services, filters, sort):
     try:
-        return services["projects"].search_projects("")
+        from vaybooks.bms.domain.identity.location_access import location_id_mongo_filter
+        from vaybooks.bms.ui.auth.session import working_location_list_context
+
+        working, accessible = working_location_list_context(services)
+        filt = location_id_mongo_filter(working, accessible)
+        return services["projects"].search_projects("", location_filter=filt)
     except Exception:
         try:
-            return services["projects"].list_projects()
+            from vaybooks.bms.domain.identity.location_access import location_id_mongo_filter
+            from vaybooks.bms.ui.auth.session import working_location_list_context
+
+            working, accessible = working_location_list_context(services)
+            filt = location_id_mongo_filter(working, accessible)
+            return services["projects"].list_projects(location_filter=filt)
         except Exception:
             return []
 

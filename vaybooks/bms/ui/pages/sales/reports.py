@@ -21,6 +21,14 @@ from vaybooks.bms.ui.report_schemas import SCHEMA_BY_REPORT_TYPE
 SALES_REPORT_TYPES = [
     "Sales Orders Pipeline",
     "Delivery Pending",
+    "Delivery Note Register",
+    "Partially Delivered Sales Orders",
+    "Invoiced but Not Delivered",
+    "Delivery Partner Expense",
+    "Partner Payables History",
+    "Customer Delivery Charges Recovered",
+    "Delivery Expense vs Recovered",
+    "Vehicle-wise Delivery History",
     "Sales by Customer",
     "Sales Returns Summary",
 ]
@@ -28,6 +36,9 @@ SALES_REPORT_TYPES = [
 _DATE_FIELD_BY_REPORT = {
     "Sales Orders Pipeline": "order_date",
     "Delivery Pending": "order_date",
+    "Delivery Note Register": "delivery_date",
+    "Partially Delivered Sales Orders": "order_date",
+    "Vehicle-wise Delivery History": "delivery_date",
     "Sales Returns Summary": "return_date",
 }
 
@@ -78,6 +89,22 @@ def _load_all(reports_svc, report_type: str) -> list:
         return reports_svc.sales_orders_pipeline()
     if report_type == "Delivery Pending":
         return reports_svc.delivery_pending()
+    if report_type == "Delivery Note Register":
+        return reports_svc.delivery_note_register()
+    if report_type == "Partially Delivered Sales Orders":
+        return reports_svc.partially_delivered_sales_orders()
+    if report_type == "Invoiced but Not Delivered":
+        return reports_svc.invoiced_not_delivered()
+    if report_type == "Delivery Partner Expense":
+        return reports_svc.partner_delivery_expense()
+    if report_type == "Partner Payables History":
+        return reports_svc.partner_payables_history()
+    if report_type == "Customer Delivery Charges Recovered":
+        return reports_svc.customer_delivery_charges_recovered()
+    if report_type == "Delivery Expense vs Recovered":
+        return reports_svc.delivery_expense_vs_recovered()
+    if report_type == "Vehicle-wise Delivery History":
+        return reports_svc.vehicle_delivery_history()
     if report_type == "Sales by Customer":
         return reports_svc.sales_by_customer()
     if report_type == "Sales Returns Summary":

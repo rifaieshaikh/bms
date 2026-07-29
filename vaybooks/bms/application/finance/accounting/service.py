@@ -109,9 +109,40 @@ class AccountingAppService:
             fy = self.resolve_voucher_financial_year(v_date)
         voucher.financial_year = fy
 
+    def _stamp_voucher_location(
+        self,
+        voucher: Voucher,
+        location_id: str = "",
+        location_name: str = "",
+        *,
+        required: bool = True,
+    ) -> None:
+        from vaybooks.bms.domain.shared.party_location import require_location_id
+
+        lid = (location_id or "").strip()
+        if required:
+            lid = require_location_id(lid)
+        elif not lid:
+            return
+        voucher.location_id = lid
+        voucher.location_name = (location_name or "").strip()
+
     def _save_voucher(
-        self, voucher: Voucher, *, financial_year: str = ""
+        self,
+        voucher: Voucher,
+        *,
+        financial_year: str = "",
+        location_id: str = "",
+        location_name: str = "",
+        require_location: bool = False,
     ) -> Voucher:
+        if location_id or require_location:
+            self._stamp_voucher_location(
+                voucher,
+                location_id,
+                location_name,
+                required=require_location or bool((location_id or "").strip()),
+            )
         self._apply_financial_year(voucher, financial_year)
         return self._domain.save_voucher(voucher)
 
@@ -649,6 +680,8 @@ class AccountingAppService:
         allocations: Optional[list] = None,
         *,
         auto_allocate: bool = True,
+        location_id: str = "",
+        location_name: str = "",
     ) -> Voucher:
         receiving = self._account_repo.find_by_id(receiving_account_id)
         customer = self._account_repo.find_by_id(customer_account_id)
@@ -675,7 +708,12 @@ class AccountingAppService:
             amount=amount,
             reference_order_id=reference_order_id,
         )
-        voucher = self._save_voucher(voucher)
+        voucher = self._save_voucher(
+            voucher,
+            location_id=location_id,
+            location_name=location_name,
+            require_location=True,
+        )
         self._emit_crm_event(
             "payment_received",
             source_module="finance",
@@ -755,6 +793,8 @@ class AccountingAppService:
         allocations: Optional[list] = None,
         *,
         auto_allocate: bool = True,
+        location_id: str = "",
+        location_name: str = "",
     ) -> Voucher:
         """Alias for customer payment (Accounts page and receipt tab)."""
         return self.create_customer_payment(
@@ -767,6 +807,8 @@ class AccountingAppService:
             allocation_invoice_id=allocation_invoice_id,
             allocations=allocations,
             auto_allocate=auto_allocate,
+            location_id=location_id,
+            location_name=location_name,
         )
 
     def update_receipt(
@@ -805,6 +847,8 @@ class AccountingAppService:
         voucher_date: Optional[date] = None,
         service_id: Optional[str] = None,
         reference_order_id: Optional[str] = None,
+        location_id: str = "",
+        location_name: str = "",
     ) -> Voucher:
         vendor = self._account_repo.find_by_id(vendor_account_id)
         expense = self._account_repo.find_by_id(expense_account_id)
@@ -826,7 +870,12 @@ class AccountingAppService:
             reference_order_id=reference_order_id,
             reference_service_id=service_id,
         )
-        return self._save_voucher(voucher)
+        return self._save_voucher(
+            voucher,
+            location_id=location_id,
+            location_name=location_name,
+            require_location=True,
+        )
 
     def update_vendor_payment(
         self,
@@ -1023,6 +1072,15 @@ class AccountingAppService:
 
     def get_voucher(self, voucher_id: str) -> Optional[Voucher]:
         return self._voucher_repo.find_by_id(voucher_id)
+
+    def save_voucher(self, voucher: Voucher) -> Voucher:
+        return self._voucher_repo.save(voucher)
+
+    def ensure_delivery_expense_account(self):
+        return self._domain.ensure_delivery_expense_account()
+
+    def get_delivery_partner_account(self, partner_id: str):
+        return self._domain.get_delivery_partner_account(partner_id)
 
     def list_vouchers_by_order(self, order_id: str) -> List[Voucher]:
         return self._voucher_repo.list_by_order(order_id)
@@ -1717,6 +1775,8 @@ class AccountingAppService:
         discount_account_id: Optional[str] = None,
         advance_applied: float = 0.0,
         voucher_type: VoucherType = VoucherType.SALES_INVOICE,
+        location_id: str = "",
+        location_name: str = "",
     ) -> Voucher:
         customer = self._account_repo.find_by_id(customer_account_id)
         income = self._account_repo.find_by_id(income_account_id)
@@ -1747,7 +1807,12 @@ class AccountingAppService:
             advance_applied=advance_applied,
             voucher_type=voucher_type,
         )
-        return self._save_voucher(voucher)
+        return self._save_voucher(
+            voucher,
+            location_id=location_id,
+            location_name=location_name,
+            require_location=False,
+        )
 
     def update_sales_invoice(
         self,
@@ -1909,6 +1974,8 @@ class AccountingAppService:
         agent_account_id: Optional[str] = None,
         commission_paid: bool = False,
         commission_pay_account_id: Optional[str] = None,
+        location_id: str = "",
+        location_name: str = "",
     ) -> Voucher:
         customer = self._account_repo.find_by_id(customer_account_id)
         store = self._account_repo.find_by_id(store_account_id)
@@ -2019,7 +2086,13 @@ class AccountingAppService:
             ),
         )
         voucher.financial_year = (financial_year or "").strip()
-        return self._save_voucher(voucher)
+        return self._save_voucher(
+            voucher,
+            financial_year=financial_year,
+            location_id=location_id,
+            location_name=location_name,
+            require_location=True,
+        )
 
     def update_cash_sales_invoice(
         self,
@@ -2423,6 +2496,8 @@ class AccountingAppService:
         lines: List[dict],
         voucher_date: Optional[date] = None,
         reference_production_batch_id: Optional[str] = None,
+        location_id: str = "",
+        location_name: str = "",
     ) -> Voucher:
         voucher_number = self._counter_repo.next("voucher_number")
         v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
@@ -2443,10 +2518,46 @@ class AccountingAppService:
             lines=voucher_lines,
         )
         voucher.reference_production_batch_id = reference_production_batch_id
-        return self._save_voucher(voucher)
+        return self._save_voucher(
+            voucher,
+            location_id=location_id,
+            location_name=location_name,
+            require_location=True,
+        )
 
-    def get_account_ledger(self, account_id: str) -> List[dict]:
-        vouchers = self._voucher_repo.list_by_account(account_id)
+    @staticmethod
+    def _voucher_matches_location_filter(
+        voucher: Voucher, location_filter: dict | None
+    ) -> bool:
+        """Match voucher.location_id against a mongo-style location filter."""
+        if not location_filter:
+            return True
+        expected = location_filter.get("location_id")
+        if expected is None and len(location_filter) == 0:
+            return True
+        if expected is None:
+            return True
+        vid = (getattr(voucher, "location_id", None) or "").strip()
+        if isinstance(expected, dict) and "$in" in expected:
+            allowed = {str(x).strip() for x in (expected.get("$in") or []) if str(x).strip()}
+            return vid in allowed
+        return vid == str(expected).strip()
+
+    def get_account_ledger(
+        self, account_id: str, *, location_filter: dict | None = None
+    ) -> List[dict]:
+        try:
+            vouchers = self._voucher_repo.list_by_account(
+                account_id, location_filter=location_filter
+            )
+        except TypeError:
+            vouchers = self._voucher_repo.list_by_account(account_id)
+            if location_filter:
+                vouchers = [
+                    v
+                    for v in vouchers
+                    if self._voucher_matches_location_filter(v, location_filter)
+                ]
         ledger = []
         for v in vouchers:
             for line in v.lines:
@@ -2462,20 +2573,65 @@ class AccountingAppService:
                     )
         return ledger
 
-    def get_trial_balance(self) -> List[dict]:
-        return self._domain.get_trial_balance()
+    def get_trial_balance(
+        self, *, location_filter: dict | None = None
+    ) -> List[dict]:
+        if not location_filter:
+            return self._domain.get_trial_balance()
+        vouchers = self._voucher_repo.list_all(location_filter=location_filter)
+        nets: dict[str, float] = {}
+        for v in vouchers:
+            for line in v.lines:
+                nets[line.account_id] = round(
+                    nets.get(line.account_id, 0.0)
+                    + float(line.debit_amount or 0)
+                    - float(line.credit_amount or 0),
+                    2,
+                )
+        accounts = {
+            a.id: a for a in self._account_repo.list_all(active_only=False)
+        }
+        rows: List[dict] = []
+        for account_id, net in nets.items():
+            if abs(net) < 0.01:
+                continue
+            account = accounts.get(account_id)
+            if not account:
+                continue
+            rows.append(
+                {
+                    "account_name": account.account_name,
+                    "account_type": account.account_type.value,
+                    "debit": max(net, 0),
+                    "credit": abs(min(net, 0)),
+                }
+            )
+        return rows
 
-    def list_vouchers(self) -> List[Voucher]:
-        return self._voucher_repo.list_all()
+    def list_vouchers(self, *, location_filter: dict | None = None) -> List[Voucher]:
+        return self._voucher_repo.list_all(location_filter=location_filter)
 
-    def list_vouchers_by_type(self, voucher_type: VoucherType) -> List[Voucher]:
+    def list_vouchers_by_type(
+        self, voucher_type: VoucherType, *, location_filter: dict | None = None
+    ) -> List[Voucher]:
         return [
-            v for v in self._voucher_repo.list_all() if v.voucher_type == voucher_type
+            v
+            for v in self._voucher_repo.list_all(location_filter=location_filter)
+            if v.voucher_type == voucher_type
         ]
 
-    def list_vouchers_by_types(self, voucher_types: list[VoucherType]) -> List[Voucher]:
+    def list_vouchers_by_types(
+        self,
+        voucher_types: list[VoucherType],
+        *,
+        location_filter: dict | None = None,
+    ) -> List[Voucher]:
         allowed = set(voucher_types)
-        return [v for v in self._voucher_repo.list_all() if v.voucher_type in allowed]
+        return [
+            v
+            for v in self._voucher_repo.list_all(location_filter=location_filter)
+            if v.voucher_type in allowed
+        ]
 
     def create_purchase_bill(
         self,
@@ -2488,6 +2644,8 @@ class AccountingAppService:
         reference_order_id: Optional[str] = None,
         reference_service_id: Optional[str] = None,
         reference_po_id: Optional[str] = None,
+        location_id: str = "",
+        location_name: str = "",
         reference_grn_id: Optional[str] = None,
         stock_lines: Optional[list[dict]] = None,
         landed_cost_lines: Optional[list[dict]] = None,
@@ -2564,7 +2722,13 @@ class AccountingAppService:
             gst_input_accounts=gst_input_accounts,
         )
         voucher.financial_year = (financial_year or "").strip()
-        saved = self._save_voucher(voucher)
+        saved = self._save_voucher(
+            voucher,
+            financial_year=financial_year,
+            location_id=location_id,
+            location_name=location_name,
+            require_location=True,
+        )
         return saved
 
     def update_purchase_bill(
@@ -2673,6 +2837,8 @@ class AccountingAppService:
         refund_account_id: Optional[str] = None,
         voucher_date: Optional[date] = None,
         reference_grn_id: Optional[str] = None,
+        location_id: str = "",
+        location_name: str = "",
     ) -> Voucher:
         vendor = self._account_repo.find_by_id(vendor_account_id)
         if not vendor:
@@ -2713,7 +2879,12 @@ class AccountingAppService:
             refund_account_name=refund.account_name if refund else None,
             reference_grn_id=reference_grn_id,
         )
-        return self._save_voucher(voucher)
+        return self._save_voucher(
+            voucher,
+            location_id=location_id,
+            location_name=location_name,
+            require_location=False,
+        )
 
     def create_sales_return_voucher(
         self,

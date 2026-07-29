@@ -4,6 +4,7 @@ from typing import List, Optional
 from pymongo.database import Database
 
 from vaybooks.bms.domain.finance.accounting.entities import Account, Voucher, VoucherLine
+from vaybooks.bms.domain.identity.location_access import merge_mongo_filters
 from vaybooks.bms.domain.shared.enums import AccountType, VoucherType
 
 
@@ -18,6 +19,7 @@ class MongoAccountRepository:
             "account_type": account.account_type.value,
             "linked_customer_id": account.linked_customer_id,
             "linked_vendor_id": account.linked_vendor_id,
+            "linked_delivery_partner_id": account.linked_delivery_partner_id,
             "linked_worker_id": account.linked_worker_id,
             "linked_agent_id": account.linked_agent_id,
             "opening_balance": account.opening_balance,
@@ -36,6 +38,7 @@ class MongoAccountRepository:
             account_type=AccountType(doc["account_type"]),
             linked_customer_id=doc.get("linked_customer_id"),
             linked_vendor_id=doc.get("linked_vendor_id"),
+            linked_delivery_partner_id=doc.get("linked_delivery_partner_id"),
             linked_worker_id=doc.get("linked_worker_id"),
             linked_agent_id=doc.get("linked_agent_id"),
             opening_balance=doc.get("opening_balance", 0),
@@ -86,6 +89,10 @@ class MongoAccountRepository:
 
     def find_agent_account(self, agent_id: str) -> Optional[Account]:
         doc = self._collection.find_one({"linked_agent_id": agent_id})
+        return self._from_doc(doc) if doc else None
+
+    def find_delivery_partner_account(self, partner_id: str) -> Optional[Account]:
+        doc = self._collection.find_one({"linked_delivery_partner_id": partner_id})
         return self._from_doc(doc) if doc else None
 
     def list_all(self, active_only: bool = True) -> List[Account]:
@@ -144,9 +151,12 @@ class MongoVoucherRepository:
             "reference_grn_id": voucher.reference_grn_id,
             "reference_so_id": voucher.reference_so_id,
             "reference_dn_id": voucher.reference_dn_id,
+            "delivery_status": getattr(voucher, "delivery_status", "") or "",
             "reference_project_id": voucher.reference_project_id,
             "reference_activity_id": voucher.reference_activity_id,
             "reference_production_batch_id": voucher.reference_production_batch_id,
+            "location_id": voucher.location_id,
+            "location_name": voucher.location_name,
             "lines": [self._line_to_doc(l) for l in voucher.lines],
             "created_at": voucher.created_at,
             "updated_at": voucher.updated_at,
@@ -167,11 +177,14 @@ class MongoVoucherRepository:
             reference_grn_id=doc.get("reference_grn_id"),
             reference_so_id=doc.get("reference_so_id"),
             reference_dn_id=doc.get("reference_dn_id"),
+            delivery_status=doc.get("delivery_status", "") or "",
             reference_project_id=doc.get("reference_project_id"),
             reference_activity_id=doc.get("reference_activity_id"),
             reference_production_batch_id=doc.get(
                 "reference_production_batch_id"
             ),
+            location_id=str(doc.get("location_id") or ""),
+            location_name=str(doc.get("location_name") or ""),
             lines=[self._line_from_doc(l) for l in doc.get("lines", [])],
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
@@ -198,8 +211,13 @@ class MongoVoucherRepository:
         doc = self._collection.find_one({"voucher_number": voucher_number})
         return self._from_doc(doc) if doc else None
 
-    def list_by_account(self, account_id: str) -> List[Voucher]:
-        docs = self._collection.find({"lines.account_id": account_id})
+    def list_by_account(
+        self, account_id: str, location_filter: dict | None = None
+    ) -> List[Voucher]:
+        query = merge_mongo_filters(
+            {"lines.account_id": account_id}, location_filter or {}
+        )
+        docs = self._collection.find(query)
         return [self._from_doc(d) for d in docs]
 
     def count_by_type_and_account(
@@ -222,8 +240,9 @@ class MongoVoucherRepository:
         docs = self._collection.find({"reference_project_id": project_id})
         return [self._from_doc(d) for d in docs]
 
-    def list_all(self) -> List[Voucher]:
-        return [self._from_doc(d) for d in self._collection.find()]
+    def list_all(self, location_filter: dict | None = None) -> List[Voucher]:
+        query = merge_mongo_filters(location_filter or {})
+        return [self._from_doc(d) for d in self._collection.find(query)]
 
 
 class MongoAccountingRepository:

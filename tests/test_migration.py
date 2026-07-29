@@ -229,7 +229,11 @@ def test_import_categories_products_customers_with_opening():
         ImportEntityType.CUSTOMERS, list(cust_df.columns)
     )
     cust_result = migration.run_import(
-        ImportEntityType.CUSTOMERS, cust_df, cust_mapping, DuplicatePolicy.SKIP
+        ImportEntityType.CUSTOMERS,
+        cust_df,
+        cust_mapping,
+        DuplicatePolicy.SKIP,
+        default_location_ids=["loc-test"],
     )
     assert cust_result.created == 2
     assert cust_result.failed == 0
@@ -271,7 +275,11 @@ def test_set_opening_balance_rejects_when_vouchers_exist():
     from datetime import date
 
     customer = customers.create_customer(
-        CustomerInput(customer_name="X", phone_number="9876501234")
+        CustomerInput(
+            customer_name="X",
+            phone_number="9876501234",
+            location_ids=["loc-test"],
+        )
     )
     account = account_repo.find_customer_account(customer.id)
     accounting.set_opening_balance(account.id, 100)

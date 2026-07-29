@@ -17,7 +17,7 @@ from vaybooks.bms.application.schedulers.protocol import JobContext, JobDefiniti
 from vaybooks.bms.domain.schedulers.entities import DOMAIN_INVENTORY
 from vaybooks.bms.domain.schedulers.schedule import FREQ_WEEKLY
 
-_TRANSFER_OPEN = ("Draft", "Dispatched")
+_TRANSFER_OPEN = ("Draft", "In Transit", "Dispatched")
 
 
 def _status(value: Any) -> str:

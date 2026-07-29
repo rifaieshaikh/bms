@@ -4,6 +4,7 @@ from typing import List, Optional
 from bson import ObjectId
 from pymongo.database import Database
 
+from vaybooks.bms.domain.identity.location_access import merge_mongo_filters
 from vaybooks.bms.domain.parties.commission_agents.entities import CommissionAgent
 from vaybooks.bms.domain.shared.enums import PartyRegistrationType
 
@@ -39,6 +40,7 @@ class MongoCommissionAgentRepository:
             "segment_ids": list(agent.segment_ids or []),
             "segment_names": list(agent.segment_names or []),
             "source_customer_id": agent.source_customer_id or "",
+            "location_ids": list(agent.location_ids or []),
             "created_at": agent.created_at,
             "updated_at": agent.updated_at,
         }
@@ -83,6 +85,7 @@ class MongoCommissionAgentRepository:
             segment_ids=list(doc.get("segment_ids") or []),
             segment_names=list(doc.get("segment_names") or []),
             source_customer_id=doc.get("source_customer_id", "") or "",
+            location_ids=list(doc.get("location_ids") or []),
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
         )
@@ -119,9 +122,11 @@ class MongoCommissionAgentRepository:
         doc = self._collection.find_one({"source_customer_id": str(customer_id)})
         return self._from_doc(doc) if doc else None
 
-    def search(self, query: str) -> List[CommissionAgent]:
+    def search(
+        self, query: str, location_filter: dict | None = None
+    ) -> List[CommissionAgent]:
         regex = {"$regex": query, "$options": "i"}
-        docs = self._collection.find(
+        mongo_query = merge_mongo_filters(
             {
                 "$or": [
                     {"agent_name": regex},
@@ -131,9 +136,14 @@ class MongoCommissionAgentRepository:
                     {"city": regex},
                     {"pincode": regex},
                 ]
-            }
+            },
+            location_filter or {},
         )
+        docs = self._collection.find(mongo_query)
         return [self._from_doc(d) for d in docs]
 
-    def list_all(self) -> List[CommissionAgent]:
-        return [self._from_doc(d) for d in self._collection.find()]
+    def list_all(
+        self, location_filter: dict | None = None
+    ) -> List[CommissionAgent]:
+        query = merge_mongo_filters(location_filter or {})
+        return [self._from_doc(d) for d in self._collection.find(query)]

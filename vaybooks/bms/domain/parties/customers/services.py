@@ -7,6 +7,7 @@ from vaybooks.bms.domain.shared.exceptions import (
     DuplicateCustomerError,
     ValidationError,
 )
+from vaybooks.bms.domain.shared.party_location import require_location_ids
 from vaybooks.bms.domain.shared.party_validation import normalize_party_fields
 
 
@@ -89,6 +90,7 @@ class CustomerDomainService:
             alternate_phone_number=kwargs.get("alternate_phone_number"),
             address_line1=kwargs.get("address", ""),
             notes=kwargs.get("notes", ""),
+            location_ids=list(kwargs.get("location_ids") or []),
         )
         return self.create(
             customer_input,
@@ -141,6 +143,7 @@ class CustomerDomainService:
             msme_number=normalized.msme_number,
             notes=customer_input.notes,
             segment_ids=list(customer_input.segment_ids or []),
+            location_ids=require_location_ids(customer_input.location_ids),
             is_commission_agent=bool(customer_input.is_commission_agent),
         )
 

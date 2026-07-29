@@ -49,6 +49,14 @@ def _clear_other_payment_dialog_flags(keep: str) -> None:
     clear_dialog_flags(*(k for k in (PAY, SAL, COMM) if k != keep))
 
 
+def _voucher_location_filter(services: dict) -> dict:
+    from vaybooks.bms.domain.identity.location_access import location_id_mongo_filter
+    from vaybooks.bms.ui.auth.session import working_location_list_context
+
+    working, accessible = working_location_list_context(services)
+    return location_id_mongo_filter(working, accessible)
+
+
 def _format_balance(balance: float) -> str:
     """Show a balance as an absolute value tagged with its nature (Dr/Cr)."""
     if abs(balance) < 0.01:
@@ -157,7 +165,8 @@ def _edit_account_dialog(accounting_service):
 
 
 @st.dialog("Account Ledger", width="large", on_dismiss=make_dismiss_handler(LEDGER_ACC))
-def _ledger_dialog(accounting_service):
+def _ledger_dialog(services):
+    accounting_service = services["accounting"]
     account = accounting_service.get_account(st.session_state.get(LEDGER_ACC))
     if not account:
         st.error("Account not found")
@@ -165,8 +174,9 @@ def _ledger_dialog(accounting_service):
     st.markdown(f"**{account.account_name}** ({account.account_type.value})")
     st.caption(f"Current balance: {_format_balance(account.current_balance)}")
 
+    filt = _voucher_location_filter(services)
     ledger = sorted(
-        accounting_service.get_account_ledger(account.id),
+        accounting_service.get_account_ledger(account.id, location_filter=filt),
         key=lambda e: e["voucher_date"],
     )
     if not ledger:
@@ -198,7 +208,7 @@ def _ledger_dialog(accounting_service):
         RCPT, RCPT_PRESELECT_ACCOUNT, RCPT_PRESELECT_INVOICE
     ),
 )
-def _receipt_dialog(accounting_service):
+def _receipt_dialog(services):
     from vaybooks.bms.domain.finance.accounting.settlement import (
         ALLOC_INVOICE_TAG,
         allocation_rows_from_meta,
@@ -206,7 +216,11 @@ def _receipt_dialog(accounting_service):
         resolve_receipt_allocations,
         strip_meta,
     )
+    from vaybooks.bms.ui.components.common.location_fields import (
+        require_location_name,
+    )
 
+    accounting_service = services["accounting"]
     target = st.session_state.get(RCPT)
     voucher = None if target in (None, "new") else accounting_service.get_voucher(target)
 
@@ -322,6 +336,7 @@ def _receipt_dialog(accounting_service):
                     allocation_invoice_id=allocation_invoice_id,
                 )
             else:
+                location_id, location_name = require_location_name(services)
                 accounting_service.create_receipt(
                     recv_opts[recv],
                     cust_opts[cust],
@@ -329,6 +344,8 @@ def _receipt_dialog(accounting_service):
                     desc,
                     v_date,
                     allocation_invoice_id=allocation_invoice_id,
+                    location_id=location_id,
+                    location_name=location_name,
                 )
             _clear_receipt_session()
             st.rerun()
@@ -344,6 +361,9 @@ def _payment_dialog(services):
     accounting_service = services["accounting"]
     vendor_service = services["vendors"]
     service_config = services["vendor_services"]
+    from vaybooks.bms.ui.components.common.location_fields import (
+        require_location_name,
+    )
 
     target = st.session_state.get(PAY)
     voucher = None if target in (None, "new") else accounting_service.get_voucher(target)
@@ -411,10 +431,13 @@ def _payment_dialog(services):
                     desc, v_date, service_id=selected_service.id,
                 )
             else:
+                location_id, location_name = require_location_name(services)
                 accounting_service.create_vendor_payment(
                     vendor_opts[vendor_name], selected_service.expense_account_id,
                     pay_opts[pay], amount, desc, v_date,
                     service_id=selected_service.id,
+                    location_id=location_id,
+                    location_name=location_name,
                 )
             st.session_state.pop(PAY, None)
             st.rerun()
@@ -698,7 +721,12 @@ def _standalone_invoice_dialog(
 
 
 @st.dialog("New Journal Entry", width="large", on_dismiss=make_dismiss_handler(JOURNAL))
-def _journal_dialog(accounting_service):
+def _journal_dialog(services):
+    from vaybooks.bms.ui.components.common.location_fields import (
+        require_location_name,
+    )
+
+    accounting_service = services["accounting"]
     accounts = accounting_service.list_accounts()
     desc = st.text_input("Journal Description", key="acc_jrnl_desc")
     lines, balanced = voucher_form(accounts, key_prefix="acc_jrnl")
@@ -708,7 +736,13 @@ def _journal_dialog(accounting_service):
         "Save", type="primary", width="stretch", disabled=not balanced
     ):
         try:
-            accounting_service.create_journal_entry(desc, lines)
+            location_id, location_name = require_location_name(services)
+            accounting_service.create_journal_entry(
+                desc,
+                lines,
+                location_id=location_id,
+                location_name=location_name,
+            )
             st.session_state.pop("acc_jrnl_lines", None)
             st.session_state.pop(JOURNAL, None)
             st.rerun()
@@ -987,7 +1021,9 @@ def _render_accounts_tab(accounting_service):
     )
 
 
-def _render_ledger_tab(accounting_service):
+def _render_ledger_tab(services):
+    accounting_service = services["accounting"]
+    filt = _voucher_location_filter(services)
     st.subheader("Ledger")
     accounts = accounting_service.list_accounts(active_only=False)
     if not accounts:
@@ -1024,7 +1060,7 @@ def _render_ledger_tab(accounting_service):
 
     st.caption(f"Current balance: {_format_balance(account.current_balance)}")
 
-    trial = accounting_service.get_trial_balance()
+    trial = accounting_service.get_trial_balance(location_filter=filt)
     if trial:
         total_debit = round(sum(r["debit"] for r in trial), 2)
         total_credit = round(sum(r["credit"] for r in trial), 2)
@@ -1036,7 +1072,7 @@ def _render_ledger_tab(accounting_service):
         )
 
     ledger = sorted(
-        accounting_service.get_account_ledger(account_id),
+        accounting_service.get_account_ledger(account_id, location_filter=filt),
         key=lambda e: e["voucher_date"],
     )
     if not ledger:
@@ -1059,8 +1095,10 @@ def _render_ledger_tab(accounting_service):
         st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
 
-def _render_trial_balance_tab(accounting_service):
-    trial = accounting_service.get_trial_balance()
+def _render_trial_balance_tab(services):
+    accounting_service = services["accounting"]
+    filt = _voucher_location_filter(services)
+    trial = accounting_service.get_trial_balance(location_filter=filt)
     if not trial:
         st.caption("No balances to show.")
         return
@@ -1113,7 +1151,7 @@ def open_pending_dialogs(services: dict) -> None:
     if st.session_state.get(EDIT_ACC):
         _edit_account_dialog(accounting_service)
     elif st.session_state.get(RCPT):
-        _receipt_dialog(accounting_service)
+        _receipt_dialog(services)
     elif st.session_state.get(PAY):
         _payment_dialog(services)
     elif st.session_state.get(SAL):
@@ -1123,11 +1161,13 @@ def open_pending_dialogs(services: dict) -> None:
     elif st.session_state.get(INV_CUST):
         _customization_invoice_dialog(accounting_service)
     elif st.session_state.get(JOURNAL):
-        _journal_dialog(accounting_service)
+        _journal_dialog(services)
     elif st.session_state.get(CREDIT_NOTE):
         _credit_note_dialog(accounting_service)
     elif st.session_state.get(DEBIT_NOTE):
         _debit_note_dialog(accounting_service)
+    elif st.session_state.get(LEDGER_ACC):
+        _ledger_dialog(services)
 
 
 def _render_customer_settlements_inbox(accounting_service) -> None:
@@ -1281,8 +1321,9 @@ def render_account_detail(services: dict):
         f"{_format_balance(account.current_balance)}"
     )
 
+    filt = _voucher_location_filter(services)
     ledger = sorted(
-        accounting_service.get_account_ledger(account_id),
+        accounting_service.get_account_ledger(account_id, location_filter=filt),
         key=lambda e: e["voucher_date"],
     )
     if not ledger:

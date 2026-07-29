@@ -36,10 +36,12 @@ class CommissionAgentAppService:
         self._accounting_domain.ensure_agent_account(agent.id, account_name)
         return agent
 
-    def search_agents(self, query: str) -> List[CommissionAgent]:
+    def search_agents(
+        self, query: str, *, location_filter: dict | None = None
+    ) -> List[CommissionAgent]:
         if not query.strip():
-            return self._agent_repo.list_all()
-        return self._agent_repo.search(query)
+            return self._agent_repo.list_all(location_filter=location_filter)
+        return self._agent_repo.search(query, location_filter=location_filter)
 
     def get_agent_detail(self, agent_id: str) -> Optional[CommissionAgent]:
         if not agent_id:
@@ -55,8 +57,10 @@ class CommissionAgentAppService:
         self._accounting_domain.sync_agent_account(agent.id, account_name)
         return agent
 
-    def list_all_agents(self) -> List[CommissionAgent]:
-        return self._agent_repo.list_all()
+    def list_all_agents(
+        self, *, location_filter: dict | None = None
+    ) -> List[CommissionAgent]:
+        return self._agent_repo.list_all(location_filter=location_filter)
 
     def find_by_source_customer_id(
         self, customer_id: str

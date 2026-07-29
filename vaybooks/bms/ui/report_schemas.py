@@ -907,6 +907,53 @@ DN_PENDING = ListSchema(
     page_size=REPORT_PAGE_SIZE,
 )
 
+DN_REGISTER = ListSchema(
+    entity_key="report_dn_register",
+    title="Delivery Note Register",
+    filter_fields=[
+        FilterField(
+            "date_range",
+            "Period",
+            F.DATE_RANGE,
+            default=_mtd,
+            record_attr="delivery_date",
+        ),
+        FilterField("customer_name", "Customer", F.REGEX, placeholder="Name contains…"),
+        FilterField("partner", "Partner", F.REGEX, placeholder="Partner contains…"),
+        FilterField("status", "Status", F.EXACT),
+        FilterField("vehicle_number", "Vehicle", F.REGEX),
+    ],
+    sort_options=[
+        SortOption("delivery_date", "Date"),
+        SortOption("dn_number", "DN number"),
+        SortOption("customer_name", "Customer"),
+    ],
+    default_sort="delivery_date",
+    page_size=REPORT_PAGE_SIZE,
+)
+
+DN_GENERIC = ListSchema(
+    entity_key="report_dn_generic",
+    title="Delivery Report",
+    filter_fields=[
+        FilterField(
+            "date_range",
+            "Period",
+            F.DATE_RANGE,
+            default=_mtd,
+            record_attr="delivery_date",
+        ),
+        FilterField("customer_name", "Customer", F.REGEX, placeholder="Name contains…"),
+        FilterField("partner", "Partner", F.REGEX, placeholder="Partner contains…"),
+    ],
+    sort_options=[
+        SortOption("delivery_date", "Date"),
+        SortOption("customer_name", "Customer"),
+    ],
+    default_sort="delivery_date",
+    page_size=REPORT_PAGE_SIZE,
+)
+
 SALES_BY_CUSTOMER = ListSchema(
     entity_key="report_sales_by_customer",
     title="Sales by Customer",
@@ -1434,6 +1481,14 @@ BOUTIQUE_REPORT_TYPES = [
 SALES_MODULE_REPORT_TYPES = [
     "Sales Orders Pipeline",
     "Delivery Pending",
+    "Delivery Note Register",
+    "Partially Delivered Sales Orders",
+    "Invoiced but Not Delivered",
+    "Delivery Partner Expense",
+    "Partner Payables History",
+    "Customer Delivery Charges Recovered",
+    "Delivery Expense vs Recovered",
+    "Vehicle-wise Delivery History",
     "Sales by Customer",
     "Sales Returns Summary",
 ]
@@ -1540,6 +1595,14 @@ SCHEMA_BY_REPORT_TYPE = {
     "Purchase Returns Summary": PURCHASE_RETURNS_SUMMARY,
     "Sales Orders Pipeline": SO_PIPELINE,
     "Delivery Pending": DN_PENDING,
+    "Delivery Note Register": DN_REGISTER,
+    "Partially Delivered Sales Orders": SO_PIPELINE,
+    "Invoiced but Not Delivered": DN_GENERIC,
+    "Delivery Partner Expense": DN_GENERIC,
+    "Partner Payables History": DN_GENERIC,
+    "Customer Delivery Charges Recovered": DN_GENERIC,
+    "Delivery Expense vs Recovered": DN_GENERIC,
+    "Vehicle-wise Delivery History": DN_REGISTER,
     "Sales by Customer": SALES_BY_CUSTOMER,
     "Sales Returns Summary": SALES_RETURNS_SUMMARY,
     **{title: PRODUCTION_REPORT for title in PRODUCTION_REPORT_TYPES},

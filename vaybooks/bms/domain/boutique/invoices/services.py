@@ -438,6 +438,8 @@ class InvoiceDomainService:
             sgst_amount=sgst_amount,
             igst_amount=igst_amount,
             utgst_amount=utgst_amount,
+            location_id=order.location_id or "",
+            location_name=order.location_name or "",
             **mph_data,
         )
 

@@ -95,7 +95,12 @@ def purchase_order_dialog(services: dict) -> None:
     inventory = services.get("inventory")
     business = services["business"].get_profile()
 
-    vendor_list = vendors.list_all_vendors()
+    from vaybooks.bms.domain.identity.location_access import location_ids_mongo_filter
+    from vaybooks.bms.ui.auth.session import working_location_list_context
+
+    working, accessible = working_location_list_context(services)
+    filt = location_ids_mongo_filter(working, accessible)
+    vendor_list = vendors.list_all_vendors(location_filter=filt)
     if not vendor_list:
         st.error("Add a vendor first.")
         return
@@ -202,6 +207,11 @@ def purchase_order_dialog(services: dict) -> None:
                 )
             if not po_lines:
                 raise ValueError("Add at least one product line")
+            from vaybooks.bms.ui.components.common.location_fields import (
+                require_location_name,
+            )
+
+            location_id, _location_name = require_location_name(services)
             created = purchases.create_purchase_order(
                 vendor_id=vendor_id,
                 order_date=order_date,
@@ -209,6 +219,7 @@ def purchase_order_dialog(services: dict) -> None:
                 lines=po_lines,
                 notes=notes,
                 status=PurchaseOrderStatus.SENT,
+                location_id=location_id,
             )
             st.session_state[PO_CREATE_SUCCESS_KEY] = created.po_number
             _clear()

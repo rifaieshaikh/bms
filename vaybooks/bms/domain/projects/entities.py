@@ -120,6 +120,8 @@ class Project:
     site_address: str = ""
     site_state_code: str = ""
     notes: str = ""
+    location_id: str = ""
+    location_name: str = ""
     start_date: Optional[date] = None
     expected_end_date: Optional[date] = None
     phases_enabled: bool = True

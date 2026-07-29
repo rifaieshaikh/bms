@@ -69,11 +69,16 @@ class PurchaseDomainService:
         notes: str = "",
         status: PurchaseOrderStatus = PurchaseOrderStatus.DRAFT,
         project_id: str = "",
+        location_id: str = "",
+        location_name: str = "",
     ) -> PurchaseOrder:
+        from vaybooks.bms.domain.shared.party_location import require_location_id
+
         if not vendor_id:
             raise ValidationError("Vendor is required")
         if not lines:
             raise ValidationError("At least one line is required")
+        location_id = require_location_id(location_id)
         po_lines = []
         for raw in lines:
             qty = float(raw.get("qty_ordered") or raw.get("qty") or 0)
@@ -98,6 +103,8 @@ class PurchaseDomainService:
             notes=notes.strip(),
             status=status,
             project_id=(project_id or "").strip(),
+            location_id=location_id,
+            location_name=(location_name or "").strip(),
         )
         return self._po_repo.save(order)
 
@@ -337,9 +344,14 @@ class PurchaseDomainService:
         source_bill_id: Optional[str] = None,
         source_grn_id: Optional[str] = None,
         notes: str = "",
+        location_id: str = "",
+        location_name: str = "",
     ) -> PurchaseReturn:
+        from vaybooks.bms.domain.shared.party_location import require_location_id
+
         if not lines:
             raise ValidationError("At least one return line is required")
+        location_id = require_location_id(location_id)
         ret_lines = []
         for raw in lines:
             qty = float(raw.get("qty") or 0)
@@ -363,6 +375,8 @@ class PurchaseDomainService:
             source_bill_id=source_bill_id,
             source_grn_id=source_grn_id,
             notes=notes.strip(),
+            location_id=location_id,
+            location_name=(location_name or "").strip(),
         )
         return self._return_repo.save(purchase_return)
 

@@ -173,9 +173,14 @@ class MongoProductionBatchRepository:
         return self._from_doc(doc) if doc else None
 
     def list_all(
-        self, status: Optional[ProductionBatchStatus] = None
+        self,
+        status: Optional[ProductionBatchStatus] = None,
+        location_filter: dict | None = None,
     ) -> list[ProductionBatch]:
+        from vaybooks.bms.domain.identity.location_access import merge_mongo_filters
+
         query = {"status": status.value} if status else {}
+        query = merge_mongo_filters(query, location_filter or {})
         return [
             self._from_doc(doc)
             for doc in self._collection.find(query).sort("batch_date", -1)

@@ -20,6 +20,8 @@ class MongoDeliveryRepository:
             "bill_ids": delivery.bill_ids,
             "delivery_date": to_bson_value(delivery.delivery_date),
             "delivery_notes": delivery.delivery_notes,
+            "location_id": delivery.location_id,
+            "location_name": delivery.location_name,
             "created_at": delivery.created_at,
             "updated_at": delivery.updated_at,
         }
@@ -32,6 +34,8 @@ class MongoDeliveryRepository:
             bill_ids=doc.get("bill_ids", []),
             delivery_date=from_bson_date(doc["delivery_date"]),
             delivery_notes=doc.get("delivery_notes", ""),
+            location_id=str(doc.get("location_id") or ""),
+            location_name=str(doc.get("location_name") or ""),
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
         )

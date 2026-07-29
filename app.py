@@ -261,6 +261,8 @@ def _run_authenticated_app(services: dict) -> None:
     from vaybooks.bms.ui.pages.parties.customers import detail as customer_detail
     from vaybooks.bms.ui.pages.parties.vendors import list as vendors
     from vaybooks.bms.ui.pages.parties.vendors import detail as vendor_detail
+    from vaybooks.bms.ui.pages.parties.delivery_partners import list as delivery_partners
+    from vaybooks.bms.ui.pages.parties.delivery_partners import detail as delivery_partner_detail
     from vaybooks.bms.ui.pages.parties.commission_agents import list as commission_agents
     from vaybooks.bms.ui.pages.parties.commission_agents import detail as commission_agent_detail
     from vaybooks.bms.ui.pages.parties.workers import list as workers
@@ -411,6 +413,12 @@ def _run_authenticated_app(services: dict) -> None:
     vendors_page = st.Page(
         _page(vendors, url_path="vendors"), title="Vendors", icon=":material/local_shipping:",
         url_path="vendors",
+    )
+    delivery_partners_page = st.Page(
+        _page(delivery_partners, url_path="delivery-partners"),
+        title="Delivery Partners",
+        icon=":material/local_shipping:",
+        url_path="delivery-partners",
     )
     commission_agents_page = st.Page(
         _page(commission_agents, url_path="commission-agents"),
@@ -918,6 +926,11 @@ def _run_authenticated_app(services: dict) -> None:
     vendor_detail_page = st.Page(
         _page(vendor_detail, url_path="vendor-detail"), title="Vendor Detail", url_path="vendor-detail",
     )
+    delivery_partner_detail_page = st.Page(
+        _page(delivery_partner_detail, url_path="delivery-partner-detail"),
+        title="Delivery Partner Detail",
+        url_path="delivery-partner-detail",
+    )
     commission_agent_detail_page = st.Page(
         _page(commission_agent_detail, url_path="commission-agent-detail"),
         title="Commission Agent Detail",
@@ -968,6 +981,7 @@ def _run_authenticated_app(services: dict) -> None:
     navigation.register("dashboard", dashboard_page)
     navigation.register("customers_list", customers_page)
     navigation.register("vendors_list", vendors_page)
+    navigation.register("delivery_partners_list", delivery_partners_page)
     navigation.register("commission_agents_list", commission_agents_page)
     navigation.register("boutique_overview", boutique_overview_page)
     navigation.register("boutique_reports", boutique_reports_page)
@@ -979,6 +993,7 @@ def _run_authenticated_app(services: dict) -> None:
     navigation.register("measurement_detail", measurement_detail_page)
     navigation.register("customer_detail", customer_detail_page)
     navigation.register("vendor_detail", vendor_detail_page)
+    navigation.register("delivery_partner_detail", delivery_partner_detail_page)
     navigation.register("commission_agent_detail", commission_agent_detail_page)
     navigation.register("time_list", time_page)
     navigation.register("calendar_list", calendar_page)
@@ -1093,6 +1108,7 @@ def _run_authenticated_app(services: dict) -> None:
         "Parties": [
             customers_page,
             vendors_page,
+            delivery_partners_page,
             commission_agents_page,
             workers_page,
             party_segments_page,
@@ -1240,6 +1256,7 @@ def _run_authenticated_app(services: dict) -> None:
         measurement_detail_page,
         customer_detail_page,
         vendor_detail_page,
+        delivery_partner_detail_page,
         commission_agent_detail_page,
         account_detail_page,
         sales_detail_page,

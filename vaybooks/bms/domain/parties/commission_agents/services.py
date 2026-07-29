@@ -14,6 +14,7 @@ from vaybooks.bms.domain.shared.exceptions import (
     DuplicateCommissionAgentError,
     ValidationError,
 )
+from vaybooks.bms.domain.shared.party_location import require_location_ids
 from vaybooks.bms.domain.shared.party_validation import (
     normalize_banking_fields,
     normalize_party_fields,
@@ -106,6 +107,7 @@ class CommissionAgentDomainService:
             default_commission_type=commission_type,
             default_commission_rate=rate,
             segment_ids=list(agent_input.segment_ids or []),
+            location_ids=require_location_ids(agent_input.location_ids),
             source_customer_id=(agent_input.source_customer_id or "").strip(),
         )
 

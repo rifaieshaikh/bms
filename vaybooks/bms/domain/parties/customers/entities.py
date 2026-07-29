@@ -27,6 +27,7 @@ class CustomerInput:
     msme_number: str = ""
     notes: str = ""
     segment_ids: List[str] = field(default_factory=list)
+    location_ids: List[str] = field(default_factory=list)
     is_commission_agent: bool = False
 
 
@@ -55,6 +56,7 @@ class Customer:
     blacklisted_at: Optional[datetime] = None
     segment_ids: List[str] = field(default_factory=list)
     segment_names: List[str] = field(default_factory=list)
+    location_ids: List[str] = field(default_factory=list)
     assigned_user_id: str = ""
     assigned_user_name: str = ""
     is_commission_agent: bool = False
@@ -108,6 +110,7 @@ class Customer:
             msme_number=customer_input.msme_number.strip(),
             notes=customer_input.notes,
             segment_ids=list(customer_input.segment_ids or []),
+            location_ids=list(customer_input.location_ids or []),
             is_commission_agent=bool(customer_input.is_commission_agent),
         )
 
@@ -130,5 +133,6 @@ class Customer:
             msme_number=customer_input.msme_number.strip(),
             notes=customer_input.notes,
             segment_ids=list(customer_input.segment_ids or []),
+            location_ids=list(customer_input.location_ids or []),
             is_commission_agent=bool(customer_input.is_commission_agent),
         )

@@ -1,9 +1,77 @@
 from vaybooks.bms.domain.shared.enums import ActivityCategory
+from vaybooks.bms.infrastructure.db.location_seed import ensure_default_locations
 from vaybooks.bms.infrastructure.db.seed import (
     DEFAULT_ACCOUNTS,
     DEFAULT_ACTIVITIES,
     DEFAULT_VENDOR_SERVICES,
+    run_seed,
 )
+
+
+class _FakeCollection:
+    def __init__(self):
+        self.docs: list[dict] = []
+
+    def find_one(self, query=None):
+        query = query or {}
+        for doc in self.docs:
+            if all(doc.get(k) == v for k, v in query.items()):
+                return dict(doc)
+        return None
+
+    def insert_one(self, document):
+        self.docs.append(dict(document))
+
+    def count_documents(self, query=None):
+        query = query or {}
+        if not query:
+            return len(self.docs)
+        return sum(
+            1
+            for doc in self.docs
+            if all(doc.get(k) == v for k, v in query.items())
+        )
+
+
+class _FakeDatabase:
+    def __init__(self):
+        self._collections: dict[str, _FakeCollection] = {}
+
+    def __getattr__(self, name: str) -> _FakeCollection:
+        return self[name]
+
+    def __getitem__(self, name: str) -> _FakeCollection:
+        if name not in self._collections:
+            self._collections[name] = _FakeCollection()
+        return self._collections[name]
+
+
+def test_ensure_default_locations_creates_main_and_store():
+    db = _FakeDatabase()
+    main_id, store_id = ensure_default_locations(db)
+    assert main_id
+    assert store_id
+    assert main_id != store_id
+    main = db.warehouses.find_one({"code": "MAIN"})
+    store = db.warehouses.find_one({"code": "STORE1"})
+    assert main is not None
+    assert store is not None
+    assert main["_id"] == main_id
+    assert store["_id"] == store_id
+    # Idempotent
+    main_id2, store_id2 = ensure_default_locations(db)
+    assert (main_id2, store_id2) == (main_id, store_id)
+    assert len(db.warehouses.docs) == 2
+
+
+def test_run_seed_ensures_main_warehouse():
+    db = _FakeDatabase()
+    run_seed(db)
+    main = db.warehouses.find_one({"code": "MAIN"})
+    assert main is not None
+    assert main["name"] == "Main Warehouse"
+    store = db.warehouses.find_one({"code": "STORE1"})
+    assert store is not None
 
 
 def test_default_activities_cover_in_house_and_outsourced():

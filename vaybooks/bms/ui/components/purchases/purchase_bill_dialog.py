@@ -53,7 +53,12 @@ def purchase_bill_dialog(services: dict) -> None:
     inventory = services.get("inventory")
     business = services["business"].get_profile()
 
-    vendor_list = vendors.list_all_vendors()
+    from vaybooks.bms.domain.identity.location_access import location_ids_mongo_filter
+    from vaybooks.bms.ui.auth.session import working_location_list_context
+
+    working, accessible = working_location_list_context(services)
+    filt = location_ids_mongo_filter(working, accessible)
+    vendor_list = vendors.list_all_vendors(location_filter=filt)
     if not vendor_list:
         st.error("Add a vendor first.")
         if st.button("Close"):
@@ -213,6 +218,11 @@ def purchase_bill_dialog(services: dict) -> None:
                 row["item_type"] = CatalogItemType.PRODUCT.value
                 if not row.get("product_id"):
                     row["product_id"] = row.get("item_id")
+            from vaybooks.bms.ui.components.common.location_fields import (
+                require_location_name,
+            )
+
+            location_id, location_name = require_location_name(services)
             purchases.create_purchase_bill_from_lines(
                 vendor_id=vendor_id,
                 raw_lines=line_items,
@@ -225,6 +235,8 @@ def purchase_bill_dialog(services: dict) -> None:
                 reference_po_id=ref_po,
                 reference_grn_id=ref_grn,
                 apply_stock=False if ref_grn else apply_stock,
+                location_id=location_id,
+                location_name=location_name,
             )
             _clear_dialog()
             st.rerun()

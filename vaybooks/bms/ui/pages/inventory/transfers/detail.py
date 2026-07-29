@@ -5,8 +5,10 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+from vaybooks.bms.domain.identity.location_access import accessible_locations
 from vaybooks.bms.domain.shared.enums import StockTransferStatus
 from vaybooks.bms.ui import navigation
+from vaybooks.bms.ui.auth.session import get_current_user
 from vaybooks.bms.ui.components.common.document_detail import (
     document_actions,
     document_header,
@@ -22,6 +24,8 @@ def render(services: dict) -> None:
     set_current_page("inventory_transfer_detail")
     mark_wired("nav.back")
     inventory = services["inventory"]
+    user = get_current_user(services)
+    allowed_ids = [loc.id for loc in accessible_locations(user, inventory)]
     transfer_id = navigation.current_detail_id("inventory_transfer_detail")
 
     if st.button("← Back to transfers", key="inv_transfer_detail_back") or consume_action(
@@ -70,30 +74,44 @@ def render(services: dict) -> None:
     if transfer.notes:
         st.caption(f"Notes: {transfer.notes}")
 
+    if transfer.status == StockTransferStatus.IN_TRANSIT:
+        st.info(
+            "Stock has left the source and is in transit. "
+            "Receive at the destination to update stock there."
+        )
+
     actions = []
     if transfer.status == StockTransferStatus.DRAFT:
         actions.append(
-            {"label": "Dispatch", "key": "transfer_dispatch", "type": "primary"}
+            {
+                "label": "Send In Transit",
+                "key": "transfer_dispatch",
+                "type": "primary",
+            }
         )
         actions.append({"label": "Cancel", "key": "transfer_cancel"})
-    elif transfer.status == StockTransferStatus.DISPATCHED:
+    elif transfer.status == StockTransferStatus.IN_TRANSIT:
         actions.append(
-            {"label": "Receive", "key": "transfer_receive", "type": "primary"}
+            {"label": "Receive at Destination", "key": "transfer_receive", "type": "primary"}
         )
         actions.append({"label": "Cancel", "key": "transfer_cancel"})
 
     clicked = document_actions(actions, suffix=f"transfer_{transfer.id}")
     if clicked.get("transfer_dispatch"):
         try:
-            inventory.dispatch_stock_transfer(transfer.id)
-            st.success("Transfer dispatched")
+            inventory.dispatch_stock_transfer(
+                transfer.id, allowed_location_ids=allowed_ids
+            )
+            st.success("Transfer is in transit (stock left source)")
             st.rerun()
         except Exception as exc:
             st.error(str(exc))
     if clicked.get("transfer_receive"):
         try:
-            inventory.receive_stock_transfer(transfer.id)
-            st.success("Transfer received")
+            inventory.receive_stock_transfer(
+                transfer.id, allowed_location_ids=allowed_ids
+            )
+            st.success("Transfer received — destination stock updated")
             st.rerun()
         except Exception as exc:
             st.error(str(exc))

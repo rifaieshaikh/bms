@@ -95,24 +95,6 @@ def _ensure_unit(inventory: InventoryAppService, code: str, label: str) -> str:
     return inventory.find_or_create_unit(code, label).id
 
 
-def _ensure_default_locations(inventory: InventoryAppService) -> str:
-    """Ensure a Main warehouse (and optional store) exist; return main location id."""
-    from vaybooks.bms.domain.shared.enums import LocationType
-
-    existing = {loc.code: loc for loc in inventory.list_locations(active_only=False)}
-    if "MAIN" not in existing:
-        main = inventory.create_location(
-            "MAIN", "Main Warehouse", location_type=LocationType.WAREHOUSE
-        )
-    else:
-        main = existing["MAIN"]
-    if "STORE1" not in existing:
-        inventory.create_location(
-            "STORE1", "Retail Store", location_type=LocationType.RETAIL_STORE
-        )
-    return main.id
-
-
 def _ensure_category(
     inventory: InventoryAppService,
     name: str,
@@ -193,7 +175,11 @@ def seed_business(db: Database, settings: AppSettings) -> None:
 
 
 def seed_customers_for_profile(
-    db: Database, profile_key: str, count: int
+    db: Database,
+    profile_key: str,
+    count: int,
+    *,
+    location_ids: list[str] | None = None,
 ) -> None:
     profile = PROFILES[profile_key]
     customers = CustomerAppService(
@@ -201,11 +187,14 @@ def seed_customers_for_profile(
         MongoAccountRepository(db),
     )
     repo = MongoCustomerRepository(db)
+    locs = list(location_ids or [])
     for row in build_customer_rows(profile, count):
         if repo.find_by_phone(row["phone_number"]):
             continue
         try:
-            customers.create_customer(CustomerInput(**row))
+            customers.create_customer(
+                CustomerInput(**row, location_ids=locs)
+            )
         except DuplicateCustomerError:
             continue
         except ValidationError as exc:
@@ -213,18 +202,25 @@ def seed_customers_for_profile(
     logger.info("Seed customers ensured for %s (count=%s)", profile_key, count)
 
 
-def seed_vendors_for_profile(db: Database, profile_key: str, count: int) -> None:
+def seed_vendors_for_profile(
+    db: Database,
+    profile_key: str,
+    count: int,
+    *,
+    location_ids: list[str] | None = None,
+) -> None:
     profile = PROFILES[profile_key]
     vendors = VendorAppService(
         MongoVendorRepository(db),
         MongoAccountRepository(db),
     )
     repo = MongoVendorRepository(db)
+    locs = list(location_ids or [])
     for row in build_vendor_rows(profile, count):
         if repo.find_by_phone(row["phone_number"]):
             continue
         try:
-            vendors.create_vendor(VendorInput(**row))
+            vendors.create_vendor(VendorInput(**row, location_ids=locs))
         except DuplicateVendorError:
             continue
         except ValidationError as exc:
@@ -269,7 +265,9 @@ def seed_products_for_profile(db: Database, profile_key: str, count: int) -> Non
     for code, label in DEMO_UNITS:
         unit_ids[code] = _ensure_unit(inventory, code, label)
 
-    opening_location_id = _ensure_default_locations(inventory)
+    from vaybooks.bms.infrastructure.db.location_seed import ensure_default_locations
+
+    opening_location_id, _store_id = ensure_default_locations(db)
 
     # Ensure category tree exists for product assignment
     seed_categories_for_profile(db, profile_key, max(count, 20))
@@ -344,7 +342,11 @@ def run_demo_seed(db: Database, settings: AppSettings) -> None:
         logger.info("Demo profile seed skipped (SEED_PROFILE=%r)", settings.seed_profile)
         return
 
+    from vaybooks.bms.infrastructure.db.location_seed import ensure_default_locations
+
     logger.info("Demo seed profiles: %s", ",".join(selected))
+    main_id, store_id = ensure_default_locations(db)
+    party_location_ids = [main_id, store_id]
     seed_business(db, settings)
 
     for profile_key in selected:
@@ -358,8 +360,14 @@ def run_demo_seed(db: Database, settings: AppSettings) -> None:
             db, profile_key, int(settings.seed_product_count)
         )
         seed_customers_for_profile(
-            db, profile_key, int(settings.seed_customer_count)
+            db,
+            profile_key,
+            int(settings.seed_customer_count),
+            location_ids=party_location_ids,
         )
         seed_vendors_for_profile(
-            db, profile_key, int(settings.seed_vendor_count)
+            db,
+            profile_key,
+            int(settings.seed_vendor_count),
+            location_ids=party_location_ids,
         )

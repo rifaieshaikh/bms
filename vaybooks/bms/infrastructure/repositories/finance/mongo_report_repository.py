@@ -209,17 +209,21 @@ class MongoReportRepository:
         result = list(self._db.invoices.aggregate(pipeline))
         return result[0]["total"] if result else 0.0
 
-    def get_monthly_advance_total(self, start: date, end: date) -> float:
-        pipeline = [
-            {
-                "$match": {
-                    "voucher_type": "Receipt",
-                    "voucher_date": {
-                        "$gte": to_bson_value(start),
-                        "$lte": to_bson_value(end),
-                    },
-                }
+    def get_monthly_advance_total(
+        self, start: date, end: date, *, location_id: str = ""
+    ) -> float:
+        match: dict = {
+            "voucher_type": "Receipt",
+            "voucher_date": {
+                "$gte": to_bson_value(start),
+                "$lte": to_bson_value(end),
             },
+        }
+        lid = (location_id or "").strip()
+        if lid:
+            match["location_id"] = lid
+        pipeline = [
+            {"$match": match},
             {"$unwind": "$lines"},
             {"$match": {"lines.debit_amount": {"$gt": 0}}},
             {"$group": {"_id": None, "total": {"$sum": "$lines.debit_amount"}}},
@@ -328,23 +332,31 @@ class MongoReportRepository:
         return result[0]["total"] if result else 0.0
 
     def sum_payment_voucher_amount(
-        self, voucher_type: str, start: date, end: date
+        self,
+        voucher_type: str,
+        start: date,
+        end: date,
+        *,
+        location_id: str = "",
     ) -> float:
         # Cash movement: first-line debit for ADVANCE/RECEIPT/vendor/salary;
         # REFUND uses last-line credit when 2 lines, else debits/2 for 4-line routed.
         from vaybooks.bms.domain.shared.enums import VoucherType
 
+        match: dict = {
+            "voucher_type": voucher_type,
+            "voucher_date": {
+                "$gte": to_bson_value(start),
+                "$lte": to_bson_value(end),
+            },
+        }
+        lid = (location_id or "").strip()
+        if lid:
+            match["location_id"] = lid
+
         if voucher_type == VoucherType.REFUND.value:
             pipeline = [
-                {
-                    "$match": {
-                        "voucher_type": voucher_type,
-                        "voucher_date": {
-                            "$gte": to_bson_value(start),
-                            "$lte": to_bson_value(end),
-                        },
-                    }
-                },
+                {"$match": match},
                 {
                     "$project": {
                         "amount": {
@@ -378,15 +390,7 @@ class MongoReportRepository:
             return result[0]["total"] if result else 0.0
 
         pipeline = [
-            {
-                "$match": {
-                    "voucher_type": voucher_type,
-                    "voucher_date": {
-                        "$gte": to_bson_value(start),
-                        "$lte": to_bson_value(end),
-                    },
-                }
-            },
+            {"$match": match},
             {
                 "$group": {
                     "_id": None,
@@ -682,7 +686,9 @@ class MongoReportRepository:
         ]
         return list(self._db.customization_orders.aggregate(pipeline))
 
-    def get_voucher_totals_by_type(self, start: date, end: date) -> dict:
+    def get_voucher_totals_by_type(
+        self, start: date, end: date, *, location_id: str = ""
+    ) -> dict:
         from vaybooks.bms.domain.shared.enums import VoucherType
 
         keys = {
@@ -700,20 +706,24 @@ class MongoReportRepository:
             VoucherType.VENDOR_PAYMENT.value,
             VoucherType.SALARY_PAYMENT.value,
         )
+        lid = (location_id or "").strip()
         for vtype, key in keys.items():
             if vtype in routed_types:
-                totals[key] = self.sum_payment_voucher_amount(vtype, start, end)
+                totals[key] = self.sum_payment_voucher_amount(
+                    vtype, start, end, location_id=lid
+                )
             else:
-                pipeline = [
-                    {
-                        "$match": {
-                            "voucher_type": vtype,
-                            "voucher_date": {
-                                "$gte": to_bson_value(start),
-                                "$lte": to_bson_value(end),
-                            },
-                        }
+                match: dict = {
+                    "voucher_type": vtype,
+                    "voucher_date": {
+                        "$gte": to_bson_value(start),
+                        "$lte": to_bson_value(end),
                     },
+                }
+                if lid:
+                    match["location_id"] = lid
+                pipeline = [
+                    {"$match": match},
                     {"$unwind": "$lines"},
                     {
                         "$group": {

@@ -26,8 +26,14 @@ logger = logging.getLogger(__name__)
 
 def _load(services, filters, sort):
     try:
+        from vaybooks.bms.domain.identity.location_access import location_id_mongo_filter
+        from vaybooks.bms.ui.auth.session import working_location_list_context
+
+        working, accessible = working_location_list_context(services)
+        filt = location_id_mongo_filter(working, accessible)
         return [
-            _po_row(po) for po in services["purchases"].list_purchase_orders()
+            _po_row(po)
+            for po in services["purchases"].list_purchase_orders(location_filter=filt)
         ]
     except Exception:
         logger.exception("Failed to load purchase orders")

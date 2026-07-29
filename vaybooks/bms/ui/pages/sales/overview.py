@@ -40,7 +40,14 @@ def _customer_receivables_total(services: dict) -> float:
     if reports is None:
         return 0.0
     try:
-        rows = reports.customer_outstanding_report(OutstandingFilter())
+        from vaybooks.bms.domain.identity.location_access import ALL_LOCATIONS
+        from vaybooks.bms.ui.auth.session import current_working_location_id
+
+        working = (current_working_location_id(services) or "").strip()
+        location_id = working if working and working != ALL_LOCATIONS else ""
+        rows = reports.customer_outstanding_report(
+            OutstandingFilter(location_id=location_id)
+        )
     except Exception:
         return 0.0
     return sum(float(r.get("balance_due") or 0) for r in rows)

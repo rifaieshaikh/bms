@@ -8,6 +8,9 @@ import streamlit as st
 
 from vaybooks.bms.domain.shared.enums import PartyRegistrationType
 from vaybooks.bms.domain.parties.vendors.entities import Vendor, VendorInput
+from vaybooks.bms.ui.components.common.location_fields import (
+    render_party_location_multiselect,
+)
 from vaybooks.bms.ui.components.common.party_form_fields import render_party_address_tax_fields
 
 
@@ -26,6 +29,8 @@ def render_vendor_form(
     key_prefix: str,
     vendor: Optional[Vendor] = None,
     segment_options: Optional[Dict[str, str]] = None,
+    *,
+    services: dict | None = None,
 ) -> VendorInput:
     """Render vendor fields.
 
@@ -120,6 +125,17 @@ def render_vendor_form(
             height=68,
         )
 
+    if services is not None:
+        location_ids = render_party_location_multiselect(
+            key_prefix,
+            services,
+            vendor.location_ids if vendor else None,
+        )
+    elif vendor:
+        location_ids = list(vendor.location_ids or [])
+    else:
+        location_ids = []
+
     return VendorInput(
         vendor_name=vendor_name,
         phone_number=phone_number,
@@ -142,4 +158,5 @@ def render_vendor_form(
         bank_name=bank_name,
         notes=notes,
         segment_ids=segment_ids,
+        location_ids=location_ids,
     )

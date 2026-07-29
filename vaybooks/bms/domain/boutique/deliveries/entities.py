@@ -13,6 +13,8 @@ class Delivery:
     bill_ids: List[str]
     delivery_date: date
     delivery_notes: str = ""
+    location_id: str = ""
+    location_name: str = ""
     id: str = field(default_factory=lambda: uuid4().hex)
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)

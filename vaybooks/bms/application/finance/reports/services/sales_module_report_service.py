@@ -138,6 +138,159 @@ class SalesModuleReportService:
                 )
         return rows
 
+    def delivery_note_register(self) -> list[dict]:
+        rows = []
+        for dn in self._sales.list_delivery_notes():
+            rows.append(
+                {
+                    "dn_number": dn.dn_number,
+                    "delivery_date": dn.delivery_date,
+                    "customer_name": dn.customer_name,
+                    "reference": dn.reference_label,
+                    "partner": dn.delivery_partner_name,
+                    "vehicle_number": dn.vehicle_number,
+                    "total_qty": dn.total_qty,
+                    "delivery_charge": dn.charges.amount,
+                    "status": dn.status.value,
+                    "payment_status": (
+                        dn.charges.payment_status.value
+                        if hasattr(dn.charges.payment_status, "value")
+                        else str(dn.charges.payment_status)
+                    ),
+                }
+            )
+        return rows
+
+    def partially_delivered_sales_orders(self) -> list[dict]:
+        return [
+            {
+                "so_number": so.so_number,
+                "customer_name": so.customer_name,
+                "order_date": so.order_date,
+                "status": so.status.value,
+                "total_amount": so.total_amount,
+            }
+            for so in self._sales.list_sales_orders()
+            if so.status == SalesOrderStatus.PARTIALLY_DELIVERED
+        ]
+
+    def invoiced_not_delivered(self) -> list[dict]:
+        rows = []
+        accounting = getattr(self._sales, "_accounting", None)
+        if not accounting:
+            return rows
+        from vaybooks.bms.domain.shared.enums import VoucherType
+
+        for inv in accounting.list_vouchers_by_type(VoucherType.SALES_INVOICE):
+            pending = self._sales.invoice_pending_delivery_qty(inv.id)
+            if not pending:
+                continue
+            rows.append(
+                {
+                    "invoice_number": inv.voucher_number,
+                    "voucher_date": inv.voucher_date,
+                    "delivery_status": getattr(inv, "delivery_status", "")
+                    or "Not Delivered",
+                    "pending_qty": round(sum(pending.values()), 2),
+                }
+            )
+        return rows
+
+    def partner_delivery_expense(self) -> list[dict]:
+        totals: dict[str, dict] = {}
+        for dn in self._sales.list_delivery_notes():
+            if dn.status.value == "Cancelled" or not dn.charges.paid_by_us:
+                continue
+            key = dn.delivery_partner_name or "Unassigned"
+            bucket = totals.setdefault(
+                key,
+                {
+                    "partner": key,
+                    "delivery_count": 0,
+                    "expense": 0.0,
+                    "recovered": 0.0,
+                },
+            )
+            bucket["delivery_count"] += 1
+            bucket["expense"] = round(bucket["expense"] + dn.charges.amount, 2)
+            if dn.charges.recoverable_from_customer:
+                bucket["recovered"] = round(
+                    bucket["recovered"] + dn.charges.customer_recoverable_amount, 2
+                )
+        return sorted(totals.values(), key=lambda r: r["expense"], reverse=True)
+
+    def partner_payables_history(self) -> list[dict]:
+        rows = []
+        for dn in self._sales.list_delivery_notes():
+            if not dn.charges.paid_by_us or dn.charges.amount <= 0:
+                continue
+            rows.append(
+                {
+                    "dn_number": dn.dn_number,
+                    "partner": dn.delivery_partner_name,
+                    "payable": dn.charges.partner_payable_amount,
+                    "payment_status": (
+                        dn.charges.payment_status.value
+                        if hasattr(dn.charges.payment_status, "value")
+                        else str(dn.charges.payment_status)
+                    ),
+                    "payment_voucher_id": dn.charges.payment_voucher_id or "",
+                    "expense_voucher_id": dn.charges.expense_voucher_id or "",
+                }
+            )
+        return rows
+
+    def customer_delivery_charges_recovered(self) -> list[dict]:
+        totals: dict[str, dict] = {}
+        for dn in self._sales.list_delivery_notes():
+            if not dn.charges.recoverable_from_customer:
+                continue
+            key = dn.customer_name or "Unknown"
+            bucket = totals.setdefault(
+                key, {"customer_name": key, "recovered": 0.0, "count": 0}
+            )
+            bucket["recovered"] = round(
+                bucket["recovered"] + dn.charges.customer_recoverable_amount, 2
+            )
+            bucket["count"] += 1
+        return sorted(totals.values(), key=lambda r: r["recovered"], reverse=True)
+
+    def delivery_expense_vs_recovered(self) -> list[dict]:
+        expense = 0.0
+        recovered = 0.0
+        for dn in self._sales.list_delivery_notes():
+            if dn.status.value == "Cancelled":
+                continue
+            if dn.charges.paid_by_us:
+                expense += dn.charges.amount
+            if dn.charges.recoverable_from_customer:
+                recovered += dn.charges.customer_recoverable_amount
+        return [
+            {
+                "delivery_expense": round(expense, 2),
+                "charges_recovered": round(recovered, 2),
+                "net_delivery_cost": round(expense - recovered, 2),
+            }
+        ]
+
+    def vehicle_delivery_history(self) -> list[dict]:
+        rows = []
+        for dn in self._sales.list_delivery_notes():
+            if not dn.vehicle_number:
+                continue
+            rows.append(
+                {
+                    "vehicle_number": dn.vehicle_number,
+                    "dn_number": dn.dn_number,
+                    "delivery_date": dn.delivery_date,
+                    "customer_name": dn.customer_name,
+                    "partner": dn.delivery_partner_name,
+                    "driver_name": dn.driver_name,
+                    "status": dn.status.value,
+                }
+            )
+        return rows
+
     def sales_by_customer(
         self, start: date | None = None, end: date | None = None
     ) -> list[dict]:

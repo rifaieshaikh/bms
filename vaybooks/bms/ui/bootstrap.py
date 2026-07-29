@@ -4,6 +4,9 @@ import streamlit as st
 from vaybooks.bms.application.settings.business.service import BusinessAppService
 from vaybooks.bms.application.parties.customers.service import CustomerAppService
 from vaybooks.bms.application.parties.vendors.service import VendorAppService
+from vaybooks.bms.application.parties.delivery_partners.service import (
+    DeliveryPartnerAppService,
+)
 from vaybooks.bms.application.parties.commission_agents.service import (
     CommissionAgentAppService,
 )
@@ -120,6 +123,9 @@ from vaybooks.bms.infrastructure.repositories.boutique.mongo_activity_repository
 from vaybooks.bms.infrastructure.repositories.finance.mongo_counter_repository import MongoCounterRepository
 from vaybooks.bms.infrastructure.repositories.parties.mongo_customer_repository import MongoCustomerRepository
 from vaybooks.bms.infrastructure.repositories.parties.mongo_vendor_repository import MongoVendorRepository
+from vaybooks.bms.infrastructure.repositories.parties.mongo_delivery_partner_repository import (
+    MongoDeliveryPartnerRepository,
+)
 from vaybooks.bms.infrastructure.repositories.parties.mongo_commission_agent_repository import (
     MongoCommissionAgentRepository,
 )
@@ -368,6 +374,7 @@ def get_services():
 
     customer_repo = MongoCustomerRepository(db)
     vendor_repo = MongoVendorRepository(db)
+    delivery_partner_repo = MongoDeliveryPartnerRepository(db)
     commission_agent_repo = MongoCommissionAgentRepository(db)
     party_segment_repo = MongoPartySegmentRepository(db)
     vendor_service_repo = MongoVendorServiceRepository(db)
@@ -531,6 +538,9 @@ def get_services():
     )
     vendor_service = VendorAppService(
         vendor_repo, account_repo, segment_service=party_segment_service
+    )
+    delivery_partner_service = DeliveryPartnerAppService(
+        delivery_partner_repo, account_repo
     )
     vendor_services_config = VendorServiceAppService(vendor_service_repo)
     crm_notification_service = CrmNotificationAppService(
@@ -869,6 +879,7 @@ def get_services():
     services = {
         "customers": customer_service,
         "vendors": vendor_service,
+        "delivery_partners": delivery_partner_service,
         "commission_agents": commission_agent_service,
         "party_segments": party_segment_service,
         "vendor_services": vendor_services_config,

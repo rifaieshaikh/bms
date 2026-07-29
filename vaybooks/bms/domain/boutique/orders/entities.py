@@ -94,6 +94,8 @@ class CustomizationOrder:
     order_activities: List[OrderActivity] = field(default_factory=list)
     delivery_date: Optional[date] = None
     delivery_notes: Optional[str] = None
+    location_id: str = ""
+    location_name: str = ""
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
 

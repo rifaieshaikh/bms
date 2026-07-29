@@ -40,19 +40,39 @@ def _enum_opts(enum_cls) -> list[tuple]:
 
 
 # --- option loaders (id/value, label) ---------------------------------------
+def _party_location_filter(services) -> dict:
+    from vaybooks.bms.domain.identity.location_access import location_ids_mongo_filter
+    from vaybooks.bms.ui.auth.session import working_location_list_context
+
+    working, accessible = working_location_list_context(services)
+    return location_ids_mongo_filter(working, accessible)
+
+
 def _customers(services):
-    return [(c.id, c.customer_name) for c in services["customers"].list_all_customers()]
+    filt = _party_location_filter(services)
+    return [
+        (c.id, c.customer_name)
+        for c in services["customers"].list_all_customers(location_filter=filt)
+    ]
 
 
 def _vendors(services):
-    return [(v.id, v.vendor_name) for v in services["vendors"].list_all_vendors()]
+    filt = _party_location_filter(services)
+    return [
+        (v.id, v.vendor_name)
+        for v in services["vendors"].list_all_vendors(location_filter=filt)
+    ]
 
 
 def _commission_agents(services):
     agents = services.get("commission_agents")
     if not agents:
         return []
-    return [(a.id, a.agent_name) for a in agents.list_all_agents()]
+    filt = _party_location_filter(services)
+    return [
+        (a.id, a.agent_name)
+        for a in agents.list_all_agents(location_filter=filt)
+    ]
 
 
 def _accounts(services):
@@ -130,19 +150,29 @@ def _inventory_locations(services):
     inventory = services.get("inventory")
     if inventory is None:
         return []
-    return [
-        (loc.id, f"{loc.code} — {loc.name}")
-        for loc in inventory.list_locations(active_only=False)
-    ]
+    from vaybooks.bms.domain.identity.location_access import accessible_locations
+    from vaybooks.bms.ui.auth.session import get_current_user
+
+    user = get_current_user(services)
+    locations = accessible_locations(user, inventory)
+    if not locations:
+        # No session user (unit tests): fall back to all locations.
+        locations = inventory.list_locations(active_only=False)
+    return [(loc.id, f"{loc.code} — {loc.name}") for loc in locations]
 
 
 def _production_batches(services):
     production = services.get("production")
     if production is None:
         return []
+    from vaybooks.bms.domain.identity.location_access import location_id_mongo_filter
+    from vaybooks.bms.ui.auth.session import working_location_list_context
+
+    working, accessible = working_location_list_context(services)
+    filt = location_id_mongo_filter(working, accessible)
     return [
         (batch.id, f"{batch.batch_number} — {batch.recipe_name}")
-        for batch in production.list_batches()
+        for batch in production.list_batches(location_filter=filt)
     ]
 
 

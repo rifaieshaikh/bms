@@ -1093,7 +1093,12 @@ def _payment_dialog(services: dict, order_id: str):
 
     store_accounts = accounting.get_store_accounts()
     service_list = service_config.list_services(active_only=True)
-    vendors = vendor_service.list_all_vendors()
+    from vaybooks.bms.domain.identity.location_access import location_ids_mongo_filter
+    from vaybooks.bms.ui.auth.session import working_location_list_context
+
+    working, accessible = working_location_list_context(services)
+    filt = location_ids_mongo_filter(working, accessible)
+    vendors = vendor_service.list_all_vendors(location_filter=filt)
     if not store_accounts or not service_list or not vendors:
         st.error(
             "Need at least one vendor, one store account and one configured "

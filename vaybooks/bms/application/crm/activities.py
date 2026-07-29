@@ -56,6 +56,8 @@ class CrmActivityAppService:
         next_action: str = "",
         next_follow_up_at: Optional[datetime] = None,
         location: str = "",
+        location_id: str = "",
+        location_name: str = "",
         priority: str = "Medium",
         promised_amount: float = 0.0,
         promised_date: Optional[datetime] = None,
@@ -64,10 +66,13 @@ class CrmActivityAppService:
         actor_id: str = "",
         actor_name: str = "",
     ) -> CrmActivity:
+        from vaybooks.bms.domain.shared.party_location import require_location_id
+
         if not activity_type:
             raise ValidationError("Activity type is required")
         if not (lead_id or enquiry_id or customer_id):
             raise ValidationError("Activity requires a lead, enquiry, or customer")
+        location_id = require_location_id(location_id)
         settings = self._settings_obj()
         active_types = {
             item.get("label")
@@ -101,6 +106,8 @@ class CrmActivityAppService:
             next_action=next_action or "",
             next_follow_up_at=next_follow_up_at,
             location=location or "",
+            location_id=location_id,
+            location_name=(location_name or "").strip(),
             priority=priority or "Medium",
             promised_amount=float(promised_amount or 0),
             promised_date=promised_date,
@@ -147,6 +154,8 @@ class CrmActivityAppService:
             "next_action",
             "next_follow_up_at",
             "location",
+            "location_id",
+            "location_name",
             "priority",
             "promised_amount",
             "promised_date",

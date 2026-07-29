@@ -13,7 +13,12 @@ from vaybooks.bms.ui.pagination import TRIAL_BALANCE_PAGE_SIZE, paginate_list, \
 def render(services: dict):
     accounting_service = services["accounting"]
     try:
-        trial = accounting_service.get_trial_balance()
+        from vaybooks.bms.domain.identity.location_access import location_id_mongo_filter
+        from vaybooks.bms.ui.auth.session import working_location_list_context
+
+        working, accessible = working_location_list_context(services)
+        filt = location_id_mongo_filter(working, accessible)
+        trial = accounting_service.get_trial_balance(location_filter=filt)
     except Exception:
         trial = []
     for row in trial:

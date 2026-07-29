@@ -172,6 +172,7 @@ class MigrationAppService:
         actor_id: str = "",
         actor_name: str = "",
         branch: str = "",
+        default_location_ids: Optional[List[str]] = None,
     ) -> ImportResult:
         missing = missing_required(entity_type, mapping)
         if missing:
@@ -191,9 +192,13 @@ class MigrationAppService:
         if entity_type == ImportEntityType.PRODUCTS:
             return self._import_products(rows, duplicate_policy)
         if entity_type == ImportEntityType.CUSTOMERS:
-            return self._import_customers(rows, duplicate_policy)
+            return self._import_customers(
+                rows, duplicate_policy, default_location_ids=default_location_ids
+            )
         if entity_type == ImportEntityType.VENDORS:
-            return self._import_vendors(rows, duplicate_policy)
+            return self._import_vendors(
+                rows, duplicate_policy, default_location_ids=default_location_ids
+            )
         if entity_type == ImportEntityType.LEADS:
             return self._import_leads(
                 rows,
@@ -203,6 +208,7 @@ class MigrationAppService:
                 actor_id=actor_id,
                 actor_name=actor_name,
                 branch=branch,
+                default_location_ids=default_location_ids,
             )
         raise ValueError(f"Unsupported entity type: {entity_type}")
 
@@ -459,12 +465,18 @@ class MigrationAppService:
     # --- customer / vendor import --------------------------------------
 
     def _import_customers(
-        self, rows: List[Dict[str, Any]], policy: DuplicatePolicy
+        self,
+        rows: List[Dict[str, Any]],
+        policy: DuplicatePolicy,
+        *,
+        default_location_ids: Optional[List[str]] = None,
     ) -> ImportResult:
         result = ImportResult(entity_type=ImportEntityType.CUSTOMERS.value)
         try:
             for row in rows:
-                self._import_one_customer(row, policy, result)
+                self._import_one_customer(
+                    row, policy, result, default_location_ids=default_location_ids
+                )
         except _AbortImport:
             pass
         return result
@@ -474,10 +486,14 @@ class MigrationAppService:
         row: Dict[str, Any],
         policy: DuplicatePolicy,
         result: ImportResult,
+        *,
+        default_location_ids: Optional[List[str]] = None,
     ) -> None:
         row_num = int(row.get("_row") or 0)
         try:
-            payload = self._party_input_from_row(row, party="customer")
+            payload = self._party_input_from_row(
+                row, party="customer", default_location_ids=default_location_ids
+            )
             customer_input = CustomerInput(**payload)
             existing = self._customers.lookup_customer_by_phone(customer_input.phone_number)
             if not existing and customer_input.gstin:
@@ -513,12 +529,18 @@ class MigrationAppService:
             result.issues.append(RowIssue(row=row_num, message=str(exc)))
 
     def _import_vendors(
-        self, rows: List[Dict[str, Any]], policy: DuplicatePolicy
+        self,
+        rows: List[Dict[str, Any]],
+        policy: DuplicatePolicy,
+        *,
+        default_location_ids: Optional[List[str]] = None,
     ) -> ImportResult:
         result = ImportResult(entity_type=ImportEntityType.VENDORS.value)
         try:
             for row in rows:
-                self._import_one_vendor(row, policy, result)
+                self._import_one_vendor(
+                    row, policy, result, default_location_ids=default_location_ids
+                )
         except _AbortImport:
             pass
         return result
@@ -528,10 +550,14 @@ class MigrationAppService:
         row: Dict[str, Any],
         policy: DuplicatePolicy,
         result: ImportResult,
+        *,
+        default_location_ids: Optional[List[str]] = None,
     ) -> None:
         row_num = int(row.get("_row") or 0)
         try:
-            payload = self._party_input_from_row(row, party="vendor")
+            payload = self._party_input_from_row(
+                row, party="vendor", default_location_ids=default_location_ids
+            )
             vendor_input = VendorInput(**payload)
             existing = self._vendors._vendor_repo.find_by_phone(vendor_input.phone_number)
             if not existing and vendor_input.gstin:
@@ -566,13 +592,24 @@ class MigrationAppService:
             result.failed += 1
             result.issues.append(RowIssue(row=row_num, message=str(exc)))
 
-    def _party_input_from_row(self, row: Dict[str, Any], party: str) -> Dict[str, Any]:
+    def _party_input_from_row(
+        self,
+        row: Dict[str, Any],
+        party: str,
+        *,
+        default_location_ids: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
         reg = row.get("registration_type") or PartyRegistrationType.UNREGISTERED.value
         try:
             registration_type = PartyRegistrationType(reg)
         except ValueError:
             registration_type = PartyRegistrationType.UNREGISTERED
         segment_ids = self._resolve_segment_ids(row.get("segments"), party)
+        location_ids = [
+            str(lid).strip()
+            for lid in (default_location_ids or [])
+            if str(lid).strip()
+        ]
         common = {
             "phone_number": (row.get("phone_number") or "").strip(),
             "alternate_phone_number": (row.get("alternate_phone_number") or None) or None,
@@ -590,6 +627,7 @@ class MigrationAppService:
             "msme_number": (row.get("msme_number") or "") or "",
             "notes": (row.get("notes") or "") or "",
             "segment_ids": segment_ids,
+            "location_ids": location_ids,
         }
         if party == "customer":
             return {
@@ -652,6 +690,7 @@ class MigrationAppService:
         actor_id: str = "",
         actor_name: str = "",
         branch: str = "",
+        default_location_ids: Optional[List[str]] = None,
     ) -> ImportResult:
         from vaybooks.bms.domain.crm.entities import CrmImportBatch
         from vaybooks.bms.domain.crm.enums import ImportBatchStatus
@@ -665,6 +704,11 @@ class MigrationAppService:
                 RowIssue(row=0, message="Lead import service is not configured")
             )
             return result
+
+        default_loc = next(
+            (str(lid).strip() for lid in (default_location_ids or []) if str(lid).strip()),
+            "",
+        )
 
         file_hash = file_bytes_hash(file_bytes or b"") if file_bytes is not None else ""
         batch = None
@@ -708,6 +752,7 @@ class MigrationAppService:
                         actor_id=actor_id,
                         actor_name=actor_name,
                         branch=branch,
+                        location_id=default_loc,
                     )
                     kind = outcome.get("outcome")
                     if kind == "created":

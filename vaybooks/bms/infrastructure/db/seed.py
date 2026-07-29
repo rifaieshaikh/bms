@@ -146,6 +146,10 @@ DEFAULT_PRODUCT_UNITS = [
 def run_seed(db):
     now = datetime.utcnow()
 
+    from vaybooks.bms.infrastructure.db.location_seed import ensure_default_locations
+
+    ensure_default_locations(db)
+
     # Seed default activities only on a fresh database. Re-seeding by name would
     # resurrect defaults that the user has renamed or deleted. Inserts are wrapped
     # in a duplicate-key guard because concurrent Streamlit sessions can race to

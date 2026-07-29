@@ -14,6 +14,7 @@ class Account:
     id: str = field(default_factory=lambda: uuid4().hex)
     linked_customer_id: Optional[str] = None
     linked_vendor_id: Optional[str] = None
+    linked_delivery_partner_id: Optional[str] = None
     linked_worker_id: Optional[str] = None
     linked_agent_id: Optional[str] = None
     opening_balance: float = 0.0
@@ -51,9 +52,12 @@ class Voucher:
     reference_grn_id: Optional[str] = None
     reference_so_id: Optional[str] = None
     reference_dn_id: Optional[str] = None
+    delivery_status: str = ""
     reference_project_id: Optional[str] = None
     reference_activity_id: Optional[str] = None
     reference_production_batch_id: Optional[str] = None
+    location_id: str = ""
+    location_name: str = ""
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
 

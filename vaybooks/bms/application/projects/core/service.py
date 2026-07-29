@@ -152,13 +152,18 @@ class ProjectAppService:
         notes: str = "",
         start_date: Optional[date] = None,
         expected_end_date: Optional[date] = None,
+        location_id: str = "",
+        location_name: str = "",
     ) -> Project:
+        from vaybooks.bms.domain.shared.party_location import require_location_id
+
         template = self._template_repo.find_by_id(template_id)
         if not template:
             raise ValidationError("Project template not found")
         if not (name or "").strip():
             raise ValidationError("Project name is required")
         self._validate_contract_value(contract_value)
+        location_id = require_location_id(location_id)
         customer_id, customer_name = self._get_customer(customer_id)
         project = self._project_from_template(
             template,
@@ -173,6 +178,8 @@ class ProjectAppService:
             start_date=start_date,
             expected_end_date=expected_end_date,
         )
+        project.location_id = location_id
+        project.location_name = (location_name or "").strip()
         return self._save_validated(project)
 
     def create_project(
@@ -188,10 +195,15 @@ class ProjectAppService:
         expected_end_date: Optional[date] = None,
         phases: Optional[List[ProjectPhase]] = None,
         activities: Optional[List[ProjectActivity]] = None,
+        location_id: str = "",
+        location_name: str = "",
     ) -> Project:
+        from vaybooks.bms.domain.shared.party_location import require_location_id
+
         if not (name or "").strip():
             raise ValidationError("Project name is required")
         self._validate_contract_value(contract_value)
+        location_id = require_location_id(location_id)
         customer_id, customer_name = self._get_customer(customer_id)
         project = Project(
             project_number=self._counter_repo.next("project_number"),
@@ -202,6 +214,8 @@ class ProjectAppService:
             site_address=(site_address or "").strip(),
             site_state_code=(site_state_code or "").strip(),
             notes=(notes or "").strip(),
+            location_id=location_id,
+            location_name=(location_name or "").strip(),
             start_date=start_date,
             expected_end_date=expected_end_date,
             parties=[
@@ -351,13 +365,20 @@ class ProjectAppService:
             raise ValidationError("System templates cannot be deleted")
         self._template_repo.delete(template_id)
 
-    def list_projects(self, status: Optional[ProjectStatus] = None) -> List[Project]:
-        return self._project_repo.list_all(status=status)
+    def list_projects(
+        self,
+        status: Optional[ProjectStatus] = None,
+        *,
+        location_filter: dict | None = None,
+    ) -> List[Project]:
+        return self._project_repo.list_all(status=status, location_filter=location_filter)
 
-    def search_projects(self, query: str = "") -> List[Project]:
+    def search_projects(
+        self, query: str = "", *, location_filter: dict | None = None
+    ) -> List[Project]:
         if not (query or "").strip():
-            return self._project_repo.list_all()
-        return self._project_repo.search(query)
+            return self._project_repo.list_all(location_filter=location_filter)
+        return self._project_repo.search(query, location_filter=location_filter)
 
     def count_by_customer(self, customer_id: str) -> int:
         return self._project_repo.count_by_customer(customer_id)

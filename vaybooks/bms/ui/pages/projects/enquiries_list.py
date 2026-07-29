@@ -83,7 +83,12 @@ def _render_cards(page_items, services) -> None:
     "New Enquiry", width="large", on_dismiss=make_dismiss_handler(CREATE_DIALOG)
 )
 def _create_enquiry_dialog(services: dict) -> None:
-    customers = services["customers"].list_all_customers()
+    from vaybooks.bms.domain.identity.location_access import location_ids_mongo_filter
+    from vaybooks.bms.ui.auth.session import working_location_list_context
+
+    working, accessible = working_location_list_context(services)
+    filt = location_ids_mongo_filter(working, accessible)
+    customers = services["customers"].list_all_customers(location_filter=filt)
     customer_labels = {c.customer_name: c.id for c in customers}
     customer_label = st.selectbox(
         "Customer",

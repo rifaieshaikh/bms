@@ -155,6 +155,8 @@ class MongoProjectRepository:
             "site_address": project.site_address,
             "site_state_code": project.site_state_code,
             "notes": project.notes,
+            "location_id": project.location_id,
+            "location_name": project.location_name,
             "start_date": to_bson_value(project.start_date),
             "expected_end_date": to_bson_value(project.expected_end_date),
             "phases_enabled": project.phases_enabled,
@@ -207,6 +209,8 @@ class MongoProjectRepository:
             site_address=doc.get("site_address", ""),
             site_state_code=doc.get("site_state_code", ""),
             notes=doc.get("notes", ""),
+            location_id=str(doc.get("location_id") or ""),
+            location_name=str(doc.get("location_name") or ""),
             start_date=from_bson_date(doc.get("start_date")),
             expected_end_date=from_bson_date(doc.get("expected_end_date")),
             phases_enabled=doc.get("phases_enabled", True),
@@ -250,30 +254,42 @@ class MongoProjectRepository:
         doc = self._collection.find_one({"_id": project_id})
         return self._from_doc(doc) if doc else None
 
-    def list_all(self, status: Optional[ProjectStatus] = None) -> List[Project]:
+    def list_all(
+        self,
+        status: Optional[ProjectStatus] = None,
+        location_filter: dict | None = None,
+    ) -> List[Project]:
+        from vaybooks.bms.domain.identity.location_access import merge_mongo_filters
+
         query: dict = {}
         if status is not None:
             query["status"] = status.value
+        query = merge_mongo_filters(query, location_filter or {})
         return [self._from_doc(d) for d in self._collection.find(query)]
 
-    def search(self, query: str = "") -> List[Project]:
+    def search(self, query: str = "", location_filter: dict | None = None) -> List[Project]:
+        from vaybooks.bms.domain.identity.location_access import merge_mongo_filters
+
         term = (query or "").strip()
         if not term:
-            return self.list_all()
+            return self.list_all(location_filter=location_filter)
         regex = {"$regex": re.escape(term), "$options": "i"}
         docs = self._collection.find(
-            {
-                "$or": [
-                    {"project_number": regex},
-                    {"name": regex},
-                    {"customer_name": regex},
-                    {"customer_id": regex},
-                    {"site_address": regex},
-                    {"notes": regex},
-                    {"_id": regex},
-                    {"parties.party_name": regex},
-                ]
-            }
+            merge_mongo_filters(
+                {
+                    "$or": [
+                        {"project_number": regex},
+                        {"name": regex},
+                        {"customer_name": regex},
+                        {"customer_id": regex},
+                        {"site_address": regex},
+                        {"notes": regex},
+                        {"_id": regex},
+                        {"parties.party_name": regex},
+                    ]
+                },
+                location_filter or {},
+            )
         )
         return [self._from_doc(d) for d in docs]
 

@@ -66,3 +66,5 @@ class CreateOrderRequest:
     notes: str = ""
     alternate_phone_number: Optional[str] = None
     address: str = ""
+    location_id: str = ""
+    location_name: str = ""

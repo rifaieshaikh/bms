@@ -25,7 +25,17 @@ def _fmt_date(value) -> str:
 
 def _load_transfers(services, filters, sort):
     try:
-        return services["inventory"].list_stock_transfers()
+        from vaybooks.bms.domain.identity.location_access import ALL_LOCATIONS
+        from vaybooks.bms.ui.auth.session import working_location_list_context
+
+        working, accessible = working_location_list_context(services)
+        inventory = services["inventory"]
+        if working and working != ALL_LOCATIONS:
+            # Specific working location: transfers touching that site.
+            return inventory.list_stock_transfers(location_ids=[working])
+        if accessible is None:
+            return inventory.list_stock_transfers()
+        return inventory.list_stock_transfers(location_ids=accessible)
     except Exception:
         return []
 

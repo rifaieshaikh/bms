@@ -101,7 +101,12 @@ def grn_dialog(services: dict) -> None:
     vendor_key = f"{GRN_DIALOG}_vendor"
     if not po:
         vendors = services["vendors"]
-        vendor_list = vendors.list_all_vendors()
+        from vaybooks.bms.domain.identity.location_access import location_ids_mongo_filter
+        from vaybooks.bms.ui.auth.session import working_location_list_context
+
+        working, accessible = working_location_list_context(services)
+        filt = location_ids_mongo_filter(working, accessible)
+        vendor_list = vendors.list_all_vendors(location_filter=filt)
         if not vendor_list:
             st.error("Add a vendor first, or select a purchase order.")
             if st.button("Close", key=f"{GRN_DIALOG}_close"):

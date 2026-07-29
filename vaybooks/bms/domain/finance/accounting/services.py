@@ -119,6 +119,42 @@ class AccountingDomainService:
             return existing
         return self.create_vendor_account(vendor_id, account_name)
 
+    def create_delivery_partner_account(
+        self,
+        partner_id: str,
+        account_name: str,
+    ) -> Account:
+        existing = self._account_repo.find_delivery_partner_account(partner_id)
+        if existing:
+            return existing
+        account = Account(
+            account_name=account_name,
+            account_type=AccountType.LIABILITY,
+            linked_delivery_partner_id=partner_id,
+        )
+        return self._account_repo.save(account)
+
+    def ensure_delivery_partner_account(
+        self,
+        partner_id: str,
+        account_name: str,
+    ) -> Account:
+        return self.create_delivery_partner_account(partner_id, account_name)
+
+    def get_delivery_partner_account(self, partner_id: str) -> Optional[Account]:
+        return self._account_repo.find_delivery_partner_account(partner_id)
+
+    def ensure_delivery_expense_account(self) -> Account:
+        for name in ("Delivery Expenses", "Freight Outward"):
+            existing = self._account_repo.find_by_name(name)
+            if existing:
+                return existing
+        account = Account(
+            account_name="Delivery Expenses",
+            account_type=AccountType.EXPENSE,
+        )
+        return self._account_repo.save(account)
+
     def create_agent_account(
         self,
         agent_id: str,

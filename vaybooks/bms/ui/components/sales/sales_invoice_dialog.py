@@ -129,6 +129,7 @@ def sales_record_dialog(services: dict) -> None:
             if st.session_state.get(SALES_RECORD_PRESELECT)
             else None
         ),
+        services=services,
     )
     matched_customer = customer_selection.customer
     customer_state = matched_customer.state_code if matched_customer else ""
@@ -534,6 +535,7 @@ def sales_record_dialog(services: dict) -> None:
             customer = resolve_customer_identity(
                 customer_service,
                 customer_selection,
+                location_ids=[location_id],
             )
             customer_account = accounting_service.get_customer_account(customer.id)
             if not customer_account:
@@ -558,6 +560,11 @@ def sales_record_dialog(services: dict) -> None:
                 from vaybooks.bms.ui.components.sales.sales_invoice_form import serialize_line_items
 
                 note = serialize_line_items(line_items, invoice_discount)
+                from vaybooks.bms.ui.components.common.location_fields import (
+                    require_location_name,
+                )
+
+                location_id, location_name = require_location_name(services)
                 voucher = accounting_service.create_cash_sales_invoice(
                     customer_account.id,
                     store_opts[store_name],
@@ -569,6 +576,8 @@ def sales_record_dialog(services: dict) -> None:
                     voucher_date=inv_date,
                     credit_applied=float(credit_applied or 0),
                     advance_applied=float(advance_applied or 0),
+                    location_id=location_id,
+                    location_name=location_name,
                 )
                 if inventory_service:
                     inventory_service.apply_sales_movements(voucher.id, line_items)

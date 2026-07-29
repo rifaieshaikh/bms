@@ -97,6 +97,7 @@ def _edit_dialog(services: dict) -> None:
         customers,
         key_prefix=SALES_RETURN_EDIT_DIALOG,
         initial_customer=customer,
+        services=services,
     )
     edit_date = st.date_input(
         "Return date",
@@ -252,7 +253,14 @@ def _edit_dialog(services: dict) -> None:
                 raise ValueError("Add at least one return line")
             if not reason.strip():
                 raise ValueError("Return reason is required")
-            resolved_customer = resolve_customer_identity(customers, selection)
+            from vaybooks.bms.ui.auth.session import require_specific_location
+
+            location_id = (
+                getattr(sales_return, "location_id", None) or ""
+            ).strip() or require_specific_location(services)
+            resolved_customer = resolve_customer_identity(
+                customers, selection, location_ids=[location_id]
+            )
             attachments = list(sales_return.attachments)
             for uploaded in uploads or []:
                 data = uploaded.getvalue()

@@ -33,6 +33,7 @@ class CommissionAgentInput:
     default_commission_type: str = "percentage"
     default_commission_rate: float = 0.0
     segment_ids: List[str] = field(default_factory=list)
+    location_ids: List[str] = field(default_factory=list)
     source_customer_id: str = ""
 
 
@@ -63,6 +64,7 @@ class CommissionAgent:
     default_commission_rate: float = 0.0
     segment_ids: List[str] = field(default_factory=list)
     segment_names: List[str] = field(default_factory=list)
+    location_ids: List[str] = field(default_factory=list)
     source_customer_id: str = ""
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
@@ -116,6 +118,7 @@ class CommissionAgent:
             ).strip().lower(),
             default_commission_rate=float(agent_input.default_commission_rate or 0),
             segment_ids=list(agent_input.segment_ids or []),
+            location_ids=list(agent_input.location_ids or []),
             source_customer_id=(agent_input.source_customer_id or "").strip(),
         )
 
@@ -146,6 +149,7 @@ class CommissionAgent:
             ).strip().lower(),
             default_commission_rate=float(agent_input.default_commission_rate or 0),
             segment_ids=list(agent_input.segment_ids or []),
+            location_ids=list(agent_input.location_ids or []),
             source_customer_id=(
                 agent_input.source_customer_id
                 if agent_input.source_customer_id is not None

@@ -1129,7 +1129,15 @@ class InventoryDomainService:
             product.current_qty = round(product.current_qty + qty, 2)
             self._apply_balance_delta(product.id, loc, qty)
         else:
-            if product.current_qty < qty - 0.001:
+            if movement_type == StockMovementType.TRANSFER_OUT and self._balance_repo is not None:
+                bal = self._balance_repo.get(product.id, loc) if loc else None
+                available = float(bal.qty) if bal is not None else 0.0
+                if available < qty - 0.001:
+                    raise ValidationError(
+                        f"Insufficient stock at location for {product.name} "
+                        f"(available {available:g}, need {qty:g})"
+                    )
+            elif product.current_qty < qty - 0.001:
                 raise ValidationError(
                     f"Insufficient stock for {product.name} "
                     f"(available {product.current_qty:g}, need {qty:g})"
@@ -1188,6 +1196,9 @@ class InventoryDomainService:
         transfer_date: date,
         lines: list[dict],
         notes: str = "",
+        *,
+        allowed_location_ids: list[str] | None = None,
+        send_in_transit: bool = False,
     ) -> StockTransfer:
         if not self._transfer_repo:
             raise ValidationError("Transfer repository not configured")
@@ -1199,6 +1210,12 @@ class InventoryDomainService:
             raise ValidationError("Destination location not found or inactive")
         if from_location_id == to_location_id:
             raise ValidationError("Source and destination must differ")
+        if allowed_location_ids is not None:
+            allowed = {str(i).strip() for i in allowed_location_ids if str(i).strip()}
+            if from_loc.id not in allowed or to_loc.id not in allowed:
+                raise ValidationError(
+                    "You can only transfer stock between locations you have access to."
+                )
         if not lines:
             raise ValidationError("At least one transfer line is required")
         transfer_lines: List[StockTransferLine] = []
@@ -1224,16 +1241,35 @@ class InventoryDomainService:
             notes=(notes or "").strip(),
             status=StockTransferStatus.DRAFT,
         )
-        return self._transfer_repo.save(transfer)
+        transfer = self._transfer_repo.save(transfer)
+        if send_in_transit:
+            transfer = self.dispatch_stock_transfer(
+                transfer.id, allowed_location_ids=allowed_location_ids
+            )
+        return transfer
 
-    def dispatch_stock_transfer(self, transfer_id: str) -> StockTransfer:
+    def dispatch_stock_transfer(
+        self,
+        transfer_id: str,
+        *,
+        allowed_location_ids: list[str] | None = None,
+    ) -> StockTransfer:
         if not self._transfer_repo:
             raise ValidationError("Transfer repository not configured")
         transfer = self._transfer_repo.find_by_id(transfer_id)
         if not transfer:
             raise ValidationError("Stock transfer not found")
         if transfer.status != StockTransferStatus.DRAFT:
-            raise ValidationError("Only draft transfers can be dispatched")
+            raise ValidationError("Only draft transfers can be sent in transit")
+        if allowed_location_ids is not None:
+            allowed = {str(i).strip() for i in allowed_location_ids if str(i).strip()}
+            if (
+                transfer.from_location_id not in allowed
+                or transfer.to_location_id not in allowed
+            ):
+                raise ValidationError(
+                    "You can only transfer stock between locations you have access to."
+                )
         for line in transfer.lines:
             product = self._product_repo.find_by_id(line.product_id)
             if not product:
@@ -1247,21 +1283,33 @@ class InventoryDomainService:
                 transfer.transfer_date,
                 StockReferenceType.STOCK_TRANSFER,
                 transfer.id,
-                f"Transfer out to {transfer.to_location_name}",
+                f"In transit to {transfer.to_location_name}",
                 location_id=transfer.from_location_id,
             )
-        transfer.status = StockTransferStatus.DISPATCHED
+        transfer.status = StockTransferStatus.IN_TRANSIT
         transfer.updated_at = utc_now()
         return self._transfer_repo.save(transfer)
 
-    def receive_stock_transfer(self, transfer_id: str) -> StockTransfer:
+    def receive_stock_transfer(
+        self,
+        transfer_id: str,
+        *,
+        allowed_location_ids: list[str] | None = None,
+    ) -> StockTransfer:
         if not self._transfer_repo:
             raise ValidationError("Transfer repository not configured")
         transfer = self._transfer_repo.find_by_id(transfer_id)
         if not transfer:
             raise ValidationError("Stock transfer not found")
-        if transfer.status != StockTransferStatus.DISPATCHED:
-            raise ValidationError("Only dispatched transfers can be received")
+        if transfer.status != StockTransferStatus.IN_TRANSIT:
+            raise ValidationError("Only in-transit transfers can be received")
+        if allowed_location_ids is not None:
+            allowed = {str(i).strip() for i in allowed_location_ids if str(i).strip()}
+            # Receiver must have access to destination (and typically source).
+            if transfer.to_location_id not in allowed:
+                raise ValidationError(
+                    "You can only receive transfers at locations you have access to."
+                )
         for line in transfer.lines:
             product = self._product_repo.find_by_id(line.product_id)
             if not product:
@@ -1275,7 +1323,7 @@ class InventoryDomainService:
                 transfer.transfer_date,
                 StockReferenceType.STOCK_TRANSFER,
                 transfer.id,
-                f"Transfer in from {transfer.from_location_name}",
+                f"Received from {transfer.from_location_name}",
                 location_id=transfer.to_location_id,
             )
         transfer.status = StockTransferStatus.RECEIVED
@@ -1290,7 +1338,7 @@ class InventoryDomainService:
             raise ValidationError("Stock transfer not found")
         if transfer.status == StockTransferStatus.RECEIVED:
             raise ValidationError("Cannot cancel a received transfer")
-        if transfer.status == StockTransferStatus.DISPATCHED:
+        if transfer.status == StockTransferStatus.IN_TRANSIT:
             self.reverse_movements_by_reference(transfer.id)
         transfer.status = StockTransferStatus.CANCELLED
         transfer.updated_at = utc_now()

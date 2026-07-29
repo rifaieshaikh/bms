@@ -55,7 +55,11 @@ def _match_stock_ledger_location(row, value) -> bool:
 
 def _match_transfer_status(transfer, value) -> bool:
     status = getattr(transfer, "status", None)
-    return getattr(status, "value", status) == value
+    raw = status.value if hasattr(status, "value") else str(status or "")
+    want = str(value or "")
+    if want in ("In Transit", "Dispatched") and raw in ("In Transit", "Dispatched"):
+        return True
+    return raw == want
 
 
 def _match_transfer_location(transfer, value) -> bool:

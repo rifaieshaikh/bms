@@ -2,11 +2,13 @@ from datetime import date
 
 import streamlit as st
 
+from vaybooks.bms.domain.identity.location_access import location_ids_mongo_filter
 from vaybooks.bms.domain.shared.exceptions import (
     DuplicateCommissionAgentError,
     ValidationError,
 )
 from vaybooks.bms.ui import navigation
+from vaybooks.bms.ui.auth.session import working_location_list_context
 from vaybooks.bms.ui.components.common.list_view import render_list
 from vaybooks.bms.ui.components.parties.commission_agent_form import (
     render_commission_agent_form,
@@ -51,12 +53,12 @@ def _render_duplicate_warning(existing_agent_id: str, agent_service) -> None:
 
 
 @st.dialog("Add Commission Agent", width="large", on_dismiss=make_dismiss_handler(A_ADD))
-def _add_agent_dialog(agent_service):
+def _add_agent_dialog(agent_service, services: dict):
     dup_id = st.session_state.get(A_DUP_ID)
     if dup_id:
         _render_duplicate_warning(dup_id, agent_service)
 
-    agent_input = render_commission_agent_form("a_add")
+    agent_input = render_commission_agent_form("a_add", services=services)
 
     cols = st.columns(2)
     do_create = cols[0].button(
@@ -83,13 +85,13 @@ def _add_agent_dialog(agent_service):
 
 
 @st.dialog("Edit Commission Agent", width="large", on_dismiss=make_dismiss_handler(A_EDIT))
-def _edit_agent_dialog(agent_service):
+def _edit_agent_dialog(agent_service, services: dict):
     agent = agent_service.get_agent_detail(st.session_state.get(A_EDIT))
     if not agent:
         st.error("Commission agent not found")
         return
 
-    agent_input = render_commission_agent_form("a_edit", agent=agent)
+    agent_input = render_commission_agent_form("a_edit", agent=agent, services=services)
 
     cols = st.columns(2)
     do_save = cols[0].button(
@@ -225,7 +227,9 @@ def _pay_agent_dialog(services, agent_id: str):
 
 
 def _load_agents(services, filters, sort):
-    agents = services["commission_agents"].list_all_agents()
+    working, accessible = working_location_list_context(services)
+    filt = location_ids_mongo_filter(working, accessible)
+    agents = services["commission_agents"].list_all_agents(location_filter=filt)
     accounting = services["accounting"]
     sales = services.get("sales")
     all_metrics = {}
@@ -312,13 +316,13 @@ def render(services: dict):
 
         get_submit_map().setdefault(A_ADD, SUBMIT_ADD)
         register_armed_dialog(A_ADD)
-        _add_agent_dialog(services["commission_agents"])
+        _add_agent_dialog(services["commission_agents"], services)
     if st.session_state.get(A_EDIT):
         from vaybooks.bms.ui.keyboard.context import get_submit_map
 
         get_submit_map().setdefault(A_EDIT, SUBMIT_EDIT)
         register_armed_dialog(A_EDIT)
-        _edit_agent_dialog(services["commission_agents"])
+        _edit_agent_dialog(services["commission_agents"], services)
     if st.session_state.get(A_PAY):
         register_armed_dialog(A_PAY)
         agent_id = st.session_state.get(A_PAY_AGENT_ID) or ""

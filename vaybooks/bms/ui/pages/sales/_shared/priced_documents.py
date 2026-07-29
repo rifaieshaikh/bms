@@ -20,6 +20,9 @@ from vaybooks.bms.ui.sales_list_schemas import ESTIMATES, QUOTATIONS
 
 
 def render_list(services: dict, document_type: str) -> None:
+    from vaybooks.bms.domain.identity.location_access import location_id_mongo_filter
+    from vaybooks.bms.ui.auth.session import working_location_list_context
+
     is_estimate = document_type == "estimate"
     title = "Estimates" if is_estimate else "Quotations"
     list_method = (
@@ -32,9 +35,11 @@ def render_list(services: dict, document_type: str) -> None:
 
     def _load(_services, _filters, _sort):
         try:
+            working, accessible = working_location_list_context(services)
+            filt = location_id_mongo_filter(working, accessible)
             return [
                 priced_document_row(document, document_type)
-                for document in list_method()
+                for document in list_method(location_filter=filt)
             ]
         except Exception:
             return []

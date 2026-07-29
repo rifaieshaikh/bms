@@ -3,6 +3,7 @@ from typing import List, Optional
 
 from pymongo.database import Database
 
+from vaybooks.bms.domain.identity.location_access import merge_mongo_filters
 from vaybooks.bms.domain.parties.workers.entities import (
     SOURCE_CUSTOMIZATION,
     Worker,
@@ -27,6 +28,7 @@ class MongoWorkerRepository:
             "is_active": worker.is_active,
             "default_hourly_rate": float(worker.default_hourly_rate or 0.0),
             "linked_user_id": worker.linked_user_id or "",
+            "location_ids": list(worker.location_ids or []),
             "created_at": worker.created_at,
             "updated_at": worker.updated_at,
         }
@@ -43,6 +45,7 @@ class MongoWorkerRepository:
             is_active=doc.get("is_active", True),
             default_hourly_rate=float(doc.get("default_hourly_rate") or 0.0),
             linked_user_id=doc.get("linked_user_id", "") or "",
+            location_ids=list(doc.get("location_ids") or []),
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
         )
@@ -55,8 +58,13 @@ class MongoWorkerRepository:
         doc = self._collection.find_one({"_id": worker_id})
         return self._from_doc(doc) if doc else None
 
-    def list_all(self, active_only: bool = True) -> List[Worker]:
-        query = {"is_active": True} if active_only else {}
+    def list_all(
+        self,
+        active_only: bool = True,
+        location_filter: dict | None = None,
+    ) -> List[Worker]:
+        base = {"is_active": True} if active_only else {}
+        query = merge_mongo_filters(base, location_filter or {})
         return [self._from_doc(d) for d in self._collection.find(query)]
 
     def list_by_activity(

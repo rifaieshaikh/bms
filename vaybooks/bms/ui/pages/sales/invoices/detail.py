@@ -222,8 +222,20 @@ def render(services: dict) -> None:
     actions.append({"label": "Edit", "key": "edit"})
     if customer_account_id and outstanding > 0.01:
         actions.append({"label": "Record Receipt", "key": "record_receipt"})
+    sales = services.get("sales")
+    pending_delivery = (
+        sales.invoice_pending_delivery_qty(voucher.id) if sales else {}
+    )
+    if pending_delivery:
+        actions.append(
+            {"label": "Create Delivery Note", "key": "create_dn", "type": "primary"}
+        )
     if linked_customer_id:
         actions.append({"label": "View customer →", "key": "view_customer"})
+    delivery_status = getattr(voucher, "delivery_status", "") or (
+        "Not Delivered" if pending_delivery else "Fully Delivered"
+    )
+    st.caption(f"Delivery status: {delivery_status}")
     clicked = document_actions(actions, suffix=f"sale_{voucher.id}")
     if not editable:
         st.info("Locked: invoice month has ended")
@@ -234,6 +246,11 @@ def render(services: dict) -> None:
         else:
             arm_invoice_edit_dialog(voucher.id)
             st.rerun()
+    if clicked.get("create_dn"):
+        from vaybooks.bms.ui.components.sales.delivery_note_dialog import arm_dn_dialog
+
+        arm_dn_dialog(invoice_id=voucher.id)
+        st.rerun()
     if clicked.get("record_receipt") and customer_account_id:
         from vaybooks.bms.ui.pages.finance.accounts import list as acc
 
@@ -358,6 +375,9 @@ def render(services: dict) -> None:
     )
     secondary_sections(document_content=content_obj)
 
+    from vaybooks.bms.ui.components.sales.delivery_note_dialog import open_dn_dialog_if_armed
+
+    open_dn_dialog_if_armed(services)
     open_invoice_edit_dialog_if_armed(
         services,
         row=row,
@@ -370,4 +390,4 @@ def render(services: dict) -> None:
         from vaybooks.bms.ui.pages.finance.accounts import list as acc
 
         if st.session_state.get(acc.RCPT):
-            acc._receipt_dialog(services["accounting"])
+            acc._receipt_dialog(services)
