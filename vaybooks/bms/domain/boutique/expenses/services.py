@@ -32,10 +32,15 @@ class ExpenseDomainService:
         vendor_or_worker_name: str = "",
         account_id: Optional[str] = None,
         notes: str = "",
+        location_id: str = "",
+        location_name: str = "",
     ) -> Expense:
+        from vaybooks.bms.domain.shared.party_location import require_location_id
+
         validate_non_negative(purchase_price, "Purchase price")
         validate_non_negative(selling_price, "Selling price")
         validate_non_negative(quantity, "Quantity")
+        location_id = require_location_id(location_id)
 
         expense = Expense(
             order_id=order_id,
@@ -55,6 +60,8 @@ class ExpenseDomainService:
             vendor_or_worker_name=vendor_or_worker_name,
             account_id=account_id,
             notes=notes,
+            location_id=location_id,
+            location_name=(location_name or "").strip(),
         )
         expense.calculate_totals()
         return self._repo.save(expense)

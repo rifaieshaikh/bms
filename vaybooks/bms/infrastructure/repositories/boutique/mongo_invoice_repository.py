@@ -41,6 +41,8 @@ class MongoInvoiceRepository:
             "utgst_amount": invoice.utgst_amount,
             "invoice_kind": invoice.invoice_kind,
             "financial_year": invoice.financial_year or "",
+            "location_id": invoice.location_id,
+            "location_name": invoice.location_name,
             "created_at": invoice.created_at,
             "updated_at": invoice.updated_at,
         }
@@ -75,6 +77,8 @@ class MongoInvoiceRepository:
             utgst_amount=float(doc.get("utgst_amount") or 0),
             invoice_kind=doc.get("invoice_kind", "standard"),
             financial_year=doc.get("financial_year", "") or "",
+            location_id=str(doc.get("location_id") or ""),
+            location_name=str(doc.get("location_name") or ""),
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
         )

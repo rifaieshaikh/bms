@@ -17,6 +17,10 @@ from vaybooks.bms.ui.components.common.filter_sort_bar import (
 from vaybooks.bms.ui.components.common.overview_action_cards import (
     overview_action_cards,
 )
+from vaybooks.bms.ui.components.shared.dashboard_card import (
+    DashboardCardSpec,
+    dashboard_card_grid,
+)
 from vaybooks.bms.ui.styles import metric_grid
 
 QUEUE_LIMIT = 8
@@ -224,23 +228,42 @@ def render(services: dict) -> None:
     pending_del = int(summary.get("bills_pending_delivery", 0) or 0)
 
     st.markdown("#### Attention")
-    metric_grid(
+    dashboard_card_grid(
         [
-            ("Open orders", summary.get("open_orders", 0)),
-            (
-                "Overdue orders",
-                overdue,
-                _tone_if(overdue > 0, "danger"),
+            DashboardCardSpec(
+                title="Open orders",
+                value=str(summary.get("open_orders", 0)),
+                icon="shopping-bag",
+                footer_text="View orders",
+                on_click=lambda: navigation.go_to_list("orders_list"),
+                key="boutique_open_orders",
             ),
-            (
-                "Bills pending invoice",
-                pending_inv,
-                _tone_if(pending_inv > 0, "warn"),
+            DashboardCardSpec(
+                title="Overdue orders",
+                value=str(overdue),
+                icon="alert-triangle",
+                tone=_tone_if(overdue > 0, "danger"),
+                footer_text="View orders",
+                on_click=lambda: navigation.go_to_list("orders_list"),
+                key="boutique_overdue_orders",
             ),
-            (
-                "Bills pending delivery",
-                pending_del,
-                _tone_if(pending_del > 0, "warn"),
+            DashboardCardSpec(
+                title="Bills pending invoice",
+                value=str(pending_inv),
+                icon="file-invoice",
+                tone=_tone_if(pending_inv > 0, "warning"),
+                footer_text="View orders",
+                on_click=lambda: navigation.go_to_list("orders_list"),
+                key="boutique_pending_invoice",
+            ),
+            DashboardCardSpec(
+                title="Bills pending delivery",
+                value=str(pending_del),
+                icon="truck",
+                tone=_tone_if(pending_del > 0, "warning"),
+                footer_text="View orders",
+                on_click=lambda: navigation.go_to_list("orders_list"),
+                key="boutique_pending_delivery",
             ),
         ],
         suffix="boutique_overview_attention",

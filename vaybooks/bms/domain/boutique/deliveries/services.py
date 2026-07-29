@@ -54,13 +54,18 @@ class DeliveryDomainService:
         delivery_notes: str = "",
         existing_deliveries: List[Delivery] | None = None,
         allow_already_delivered: bool = False,
+        location_id: str = "",
+        location_name: str = "",
     ) -> Delivery:
+        from vaybooks.bms.domain.shared.party_location import require_location_id
+
         existing = existing_deliveries or self._delivery_repo.list_by_order(order.id)
         self.validate_bill_ids(
             order, bill_ids, existing, allow_already_delivered=allow_already_delivered
         )
         if not delivery_date:
             raise ValidationError("Delivery date is required")
+        location_id = require_location_id(location_id or order.location_id)
 
         delivery = Delivery(
             order_id=order.id,
@@ -68,5 +73,7 @@ class DeliveryDomainService:
             bill_ids=list(bill_ids),
             delivery_date=delivery_date,
             delivery_notes=delivery_notes,
+            location_id=location_id,
+            location_name=(location_name or order.location_name or "").strip(),
         )
         return self._delivery_repo.save(delivery)

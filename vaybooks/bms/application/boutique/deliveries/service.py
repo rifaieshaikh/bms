@@ -59,6 +59,8 @@ class DeliveryAppService:
         delivery_date: date,
         delivery_notes: str = "",
         allow_already_delivered: bool = False,
+        location_id: str = "",
+        location_name: str = "",
     ) -> Delivery:
         order = self._resolve_order(order_id)
         existing = self._delivery_repo.list_by_order(order.id)
@@ -69,6 +71,8 @@ class DeliveryAppService:
             delivery_notes=delivery_notes,
             existing_deliveries=existing,
             allow_already_delivered=allow_already_delivered,
+            location_id=location_id or order.location_id,
+            location_name=location_name or order.location_name,
         )
         invoices = self._invoice_repo.list_by_order(order.id)
         deliveries = self._delivery_repo.list_by_order(order.id) + [delivery]

@@ -4,6 +4,7 @@ from typing import List, Optional
 
 from pymongo.database import Database
 
+from vaybooks.bms.domain.identity.location_access import merge_mongo_filters
 from vaybooks.bms.domain.parties.customers.entities import Customer
 from vaybooks.bms.domain.shared.enums import PartyRegistrationType
 
@@ -44,6 +45,9 @@ class MongoCustomerRepository:
             "segment_names": list(customer.segment_names or []),
             "assigned_user_id": customer.assigned_user_id or "",
             "assigned_user_name": customer.assigned_user_name or "",
+            "is_commission_agent": bool(customer.is_commission_agent),
+            "commission_agent_id": customer.commission_agent_id or "",
+            "location_ids": list(customer.location_ids or []),
             "created_at": customer.created_at,
             "updated_at": customer.updated_at,
         }
@@ -83,6 +87,9 @@ class MongoCustomerRepository:
             segment_names=list(doc.get("segment_names") or []),
             assigned_user_id=doc.get("assigned_user_id", "") or "",
             assigned_user_name=doc.get("assigned_user_name", "") or "",
+            is_commission_agent=bool(doc.get("is_commission_agent", False)),
+            commission_agent_id=doc.get("commission_agent_id", "") or "",
+            location_ids=list(doc.get("location_ids") or []),
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
         )
@@ -109,9 +116,11 @@ class MongoCustomerRepository:
         doc = self._collection.find_one({"gstin": gstin.upper()})
         return self._from_doc(doc) if doc else None
 
-    def search(self, query: str) -> List[Customer]:
+    def search(
+        self, query: str, location_filter: dict | None = None
+    ) -> List[Customer]:
         regex = {"$regex": re.escape((query or "").strip()), "$options": "i"}
-        docs = self._collection.find(
+        mongo_query = merge_mongo_filters(
             {
                 "$or": [
                     {"customer_name": regex},
@@ -121,9 +130,12 @@ class MongoCustomerRepository:
                     {"city": regex},
                     {"pincode": regex},
                 ]
-            }
+            },
+            location_filter or {},
         )
+        docs = self._collection.find(mongo_query)
         return [self._from_doc(d) for d in docs]
 
-    def list_all(self) -> List[Customer]:
-        return [self._from_doc(d) for d in self._collection.find()]
+    def list_all(self, location_filter: dict | None = None) -> List[Customer]:
+        query = merge_mongo_filters(location_filter or {})
+        return [self._from_doc(d) for d in self._collection.find(query)]

@@ -30,7 +30,12 @@ _ACTION_FLAGS = {
 
 
 def _load_activities(services: dict, filters: dict, sort) -> list:
-    rows = page_adapter(services).list_activities(limit=2000)
+    from vaybooks.bms.domain.identity.location_access import location_id_mongo_filter
+    from vaybooks.bms.ui.auth.session import working_location_list_context
+
+    working, accessible = working_location_list_context(services)
+    filt = location_id_mongo_filter(working, accessible)
+    rows = page_adapter(services).list_activities(limit=2000, location_filter=filt)
     st.session_state[_LOADED] = rows
     return rows
 

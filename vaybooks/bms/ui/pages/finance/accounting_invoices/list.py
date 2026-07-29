@@ -11,11 +11,18 @@ from vaybooks.bms.ui.pages.finance.accounts import list as acc
 
 def _load(services, filters, sort):
     try:
+        from vaybooks.bms.domain.identity.location_access import location_id_mongo_filter
+        from vaybooks.bms.ui.auth.session import working_location_list_context
+
+        working, accessible = working_location_list_context(services)
+        filt = location_id_mongo_filter(working, accessible)
         accounting = services["accounting"]
         customization = accounting.list_vouchers_by_type(
-            VoucherType.CUSTOMIZATION_INVOICE
+            VoucherType.CUSTOMIZATION_INVOICE, location_filter=filt
         )
-        sales = accounting.list_vouchers_by_type(VoucherType.SALES_INVOICE)
+        sales = accounting.list_vouchers_by_type(
+            VoucherType.SALES_INVOICE, location_filter=filt
+        )
         return customization + sales
     except Exception:
         return []

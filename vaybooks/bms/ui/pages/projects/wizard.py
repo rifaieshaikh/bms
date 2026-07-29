@@ -187,11 +187,20 @@ def _step_modules(data: dict) -> None:
     _nav_row(5)
 
 
+def _visible_customers(services: dict):
+    from vaybooks.bms.domain.identity.location_access import location_ids_mongo_filter
+    from vaybooks.bms.ui.auth.session import working_location_list_context
+
+    working, accessible = working_location_list_context(services)
+    filt = location_ids_mongo_filter(working, accessible)
+    return services["customers"].list_all_customers(location_filter=filt)
+
+
 def _step_preview(data: dict, services: dict) -> None:
     st.markdown("**Step 7 — Preview & details**")
     templates = _load_templates(services)
     template_options = {t.name: t.id for t in templates}
-    customers = services["customers"].list_all_customers()
+    customers = _visible_customers(services)
     customer_labels = {c.customer_name: c.id for c in customers}
     state_labels = [f"{s['code']} — {s['name']}" for s in INDIAN_STATES]
 
@@ -284,7 +293,7 @@ def _create_from_wizard(data: dict, services: dict) -> None:
     if not name:
         st.error("Project name is required")
         return
-    customers = services["customers"].list_all_customers()
+    customers = _visible_customers(services)
     customer_labels = {c.customer_name: c.id for c in customers}
     customer_label = data.get("customer_label") or ""
     if customer_label not in customer_labels:
@@ -306,6 +315,11 @@ def _create_from_wizard(data: dict, services: dict) -> None:
     contract_value = float(data.get("contract_value") or 0.0)
 
     try:
+        from vaybooks.bms.ui.components.common.location_fields import (
+            require_location_name,
+        )
+
+        location_id, location_name = require_location_name(services)
         projects_svc = services["projects"]
         if template_id:
             project = projects_svc.create_project_from_template(
@@ -315,6 +329,8 @@ def _create_from_wizard(data: dict, services: dict) -> None:
                 contract_value,
                 site_address=data.get("site_address") or "",
                 site_state_code=site_state_code,
+                location_id=location_id,
+                location_name=location_name,
             )
         else:
             project = projects_svc.create_project(
@@ -323,6 +339,8 @@ def _create_from_wizard(data: dict, services: dict) -> None:
                 contract_value,
                 site_address=data.get("site_address") or "",
                 site_state_code=site_state_code,
+                location_id=location_id,
+                location_name=location_name,
             )
         projects_svc.update_project_settings(
             project.id,

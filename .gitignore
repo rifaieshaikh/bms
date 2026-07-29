@@ -11,3 +11,7 @@ venv/
 .pytest_cache/
 .DS_Store
 COMMIT_MSG.tmp
+.claude
+.vscode
+.claudeignore
+CLAUDE.md

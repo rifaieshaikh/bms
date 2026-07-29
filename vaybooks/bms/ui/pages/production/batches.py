@@ -3,22 +3,38 @@ from datetime import date
 import streamlit as st
 
 from vaybooks.bms.ui import navigation
+from vaybooks.bms.ui.auth.session import require_specific_location
 
 
 @st.dialog("New Production Batch")
-def _new_batch_dialog(service, inventory) -> None:
+def _new_batch_dialog(services: dict) -> None:
+    service = services.get("production")
+    inventory = services.get("inventory")
     recipes = service.list_recipes(active_only=True)
     locations = inventory.list_locations(active_only=True)
     if not recipes or not locations:
         st.error("An active recipe and production location are required.")
         return
+    try:
+        working_location_id = require_specific_location(services)
+    except Exception as exc:
+        st.error(str(exc))
+        return
     recipe_labels = {recipe.name: recipe for recipe in recipes}
     location_labels = {location.name: location for location in locations}
+    default_loc_name = next(
+        (name for name, loc in location_labels.items() if loc.id == working_location_id),
+        list(location_labels)[0],
+    )
     batch_number = st.text_input(
         "Batch number", value=f"PB-{date.today():%Y%m%d}-"
     )
     recipe_label = st.selectbox("Recipe", list(recipe_labels))
-    location_label = st.selectbox("Location", list(location_labels))
+    location_label = st.selectbox(
+        "Location",
+        list(location_labels),
+        index=list(location_labels).index(default_loc_name),
+    )
     c1, c2 = st.columns(2)
     batch_date = c1.date_input("Batch date", value=date.today())
     planned_qty = c2.number_input(
@@ -48,8 +64,13 @@ def render(services: dict) -> None:
         st.error("Production or inventory service is unavailable.")
         return
     if st.button("New batch", type="primary"):
-        _new_batch_dialog(service, inventory)
-    batches = service.list_batches()
+        _new_batch_dialog(services)
+    from vaybooks.bms.domain.identity.location_access import location_id_mongo_filter
+    from vaybooks.bms.ui.auth.session import working_location_list_context
+
+    working, accessible = working_location_list_context(services)
+    filt = location_id_mongo_filter(working, accessible)
+    batches = service.list_batches(location_filter=filt)
     if not batches:
         st.info("No production batches yet.")
         return

@@ -47,10 +47,10 @@ class FakeCustomerRepository:
                 return c
         return None
 
-    def search(self, query: str) -> List[Customer]:
+    def search(self, query: str, location_filter: dict | None = None) -> List[Customer]:
         return list(self._store.values())
 
-    def list_all(self) -> List[Customer]:
+    def list_all(self, location_filter: dict | None = None) -> List[Customer]:
         return list(self._store.values())
 
 
@@ -89,6 +89,18 @@ class FakeAccountRepository:
                 return a
         return None
 
+    def find_agent_account(self, agent_id: str) -> Optional[Account]:
+        for a in self._store.values():
+            if a.linked_agent_id == agent_id:
+                return a
+        return None
+
+    def find_delivery_partner_account(self, partner_id: str) -> Optional[Account]:
+        for a in self._store.values():
+            if getattr(a, "linked_delivery_partner_id", None) == partner_id:
+                return a
+        return None
+
     def customer_balances_by_customer(self) -> dict:
         return {
             str(a.linked_customer_id): a.current_balance
@@ -124,10 +136,30 @@ class FakeVoucherRepository:
                 return v
         return None
 
-    def list_by_account(self, account_id: str) -> List[Voucher]:
-        return [
+    def list_by_account(
+        self, account_id: str, location_filter: dict | None = None
+    ) -> List[Voucher]:
+        vouchers = [
             v for v in self._store.values()
             if any(l.account_id == account_id for l in v.lines)
+        ]
+        if not location_filter:
+            return vouchers
+        expected = location_filter.get("location_id")
+        if expected is None:
+            return vouchers
+        if isinstance(expected, dict) and "$in" in expected:
+            allowed = {str(x).strip() for x in (expected.get("$in") or [])}
+            return [
+                v
+                for v in vouchers
+                if (getattr(v, "location_id", "") or "").strip() in allowed
+            ]
+        want = str(expected).strip()
+        return [
+            v
+            for v in vouchers
+            if (getattr(v, "location_id", "") or "").strip() == want
         ]
 
     def list_by_order(self, order_id: str) -> List[Voucher]:
@@ -139,8 +171,26 @@ class FakeVoucherRepository:
                 return voucher
         return None
 
-    def list_all(self) -> List[Voucher]:
-        return list(self._store.values())
+    def list_all(self, location_filter: dict | None = None) -> List[Voucher]:
+        vouchers = list(self._store.values())
+        if not location_filter:
+            return vouchers
+        expected = location_filter.get("location_id")
+        if expected is None:
+            return vouchers
+        if isinstance(expected, dict) and "$in" in expected:
+            allowed = {str(x).strip() for x in (expected.get("$in") or [])}
+            return [
+                v
+                for v in vouchers
+                if (getattr(v, "location_id", "") or "").strip() in allowed
+            ]
+        want = str(expected).strip()
+        return [
+            v
+            for v in vouchers
+            if (getattr(v, "location_id", "") or "").strip() == want
+        ]
 
     def delete(self, voucher_id: str) -> None:
         self._store.pop(voucher_id, None)
@@ -175,10 +225,14 @@ class FakeOrderRepository:
                     return deepcopy(o)
         return None
 
-    def search(self, query: str) -> List[CustomizationOrder]:
+    def search(
+        self, query: str, location_filter: dict | None = None
+    ) -> List[CustomizationOrder]:
         return [deepcopy(o) for o in self._store.values()]
 
-    def list_all(self) -> List[CustomizationOrder]:
+    def list_all(
+        self, location_filter: dict | None = None
+    ) -> List[CustomizationOrder]:
         return [deepcopy(o) for o in self._store.values()]
 
     def list_by_status(self, status: str) -> List[CustomizationOrder]:

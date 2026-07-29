@@ -239,14 +239,21 @@ def create_cash_sale_fixture(
 ) -> SalesFixture:
     """Create customer + stocked product + posted cash sales invoice."""
     from e2e.helpers.unique import unique_name, unique_phone
+    from vaybooks.bms.infrastructure.db.location_seed import ensure_default_locations
 
     accounting, customers, inventory, sales = _services()
+    main_id, store_id = ensure_default_locations(_db())
+    location_ids = [main_id, store_id]
     cash, _ = ensure_posting_accounts(accounting)
 
     name = customer_name or unique_name("RetCust")
     phone_number = phone or unique_phone()
     customer = customers.create_customer(
-        CustomerInput(customer_name=name, phone_number=phone_number)
+        CustomerInput(
+            customer_name=name,
+            phone_number=phone_number,
+            location_ids=list(location_ids),
+        )
     )
     customer_account = accounting.get_customer_account(customer.id)
     if not customer_account:

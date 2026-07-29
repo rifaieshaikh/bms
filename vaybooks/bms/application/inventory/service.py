@@ -577,6 +577,9 @@ class InventoryAppService:
         transfer_date: date,
         lines: list[dict],
         notes: str = "",
+        *,
+        allowed_location_ids: list[str] | None = None,
+        send_in_transit: bool = False,
     ) -> StockTransfer:
         return self._domain.create_stock_transfer(
             transfer_number,
@@ -585,19 +588,47 @@ class InventoryAppService:
             transfer_date,
             lines,
             notes,
+            allowed_location_ids=allowed_location_ids,
+            send_in_transit=send_in_transit,
         )
 
-    def dispatch_stock_transfer(self, transfer_id: str) -> StockTransfer:
-        return self._domain.dispatch_stock_transfer(transfer_id)
+    def dispatch_stock_transfer(
+        self,
+        transfer_id: str,
+        *,
+        allowed_location_ids: list[str] | None = None,
+    ) -> StockTransfer:
+        return self._domain.dispatch_stock_transfer(
+            transfer_id, allowed_location_ids=allowed_location_ids
+        )
 
-    def receive_stock_transfer(self, transfer_id: str) -> StockTransfer:
-        return self._domain.receive_stock_transfer(transfer_id)
+    def receive_stock_transfer(
+        self,
+        transfer_id: str,
+        *,
+        allowed_location_ids: list[str] | None = None,
+    ) -> StockTransfer:
+        return self._domain.receive_stock_transfer(
+            transfer_id, allowed_location_ids=allowed_location_ids
+        )
 
     def cancel_stock_transfer(self, transfer_id: str) -> StockTransfer:
         return self._domain.cancel_stock_transfer(transfer_id)
 
-    def list_stock_transfers(self) -> List[StockTransfer]:
-        return self._domain.list_stock_transfers()
+    def list_stock_transfers(
+        self, *, location_ids: list[str] | None = None
+    ) -> List[StockTransfer]:
+        transfers = self._domain.list_stock_transfers()
+        if location_ids is None:
+            return transfers
+        allowed = {str(i).strip() for i in location_ids if str(i).strip()}
+        if not allowed:
+            return []
+        return [
+            t
+            for t in transfers
+            if t.from_location_id in allowed or t.to_location_id in allowed
+        ]
 
     def get_stock_transfer(self, transfer_id: str) -> Optional[StockTransfer]:
         return self._domain.get_stock_transfer(transfer_id)

@@ -1,11 +1,13 @@
 import streamlit as st
 
+from vaybooks.bms.domain.identity.location_access import location_ids_mongo_filter
 from vaybooks.bms.domain.parties.customers.entities import CustomerInput
 from vaybooks.bms.domain.shared.exceptions import (
     DuplicateCustomerError,
     ValidationError,
 )
 from vaybooks.bms.ui import navigation
+from vaybooks.bms.ui.auth.session import working_location_list_context
 from vaybooks.bms.ui.components.parties.customer_card import customer_card
 from vaybooks.bms.ui.components.parties.customer_form import render_customer_form
 from vaybooks.bms.ui.components.common.list_view import render_list
@@ -112,6 +114,7 @@ def _add_customer_dialog(customer_service, services: dict):
         segment_options=_customer_segment_options(services),
         require_name=require_name,
         require_phone=require_phone,
+        services=services,
     )
 
     cols = st.columns(2)
@@ -144,6 +147,7 @@ def _edit_customer_dialog(customer_service, customer_id: str, services: dict):
         segment_options=_customer_segment_options(services, customer),
         require_name=require_name,
         require_phone=require_phone,
+        services=services,
     )
 
     cols = st.columns(2)
@@ -158,7 +162,9 @@ def _edit_customer_dialog(customer_service, customer_id: str, services: dict):
 
 
 def _load_customers(services, filters, sort):
-    customers = services["customers"].list_all_customers()
+    working, accessible = working_location_list_context(services)
+    filt = location_ids_mongo_filter(working, accessible)
+    customers = services["customers"].list_all_customers(location_filter=filt)
     accounting = services.get("accounting")
     try:
         counts = services["orders"].order_counts_by_customer()

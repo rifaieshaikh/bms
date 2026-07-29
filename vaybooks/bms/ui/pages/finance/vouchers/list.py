@@ -11,7 +11,12 @@ from vaybooks.bms.ui.pages.finance.accounts import list as acc
 
 def _load(services, filters, sort):
     try:
-        return services["accounting"].list_vouchers()
+        from vaybooks.bms.domain.identity.location_access import location_id_mongo_filter
+        from vaybooks.bms.ui.auth.session import working_location_list_context
+
+        working, accessible = working_location_list_context(services)
+        filt = location_id_mongo_filter(working, accessible)
+        return services["accounting"].list_vouchers(location_filter=filt)
     except Exception:
         return []
 
@@ -39,5 +44,5 @@ def render(services: dict):
     )
     if bar["primary_clicked"]:
         clear_all_dialog_flags()
-        acc._journal_dialog(services["accounting"])
+        acc._journal_dialog(services)
     acc.open_pending_dialogs(services)

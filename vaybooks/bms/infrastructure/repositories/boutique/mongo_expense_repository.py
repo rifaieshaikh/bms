@@ -34,6 +34,8 @@ class MongoExpenseRepository:
             "vendor_or_worker_name": expense.vendor_or_worker_name,
             "account_id": expense.account_id,
             "notes": expense.notes,
+            "location_id": expense.location_id,
+            "location_name": expense.location_name,
             "created_at": expense.created_at,
             "updated_at": expense.updated_at,
         }
@@ -60,6 +62,8 @@ class MongoExpenseRepository:
             vendor_or_worker_name=doc.get("vendor_or_worker_name", ""),
             account_id=doc.get("account_id"),
             notes=doc.get("notes", ""),
+            location_id=str(doc.get("location_id") or ""),
+            location_name=str(doc.get("location_name") or ""),
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
         )

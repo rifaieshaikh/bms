@@ -38,6 +38,8 @@ class PurchaseOrder:
     status: PurchaseOrderStatus = PurchaseOrderStatus.DRAFT
     notes: str = ""
     project_id: str = ""
+    location_id: str = ""
+    location_name: str = ""
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
 
@@ -152,6 +154,8 @@ class PurchaseReturn:
     source_grn_id: Optional[str] = None
     voucher_id: Optional[str] = None
     notes: str = ""
+    location_id: str = ""
+    location_name: str = ""
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
 

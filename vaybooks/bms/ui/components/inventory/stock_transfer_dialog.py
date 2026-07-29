@@ -1,4 +1,4 @@
-"""Dialog to create a new stock transfer between locations."""
+"""Dialog to create a new stock transfer between accessible locations."""
 
 from __future__ import annotations
 
@@ -6,7 +6,10 @@ from datetime import date
 
 import streamlit as st
 
-from vaybooks.bms.domain.identity.location_access import accessible_locations
+from vaybooks.bms.domain.identity.location_access import (
+    accessible_locations,
+    can_transfer_stock,
+)
 from vaybooks.bms.ui.auth.session import get_current_user
 from vaybooks.bms.ui.components.common.location_picker import render_location_selectbox
 from vaybooks.bms.ui.dialog_utils import make_dismiss_handler, register_armed_dialog
@@ -36,6 +39,10 @@ def _next_transfer_number(inventory) -> str:
     return f"ST-{len(existing) + 1:04d}"
 
 
+def _accessible_ids(user, inventory) -> list[str]:
+    return [loc.id for loc in accessible_locations(user, inventory)]
+
+
 @st.dialog(
     "New Stock Transfer", width="large", on_dismiss=make_dismiss_handler(TRANSFER_DIALOG)
 )
@@ -47,8 +54,11 @@ def stock_transfer_dialog(services: dict) -> None:
     inventory = services["inventory"]
     user = get_current_user(services)
     locations = accessible_locations(user, inventory)
-    if len(locations) < 2:
-        st.warning("Add at least two active locations (Business → Locations) before creating a transfer.")
+    if not can_transfer_stock(user, locations):
+        st.warning(
+            "Stock transfers require access to at least two locations. "
+            "Ask an admin to assign more locations to your user."
+        )
         if st.button("Close", key=f"{TRANSFER_DIALOG}_close_locations"):
             _clear()
             st.rerun()
@@ -65,6 +75,7 @@ def stock_transfer_dialog(services: dict) -> None:
     prod_opts = {f"{p.sku} — {p.name}": p.id for p in products}
     prod_names = list(prod_opts.keys())
     prod_name_by_id = {p.id: f"{p.sku} — {p.name}" for p in products}
+    allowed_ids = _accessible_ids(user, inventory)
 
     cols = st.columns(2)
     with cols[0]:
@@ -89,6 +100,10 @@ def stock_transfer_dialog(services: dict) -> None:
         "Transfer date", value=date.today(), key=f"{TRANSFER_DIALOG}_date"
     )
     notes = st.text_area("Notes", key=f"{TRANSFER_DIALOG}_notes")
+    st.caption(
+        "Initiate sends stock **in transit** (leaves the source). "
+        "Receive at the destination to add stock there."
+    )
 
     st.markdown("**Lines**")
     lines = st.session_state.setdefault(_LINES_KEY, [{"product_id": "", "qty": 1.0}])
@@ -129,15 +144,16 @@ def stock_transfer_dialog(services: dict) -> None:
         lines.pop()
         st.rerun()
 
-    action_cols = st.columns(2)
-    do_save = action_cols[0].button(
-        "Create Transfer", type="primary", width="stretch"
+    action_cols = st.columns(3)
+    do_send = action_cols[0].button(
+        "Initiate (In Transit)", type="primary", width="stretch"
     ) or consume_submit(SUBMIT_TRANSFER)
-    if action_cols[1].button("Cancel", width="stretch"):
+    do_draft = action_cols[1].button("Save Draft", width="stretch")
+    if action_cols[2].button("Cancel", width="stretch"):
         _clear()
         st.rerun()
 
-    if not do_save:
+    if not do_send and not do_draft:
         return
     try:
         if not from_location_id or not to_location_id:
@@ -152,16 +168,24 @@ def stock_transfer_dialog(services: dict) -> None:
         if not valid_lines:
             raise ValueError("Add at least one line with product and quantity")
         transfer_number = _next_transfer_number(inventory)
-        inventory.create_stock_transfer(
+        transfer = inventory.create_stock_transfer(
             transfer_number,
             from_location_id,
             to_location_id,
             transfer_date,
             valid_lines,
             notes.strip(),
+            allowed_location_ids=allowed_ids,
+            send_in_transit=bool(do_send),
         )
         _clear()
-        st.success(f"Transfer {transfer_number} created")
+        if transfer.status.value == "In Transit":
+            st.success(
+                f"Transfer {transfer_number} is in transit "
+                f"(stock left {transfer.from_location_name})"
+            )
+        else:
+            st.success(f"Transfer {transfer_number} saved as draft")
         st.rerun()
     except Exception as exc:
         st.error(str(exc))

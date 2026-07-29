@@ -5,6 +5,10 @@ import streamlit as st
 from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.components.home.dashboard_cards import order_action_cards
 from vaybooks.bms.ui.components.inventory.inventory_product_card import inventory_low_stock_cards
+from vaybooks.bms.ui.components.shared.dashboard_card import (
+    DashboardCardSpec,
+    dashboard_card_grid,
+)
 from vaybooks.bms.ui.styles import metric_grid
 
 
@@ -41,36 +45,97 @@ def _dashboard_summary(_reports):
     return asdict(_reports.get_dashboard_summary())
 
 
+def _go_to_orders() -> None:
+    navigation.go_to_list("orders_list")
+
+
 def _kpi_row(summary):
-    metric_grid(
+    dashboard_card_grid(
         [
-            ("🧾 Active Orders", _summary_int(summary, "active_orders")),
-            ("⚙️ In Progress", _summary_int(summary, "pending_activity_orders")),
-            ("✅ Completed", _completed_count(summary)),
-            ("📋 Pending Activities", _summary_int(summary, "total_pending_activities")),
-            (
-                "📦 Delivered (Month)",
-                _summary_int(summary, "delivered_this_month"),
+            DashboardCardSpec(
+                title="Active Orders",
+                value=str(_summary_int(summary, "active_orders")),
+                icon="shopping-bag",
+                footer_text="View active orders",
+                on_click=_go_to_orders,
+                key="home_active_orders",
             ),
-            (
-                "💰 Advance (Month)",
-                f"₹{_summary_float(summary, 'total_advance_this_month'):,.0f}",
+            DashboardCardSpec(
+                title="In Progress",
+                value=str(_summary_int(summary, "pending_activity_orders")),
+                icon="settings",
+                footer_text="View in-progress orders",
+                on_click=_go_to_orders,
+                key="home_in_progress",
             ),
-            (
-                "🧾 Invoiced (Month)",
-                f"₹{_summary_float(summary, 'total_invoice_this_month'):,.0f}",
+            DashboardCardSpec(
+                title="Completed",
+                value=str(_completed_count(summary)),
+                icon="check",
+                tone="success",
+                footer_text="View completed orders",
+                on_click=_go_to_orders,
+                key="home_completed",
             ),
-            (
-                "⏳ Bills Pending Invoice",
-                _summary_int(summary, "bills_pending_invoice"),
+            DashboardCardSpec(
+                title="Pending Activities",
+                value=str(_summary_int(summary, "total_pending_activities")),
+                icon="list-check",
+                tone="warning" if _summary_int(summary, "total_pending_activities") else "primary",
+                footer_text="View pending activities",
+                on_click=_go_to_orders,
+                key="home_pending_activities",
             ),
-            (
-                "⌛ Items Not Delivered",
-                _summary_int(summary, "items_pending"),
+            DashboardCardSpec(
+                title="Delivered (Month)",
+                value=str(_summary_int(summary, "delivered_this_month")),
+                icon="truck",
+                tone="success",
+                footer_text="View delivered orders",
+                on_click=_go_to_orders,
+                key="home_delivered_month",
             ),
-            (
-                "🚚 Awaiting Delivery",
-                _summary_int(summary, "items_awaiting_delivery"),
+            DashboardCardSpec(
+                title="Advance (Month)",
+                value=f"₹{_summary_float(summary, 'total_advance_this_month'):,.0f}",
+                icon="cash",
+                footer_text="View advances",
+                on_click=_go_to_orders,
+                key="home_advance_month",
+            ),
+            DashboardCardSpec(
+                title="Invoiced (Month)",
+                value=f"₹{_summary_float(summary, 'total_invoice_this_month'):,.0f}",
+                icon="file-invoice",
+                footer_text="View invoices",
+                on_click=_go_to_orders,
+                key="home_invoiced_month",
+            ),
+            DashboardCardSpec(
+                title="Bills Pending Invoice",
+                value=str(_summary_int(summary, "bills_pending_invoice")),
+                icon="receipt",
+                tone="warning" if _summary_int(summary, "bills_pending_invoice") else "primary",
+                footer_text="View pending bills",
+                on_click=_go_to_orders,
+                key="home_bills_pending_invoice",
+            ),
+            DashboardCardSpec(
+                title="Items Not Delivered",
+                value=str(_summary_int(summary, "items_pending")),
+                icon="box",
+                tone="warning" if _summary_int(summary, "items_pending") else "primary",
+                footer_text="View pending items",
+                on_click=_go_to_orders,
+                key="home_items_pending",
+            ),
+            DashboardCardSpec(
+                title="Awaiting Delivery",
+                value=str(_summary_int(summary, "items_awaiting_delivery")),
+                icon="truck-delivery",
+                footer_text="View awaiting delivery",
+                on_click=_go_to_orders,
+                key="home_awaiting_delivery",
             ),
         ],
         suffix="dashboard_kpi",

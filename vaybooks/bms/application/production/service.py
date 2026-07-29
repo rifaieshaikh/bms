@@ -51,9 +51,12 @@ class ProductionAppService:
         self._recipe_repo.delete(recipe_id)
 
     def list_batches(
-        self, status: Optional[ProductionBatchStatus] = None
+        self,
+        status: Optional[ProductionBatchStatus] = None,
+        *,
+        location_filter: dict | None = None,
     ) -> list[ProductionBatch]:
-        return self._batch_repo.list_all(status)
+        return self._batch_repo.list_all(status, location_filter=location_filter)
 
     def get_batch(self, batch_id: str) -> Optional[ProductionBatch]:
         return self._batch_repo.find_by_id(batch_id)

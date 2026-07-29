@@ -286,6 +286,27 @@ def require_specific_location(services: dict) -> str:
     return location_id
 
 
+def working_location_list_context(services: dict) -> tuple[str, list[str] | None]:
+    """Return ``(working_location_id, accessible_ids_or_None)`` for list filters.
+
+    ``accessible_ids`` is always the locations the current user may access.
+    When working location is ALL, filters use that set (not the full business
+    roster unless the user is Owner with every location).
+
+    ``None`` is reserved for unit UI tests with no session user.
+    """
+    from vaybooks.bms.domain.identity.location_access import ALL_LOCATIONS
+
+    working = current_working_location_id(services)
+    user = get_current_user(services)
+    inventory = services.get("inventory")
+    locations = _accessible_locations(user, inventory)
+    accessible_ids = [loc.id for loc in locations]
+    if user is None and working == ALL_LOCATIONS:
+        return working, None
+    return working, accessible_ids
+
+
 def _accessible_locations(user, inventory) -> list:
     from vaybooks.bms.domain.identity.location_access import accessible_locations
 

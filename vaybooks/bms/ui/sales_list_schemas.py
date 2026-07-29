@@ -125,9 +125,13 @@ DELIVERY_NOTES = ListSchema(
     filter_fields=[
         FilterField("dn_number", "DN number", F.EXACT),
         FilterField("so_number", "SO number", F.EXACT),
+        FilterField("invoice_number", "Invoice number", F.EXACT),
         FilterField("customer_name", "Customer", F.EXACT),
+        FilterField("delivery_partner_name", "Delivery partner", F.EXACT),
+        FilterField("vehicle_number", "Vehicle number", F.EXACT),
         FilterField("delivery_date", "Delivery date", F.DATE_RANGE),
         FilterField("status", "Status", F.EXACT),
+        FilterField("payment_status", "Payment status", F.EXACT),
         FilterField(
             "customer_id",
             "Customer",

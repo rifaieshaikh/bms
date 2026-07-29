@@ -54,6 +54,7 @@ def render_customer_identity_selector(
     *,
     key_prefix: str,
     initial_customer=None,
+    services: dict | None = None,
 ) -> CustomerIdentitySelection:
     """Render linked, searchable name and mobile dropdowns.
 
@@ -61,7 +62,15 @@ def render_customer_identity_selector(
     one synchronizes the other; a new name/mobile pair is resolved when the
     parent form is submitted.
     """
-    customers = customer_service.list_all_customers()
+    if services is not None:
+        from vaybooks.bms.domain.identity.location_access import location_ids_mongo_filter
+        from vaybooks.bms.ui.auth.session import working_location_list_context
+
+        working, accessible = working_location_list_context(services)
+        filt = location_ids_mongo_filter(working, accessible)
+        customers = customer_service.list_all_customers(location_filter=filt)
+    else:
+        customers = customer_service.list_all_customers()
     customer_by_id = {customer.id: customer for customer in customers}
     name_to_customer = {_name_label(customer): customer for customer in customers}
     mobile_to_customer = {
@@ -195,6 +204,8 @@ def render_customer_identity_selector(
 def resolve_customer_identity(
     customer_service,
     selection: CustomerIdentitySelection,
+    *,
+    location_ids: list[str] | None = None,
 ):
     """Return existing customer or create one using business identity settings."""
     if selection.customer_id:
@@ -212,4 +223,7 @@ def resolve_customer_identity(
     if require_phone and not phone:
         raise ValueError("Mobile number is required")
 
-    return customer_service.find_or_create_customer(name, phone)
+    kwargs = {}
+    if location_ids is not None:
+        kwargs["location_ids"] = list(location_ids)
+    return customer_service.find_or_create_customer(name, phone, **kwargs)

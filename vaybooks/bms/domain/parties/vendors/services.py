@@ -5,6 +5,7 @@ from vaybooks.bms.domain.shared.exceptions import (
     DuplicateVendorError,
     ValidationError,
 )
+from vaybooks.bms.domain.shared.party_location import require_location_ids
 from vaybooks.bms.domain.shared.party_validation import (
     normalize_banking_fields,
     normalize_party_fields,
@@ -80,6 +81,7 @@ class VendorDomainService:
             bank_name=banking.bank_name,
             notes=vendor_input.notes,
             segment_ids=list(vendor_input.segment_ids or []),
+            location_ids=require_location_ids(vendor_input.location_ids),
         )
 
     def _check_duplicates(

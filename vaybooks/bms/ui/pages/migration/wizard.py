@@ -425,10 +425,14 @@ def _step_dry_run(
 
 
 # --- step 4: import ---------------------------------------------------------
-def _run_import(migration, entity: ImportEntityType) -> None:
+def _run_import(migration, entity: ImportEntityType, services: Optional[dict] = None) -> None:
     df = st.session_state.get(_sk(entity, "df"))
     mapping = st.session_state.get(_sk(entity, "mapping")) or {}
-    from vaybooks.bms.ui.auth.session import current_user_id, current_user_name
+    from vaybooks.bms.ui.auth.session import (
+        current_user_id,
+        current_user_name,
+        current_working_location_id,
+    )
 
     extra = {}
     if entity == ImportEntityType.LEADS:
@@ -438,6 +442,14 @@ def _run_import(migration, entity: ImportEntityType) -> None:
             "actor_id": current_user_id(),
             "actor_name": current_user_name(),
         }
+    if entity in (
+        ImportEntityType.CUSTOMERS,
+        ImportEntityType.VENDORS,
+        ImportEntityType.LEADS,
+    ) and services:
+        loc_id = current_working_location_id(services)
+        if loc_id:
+            extra["default_location_ids"] = [loc_id]
     with st.spinner("Importing…"):
         result = migration.run_import(
             entity,
@@ -483,7 +495,7 @@ def _render_result(entity: ImportEntityType, result) -> None:
         _go_to_hub(entity)
 
 
-def _step_import(migration, entity: ImportEntityType) -> None:
+def _step_import(migration, entity: ImportEntityType, services: Optional[dict] = None) -> None:
     result = st.session_state.get(_sk(entity, "result"))
     if result is not None:
         _render_result(entity, result)
@@ -508,13 +520,13 @@ def _step_import(migration, entity: ImportEntityType) -> None:
 
     mark_wired("migration.confirm_import")
     if consume_action("migration.confirm_import"):
-        _run_import(migration, entity)
+        _run_import(migration, entity, services)
     _nav_row(
         entity,
         3,
         next_label="Confirm import",
         next_icon=":material/upload:",
-        on_next=lambda: _run_import(migration, entity),
+        on_next=lambda: _run_import(migration, entity, services),
     )
 
 
@@ -602,6 +614,8 @@ def render_migration_wizard(services: dict, entity: ImportEntityType) -> None:
     steps = [_step_upload, _step_mapping, _step_dry_run, _step_import]
     if step == 2:
         _step_dry_run(migration, entity, services)
+    elif step == 3:
+        _step_import(migration, entity, services)
     else:
         steps[step](migration, entity)
 

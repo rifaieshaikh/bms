@@ -78,6 +78,7 @@ def sales_order_dialog(services: dict) -> None:
         customers,
         key_prefix=SO_DIALOG,
         initial_customer=initial_customer,
+        services=services,
     )
     selected_customer = customer_selection.customer
     business_service = services.get("business")
@@ -194,6 +195,7 @@ def sales_order_dialog(services: dict) -> None:
             customer = resolve_customer_identity(
                 customers,
                 customer_selection,
+                location_ids=[location_id],
             )
             sales.create_sales_order(
                 customer_id=customer.id,

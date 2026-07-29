@@ -88,7 +88,7 @@ def sales_return_dialog(services: dict) -> None:
         key=f"{SALES_RETURN_DIALOG}_number",
     )
     customer_selection = render_customer_identity_selector(
-        customers, key_prefix=SALES_RETURN_DIALOG
+        customers, key_prefix=SALES_RETURN_DIALOG, services=services
     )
     matched_customer = customer_selection.customer
 
@@ -270,7 +270,9 @@ def sales_return_dialog(services: dict) -> None:
             if not return_reason.strip():
                 raise ValueError("Return reason is required")
             location_id = require_specific_location(services)
-            customer = resolve_customer_identity(customers, customer_selection)
+            customer = resolve_customer_identity(
+                customers, customer_selection, location_ids=[location_id]
+            )
             attachments = []
             for uploaded in uploaded_files or []:
                 data = uploaded.getvalue()

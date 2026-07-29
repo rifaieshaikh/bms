@@ -4,6 +4,7 @@ from typing import List, Optional
 from bson import ObjectId
 from pymongo.database import Database
 
+from vaybooks.bms.domain.identity.location_access import merge_mongo_filters
 from vaybooks.bms.domain.shared.enums import VendorRegistrationType
 from vaybooks.bms.domain.parties.vendors.entities import Vendor
 
@@ -36,6 +37,7 @@ class MongoVendorRepository:
             "notes": vendor.notes,
             "segment_ids": list(vendor.segment_ids or []),
             "segment_names": list(vendor.segment_names or []),
+            "location_ids": list(vendor.location_ids or []),
             "created_at": vendor.created_at,
             "updated_at": vendor.updated_at,
         }
@@ -76,6 +78,7 @@ class MongoVendorRepository:
             notes=doc.get("notes", ""),
             segment_ids=list(doc.get("segment_ids") or []),
             segment_names=list(doc.get("segment_names") or []),
+            location_ids=list(doc.get("location_ids") or []),
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
         )
@@ -104,9 +107,11 @@ class MongoVendorRepository:
         doc = self._collection.find_one({"gstin": gstin.upper()})
         return self._from_doc(doc) if doc else None
 
-    def search(self, query: str) -> List[Vendor]:
+    def search(
+        self, query: str, location_filter: dict | None = None
+    ) -> List[Vendor]:
         regex = {"$regex": query, "$options": "i"}
-        docs = self._collection.find(
+        mongo_query = merge_mongo_filters(
             {
                 "$or": [
                     {"vendor_name": regex},
@@ -116,9 +121,12 @@ class MongoVendorRepository:
                     {"city": regex},
                     {"pincode": regex},
                 ]
-            }
+            },
+            location_filter or {},
         )
+        docs = self._collection.find(mongo_query)
         return [self._from_doc(d) for d in docs]
 
-    def list_all(self) -> List[Vendor]:
-        return [self._from_doc(d) for d in self._collection.find()]
+    def list_all(self, location_filter: dict | None = None) -> List[Vendor]:
+        query = merge_mongo_filters(location_filter or {})
+        return [self._from_doc(d) for d in self._collection.find(query)]

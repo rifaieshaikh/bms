@@ -13,7 +13,11 @@ from vaybooks.bms.infrastructure.repositories.finance.mongo_report_repository im
 
 
 def build_period_summary(
-    repo: MongoReportRepository, start: date, end: date
+    repo: MongoReportRepository,
+    start: date,
+    end: date,
+    *,
+    location_id: str = "",
 ) -> dict[str, Any]:
     summary: dict[str, Any] = {
         "order_count": 0,
@@ -22,6 +26,7 @@ def build_period_summary(
         "expenses": 0,
         "mph": None,
     }
+    lid = (location_id or "").strip()
     item_snapshot = repo.item_delivery_snapshot()
     order_count = repo.count_orders_created(start, end)
     total_revenue = repo.get_monthly_invoice_total(start, end)
@@ -70,14 +75,16 @@ def build_period_summary(
             "invoiced": total_revenue,
             "revenue": total_revenue,
             "total_revenue": total_revenue,
-            "receipts": repo.get_monthly_advance_total(start, end),
+            "receipts": repo.get_monthly_advance_total(
+                start, end, location_id=lid
+            ),
             "expenses": expenses,
             "gross_margin": repo.sum_invoice_margin(start, end),
             "vendor_payments": repo.sum_payment_voucher_amount(
-                VoucherType.VENDOR_PAYMENT.value, start, end
+                VoucherType.VENDOR_PAYMENT.value, start, end, location_id=lid
             ),
             "salary_payments": repo.sum_payment_voucher_amount(
-                VoucherType.SALARY_PAYMENT.value, start, end
+                VoucherType.SALARY_PAYMENT.value, start, end, location_id=lid
             ),
             "active_orders": repo.count_orders_by_statuses(
                 active_statuses + [OrderStatus.COMPLETED.value]

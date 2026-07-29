@@ -112,6 +112,8 @@ class CrmLead:
     import_batch_id: str = ""
     import_row_fingerprint: str = ""
     branch: str = ""
+    location_id: str = ""
+    location_name: str = ""
     is_deleted: bool = False
     deleted_at: Optional[datetime] = None
     created_by_id: str = ""
@@ -217,6 +219,8 @@ class CrmActivity:
     next_action: str = ""
     next_follow_up_at: Optional[datetime] = None
     location: str = ""
+    location_id: str = ""
+    location_name: str = ""
     priority: str = LeadPriority.MEDIUM.value
     attachment_ids: List[str] = field(default_factory=list)
     # Automatic activity source identity (idempotency)

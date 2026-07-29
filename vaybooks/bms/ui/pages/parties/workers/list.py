@@ -1,12 +1,18 @@
 import streamlit as st
 
 from vaybooks.bms.application.parties.workers.activity_options import refs_from_keys
+from vaybooks.bms.domain.identity.location_access import location_ids_mongo_filter
 from vaybooks.bms.domain.shared.exceptions import ValidationError
-from vaybooks.bms.ui.auth.session import can_permission
+from vaybooks.bms.ui.auth.session import (
+    can_permission,
+    working_location_list_context,
+)
 from vaybooks.bms.ui.components.common.list_view import render_list
+from vaybooks.bms.ui.components.common.location_fields import (
+    render_party_location_multiselect,
+)
 from vaybooks.bms.ui.filtering import ListSchema, SortOption
 from vaybooks.bms.ui.pages.access.users.list import (
-    _location_options,
     _role_options,
     _validate_location_assignment,
 )
@@ -37,7 +43,11 @@ def _can_manage_users(services: dict) -> bool:
 
 
 def _login_fields(services: dict, *, key_prefix: str) -> dict:
-    """Render optional login fields. Returns payload used by create/update."""
+    """Render optional login fields. Returns payload used by create/update.
+
+    Login user ``location_ids`` are supplied separately from party visibility
+    (reused from the party multiselect when creating a login).
+    """
     if not _can_manage_users(services):
         st.caption("You need user-management permission to create a system login.")
         return {"create_login": False}
@@ -52,7 +62,6 @@ def _login_fields(services: dict, *, key_prefix: str) -> dict:
 
     roles = services["roles"].list_roles()
     role_ids, role_labels = _role_options(roles)
-    location_ids, location_labels = _location_options(services)
 
     username = st.text_input("Username", key=f"{key_prefix}_username")
     password = st.text_input(
@@ -65,19 +74,14 @@ def _login_fields(services: dict, *, key_prefix: str) -> dict:
         key=f"{key_prefix}_roles",
         help="Choose CRM, sales, or other roles this employee should have.",
     )
-    selected_locations = st.multiselect(
-        "Accessible locations",
-        options=location_ids,
-        format_func=lambda lid: location_labels.get(lid, lid),
-        key=f"{key_prefix}_locations",
-        help="Leave empty for all locations when the role allows it.",
+    st.caption(
+        "Login location access uses the same locations selected for party visibility."
     )
     return {
         "create_login": True,
         "username": username,
         "password": password,
         "role_ids": selected_roles,
-        "location_ids": selected_locations,
     }
 
 
@@ -112,6 +116,7 @@ def _add_worker_dialog(worker_service, services: dict):
         key="add_worker_acts",
         placeholder="Select activities this employee can do…",
     )
+    location_ids = render_party_location_multiselect("add_worker", services)
     st.divider()
     login = _login_fields(services, key_prefix="add_worker")
 
@@ -123,12 +128,13 @@ def _add_worker_dialog(worker_service, services: dict):
             if login.get("create_login"):
                 _validate_location_assignment(
                     login.get("role_ids") or [],
-                    login.get("location_ids") or [],
+                    location_ids,
                 )
             worker_service.create_worker(
                 name,
                 refs_from_keys(selected),
                 default_hourly_rate=hourly_rate,
+                location_ids=location_ids,
                 **login,
             )
             if login.get("create_login"):
@@ -171,6 +177,9 @@ def _edit_worker_dialog(worker_service, services: dict, worker_id: str):
         placeholder="Select activities this employee can do…",
     )
     is_active = st.checkbox("Active", value=worker.is_active, key="edit_worker_active")
+    location_ids = render_party_location_multiselect(
+        "edit_worker", services, worker.location_ids
+    )
 
     st.divider()
     st.caption(_login_caption(services, worker.linked_user_id or ""))
@@ -191,7 +200,7 @@ def _edit_worker_dialog(worker_service, services: dict, worker_id: str):
             if login.get("create_login"):
                 _validate_location_assignment(
                     login.get("role_ids") or [],
-                    login.get("location_ids") or [],
+                    location_ids,
                 )
             worker_service.update_worker(
                 worker_id,
@@ -199,6 +208,7 @@ def _edit_worker_dialog(worker_service, services: dict, worker_id: str):
                 refs_from_keys(selected),
                 is_active,
                 default_hourly_rate=hourly_rate,
+                location_ids=location_ids,
                 **login,
             )
             st.success("Employee updated")
@@ -227,7 +237,11 @@ def _worker_card(worker, services: dict, index: int):
 
 def _load_workers(services, filters, sort):
     try:
-        return services["workers"].list_workers(active_only=False)
+        working, accessible = working_location_list_context(services)
+        filt = location_ids_mongo_filter(working, accessible)
+        return services["workers"].list_workers(
+            active_only=False, location_filter=filt
+        )
     except Exception:
         return []
 

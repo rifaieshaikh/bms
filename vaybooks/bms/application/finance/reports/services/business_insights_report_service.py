@@ -42,14 +42,20 @@ class BusinessInsightsReportService:
         self._customers = customer_service
         self._profitability = ProfitabilityReportService(report_repo)
 
-    def get_period_summary(self, start: date, end: date) -> dict[str, Any]:
+    def get_period_summary(
+        self, start: date, end: date, *, location_id: str = ""
+    ) -> dict[str, Any]:
         from vaybooks.bms.application.finance.reports.services.period_summary import build_period_summary
 
-        return build_period_summary(self._repo, start, end)
+        return build_period_summary(
+            self._repo, start, end, location_id=location_id
+        )
 
     def period_financial_summary(self, filters: PeriodSummaryFilter) -> list:
         summary = self.get_period_summary(
-            filters.date_range.start, filters.date_range.end
+            filters.date_range.start,
+            filters.date_range.end,
+            location_id=getattr(filters, "location_id", "") or "",
         )
         return flatten_period_summary(summary)
 
@@ -126,6 +132,7 @@ class BusinessInsightsReportService:
 
         cutoffs = normalize_aging_bucket_days(filters.bucket_days)
         as_of = filters.as_of_date or date.today()
+        location_id = (getattr(filters, "location_id", "") or "").strip()
         customer_map = {
             c.id: c.customer_name for c in self._customers.list_all_customers()
         }
@@ -148,6 +155,33 @@ class BusinessInsightsReportService:
             if callable(list_one):
                 vouchers = list(list_one(VoucherType.SALES_INVOICE) or [])
                 vouchers.extend(list_one(VoucherType.CUSTOMIZATION_INVOICE) or [])
+
+        if location_id:
+            vouchers = [
+                v
+                for v in vouchers
+                if (getattr(v, "location_id", "") or "").strip() == location_id
+            ]
+
+        balance_by_account: dict[str, float] | None = None
+        if location_id:
+            balance_by_account = {}
+            list_all = getattr(self._accounting, "list_vouchers", None)
+            loc_vouchers = (
+                list_all(location_filter={"location_id": location_id})
+                if callable(list_all)
+                else []
+            )
+            for voucher in loc_vouchers or []:
+                for line in getattr(voucher, "lines", None) or []:
+                    account_id = getattr(line, "account_id", None)
+                    if not account_id:
+                        continue
+                    debit = float(getattr(line, "debit_amount", 0) or 0)
+                    credit = float(getattr(line, "credit_amount", 0) or 0)
+                    balance_by_account[account_id] = round(
+                        balance_by_account.get(account_id, 0.0) + debit - credit, 2
+                    )
 
         for voucher in vouchers:
             vtype = getattr(voucher, "voucher_type", None)
@@ -175,7 +209,10 @@ class BusinessInsightsReportService:
         for acc in self._accounting.list_accounts(active_only=False):
             if not acc.linked_customer_id:
                 continue
-            balance = float(acc.current_balance or 0)
+            if balance_by_account is not None:
+                balance = float(balance_by_account.get(acc.id, 0) or 0)
+            else:
+                balance = float(acc.current_balance or 0)
             if balance <= 0:
                 continue
             if filters.min_balance is not None and balance < filters.min_balance:
@@ -241,11 +278,34 @@ class BusinessInsightsReportService:
 
     def vendor_payables_report(self, filters: OutstandingFilter) -> list:
         vendor_map = {v.id: v.vendor_name for v in self._vendors.list_all_vendors()}
+        location_id = (getattr(filters, "location_id", "") or "").strip()
+        balance_by_account: dict[str, float] | None = None
+        if location_id:
+            balance_by_account = {}
+            list_all = getattr(self._accounting, "list_vouchers", None)
+            loc_vouchers = (
+                list_all(location_filter={"location_id": location_id})
+                if callable(list_all)
+                else []
+            )
+            for voucher in loc_vouchers or []:
+                for line in getattr(voucher, "lines", None) or []:
+                    account_id = getattr(line, "account_id", None)
+                    if not account_id:
+                        continue
+                    debit = float(getattr(line, "debit_amount", 0) or 0)
+                    credit = float(getattr(line, "credit_amount", 0) or 0)
+                    balance_by_account[account_id] = round(
+                        balance_by_account.get(account_id, 0.0) + debit - credit, 2
+                    )
         rows = []
         for acc in self._accounting.list_accounts(active_only=False):
             if not acc.linked_vendor_id:
                 continue
-            balance = acc.current_balance
+            if balance_by_account is not None:
+                balance = float(balance_by_account.get(acc.id, 0) or 0)
+            else:
+                balance = acc.current_balance
             payable = abs(balance) if balance < 0 else 0
             if payable <= 0:
                 continue
@@ -267,7 +327,9 @@ class BusinessInsightsReportService:
 
     def cash_movement_report(self, filters: CashMovementFilter) -> list:
         totals = self._repo.get_voucher_totals_by_type(
-            filters.date_range.start, filters.date_range.end
+            filters.date_range.start,
+            filters.date_range.end,
+            location_id=getattr(filters, "location_id", "") or "",
         )
         return [
             {"flow_type": "Receipts", "amount": totals.get("receipt", 0)},

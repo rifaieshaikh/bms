@@ -1,0 +1,136 @@
+/*
+ * Tabler icon overlay for the custom sidebar nav (app.py builds it with
+ * st.page_link(page) per entry, not Streamlit's built-in nav UI).
+ *
+ * WHY THIS EXISTS: st.Page(icon=...) / st.page_link's icon validation (see
+ * streamlit/string_util.py: validate_material_icon, supported_icon_packs =
+ * ["material"]) only accepts a single emoji character or a ":material/name:"
+ * shortcode — there is no public way to pass a Tabler icon (or any custom
+ * icon) into that parameter; passing anything else raises
+ * StreamlitAPIException. So app.py keeps every st.Page icon= as
+ * ":material/<name>:" (required for the page to render at all), and this
+ * stylesheet visually replaces the rendered glyph with the closest Tabler
+ * icon, keyed by each link's href (== the page's url_path).
+ *
+ * FRAGILE — READ BEFORE TOUCHING: this relies on Streamlit's *internal* DOM
+ * structure (the data-testid attributes below), which is not a public,
+ * versioned API. Verified against streamlit==1.59.2's compiled frontend
+ * (PageLink.*.js renders `data-testid="stPageLink-NavLink"` on the <a>, and
+ * the Icon component renders `data-testid="stIconMaterial"` on a <span> whose
+ * text content is the bare icon name, e.g. "dashboard"). A future Streamlit
+ * upgrade can rename or restructure these without notice — if sidebar icons
+ * disappear or fall back to Material Symbols after a `pip install -U
+ * streamlit`, re-inspect the sidebar DOM (browser devtools) and update the
+ * base selectors here.
+ *
+ * Regenerating after an app.py sidebar change: the per-href rules below are
+ * derived from app.py's `page_groups` (url_path -> :material/name: pairs) via
+ * a Tabler-equivalence table. There is no build step — if you add/rename a
+ * sidebar page or its icon, add/update the matching rule by hand (pick a
+ * Tabler icon at https://tabler.io/icons and its codepoint from
+ * https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css).
+ *
+ * HREF FORMAT — the bug that broke this once already: rendered `href` values
+ * have NO leading slash and are just the bare `url_path` (e.g. href="customers",
+ * href="mtd-dashboard") — confirmed via Playwright DOM inspection against a
+ * running app. The one exception is the default page (`st.Page(default=True)`,
+ * "dashboard"), whose href is `""` regardless of which page is current. Rules
+ * must use `a[href="url_path"]` (exact match), NOT `a[href$="/url_path"]` —
+ * the earlier slash-suffix version matched nothing and every sidebar icon
+ * silently rendered blank.
+ */
+
+[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] [data-testid="stIconMaterial"] {
+  /* Do not hide Material glyphs — on Streamlit 1.58 the Tabler ::before overlay
+   * often misses, which previously left blank icon slots (visibility:hidden). */
+  position: relative;
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  font-size: 18px;
+  line-height: 18px;
+  text-align: center;
+  color: var(--color-nav-icon);
+}
+[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] [data-testid="stIconMaterial"]::before {
+  /* Optional Tabler overlay when the webfont + href rule both match. */
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "tabler-icons" !important;
+  font-style: normal;
+  font-weight: normal;
+  font-variant: normal;
+  text-transform: none;
+  font-size: 18px;
+  line-height: 1;
+  speak: none;
+  color: var(--color-nav-icon);
+  background: var(--color-surface);
+}
+
+/* url_path -> Tabler icon codepoint (Material name -> Tabler name in comment) */
+[data-testid="stSidebar"] a[href=""] [data-testid="stIconMaterial"]::before, [data-testid="stSidebar"] a[href="dashboard"] [data-testid="stIconMaterial"]::before { content: "\ea87"; } /* dashboard -> ti-dashboard (default page) */
+[data-testid="stSidebar"] a[href="mtd-dashboard"] [data-testid="stIconMaterial"]::before { content: "\fd2f"; } /* calendar_month -> ti-calendar-month */
+[data-testid="stSidebar"] a[href="customers"] [data-testid="stIconMaterial"]::before { content: "\ebf2"; } /* group -> ti-users */
+[data-testid="stSidebar"] a[href="vendors"] [data-testid="stIconMaterial"]::before { content: "\ebc4"; } /* local_shipping -> ti-truck */
+[data-testid="stSidebar"] a[href="employees"] [data-testid="stIconMaterial"]::before { content: "\eff7"; } /* badge -> ti-id-badge */
+[data-testid="stSidebar"] a[href="customizationOrders"] [data-testid="stIconMaterial"]::before { content: "\f5f8"; } /* shopping_bag -> ti-shopping-bag */
+[data-testid="stSidebar"] a[href="measurements"] [data-testid="stIconMaterial"]::before { content: "\eed2"; } /* straighten -> ti-ruler-2 */
+[data-testid="stSidebar"] a[href="customizationItems"] [data-testid="stIconMaterial"]::before { content: "\f2c9"; } /* inventory_2 -> ti-packages */
+[data-testid="stSidebar"] a[href="time"] [data-testid="stIconMaterial"]::before { content: "\ea70"; } /* schedule -> ti-clock */
+[data-testid="stSidebar"] a[href="projects-dashboard"] [data-testid="stIconMaterial"]::before { content: "\ea87"; } /* dashboard -> ti-dashboard */
+[data-testid="stSidebar"] a[href="project-enquiries"] [data-testid="stIconMaterial"]::before { content: "\f021"; } /* contact_mail -> ti-address-book */
+[data-testid="stSidebar"] a[href="projects"] [data-testid="stIconMaterial"]::before { content: "\ea4f"; } /* apartment -> ti-building */
+[data-testid="stSidebar"] a[href="project-measurements"] [data-testid="stIconMaterial"]::before { content: "\eed2"; } /* straighten -> ti-ruler-2 */
+[data-testid="stSidebar"] a[href="project-ra-bills"] [data-testid="stIconMaterial"]::before { content: "\edfa"; } /* receipt_long -> ti-receipt-2 */
+[data-testid="stSidebar"] a[href="projects-reports"] [data-testid="stIconMaterial"]::before { content: "\eecb"; } /* analytics -> ti-report-analytics */
+[data-testid="stSidebar"] a[href="projects-settings"] [data-testid="stIconMaterial"]::before { content: "\eb20"; } /* settings -> ti-settings */
+[data-testid="stSidebar"] a[href="sales-overview"] [data-testid="stIconMaterial"]::before { content: "\ea87"; } /* dashboard -> ti-dashboard */
+[data-testid="stSidebar"] a[href="estimates"] [data-testid="stIconMaterial"]::before { content: "\eb67"; } /* request_quote -> ti-file-invoice */
+[data-testid="stSidebar"] a[href="quotations"] [data-testid="stIconMaterial"]::before { content: "\eaa2"; } /* description -> ti-file-text */
+[data-testid="stSidebar"] a[href="sales-orders"] [data-testid="stIconMaterial"]::before { content: "\ea6d"; } /* assignment -> ti-clipboard-list */
+[data-testid="stSidebar"] a[href="delivery-notes"] [data-testid="stIconMaterial"]::before { content: "\ebc4"; } /* local_shipping -> ti-truck */
+[data-testid="stSidebar"] a[href="sales"] [data-testid="stIconMaterial"]::before { content: "\f863"; } /* point_of_sale -> ti-device-desktop-dollar */
+[data-testid="stSidebar"] a[href="sales-returns"] [data-testid="stIconMaterial"]::before { content: "\eb77"; } /* undo -> ti-arrow-back-up */
+[data-testid="stSidebar"] a[href="sales-reports"] [data-testid="stIconMaterial"]::before { content: "\eecb"; } /* analytics -> ti-report-analytics */
+[data-testid="stSidebar"] a[href="purchases-overview"] [data-testid="stIconMaterial"]::before { content: "\ea87"; } /* dashboard -> ti-dashboard */
+[data-testid="stSidebar"] a[href="purchase-orders"] [data-testid="stIconMaterial"]::before { content: "\eb25"; } /* shopping_cart -> ti-shopping-cart */
+[data-testid="stSidebar"] a[href="goods-receipt"] [data-testid="stIconMaterial"]::before { content: "\eaff"; } /* inventory -> ti-package */
+[data-testid="stSidebar"] a[href="purchases"] [data-testid="stIconMaterial"]::before { content: "\edfd"; } /* receipt -> ti-receipt */
+[data-testid="stSidebar"] a[href="purchase-returns"] [data-testid="stIconMaterial"]::before { content: "\eb77"; } /* undo -> ti-arrow-back-up */
+[data-testid="stSidebar"] a[href="purchases-reports"] [data-testid="stIconMaterial"]::before { content: "\eecb"; } /* analytics -> ti-report-analytics */
+[data-testid="stSidebar"] a[href="inventory-overview"] [data-testid="stIconMaterial"]::before { content: "\eecb"; } /* analytics -> ti-report-analytics */
+[data-testid="stSidebar"] a[href="inventory-categories"] [data-testid="stIconMaterial"]::before { content: "\f1f6"; } /* category -> ti-category */
+[data-testid="stSidebar"] a[href="inventory-products"] [data-testid="stIconMaterial"]::before { content: "\eaff"; } /* inventory -> ti-package */
+[data-testid="stSidebar"] a[href="inventory-stock"] [data-testid="stIconMaterial"]::before { content: "\ebe3"; } /* warehouse -> ti-building-warehouse */
+[data-testid="stSidebar"] a[href="inventory-stock-ledger"] [data-testid="stIconMaterial"]::before { content: "\edfa"; } /* receipt_long -> ti-receipt-2 */
+[data-testid="stSidebar"] a[href="inventory-movements"] [data-testid="stIconMaterial"]::before { content: "\edb0"; } /* swap_horiz -> ti-arrows-left-right */
+[data-testid="stSidebar"] a[href="inventory-customer-prices"] [data-testid="stIconMaterial"]::before { content: "\eb34"; } /* sell -> ti-tag */
+[data-testid="stSidebar"] a[href="inventory-reports"] [data-testid="stIconMaterial"]::before { content: "\ea59"; } /* assessment -> ti-chart-bar */
+[data-testid="stSidebar"] a[href="accounts"] [data-testid="stIconMaterial"]::before { content: "\ebe2"; } /* account_balance -> ti-building-bank */
+[data-testid="stSidebar"] a[href="vouchers"] [data-testid="stIconMaterial"]::before { content: "\edfa"; } /* receipt_long -> ti-receipt-2 */
+[data-testid="stSidebar"] a[href="receipts"] [data-testid="stIconMaterial"]::before { content: "\ea55"; } /* payments -> ti-cash */
+[data-testid="stSidebar"] a[href="payments"] [data-testid="stIconMaterial"]::before { content: "\eb1e"; } /* send_money -> ti-send */
+[data-testid="stSidebar"] a[href="accounting-invoices"] [data-testid="stIconMaterial"]::before { content: "\eb67"; } /* request_quote -> ti-file-invoice */
+[data-testid="stSidebar"] a[href="journal"] [data-testid="stIconMaterial"]::before { content: "\efc5"; } /* menu_book -> ti-book-2 */
+[data-testid="stSidebar"] a[href="trial-balance"] [data-testid="stIconMaterial"]::before { content: "\ebc2"; } /* balance -> ti-scale */
+[data-testid="stSidebar"] a[href="reports"] [data-testid="stIconMaterial"]::before { content: "\eecb"; } /* analytics -> ti-report-analytics */
+[data-testid="stSidebar"] a[href="export-backup"] [data-testid="stIconMaterial"]::before { content: "\ea96"; } /* download -> ti-download */
+[data-testid="stSidebar"] a[href="migration-categories"] [data-testid="stIconMaterial"]::before { content: "\eb47"; } /* upload_file -> ti-upload */
+[data-testid="stSidebar"] a[href="migration-products"] [data-testid="stIconMaterial"]::before { content: "\eb47"; } /* upload_file -> ti-upload */
+[data-testid="stSidebar"] a[href="migration-customers"] [data-testid="stIconMaterial"]::before { content: "\eb47"; } /* upload_file -> ti-upload */
+[data-testid="stSidebar"] a[href="migration-vendors"] [data-testid="stIconMaterial"]::before { content: "\eb47"; } /* upload_file -> ti-upload */
+[data-testid="stSidebar"] a[href="business-settings"] [data-testid="stIconMaterial"]::before { content: "\ea4e"; } /* store -> ti-building-store */
+[data-testid="stSidebar"] a[href="print-settings"] [data-testid="stIconMaterial"]::before { content: "\eb0e"; } /* print -> ti-printer */
+[data-testid="stSidebar"] a[href="keyboard-shortcuts"] [data-testid="stIconMaterial"]::before { content: "\ebd6"; } /* keyboard -> ti-keyboard */
+[data-testid="stSidebar"] a[href="customization-activities"] [data-testid="stIconMaterial"]::before { content: "\f074"; } /* checklist -> ti-checklist */
+[data-testid="stSidebar"] a[href="project-activities"] [data-testid="stIconMaterial"]::before { content: "\f074"; } /* checklist -> ti-checklist */
+[data-testid="stSidebar"] a[href="measurement-specs"] [data-testid="stIconMaterial"]::before { content: "\eed2"; } /* straighten -> ti-ruler-2 */
+[data-testid="stSidebar"] a[href="services"] [data-testid="stIconMaterial"]::before { content: "\f1f6"; } /* category -> ti-category */
+[data-testid="stSidebar"] a[href="system-settings"] [data-testid="stIconMaterial"]::before { content: "\eb20"; } /* settings -> ti-settings */
+[data-testid="stSidebar"] a[href="system-updates"] [data-testid="stIconMaterial"]::before { content: "\ea71"; } /* system_update -> ti-cloud-download */
+[data-testid="stSidebar"] a[href="system-logs"] [data-testid="stIconMaterial"]::before { content: "\ebea"; } /* article -> ti-history */

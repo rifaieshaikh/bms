@@ -29,6 +29,8 @@ class Expense:
     vendor_or_worker_name: str = ""
     account_id: Optional[str] = None
     notes: str = ""
+    location_id: str = ""
+    location_name: str = ""
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
 

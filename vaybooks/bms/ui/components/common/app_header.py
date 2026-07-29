@@ -237,7 +237,7 @@ def _render_location_switcher(services: dict) -> None:
 
     def _fmt(value: str) -> str:
         if value == ALL_LOCATIONS:
-            return "All locations"
+            return "All my locations"
         return label_by_id.get(value, value)
 
     # Single fixed location: show as a static caption, no switcher.
@@ -249,16 +249,17 @@ def _render_location_switcher(services: dict) -> None:
 
     with st.popover(_ICON_LABEL, icon=":material/location_on:"):
         st.markdown("**Working location**")
-        try:
-            index = options.index(current)
-        except ValueError:
-            index = 0
+        # Do not pass index= together with key= — that causes React #185 loops.
+        radio_key = "header_working_location_radio"
+        if st.session_state.get(radio_key) not in options:
+            st.session_state[radio_key] = (
+                current if current in options else options[0]
+            )
         selected = st.radio(
             "Working location",
             options,
-            index=index,
             format_func=_fmt,
-            key="header_working_location_radio",
+            key=radio_key,
             label_visibility="collapsed",
         )
         if selected != current:
@@ -266,7 +267,8 @@ def _render_location_switcher(services: dict) -> None:
             st.rerun()
         if selected == ALL_LOCATIONS:
             st.caption(
-                "All is view-only. Pick a specific location to create documents."
+                "Shows all locations you can access (not the whole business). "
+                "View-only — pick a specific location to create documents."
             )
 
 

@@ -39,8 +39,13 @@ def _toggle_selection(lead_id: str, selected: bool) -> None:
 
 
 def _load_leads(services: dict, filters: dict, sort) -> list:
+    from vaybooks.bms.domain.identity.location_access import location_id_mongo_filter
+    from vaybooks.bms.ui.auth.session import working_location_list_context
+
     adapter = page_adapter(services)
-    rows = adapter.list_leads(limit=2000)
+    working, accessible = working_location_list_context(services)
+    filt = location_id_mongo_filter(working, accessible)
+    rows = adapter.list_leads(limit=2000, location_filter=filt)
     st.session_state[_LOADED] = rows
     return rows
 

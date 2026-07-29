@@ -17,6 +17,10 @@ from vaybooks.bms.ui.components.common.filter_sort_bar import (
 from vaybooks.bms.ui.components.inventory.inventory_product_card import (
     inventory_low_stock_cards,
 )
+from vaybooks.bms.ui.components.shared.dashboard_card import (
+    DashboardCardSpec,
+    dashboard_card_grid,
+)
 from vaybooks.bms.ui.inventory_list_schemas import INVENTORY_OVERVIEW
 from vaybooks.bms.ui.styles import metric_grid
 
@@ -145,17 +149,25 @@ def render(services: dict) -> None:
     out_count = int(summary.get("out_of_stock_count", 0) or 0)
 
     st.markdown("#### Attention")
-    metric_grid(
+    dashboard_card_grid(
         [
-            (
-                "Low stock",
-                low_count,
-                _tone_if(low_count > 0, "warn"),
+            DashboardCardSpec(
+                title="Low stock",
+                value=str(low_count),
+                icon="alert-triangle",
+                tone=_tone_if(low_count > 0, "warning"),
+                footer_text="View stock on hand",
+                on_click=lambda: navigation.go_to_list("inventory_stock_list"),
+                key="inventory_low_stock",
             ),
-            (
-                "Out of stock",
-                out_count,
-                _tone_if(out_count > 0, "danger"),
+            DashboardCardSpec(
+                title="Out of stock",
+                value=str(out_count),
+                icon="box-off",
+                tone=_tone_if(out_count > 0, "danger"),
+                footer_text="View stock on hand",
+                on_click=lambda: navigation.go_to_list("inventory_stock_list"),
+                key="inventory_out_of_stock",
             ),
         ],
         suffix="inventory_overview_attention",

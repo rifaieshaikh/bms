@@ -29,10 +29,12 @@ class VendorAppService:
         self._accounting_domain.ensure_vendor_account(vendor.id, account_name)
         return vendor
 
-    def search_vendors(self, query: str) -> List[Vendor]:
+    def search_vendors(
+        self, query: str, *, location_filter: dict | None = None
+    ) -> List[Vendor]:
         if not query.strip():
-            return self._vendor_repo.list_all()
-        return self._vendor_repo.search(query)
+            return self._vendor_repo.list_all(location_filter=location_filter)
+        return self._vendor_repo.search(query, location_filter=location_filter)
 
     def get_vendor_detail(self, vendor_id: str) -> Optional[Vendor]:
         if not vendor_id:
@@ -43,8 +45,10 @@ class VendorAppService:
         vendor = self._vendor_domain.update(vendor_id, vendor_input)
         return self._apply_segment_names(vendor)
 
-    def list_all_vendors(self) -> List[Vendor]:
-        return self._vendor_repo.list_all()
+    def list_all_vendors(
+        self, *, location_filter: dict | None = None
+    ) -> List[Vendor]:
+        return self._vendor_repo.list_all(location_filter=location_filter)
 
     def _apply_segment_names(self, vendor: Vendor) -> Vendor:
         if self._segments:

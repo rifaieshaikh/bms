@@ -1,0 +1,1199 @@
+:root {
+
+  --color-primary: var(--primary-color);
+  --color-primary-subtle: var(--primary-1);
+  --color-primary-muted: var(--primary-3);
+  --color-primary-strong: var(--primary-5);
+  --color-primary-hover: var(--primary-7);
+  --color-primary-active: var(--primary-8);
+  --color-primary-emphasis: var(--primary-9);
+
+  --color-bg: var(--white-975);
+  --color-bg-alt: var(--white-900);
+  --color-surface: var(--white);
+  --color-surface-muted: var(--white-900);
+  --color-border: var(--white-600);
+  --color-border-strong: var(--white-400);
+
+  --color-text: var(--black-500);
+  --color-text-muted: var(--black-975);
+  --color-text-subtle: var(--white-050);
+  --color-text-inverse: var(--white);
+  --color-text-on-primary: var(--white);
+
+  --color-success: var(--green-6);
+  --color-success-bg: var(--green-1);
+  --color-success-border: var(--green-3);
+  --color-success-text: var(--green-9);
+
+  --color-danger: var(--red-6);
+  --color-danger-bg: var(--red-1);
+  --color-danger-border: var(--red-3);
+  --color-danger-text: var(--red-9);
+
+  --color-warning: var(--orange-6);
+  --color-warning-bg: var(--orange-1);
+  --color-warning-border: var(--orange-3);
+  --color-warning-text: var(--orange-9);
+
+  --color-info: var(--blue-6);
+  --color-info-bg: var(--blue-1);
+  --color-info-border: var(--blue-3);
+  --color-info-text: var(--blue-9);
+
+  --color-accent: var(--yellow-6);
+  --color-accent-bg: var(--yellow-1);
+  --color-accent-border: var(--yellow-3);
+  --color-accent-text: var(--yellow-9);
+
+  --color-neutral: var(--neutral-4);
+  --color-neutral-bg: var(--neutral-1);
+  --color-neutral-border: var(--neutral-2);
+  --color-neutral-text: var(--neutral-7);
+
+  --color-nav-icon: var(--nav-icon-default);
+  --color-nav-text: var(--nav-text-default);
+  --color-sidebar-border: var(--sidebar-border);
+
+  --color-violet: var(--violet-9);
+  --color-violet-bg: var(--violet-1);
+  --color-violet-border: var(--violet-3);
+  --color-violet-text: var(--violet-9);
+
+  --color-teal-text: var(--teal-9);
+
+  --color-primary-hover-bg: var(--primary-a08);
+  --color-divider-subtle: var(--slate-500-a12);
+  --color-surface-hover: var(--slate-500-a04);
+  --color-text-faint: var(--slate-500-a60);
+
+  --font-family-base: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-size-xs: 0.7rem;
+  --font-size-sm: 0.78rem;
+  --font-size-base: 0.875rem;
+  --font-size-md: 0.95rem;
+  --font-size-lg: 1.1rem;
+  --font-size-xl: 1.3rem;
+  --font-weight-regular: 400;
+  --font-weight-medium: 600;
+  --font-weight-bold: 700;
+  --line-height-tight: 1.2;
+  --line-height-base: 1.45;
+
+  --space-1: 0.15rem;
+  --space-2: 0.25rem;
+  --space-3: 0.35rem;
+  --space-4: 0.5rem;
+  --space-5: 0.6rem;
+  --space-6: 0.75rem;
+  --space-7: 1rem;
+  --space-8: 1.5rem;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-nav: 10px;
+  --radius-pill: 999px;
+  --radius-base: 0.6rem;
+
+  --shadow-resting: 0 1px 3px var(--black-500-a06);
+  --shadow-hover: 0 6px 18px var(--black-500-a14);
+  --shadow-focus: 0 2px 8px var(--primary-a35);
+
+  --transition-fast: 0.15s ease;
+  --transition-base: 0.18s ease;
+
+  --breakpoint-phone: 640px;
+}
+
+div.stButton>button,
+div.stDownloadButton>button,
+div[data-testid="stPopover"]>div>button,
+div[data-testid="stPopover"] button {
+  padding: var(--space-1) var(--space-5);
+  min-height: 1.75rem;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-tight);
+  white-space: nowrap;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+div.stButton>button[kind="primary"] {
+  background: linear-gradient(135deg,
+      var(--color-primary),
+      color-mix(in srgb, var(--color-primary) 80%, var(--black)));
+  border: none;
+}
+
+div.stButton>button[kind="primary"]:hover {
+  filter: brightness(1.08);
+  box-shadow: var(--shadow-focus);
+}
+
+div.stButton>button[kind="secondary"]:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+h1,
+h2,
+h3 {
+  color: var(--color-text);
+}
+
+div[class*="st-key-card_grid"] div[data-testid="stVerticalBlockBorderWrapper"] {
+  padding: var(--space-5) var(--space-6);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-resting);
+  transition: box-shadow var(--transition-base), transform var(--transition-base);
+}
+
+div[class*="st-key-card_grid"] div[data-testid="stVerticalBlockBorderWrapper"]:hover {
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-2px);
+}
+
+div[class*="st-key-card_grid"] div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stVerticalBlock"] {
+  gap: var(--space-3);
+}
+
+div[class*="st-key-card_grid"] div[data-testid="stVerticalBlockBorderWrapper"]>div[data-testid="stVerticalBlock"]>div[data-testid="stVerticalBlockBorderWrapper"] {
+  border: none !important;
+  box-shadow: none !important;
+  border-left: none !important;
+  padding: 0;
+  background: transparent;
+}
+
+div[class*="st-key-card_grid"] div[data-testid="stVerticalBlockBorderWrapper"]:hover>div[data-testid="stVerticalBlock"]>div[data-testid="stVerticalBlockBorderWrapper"] {
+  transform: none;
+  box-shadow: none;
+}
+
+.z-card-amount {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+  margin: 0.1rem 0 0.3rem 0;
+  color: var(--color-text);
+}
+
+.z-card-journal {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  background: var(--color-bg-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem var(--space-4);
+  margin: 0.2rem 0 0.35rem 0;
+  line-height: var(--line-height-base);
+}
+
+.z-badge.z-amount {
+  font-size: 0.82rem;
+  padding: 0.15rem var(--space-6);
+}
+
+.z-icon-caption {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  line-height: var(--line-height-tight);
+  margin: 0.25rem 0;
+}
+
+.z-badge.z-compact {
+  white-space: nowrap;
+  font-size: 0.68rem;
+  padding: 0.06rem var(--space-4);
+}
+
+.z-card-title {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.25;
+  margin: 0 0 0.2rem 0;
+  color: var(--color-text);
+}
+
+.z-badge {
+  display: inline-block;
+  padding: var(--space-1) var(--space-5);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+}
+
+.z-badge.gray {
+  background: var(--color-neutral-bg);
+  color: var(--color-neutral-text);
+  border-color: var(--color-neutral-border);
+}
+
+.z-badge.blue {
+  background: var(--color-info-bg);
+  color: var(--color-info-text);
+  border-color: var(--color-info-border);
+}
+
+.z-badge.orange {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  border-color: var(--color-warning-border);
+}
+
+.z-badge.violet {
+  background: var(--color-violet-bg);
+  color: var(--color-violet-text);
+  border-color: var(--color-violet-border);
+}
+
+.z-badge.green {
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+  border-color: var(--color-success-border);
+}
+
+.z-badge.red {
+  background: var(--color-danger-bg);
+  color: var(--color-danger-text);
+  border-color: var(--color-danger-border);
+}
+
+.z-badge.plum {
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--white));
+  color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 28%, var(--white));
+}
+
+.z-badge.gold {
+  background: var(--color-accent-bg);
+  color: var(--color-accent-text);
+  border-color: var(--color-accent-border);
+}
+
+section[data-testid="stSidebar"] {
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-sidebar-border);
+  width: 250px !important;
+  min-width: 250px !important;
+  max-width: 250px !important;
+}
+
+section[data-testid="stSidebar"]>div {
+  width: 250px !important;
+  padding: 0;
+  overflow: initial;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+[data-testid="stSidebarCollapseButton"] {
+  display: none !important;
+}
+
+[data-testid="stSidebarHeader"] {
+  display: flex;
+  align-items: center;
+  height: 60px;
+  flex-shrink: 0;
+  padding: var(--space-6);
+  border-bottom: 1px solid var(--color-sidebar-border);
+  margin-bottom: 0;
+  box-sizing: border-box;
+}
+
+[data-testid="stSidebarHeader"] img {
+  max-height: 28px;
+  width: auto;
+}
+
+[data-testid="stSidebarUserContent"] {
+  position: relative;
+  padding: var(--space-6);
+  overflow: visible;
+}
+
+[data-testid="stSidebarCollapseButton"] button {
+  border-radius: var(--radius-pill);
+  transition: background var(--transition-fast);
+}
+
+[data-testid="stSidebarCollapseButton"] button:hover {
+  background: var(--color-surface-hover);
+}
+
+div[class*="st-key-sidebar_rail_toggle"] {
+  position: absolute;
+  top: -46px;
+  right: var(--space-6);
+  z-index: 5;
+  width: auto;
+}
+
+div[class*="st-key-sidebar_rail_toggle"] button {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-text-muted);
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+div[class*="st-key-sidebar_rail_toggle"] button:hover {
+  background: var(--color-primary-hover-bg);
+  border-color: var(--color-primary-muted);
+  color: var(--color-primary);
+}
+
+div[class*="st-key-sidebar_rail_toggle"] button:active {
+  background: var(--color-primary-subtle);
+  border-color: var(--color-primary);
+  color: var(--color-primary-active);
+}
+
+div[class*="st-key-sidebar_rail_toggle"] button:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-focus);
+}
+
+div[class*="st-key-sidebar_rail_toggle"] button [data-testid="stIconMaterial"] {
+  position: relative;
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  font-size: 16px;
+  line-height: 16px;
+  color: transparent;
+}
+
+div[class*="st-key-sidebar_rail_toggle"] button [data-testid="stIconMaterial"]::before {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "tabler-icons" !important;
+  font-style: normal;
+  font-weight: normal;
+  font-variant: normal;
+  text-transform: none;
+  font-size: 16px;
+  line-height: 1;
+  speak: none;
+  color: currentColor;
+}
+
+div[class*="st-key-sidebar_rail_toggle_expanded"] button [data-testid="stIconMaterial"]::before {
+  content: "\ea60";
+
+}
+
+div[class*="st-key-sidebar_rail_toggle_collapsed"] button [data-testid="stIconMaterial"]::before {
+  content: "\ea61";
+
+}
+
+div[class*="st-key-sidebar_nav_scroll"] {
+  overflow-y: auto;
+  overflow-x: hidden;
+  max-height: calc(100vh - 60px - (var(--space-6) * 2));
+  gap: var(--space-2);
+}
+
+section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] {
+  margin: 20px 0 8px;
+  padding: 0;
+}
+
+section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {
+  margin: 0;
+  font-size: 11px;
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-nav-icon);
+}
+
+section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: var(--radius-nav);
+  transition: background 0.2s ease, color 0.2s ease;
+  margin: 0;
+}
+
+.stVerticalBlock .stElementContainer {
+  margin: 0;
+}
+
+section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] [data-testid="stIconMaterial"] {
+  color: var(--color-nav-icon) !important;
+  transition: color 0.2s ease;
+}
+
+section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] [data-testid="stMarkdownContainer"] p {
+  color: var(--color-nav-text) !important;
+  font-size: 14px !important;
+  transition: color 0.2s ease;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] [data-testid="stMarkdownContainer"] {
+  overflow: hidden;
+  min-width: 0;
+}
+
+section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]>span:last-child {
+  min-width: 0;
+  overflow: hidden;
+}
+
+section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]:hover {
+  background: var(--color-surface-hover);
+}
+
+section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]:hover [data-testid="stIconMaterial"],
+section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]:hover [data-testid="stMarkdownContainer"] p {
+  color: var(--color-primary) !important;
+}
+
+.z-nav-badge {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem var(--space-5);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  background: var(--color-neutral-bg);
+  color: var(--color-neutral-text);
+}
+
+.z-sidebar-version {
+  margin: 0;
+  padding: 0 var(--space-7);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-subtle);
+}
+
+div[data-testid="stMetric"] {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5) var(--space-6);
+}
+
+div[class*="st-key-zpanel"]>div[data-testid="stVerticalBlockBorderWrapper"],
+div[class*="st-key-zpanel"] div[data-testid="stExpander"] {
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-resting);
+}
+
+div[data-testid="stTextInput"] input,
+div[data-testid="stTextArea"] textarea,
+div[data-testid="stNumberInput"] input,
+div[data-baseweb="select"]>div,
+div[data-testid="stDateInput"] input,
+div[data-testid="stTimeInput"] input {
+  border-radius: var(--radius-md) !important;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  border: 1px solid var(--color-border);
+}
+
+div[data-testid="stTextInput"] input:focus,
+div[data-testid="stTextArea"] textarea:focus,
+div[data-testid="stNumberInput"] input:focus,
+div[data-testid="stDateInput"] input:focus,
+div[data-testid="stTimeInput"] input:focus {
+  border-color: var(--color-primary) !important;
+  box-shadow: var(--shadow-focus);
+}
+
+div[data-testid="stCheckbox"] label span[data-testid="stMarkdownContainer"],
+div[data-testid="stRadio"] label span[data-testid="stMarkdownContainer"] {
+  font-size: var(--font-size-sm);
+}
+
+div[data-testid="stToggle"] label div[data-baseweb="checkbox"] div[aria-checked="true"] {
+  background: var(--color-primary) !important;
+}
+
+div[data-testid="stTabs"] button[data-baseweb="tab"] {
+  font-size: var(--font-size-sm);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+div[data-testid="stTabs"] div[data-baseweb="tab-highlight"] {
+  background-color: var(--color-primary);
+}
+
+div[data-testid="stFileUploaderDropzone"] {
+  border-radius: var(--radius-md);
+  border-color: var(--color-border);
+  background: var(--color-bg-alt);
+}
+
+div[data-testid="stProgress"] div[role="progressbar"]>div {
+  background-color: var(--color-primary);
+  border-radius: var(--radius-pill);
+}
+
+div[data-testid="stSpinner"] {
+  color: var(--color-text-muted);
+}
+
+.z-page-loader-wrap {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #F4F6F5;
+  z-index: 999995;
+}
+
+.z-page-loader {
+  color: var(--color-primary);
+  width: 4px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  box-shadow: 19px 0 0 7px, 38px 0 0 3px, 57px 0 0 0;
+  transform: translateX(-38px);
+  animation: z-page-loader-spin 0.5s infinite alternate linear;
+}
+
+@keyframes z-page-loader-spin {
+  50% {
+    box-shadow: 19px 0 0 3px, 38px 0 0 7px, 57px 0 0 3px;
+  }
+
+  100% {
+    box-shadow: 19px 0 0 0, 38px 0 0 3px, 57px 0 0 7px;
+  }
+}
+
+div[data-testid="stExpander"] summary {
+  border-radius: var(--radius-md);
+}
+
+section[data-testid="stMain"] {
+  padding-top: 60px;
+}
+
+div[class*="st-key-ztopbar"]:not([class*="ztopbar_"]) {
+  position: fixed !important;
+  top: 0;
+  left: 250px;
+  right: 0;
+  height: 60px;
+  z-index: 999990;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-sidebar-border);
+  margin: 0 !important;
+  padding: 0 1rem;
+  box-sizing: border-box;
+  pointer-events: auto !important;
+  overflow: visible;
+  width: auto;
+  ;
+}
+
+div[class*="st-key-ztopbar"]:not([class*="ztopbar_"])>div,
+div[class*="st-key-ztopbar"]:not([class*="ztopbar_"])>div>div[data-testid="stVerticalBlock"],
+div[class*="st-key-ztopbar"]:not([class*="ztopbar_"]) [data-testid="stHorizontalBlock"] {
+  height: 100%;
+  min-height: 0;
+  align-items: center !important;
+}
+
+section[data-testid="stMain"] div[data-testid="stElementContainer"]:has(> div > div[class*="st-key-ztopbar"]:not([class*="ztopbar_"])),
+section[data-testid="stMain"] div[data-testid="element-container"]:has(div[class*="st-key-ztopbar"]:not([class*="ztopbar_"])) {
+  height: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  border: none !important;
+}
+
+div[class*="st-key-ztopbar"] div[data-testid="stVerticalBlock"] {
+  gap: 0 !important;
+}
+
+div[class*="st-key-ztopbar"] [data-testid="stElementContainer"],
+div[class*="st-key-ztopbar"] [data-testid="element-container"] {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+div[class*="st-key-ztopbar_actions"] {
+  display: flex !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  width: 100%;
+}
+
+div[class*="st-key-ztopbar"] div[data-testid="stPopover"],
+div[class*="st-key-ztopbar_actions"] div[data-testid="stPopover"] {
+  pointer-events: auto !important;
+}
+
+div[class*="st-key-ztopbar"] div[data-testid="stPopover"]>div>button,
+div[class*="st-key-ztopbar"] div[data-testid="stPopover"] button {
+  border-radius: var(--radius-md);
+  border-color: var(--color-border);
+  background: var(--color-surface);
+  min-height: 32px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0.2rem 0.45rem;
+  white-space: nowrap;
+  pointer-events: auto !important;
+  position: relative;
+  z-index: 2;
+}
+
+div[class*="st-key-ztopbar"] div[data-testid="stPopover"]>div>button:hover {
+  background: var(--color-primary-hover-bg);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+/* Utility icon buttons (location, notifications, schedulers, access, settings):
+   default #696969 glyph at 18px — New/Export/Account override color elsewhere. */
+div[class*="st-key-ztopbar_loc"] div[data-testid="stPopover"]>div>button,
+div[class*="st-key-ztopbar_notif"] div[data-testid="stPopover"]>div>button,
+div[class*="st-key-ztopbar_sched"] div[data-testid="stPopover"]>div>button,
+div[class*="st-key-ztopbar_access"] div[data-testid="stPopover"]>div>button,
+div[class*="st-key-ztopbar_settings"] div[data-testid="stPopover"]>div>button {
+  color: var(--color-nav-text);
+}
+
+div[class*="st-key-ztopbar_loc"] [data-testid="stIconMaterial"],
+div[class*="st-key-ztopbar_notif"] [data-testid="stIconMaterial"],
+div[class*="st-key-ztopbar_sched"] [data-testid="stIconMaterial"],
+div[class*="st-key-ztopbar_access"] [data-testid="stIconMaterial"],
+div[class*="st-key-ztopbar_settings"] [data-testid="stIconMaterial"] {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+}
+
+div[class*="st-key-ztopbar_new"] div[data-testid="stPopover"]>div>button,
+div[class*="st-key-ztopbar_new"] div[data-testid="stPopover"] button {
+  background: var(--color-primary) !important;
+  color: var(--color-text-on-primary) !important;
+  border-color: var(--color-primary) !important;
+  min-width: auto !important;
+  padding: 0 0.85rem !important;
+  font-weight: var(--font-weight-medium);
+}
+
+div[class*="st-key-ztopbar_new"] div[data-testid="stPopover"]>div>button:hover,
+div[class*="st-key-ztopbar_new"] div[data-testid="stPopover"] button:hover {
+  background: var(--color-primary-hover) !important;
+  border-color: var(--color-primary-hover) !important;
+  color: var(--color-text-on-primary) !important;
+}
+
+div[class*="st-key-ztopbar_export"] div[data-testid="stPopover"]>div>button,
+div[class*="st-key-ztopbar_export"] div[data-testid="stPopover"] button {
+  background: var(--color-surface) !important;
+  color: var(--color-text) !important;
+  border-color: var(--color-border) !important;
+  min-width: auto !important;
+  padding: 0 0.85rem !important;
+  font-weight: var(--font-weight-medium);
+}
+
+div[class*="st-key-ztopbar_export"] div[data-testid="stPopover"]>div>button:hover,
+div[class*="st-key-ztopbar_export"] div[data-testid="stPopover"] button:hover {
+  border-color: var(--color-primary) !important;
+  color: var(--color-primary) !important;
+}
+
+div[class*="st-key-ztopbar_account"] div[data-testid="stPopover"]>div>button,
+div[class*="st-key-ztopbar_account"] div[data-testid="stPopover"] button {
+  min-width: auto !important;
+  max-width: 12rem;
+  padding: 0 0.65rem !important;
+  gap: 0.35rem;
+  background: var(--color-bg-alt) !important;
+  border-color: transparent !important;
+}
+
+div[class*="st-key-ztopbar_account"] div[data-testid="stPopover"]>div>button:hover,
+div[class*="st-key-ztopbar_account"] div[data-testid="stPopover"] button:hover {
+  background: var(--color-surface-hover) !important;
+  border-color: transparent !important;
+  color: var(--color-text) !important;
+}
+
+.z-topbar-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: 0.4rem var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  cursor: default;
+  transition: background var(--transition-fast);
+}
+
+.z-topbar-menu-item:hover {
+  background: var(--color-surface-hover);
+}
+
+.z-topbar-menu-item i {
+  font-size: 16px;
+  color: var(--color-nav-text);
+  flex-shrink: 0;
+}
+
+.z-topbar-account-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  margin-bottom: 0.25rem;
+}
+
+.z-topbar-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-sm);
+  flex-shrink: 0;
+}
+
+.z-topbar-user-role {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.z-topbar-divider {
+  width: 1px;
+  height: 24px;
+  margin: 0 auto;
+  background: var(--color-border);
+}
+
+div[class*="st-key-ztopbar"]:not([class*="ztopbar_"])>div>div[data-testid="stHorizontalBlock"]>div[data-testid="stColumn"]:first-child {
+  flex: 1 1 auto !important;
+  width: auto !important;
+}
+
+div[class*="st-key-ztopbar"]:not([class*="ztopbar_"])>div>div[data-testid="stHorizontalBlock"]>div[data-testid="stColumn"]:last-child {
+  flex: 0 0 auto !important;
+  width: auto !important;
+  min-width: fit-content !important;
+}
+
+.z-topbar-search {
+  position: relative;
+  flex: 1;
+  max-width: 420px;
+  display: flex;
+  align-items: center;
+}
+
+.z-topbar-search>i {
+  position: absolute;
+  left: 14px;
+  font-size: 16px;
+  color: var(--color-text-subtle);
+  pointer-events: none;
+}
+
+.z-topbar-search-input {
+  width: 100%;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-alt);
+  padding: 0 14px 0 40px;
+  font-size: var(--font-size-base);
+  font-family: var(--font-family-base);
+  color: var(--color-text);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.z-topbar-search-input::placeholder {
+  color: var(--color-text-subtle);
+}
+
+.z-topbar-search-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-focus);
+  background: var(--color-surface);
+}
+
+.z-topbar-search-input:disabled {
+  cursor: default;
+  opacity: 0.9;
+}
+
+@media (max-width: 640px) {
+  .block-container {
+    padding-left: var(--space-6);
+    padding-right: var(--space-6);
+  }
+
+  div[class*="st-key-ztopbar"]:not([class*="ztopbar_"]) {
+    left: 0;
+  }
+}
+
+/* Dashboard summary cards (vaybooks.bms.ui.components.shared.dashboard_card).
+   Layout/spacing values below are the reference design's exact spec (48px
+   icon, 16px radius, 20px padding) rather than the closest existing --space-*
+   step; colors still come only from the semantic tokens above. */
+:root {
+  --dcard-radius: 16px;
+  --dcard-padding: 20px;
+  --dcard-icon-size: 48px;
+  --dcard-icon-radius: 12px;
+  --dcard-icon-glyph: 22px;
+  --dcard-value-size: 1.85rem;
+}
+
+div[class*="st-key-dcard_grid"] div[data-testid="stHorizontalBlock"] {
+  align-items: stretch;
+}
+
+div[class*="st-key-dcard_grid"] div[data-testid="stVerticalBlockBorderWrapper"] {
+  height: 100%;
+  box-sizing: border-box;
+  padding: var(--dcard-padding);
+  border: 1px solid var(--color-sidebar-border);
+  border-radius: var(--dcard-radius);
+  background: var(--color-surface);
+  box-shadow: none;
+  transition: box-shadow var(--transition-base);
+}
+
+div[class*="st-key-dcard_grid"] div[data-testid="stVerticalBlockBorderWrapper"]:hover {
+  box-shadow: var(--shadow-hover);
+}
+
+div[class*="st-key-dcard_grid"] div[data-testid="stVerticalBlockBorderWrapper"]>div[data-testid="stVerticalBlock"] {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.z-dcard-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  margin-bottom: var(--space-7);
+}
+
+.z-dcard-icon {
+  width: var(--dcard-icon-size);
+  height: var(--dcard-icon-size);
+  min-width: var(--dcard-icon-size);
+  border-radius: var(--dcard-icon-radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--dcard-icon-glyph);
+  flex-shrink: 0;
+}
+
+.z-dcard-icon.primary {
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
+}
+
+.z-dcard-icon.success {
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+}
+
+.z-dcard-icon.danger {
+  background: var(--color-danger-bg);
+  color: var(--color-danger-text);
+}
+
+.z-dcard-icon.warning {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+}
+
+.z-dcard-icon.info {
+  background: var(--color-info-bg);
+  color: var(--color-info-text);
+}
+
+.z-dcard-icon.neutral {
+  background: var(--color-neutral-bg);
+  color: var(--color-neutral-text);
+}
+
+.z-dcard-title {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+  line-height: var(--line-height-tight);
+}
+
+.z-dcard-middle {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  margin-bottom: var(--space-7);
+}
+
+.z-dcard-value {
+  font-size: var(--dcard-value-size);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+  line-height: 1.1;
+}
+
+.z-dcard-growth {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.z-dcard-growth.up {
+  color: var(--color-success-text);
+}
+
+.z-dcard-growth.down {
+  color: var(--color-danger-text);
+}
+
+div[class*="st-key-dcard_grid"] div[data-testid="stElementContainer"]:has(div[class*="st-key-dcard_footer_"]) {
+  margin-top: auto !important;
+}
+
+div[class*="st-key-dcard_grid"] div[class*="st-key-dcard_footer_"] {
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--color-border);
+}
+
+div[class*="st-key-dcard_grid"] div[class*="st-key-dcard_footer_"] button {
+  width: 100%;
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  min-height: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-regular);
+  box-shadow: none !important;
+  transition: color var(--transition-fast);
+}
+
+div[class*="st-key-dcard_grid"] div[class*="st-key-dcard_footer_"] button:hover {
+  color: var(--color-primary);
+}
+
+div[class*="st-key-dcard_grid"] div[class*="st-key-dcard_footer_"] button::after {
+  content: "\2192";
+  font-size: 1rem;
+  margin-left: var(--space-4);
+}
+
+/* Login page (vaybooks.bms.ui.auth.login_page) — full-screen split-screen
+   sign-in. Structure is st.container(key=...) + st.columns (widgets can't
+   nest inside raw HTML), styled here via the st-key-* scopes; only the
+   banner/logo images are raw <img> tags for object-fit control. */
+div[class*="st-key-zlogin_page"] {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 999996;
+  display: flex;
+  background: var(--color-surface);
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+
+/* Edge-to-edge: the card IS the viewport, not a floating panel on a visible
+   backdrop — no max-width, radius, or shadow, or the page reads as "a card
+   centered on a page" instead of "a full-screen login route". */
+div[class*="st-key-zlogin_card"] {
+  width: 100%;
+  min-height: 100vh;
+  background: var(--color-surface);
+}
+
+div[class*="st-key-zlogin_card"]>div[data-testid="stHorizontalBlock"] {
+  gap: 0 !important;
+  align-items: stretch;
+}
+
+div[class*="st-key-zlogin_card"] div[data-testid="stColumn"]:has(div[class*="st-key-zlogin_form_col"]) {
+  padding: 3rem 10rem;
+  display: flex;
+  align-items: center;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+div[class*="st-key-zlogin_card"] div[data-testid="stColumn"]:has(div[class*="st-key-zlogin_form_col"]) .stVerticalBlock {
+  height: auto;
+}
+
+div[class*="st-key-zlogin_card"] div[data-testid="stColumn"]:has(div[class*="st-key-zlogin_banner"]) {
+  padding: 0;
+  position: relative;
+  min-height: 100vh;
+}
+
+/* Streamlit sets position:relative on every stElementContainer by default, so
+   that div — not our positioned stColumn above — becomes the banner <img>'s
+   actual containing block, and it collapses to 0 height (its only child is
+   absolutely positioned). Neutralize it so the img anchors to the stColumn,
+   which already gets a real height from align-items:stretch on the row. */
+div[class*="st-key-zlogin_banner"] [data-testid="stElementContainer"] {
+  position: static !important;
+}
+
+div[class*="st-key-zlogin_form_col"] {
+  width: 100%;
+}
+
+/* The login form is the single input container: every field lives inside
+   this st.form, and overflow:hidden keeps it that way — nothing (rogue
+   absolutely-positioned elements, overflowing focus rings) can render
+   outside its bounds. */
+div[class*="st-key-zlogin_form_col"] div[data-testid="stForm"] {
+  overflow: hidden;
+  width: 100%;
+}
+
+.z-login-logo {
+  margin-bottom: var(--space-8);
+}
+
+.z-login-logo img {
+  max-height: 32px;
+  width: auto;
+}
+
+.z-login-title {
+  font-size: 1.6rem;
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+  margin: 0 0 var(--space-3) 0;
+}
+
+.z-login-subtitle {
+  font-size: var(--font-size-base);
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-8) 0;
+}
+
+div[class*="st-key-zlogin_form_col"] div[data-testid="stTextInput"] {
+  width: 100%;
+}
+
+/* Streamlit's native "Press Enter to submit form" hint under form text
+   inputs — not part of this design, so hide it on the login form only. */
+div[class*="st-key-zlogin_form_col"] div[data-testid="InputInstructions"] {
+  display: none !important;
+}
+
+div[class*="st-key-zlogin_form_col"] div[data-testid="stTextInput"] input {
+  height: 44px !important;
+  width: 100%;
+  border-radius: 10px !important;
+}
+
+div[class*="st-key-zlogin_form_col"] div[data-testid="stFormSubmitButton"] button {
+  height: 44px;
+  border-radius: 10px;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+}
+
+.z-login-forgot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  padding-top: 0.4rem;
+}
+
+.z-login-forgot span {
+  font-size: var(--font-size-sm);
+  color: var(--color-primary);
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.z-login-forgot span:hover {
+  color: var(--color-primary-hover);
+  text-decoration: underline;
+}
+
+div[class*="st-key-zlogin_form_col"] div[data-testid="stCheckbox"] {
+  padding-top: 0.15rem;
+}
+
+.z-login-banner-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover !important;
+  display: block;
+}
+
+@media (max-width: 640px) {
+  div[class*="st-key-zlogin_card"] div[data-testid="stColumn"]:has(div[class*="st-key-zlogin_banner"]) {
+    display: none;
+  }
+
+  div[class*="st-key-zlogin_card"] div[data-testid="stColumn"]:has(div[class*="st-key-zlogin_form_col"]) {
+    width: 100% !important;
+    flex: 1 1 100% !important;
+    padding: 2.5rem 1.5rem;
+  }
+}

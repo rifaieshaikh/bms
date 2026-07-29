@@ -11,7 +11,11 @@ class WorkerRepository(Protocol):
 
     def find_by_id(self, worker_id: str) -> Optional[Worker]: ...
 
-    def list_all(self, active_only: bool = True) -> List[Worker]: ...
+    def list_all(
+        self,
+        active_only: bool = True,
+        location_filter: dict | None = None,
+    ) -> List[Worker]: ...
 
     def list_by_activity(
         self,

@@ -8,8 +8,9 @@ import streamlit as st
 
 from vaybooks.bms.domain.boutique.invoices.entities import Invoice
 from vaybooks.bms.domain.boutique.orders.entities import CustomizationOrder
+from vaybooks.bms.ui.components.shared import CardAction, card
 from vaybooks.bms.ui.dialog_utils import clear_all_dialog_flags, register_armed_dialog
-from vaybooks.bms.ui.styles import render_card_grid, status_badge
+from vaybooks.bms.ui.styles import render_card_grid
 
 
 @dataclass(frozen=True)
@@ -41,85 +42,36 @@ def invoice_card(
     items_text = ", ".join(item_labels) or "—"
     item_count = len(item_labels)
     display_amount = invoice.grand_total if invoice.is_generated else invoice.net_amount
+    show_taxable = invoice.discount_amount > 0 or (
+        invoice.is_generated and invoice.total_tax > 0
+    )
+    amount = display_amount if show_taxable else invoice.invoice_amount
 
-    with st.container(border=True):
-        st.markdown(
-            f'<p class="z-card-title">{invoice.invoice_number}</p>',
-            unsafe_allow_html=True,
-        )
+    items_part = (
+        f"{item_count} item{'s' if item_count != 1 else ''}: {items_text}"
+        if item_count
+        else f"Items: {items_text}"
+    )
+    caption_lines = [f"{invoice.invoice_date} · {items_part}"]
+    if invoice.discount_amount > 0:
+        caption_lines.append(f"Discount ₹{invoice.discount_amount:,.0f}")
+    if invoice.is_generated and invoice.total_tax > 0:
+        caption_lines.append(f"GST ₹{invoice.total_tax:,.0f}")
 
-        if invoice.discount_amount > 0 or (invoice.is_generated and invoice.total_tax > 0):
-            st.markdown(
-                f'<p class="z-card-amount" style="color:#2E7D46">'
-                f"₹{display_amount:,.0f}</p>",
-                unsafe_allow_html=True,
-            )
-            badges = status_badge(
-                f"Taxable ₹{invoice.net_amount:,.0f}", "gray", compact=True
-            )
-        else:
-            st.markdown(
-                f'<p class="z-card-amount" style="color:#2E7D46">'
-                f"₹{invoice.invoice_amount:,.0f}</p>",
-                unsafe_allow_html=True,
-            )
-            badges = ""
-
-        if invoice.is_generated:
-            badges = (badges + " ") if badges else ""
-            badges += status_badge("Generated", "green", compact=True)
-        if invoice.is_cancellation:
-            badges = (badges + " ") if badges else ""
-            badges += status_badge("Cancellation", "orange", compact=True)
-        if posted:
-            badges = (badges + " ") if badges else ""
-            badges += status_badge("Posted", "blue", compact=True)
-        if badges:
-            st.markdown(badges, unsafe_allow_html=True)
-
-        items_part = (
-            f"{item_count} item{'s' if item_count != 1 else ''}: {items_text}"
-            if item_count
-            else f"Items: {items_text}"
-        )
-        st.caption(f"{invoice.invoice_date} · {items_part}")
-
-        if invoice.discount_amount > 0:
-            st.caption(f"Discount ₹{invoice.discount_amount:,.0f}")
-        if invoice.is_generated and invoice.total_tax > 0:
-            st.caption(f"GST ₹{invoice.total_tax:,.0f}")
-
-        margin_badges = (
-            status_badge(f"Margin ₹{invoice.margin_amount:,.0f}", "violet", compact=True)
-            + " "
-            + status_badge(
-                f"MPH ₹{invoice.margin_per_hour:,.0f}/h"
-                if invoice.margin_per_hour is not None
-                else "MPH —",
-                "gray",
-                compact=True,
-            )
-        )
-        st.markdown(margin_badges, unsafe_allow_html=True)
-
-        action_cols = st.columns(2 if pdf_bytes else 1)
-        col_idx = 0
-        if pdf_bytes:
-            action_cols[col_idx].download_button(
+    actions = []
+    if pdf_bytes:
+        actions.append(
+            CardAction(
                 "Download PDF",
-                data=pdf_bytes,
-                file_name=f"{invoice.invoice_number}.pdf",
-                mime="application/pdf",
                 key=f"dl_inv_pdf_{invoice.id}",
-                width="stretch",
+                download_data=pdf_bytes,
+                download_file_name=f"{invoice.invoice_number}.pdf",
+                download_mime="application/pdf",
             )
-            col_idx += 1
-        if edit and action_cols[col_idx].button(
-            "Edit",
-            key=edit.button_key,
-            type="primary",
-            width="stretch",
-        ):
+        )
+    if edit:
+
+        def _on_edit() -> None:
             if edit.before_edit:
                 edit.before_edit()
             if edit.clear_dialogs:
@@ -128,6 +80,31 @@ def invoice_card(
             if edit.register_dialog:
                 register_armed_dialog(edit.flag_key)
             st.rerun()
+
+        actions.append(CardAction("Edit", key=edit.button_key, on_click=_on_edit))
+
+    with st.container(border=True):
+        card(
+            invoice.invoice_number,
+            amount=f"₹{amount:,.0f}",
+            badges=[
+                show_taxable and (f"Taxable ₹{invoice.net_amount:,.0f}", "gray"),
+                invoice.is_generated and ("Generated", "green"),
+                invoice.is_cancellation and ("Cancellation", "orange"),
+                posted and ("Posted", "blue"),
+            ],
+            caption_lines=caption_lines,
+            footer_badges=[
+                (f"Margin ₹{invoice.margin_amount:,.0f}", "violet"),
+                (
+                    f"MPH ₹{invoice.margin_per_hour:,.0f}/h"
+                    if invoice.margin_per_hour is not None
+                    else "MPH —",
+                    "gray",
+                ),
+            ],
+            actions=actions,
+        )
 
 
 def invoice_cards(

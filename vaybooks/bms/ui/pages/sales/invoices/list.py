@@ -15,7 +15,12 @@ from vaybooks.bms.ui.sales_list_schemas import STORE_SALES
 
 def _load_sales(services, filters, sort):
     try:
-        return services["sales"].list_sales_invoices()
+        from vaybooks.bms.domain.identity.location_access import location_id_mongo_filter
+        from vaybooks.bms.ui.auth.session import working_location_list_context
+
+        working, accessible = working_location_list_context(services)
+        filt = location_id_mongo_filter(working, accessible)
+        return services["sales"].list_sales_invoices(location_filter=filt)
     except Exception:
         return []
 

@@ -28,6 +28,10 @@ from vaybooks.bms.ui.crm_list_schemas import (
     OPEN_ENQUIRY_STATUSES,
     OPEN_LEAD_STATUSES,
 )
+from vaybooks.bms.ui.components.shared.dashboard_card import (
+    DashboardCardSpec,
+    dashboard_card_grid,
+)
 from vaybooks.bms.ui.pages.crm.drilldown import open_filtered_list
 from vaybooks.bms.ui.styles import metric_grid, render_card_grid, status_badge
 
@@ -42,16 +46,50 @@ def _snapshot_value(snapshot: Any, name: str, default: Any = 0) -> Any:
 
 
 def _kpi_row(snapshot: Any) -> None:
-    metric_grid(
+    unassigned = _snapshot_value(snapshot, "unassigned_leads")
+    dashboard_card_grid(
         [
-            ("Active leads", _snapshot_value(snapshot, "total_active_leads")),
-            ("New in period", _snapshot_value(snapshot, "new_leads_in_period")),
-            (
-                "Unassigned leads",
-                _snapshot_value(snapshot, "unassigned_leads"),
-                "warn" if _snapshot_value(snapshot, "unassigned_leads") else "neutral",
+            DashboardCardSpec(
+                title="Active leads",
+                value=str(_snapshot_value(snapshot, "total_active_leads")),
+                icon="users",
+                footer_text="View active leads",
+                on_click=lambda: open_filtered_list(
+                    CRM_LEADS, "crm_leads_list", {"statuses": list(OPEN_LEAD_STATUSES)}
+                ),
+                key="crm_active_leads",
             ),
-            ("Open enquiries", _snapshot_value(snapshot, "open_enquiries")),
+            DashboardCardSpec(
+                title="New in period",
+                value=str(_snapshot_value(snapshot, "new_leads_in_period")),
+                icon="user-plus",
+                footer_text="View all leads",
+                on_click=lambda: navigation.go_to_list("crm_leads_list"),
+                key="crm_new_leads",
+            ),
+            DashboardCardSpec(
+                title="Unassigned leads",
+                value=str(unassigned),
+                icon="user-exclamation",
+                tone="warning" if unassigned else "primary",
+                footer_text="View unassigned leads",
+                on_click=lambda: open_filtered_list(
+                    CRM_LEADS, "crm_leads_list", {"assignment": "unassigned"}
+                ),
+                key="crm_unassigned_leads",
+            ),
+            DashboardCardSpec(
+                title="Open enquiries",
+                value=str(_snapshot_value(snapshot, "open_enquiries")),
+                icon="mail",
+                footer_text="View open enquiries",
+                on_click=lambda: open_filtered_list(
+                    CRM_ENQUIRIES,
+                    "crm_enquiries_list",
+                    {"statuses": list(OPEN_ENQUIRY_STATUSES)},
+                ),
+                key="crm_open_enquiries",
+            ),
         ],
         suffix="crm_dash_pipeline",
     )

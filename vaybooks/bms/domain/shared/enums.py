@@ -67,6 +67,7 @@ class VoucherType(str, Enum):
     REFUND = "Refund"
     VENDOR_PAYMENT = "Vendor Payment"
     SALARY_PAYMENT = "Salary Payment"
+    COMMISSION_PAYMENT = "Commission Payment"
     SALES_RETURN = "Sales Return"
     CREDIT_NOTE = "Credit Note"
     DEBIT_NOTE = "Debit Note"
@@ -92,8 +93,29 @@ class SalesReturnStatus(str, Enum):
 
 class DeliveryNoteStatus(str, Enum):
     DRAFT = "Draft"
+    CONFIRMED = "Confirmed"
+    DISPATCHED = "Dispatched"
     DELIVERED = "Delivered"
+    PARTIALLY_DELIVERED = "Partially Delivered"
     CANCELLED = "Cancelled"
+
+
+class DeliveryReferenceType(str, Enum):
+    SALES_ORDER = "sales_order"
+    INVOICE = "invoice"
+    DIRECT = "direct"
+
+
+class DeliveryChargePaymentStatus(str, Enum):
+    UNPAID = "Unpaid"
+    PARTIALLY_PAID = "Partially Paid"
+    PAID = "Paid"
+
+
+class InvoiceDeliveryStatus(str, Enum):
+    NOT_DELIVERED = "Not Delivered"
+    PARTIALLY_DELIVERED = "Partially Delivered"
+    FULLY_DELIVERED = "Fully Delivered"
 
 
 class EstimateStatus(str, Enum):
@@ -138,9 +160,19 @@ class LocationType(str, Enum):
 
 class StockTransferStatus(str, Enum):
     DRAFT = "Draft"
-    DISPATCHED = "Dispatched"
+    IN_TRANSIT = "In Transit"
     RECEIVED = "Received"
     CANCELLED = "Cancelled"
+
+    # Legacy alias — same value as IN_TRANSIT (Python Enum alias).
+    DISPATCHED = "In Transit"
+
+    @classmethod
+    def _missing_(cls, value):
+        # Documents saved before rename used "Dispatched".
+        if value == "Dispatched":
+            return cls.IN_TRANSIT
+        return None
 
 
 class StockMovementType(str, Enum):

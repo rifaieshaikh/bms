@@ -105,12 +105,14 @@ def test_dashboard_exposes_attention_and_transaction_metrics():
             origin="Manual",
         )
     )
+    from vaybooks.bms.domain.shared.date_utils import utc_now
+
     service = CrmDashboardAppService(
         leads,
         enquiry_repo=FakeEnquiryRepo(),
         activity_repo=activities,
         sales_service=FakeSales(
-            [_order("customer-1", date.today(), 1000)]
+            [_order("customer-1", utc_now().date(), 1000)]
         ),
         accounting_service=FakeAccounting({"customer-1": 400}),
     )

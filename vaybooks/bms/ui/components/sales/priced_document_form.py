@@ -73,6 +73,7 @@ def render_priced_document_form(
         customer_service,
         key_prefix=key_prefix,
         initial_customer=initial_customer,
+        services=services,
     )
     registered = business_is_registered(business)
     selected_customer = customer_selection.customer
@@ -227,9 +228,15 @@ def render_priced_document_form(
     if not lines:
         st.error("Add at least one product line")
         return False
+    from vaybooks.bms.ui.components.common.location_fields import (
+        require_location_name,
+    )
+
+    location_id, _location_name = require_location_name(services)
     customer = resolve_customer_identity(
         customer_service,
         customer_selection,
+        location_ids=[location_id],
     )
     kwargs = {
         "customer_id": customer.id,
@@ -246,6 +253,7 @@ def render_priced_document_form(
         method = sales.update_estimate if is_estimate else sales.update_quotation
         method(existing.id, **kwargs)
     else:
+        kwargs["location_id"] = location_id
         method = sales.create_estimate if is_estimate else sales.create_quotation
         method(**kwargs)
     st.success("Document saved")

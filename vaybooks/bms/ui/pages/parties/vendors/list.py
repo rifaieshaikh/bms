@@ -2,11 +2,13 @@ from datetime import date
 
 import streamlit as st
 
+from vaybooks.bms.domain.identity.location_access import location_ids_mongo_filter
 from vaybooks.bms.domain.shared.exceptions import (
     DuplicateVendorError,
     ValidationError,
 )
 from vaybooks.bms.ui import navigation
+from vaybooks.bms.ui.auth.session import working_location_list_context
 from vaybooks.bms.ui.components.common.list_view import render_list
 from vaybooks.bms.ui.components.parties.vendor_form import render_vendor_form
 from vaybooks.bms.ui.dialog_utils import (
@@ -65,7 +67,7 @@ def _add_vendor_dialog(vendor_service, services: dict):
         _render_duplicate_vendor_warning(dup_id, vendor_service)
 
     vendor_input = render_vendor_form(
-        "v_add", segment_options=_vendor_segment_options(services)
+        "v_add", segment_options=_vendor_segment_options(services), services=services
     )
 
     cols = st.columns(2)
@@ -103,6 +105,7 @@ def _edit_vendor_dialog(vendor_service, services: dict):
         "v_edit",
         vendor=vendor,
         segment_options=_vendor_segment_options(services, vendor),
+        services=services,
     )
 
     cols = st.columns(2)
@@ -213,7 +216,9 @@ def _pay_vendor_dialog(services, vendor_id: str):
 
 # --- views -------------------------------------------------------------------
 def _load_vendors(services, filters, sort):
-    vendors = services["vendors"].list_all_vendors()
+    working, accessible = working_location_list_context(services)
+    filt = location_ids_mongo_filter(working, accessible)
+    vendors = services["vendors"].list_all_vendors(location_filter=filt)
     accounting = services["accounting"]
     for vendor in vendors:
         try:

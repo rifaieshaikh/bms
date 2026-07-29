@@ -46,8 +46,11 @@ from vaybooks.bms.domain.shared.financial_year import (
     resolve_financial_year,
 )
 from vaybooks.bms.domain.shared.enums import (
+    DeliveryChargePaymentStatus,
     DeliveryNoteStatus,
+    DeliveryReferenceType,
     EstimateStatus,
+    InvoiceDeliveryStatus,
     QuotationStatus,
     PartyRegistrationType,
     SalesOrderStatus,
@@ -142,7 +145,10 @@ class SalesAppService:
         raw_lines: list[dict],
         invoice_discount: float = 0.0,
         document_content: Optional[DocumentContentSnapshot] = None,
-    ) -> tuple[list[dict], str, float]:
+        commission: Optional[dict] = None,
+    ) -> tuple[list[dict], str, float, Optional[dict]]:
+        from vaybooks.bms.domain.sales.commission import normalize_commission_payload
+
         customer = self._customer_from_account(customer_account_id)
         business = (
             self._business_service.get_profile()
@@ -162,6 +168,9 @@ class SalesAppService:
             )
         sales_lines = [line.to_line_dict() for line in resolved]
         summary = tax_summary_from_lines(resolved)
+        normalized_commission = normalize_commission_payload(
+            commission, taxable_amount=summary["taxable"]
+        )
         note = serialize_sales_line_items(
             sales_lines,
             invoice_discount=invoice_discount,
@@ -169,8 +178,9 @@ class SalesAppService:
             document_content=(
                 dataclass_to_dict(document_content) if document_content else None
             ),
+            commission=normalized_commission,
         )
-        return sales_lines, note, summary["grand_total"]
+        return sales_lines, note, summary["grand_total"], normalized_commission
 
     @staticmethod
     def _customer_is_registered(customer: Optional[Customer]) -> bool:
@@ -332,8 +342,10 @@ class SalesAppService:
             enriched.append(row)
         return enriched, supply_type
 
-    def list_estimates(self) -> List[Estimate]:
-        return self._estimate_repo.list_all() if self._estimate_repo else []
+    def list_estimates(self, *, location_filter: dict | None = None) -> List[Estimate]:
+        if not self._estimate_repo:
+            return []
+        return self._estimate_repo.list_all(location_filter=location_filter)
 
     def get_estimate(self, estimate_id: str) -> Optional[Estimate]:
         return self._estimate_repo.find_by_id(estimate_id) if self._estimate_repo else None
@@ -349,8 +361,10 @@ class SalesAppService:
         custom_values: Optional[dict] = None,
         bank_account_id: Optional[str] = None,
         terms_and_conditions: Optional[str] = None,
+        location_id: str = "",
     ) -> Estimate:
         enriched, supply_type = self._enrich_so_lines(customer_id, lines)
+        location_name = self._location_name(location_id)
         return self._domain.create_estimate(
             estimate_number=self._counter_repo.next("estimate_number"),
             customer_id=customer_id,
@@ -361,6 +375,8 @@ class SalesAppService:
             notes=notes,
             status=status,
             supply_type=supply_type,
+            location_id=location_id,
+            location_name=location_name,
             document_content=self.build_document_content(
                 "estimate",
                 custom_values,
@@ -403,8 +419,10 @@ class SalesAppService:
             changes["status"] = status
         return self._domain.update_estimate(estimate_id, **changes)
 
-    def list_quotations(self) -> List[Quotation]:
-        return self._quotation_repo.list_all() if self._quotation_repo else []
+    def list_quotations(self, *, location_filter: dict | None = None) -> List[Quotation]:
+        if not self._quotation_repo:
+            return []
+        return self._quotation_repo.list_all(location_filter=location_filter)
 
     def get_quotation(self, quotation_id: str) -> Optional[Quotation]:
         return (
@@ -424,8 +442,10 @@ class SalesAppService:
         custom_values: Optional[dict] = None,
         bank_account_id: Optional[str] = None,
         terms_and_conditions: Optional[str] = None,
+        location_id: str = "",
     ) -> Quotation:
         enriched, supply_type = self._enrich_so_lines(customer_id, lines)
+        location_name = self._location_name(location_id)
         quotation = self._domain.create_quotation(
             quotation_number=self._counter_repo.next("quotation_number"),
             customer_id=customer_id,
@@ -436,6 +456,8 @@ class SalesAppService:
             notes=notes,
             status=status,
             supply_type=supply_type,
+            location_id=location_id,
+            location_name=location_name,
             document_content=self.build_document_content(
                 "quotation",
                 custom_values,
@@ -702,8 +724,8 @@ class SalesAppService:
         self._estimate_repo.save(estimate)
         return voucher
 
-    def list_sales_orders(self) -> List[SalesOrder]:
-        return self._so_repo.list_all()
+    def list_sales_orders(self, *, location_filter: dict | None = None) -> List[SalesOrder]:
+        return self._so_repo.list_all(location_filter=location_filter)
 
     def get_sales_order(self, order_id: str) -> Optional[SalesOrder]:
         return self._so_repo.find_by_id(order_id)
@@ -824,11 +846,116 @@ class SalesAppService:
     def close_sales_order(self, order_id: str) -> SalesOrder:
         return self._domain.close_sales_order(order_id)
 
-    def list_delivery_notes(self) -> List[DeliveryNote]:
-        return self._dn_repo.list_all()
+    def list_delivery_notes(self, *, location_filter: dict | None = None) -> List[DeliveryNote]:
+        return self._dn_repo.list_all(location_filter=location_filter)
 
     def get_delivery_note(self, dn_id: str) -> Optional[DeliveryNote]:
         return self._dn_repo.find_by_id(dn_id)
+
+    def list_delivery_notes_by_partner(self, delivery_partner_id: str) -> List[DeliveryNote]:
+        return self._dn_repo.list_by_partner(delivery_partner_id)
+
+    def list_unpaid_delivery_charges(
+        self, delivery_partner_id: str | None = None
+    ) -> List[DeliveryNote]:
+        """DNs with business-paid delivery charge still unpaid."""
+        notes = (
+            self._dn_repo.list_by_partner(delivery_partner_id)
+            if delivery_partner_id
+            else self._dn_repo.list_all()
+        )
+        unpaid = []
+        for dn in notes:
+            if dn.status == DeliveryNoteStatus.CANCELLED:
+                continue
+            ch = dn.charges
+            if not ch.paid_by_us or ch.amount <= 0:
+                continue
+            if ch.payment_voucher_id or ch.payment_status == DeliveryChargePaymentStatus.PAID:
+                continue
+            unpaid.append(dn)
+        return unpaid
+
+    def list_delivery_notes_by_invoice(self, sales_invoice_id: str) -> List[DeliveryNote]:
+        return self._dn_repo.list_by_invoice(sales_invoice_id)
+
+    def invoice_delivered_qty_by_product(self, sales_invoice_id: str) -> dict[str, float]:
+        totals: dict[str, float] = {}
+        for dn in self._dn_repo.list_by_invoice(sales_invoice_id):
+            if dn.status == DeliveryNoteStatus.CANCELLED:
+                continue
+            for line in dn.lines:
+                totals[line.product_id] = round(
+                    totals.get(line.product_id, 0.0) + line.qty_delivered, 2
+                )
+        return totals
+
+    def invoice_pending_delivery_qty(self, sales_invoice_id: str) -> dict[str, float]:
+        voucher = self._accounting.get_voucher(sales_invoice_id)
+        if not voucher:
+            return {}
+        items, _, _ = parse_sales_line_items_note(voucher.description)
+        delivered = self.invoice_delivered_qty_by_product(sales_invoice_id)
+        pending: dict[str, float] = {}
+        for item in items:
+            product_id = str(item.get("product_id") or "")
+            if not product_id:
+                continue
+            qty = float(item.get("qty") or 0)
+            left = round(max(qty - delivered.get(product_id, 0.0), 0.0), 2)
+            if left > 0:
+                pending[product_id] = left
+        return pending
+
+    def _refresh_invoice_delivery_status(self, sales_invoice_id: str) -> None:
+        voucher = self._accounting.get_voucher(sales_invoice_id)
+        if not voucher or voucher.voucher_type != VoucherType.SALES_INVOICE:
+            return
+        items, _, _ = parse_sales_line_items_note(voucher.description)
+        if not items:
+            return
+        delivered = self.invoice_delivered_qty_by_product(sales_invoice_id)
+        total_qty = 0.0
+        total_delivered = 0.0
+        updated_items = []
+        for item in items:
+            product_id = str(item.get("product_id") or "")
+            qty = float(item.get("qty") or 0)
+            qty_delivered = round(delivered.get(product_id, 0.0), 2)
+            item = dict(item)
+            item["qty_delivered"] = qty_delivered
+            updated_items.append(item)
+            total_qty += qty
+            total_delivered += min(qty_delivered, qty)
+        if total_delivered <= 0:
+            status = InvoiceDeliveryStatus.NOT_DELIVERED.value
+        elif total_delivered + 0.001 >= total_qty:
+            status = InvoiceDeliveryStatus.FULLY_DELIVERED.value
+        else:
+            status = InvoiceDeliveryStatus.PARTIALLY_DELIVERED.value
+        # Rewrite description JSON preserving header line
+        header = voucher.description.split("\n", 1)[0]
+        invoice_discount = 0.0
+        tax_summary = None
+        try:
+            _, rest = voucher.description.split("\n", 1)
+            data = __import__("json").loads(rest.strip())
+            invoice_discount = float(data.get("invoice_discount") or 0)
+            tax_summary = data.get("tax_summary")
+            document_content = data.get("document_content")
+            commission = data.get("commission")
+        except Exception:
+            document_content = None
+            commission = None
+        voucher.description = header + "\n" + serialize_sales_line_items(
+            updated_items,
+            invoice_discount=invoice_discount,
+            tax_summary=tax_summary,
+            document_content=document_content,
+            commission=commission,
+        )
+        voucher.delivery_status = status
+        self._accounting.save_voucher(voucher)
 
     def create_delivery_note(
         self,
@@ -836,20 +963,68 @@ class SalesAppService:
         delivery_date: date,
         lines: list[dict],
         sales_order_id: Optional[str] = None,
+        sales_invoice_id: Optional[str] = None,
         notes: str = "",
-        confirm: bool = True,
+        confirm: bool = False,
         custom_values: Optional[dict] = None,
         terms_and_conditions: Optional[str] = None,
         location_id: str = "",
+        billing_address: str = "",
+        delivery_address: str = "",
+        contact_person: str = "",
+        contact_phone: str = "",
+        gstin: str = "",
+        expected_delivery_date: Optional[date] = None,
+        delivery_partner_id: str = "",
+        delivery_partner_name: str = "",
+        vehicle_number: str = "",
+        driver_name: str = "",
+        driver_phone: str = "",
+        lr_consignment_number: str = "",
+        eway_bill_number: str = "",
+        number_of_packages: float = 0.0,
+        gross_weight: float = 0.0,
+        net_weight: float = 0.0,
+        charges: Optional[dict] = None,
+        attachments: Optional[list] = None,
+        allow_override: bool = False,
+        override_qty_reason: str = "",
+        dn_number: Optional[str] = None,
     ) -> DeliveryNote:
         so_number = ""
         so_location_id = ""
+        invoice_number = ""
+        invoice_pending = None
+        stock_source = ""
         if sales_order_id:
             so = self._so_repo.find_by_id(sales_order_id)
             so_number = so.so_number if so else ""
             so_location_id = so.location_id if so else ""
+        if sales_invoice_id:
+            voucher = self._accounting.get_voucher(sales_invoice_id)
+            if not voucher or voucher.voucher_type != VoucherType.SALES_INVOICE:
+                raise ValueError("Sales invoice not found")
+            invoice_number = voucher.voucher_number
+            invoice_pending = self.invoice_pending_delivery_qty(sales_invoice_id)
+            # Invoice without DN already issued stock
+            if not voucher.reference_dn_id:
+                stock_source = "invoice"
         location_id = location_id or so_location_id
-        dn_number = self._counter_repo.next("dn_number")
+        if not dn_number:
+            dn_number = self._counter_repo.next("dn_number")
+        customer = None
+        if self._customer_service:
+            customer = self._customer_service.get_customer_detail(customer_id)
+        if customer and not billing_address:
+            billing_address = getattr(customer, "formatted_address", "") or ""
+        if customer and not delivery_address:
+            delivery_address = billing_address
+        if customer and not contact_person:
+            contact_person = getattr(customer, "contact_person", "") or ""
+        if customer and not contact_phone:
+            contact_phone = getattr(customer, "phone_number", "") or ""
+        if customer and not gstin:
+            gstin = getattr(customer, "gstin", "") or ""
         dn = self._domain.create_delivery_note(
             dn_number=dn_number,
             customer_id=customer_id,
@@ -858,9 +1033,33 @@ class SalesAppService:
             lines=lines,
             sales_order_id=sales_order_id,
             so_number=so_number,
+            sales_invoice_id=sales_invoice_id,
+            invoice_number=invoice_number,
             notes=notes,
             location_id=location_id,
             location_name=self._location_name(location_id),
+            billing_address=billing_address,
+            delivery_address=delivery_address,
+            contact_person=contact_person,
+            contact_phone=contact_phone,
+            gstin=gstin,
+            expected_delivery_date=expected_delivery_date,
+            delivery_partner_id=delivery_partner_id,
+            delivery_partner_name=delivery_partner_name,
+            vehicle_number=vehicle_number,
+            driver_name=driver_name,
+            driver_phone=driver_phone,
+            lr_consignment_number=lr_consignment_number,
+            eway_bill_number=eway_bill_number,
+            number_of_packages=number_of_packages,
+            gross_weight=gross_weight,
+            net_weight=net_weight,
+            charges=charges,
+            attachments=attachments,
+            allow_override=allow_override,
+            override_qty_reason=override_qty_reason,
+            invoice_pending=invoice_pending,
+            stock_source=stock_source,
         )
         dn.document_content = self.build_document_content(
             "delivery_note",
@@ -869,20 +1068,92 @@ class SalesAppService:
         )
         self._dn_repo.save(dn)
         if confirm:
-            return self.confirm_delivery_note(dn.id)
+            # Backward-compatible: confirm=True completes dispatch+deliver (issues stock).
+            return self.deliver_delivery_note(dn.id)
         return dn
 
     def confirm_delivery_note(self, dn_id: str) -> DeliveryNote:
         dn = self._dn_repo.find_by_id(dn_id)
         if not dn:
             raise ValueError("Delivery note not found")
-        if dn.status == DeliveryNoteStatus.DELIVERED:
+        if dn.status != DeliveryNoteStatus.DRAFT:
             return dn
-        stock_lines = self._domain.dn_to_stock_lines(dn)
-        self._inventory.apply_delivery_note_issue(
-            dn.id, stock_lines, dn.delivery_date
+        saved = self._domain.confirm_delivery_note(dn_id)
+        if saved.sales_invoice_id:
+            self._refresh_invoice_delivery_status(saved.sales_invoice_id)
+        self._post_delivery_charges_if_needed(saved.id)
+        return self._dn_repo.find_by_id(saved.id) or saved
+
+    def dispatch_delivery_note(self, dn_id: str) -> DeliveryNote:
+        dn = self._dn_repo.find_by_id(dn_id)
+        if not dn:
+            raise ValueError("Delivery note not found")
+        if dn.status == DeliveryNoteStatus.DRAFT:
+            self.confirm_delivery_note(dn_id)
+            dn = self._dn_repo.find_by_id(dn_id)
+        if not dn.stock_issued:
+            if dn.stock_source == "invoice":
+                self._domain.mark_stock_issued(dn.id, stock_source="invoice")
+            else:
+                stock_lines = self._domain.dn_to_stock_lines(dn)
+                self._inventory.apply_delivery_note_issue(
+                    dn.id, stock_lines, dn.delivery_date
+                )
+                self._domain.mark_stock_issued(dn.id, stock_source="delivery_note")
+        return self._domain.dispatch_delivery_note(dn_id)
+
+    def deliver_delivery_note(
+        self,
+        dn_id: str,
+        *,
+        partially: bool = False,
+        receiver_name: str = "",
+        receiver_phone: str = "",
+        receiver_acknowledgement: str = "",
+        attachments: Optional[list] = None,
+    ) -> DeliveryNote:
+        dn = self._dn_repo.find_by_id(dn_id)
+        if not dn:
+            raise ValueError("Delivery note not found")
+        if dn.status in (DeliveryNoteStatus.DRAFT, DeliveryNoteStatus.CONFIRMED):
+            self.dispatch_delivery_note(dn_id)
+        saved = self._domain.deliver_delivery_note(
+            dn_id,
+            partially=partially,
+            receiver_name=receiver_name,
+            receiver_phone=receiver_phone,
+            receiver_acknowledgement=receiver_acknowledgement,
+            attachments=attachments,
         )
-        return self._domain.confirm_delivery_note(dn_id)
+        if saved.sales_invoice_id:
+            self._refresh_invoice_delivery_status(saved.sales_invoice_id)
+        return saved
+
+    def cancel_delivery_note(self, dn_id: str) -> DeliveryNote:
+        dn = self._dn_repo.find_by_id(dn_id)
+        if not dn:
+            raise ValueError("Delivery note not found")
+        if dn.status == DeliveryNoteStatus.CANCELLED:
+            return dn
+        if dn.charges.payment_voucher_id and dn.charges.payment_status == DeliveryChargePaymentStatus.PAID:
+            raise ValueError(
+                "Cannot cancel: delivery partner payment already settled; reverse payment first"
+            )
+        if dn.stock_issued and dn.stock_source == "delivery_note":
+            self._inventory.reverse_movements_by_reference(dn.id)
+            dn.stock_issued = False
+            self._dn_repo.save(dn)
+        if dn.charges.expense_voucher_id and not dn.charges.payment_voucher_id:
+            try:
+                self._accounting.void_voucher(dn.charges.expense_voucher_id)
+            except Exception:
+                logger.exception("Failed to void delivery expense voucher")
+            dn.charges.expense_voucher_id = None
+            self._dn_repo.save(dn)
+        saved = self._domain.cancel_delivery_note(dn_id)
+        if saved.sales_invoice_id:
+            self._refresh_invoice_delivery_status(saved.sales_invoice_id)
+        return saved
 
     def update_delivery_note(
         self,
@@ -894,10 +1165,24 @@ class SalesAppService:
         custom_values: Optional[dict] = None,
         terms_and_conditions: Optional[str] = None,
         location_id: Optional[str] = None,
+        allow_edit_delivered: bool = False,
+        allow_override: bool = False,
+        override_qty_reason: str = "",
+        **extra,
     ) -> DeliveryNote:
         location_name = (
             self._location_name(location_id) if location_id is not None else None
         )
+        dn = self._dn_repo.find_by_id(dn_id)
+        invoice_pending = None
+        if dn and dn.sales_invoice_id:
+            # Exclude this DN's qty from pending when editing
+            pending = self.invoice_pending_delivery_qty(dn.sales_invoice_id)
+            for line in dn.lines:
+                pending[line.product_id] = round(
+                    pending.get(line.product_id, 0.0) + line.qty_delivered, 2
+                )
+            invoice_pending = pending
         return self._domain.update_delivery_note(
             dn_id,
             delivery_date=delivery_date,
@@ -910,7 +1195,185 @@ class SalesAppService:
             ),
             location_id=location_id,
             location_name=location_name,
+            allow_edit_delivered=allow_edit_delivered,
+            allow_override=allow_override,
+            override_qty_reason=override_qty_reason,
+            invoice_pending=invoice_pending,
+            **{k: v for k, v in extra.items() if v is not None},
         )
+
+    def _post_delivery_charges_if_needed(self, dn_id: str) -> DeliveryNote:
+        dn = self._dn_repo.find_by_id(dn_id)
+        if not dn:
+            raise ValueError("Delivery note not found")
+        charges = dn.charges
+        if not charges.paid_by_us or charges.amount <= 0:
+            return dn
+        if charges.expense_voucher_id:
+            return dn
+        expense_account = self._accounting.ensure_delivery_expense_account()
+        partner_account = None
+        if dn.delivery_partner_id:
+            partner_account = self._accounting.get_delivery_partner_account(
+                dn.delivery_partner_id
+            )
+        amount = round(charges.amount + charges.tax_amount, 2)
+        if charges.payment_mode and charges.paid_from_account_id and charges.payment_status != DeliveryChargePaymentStatus.UNPAID:
+            paying = self._accounting.get_account(charges.paid_from_account_id)
+            if not paying:
+                raise ValueError("Paid-from account not found")
+            voucher = self._accounting.create_journal_entry(
+                description=f"Delivery charges for {dn.dn_number}",
+                lines=[
+                    {
+                        "account_id": expense_account.id,
+                        "account_name": expense_account.account_name,
+                        "debit_amount": amount,
+                        "credit_amount": 0,
+                        "description": "Delivery Expenses",
+                    },
+                    {
+                        "account_id": paying.id,
+                        "account_name": paying.account_name,
+                        "debit_amount": 0,
+                        "credit_amount": amount,
+                        "description": charges.payment_reference or "Delivery charge paid",
+                    },
+                ],
+                voucher_date=charges.payment_date or dn.delivery_date,
+            )
+            charges.expense_voucher_id = voucher.id
+            charges.payment_voucher_id = voucher.id
+            charges.payment_status = DeliveryChargePaymentStatus.PAID
+            charges.partner_payable_amount = 0.0
+        else:
+            if not partner_account:
+                raise ValueError(
+                    "Select a delivery partner (or pay immediately) to record delivery charges"
+                )
+            voucher = self._accounting.create_journal_entry(
+                description=f"Delivery charges payable for {dn.dn_number}",
+                lines=[
+                    {
+                        "account_id": expense_account.id,
+                        "account_name": expense_account.account_name,
+                        "debit_amount": amount,
+                        "credit_amount": 0,
+                        "description": "Delivery Expenses",
+                    },
+                    {
+                        "account_id": partner_account.id,
+                        "account_name": partner_account.account_name,
+                        "debit_amount": 0,
+                        "credit_amount": amount,
+                        "description": "Delivery Partner Payable",
+                    },
+                ],
+                voucher_date=dn.delivery_date,
+            )
+            charges.expense_voucher_id = voucher.id
+            charges.partner_payable_amount = amount
+            charges.payment_status = DeliveryChargePaymentStatus.UNPAID
+        if charges.recoverable_from_customer and charges.customer_recoverable_amount <= 0:
+            charges.customer_recoverable_amount = amount
+        dn.charges = charges
+        dn.updated_at = datetime.utcnow()
+        return self._dn_repo.save(dn)
+
+    def update_delivery_logistics(
+        self,
+        dn_id: str,
+        *,
+        vehicle_number: str = "",
+        driver_name: str = "",
+        driver_phone: str = "",
+        lr_consignment_number: str = "",
+        eway_bill_number: str = "",
+        receiver_name: str = "",
+        receiver_phone: str = "",
+        attachments: list | None = None,
+    ) -> DeliveryNote:
+        dn = self._dn_repo.find_by_id(dn_id)
+        if not dn:
+            raise ValueError("Delivery note not found")
+        if dn.status == DeliveryNoteStatus.CANCELLED:
+            raise ValueError("Cannot update a cancelled delivery note")
+        if vehicle_number != dn.vehicle_number:
+            dn.append_change("vehicle_number", dn.vehicle_number, vehicle_number)
+        dn.vehicle_number = (vehicle_number or "").strip()
+        dn.driver_name = (driver_name or "").strip()
+        dn.driver_phone = (driver_phone or "").strip()
+        dn.lr_consignment_number = (lr_consignment_number or "").strip()
+        dn.eway_bill_number = (eway_bill_number or "").strip()
+        dn.receiver_name = (receiver_name or "").strip()
+        dn.receiver_phone = (receiver_phone or "").strip()
+        if attachments is not None:
+            dn.attachments = list(attachments)
+        dn.updated_at = datetime.utcnow()
+        return self._dn_repo.save(dn)
+
+    def record_delivery_partner_payment(
+        self,
+        dn_id: str,
+        *,
+        paid_from_account_id: str,
+        payment_date: Optional[date] = None,
+        payment_reference: str = "",
+        payment_mode: str = "",
+        amount: Optional[float] = None,
+    ) -> DeliveryNote:
+        dn = self._dn_repo.find_by_id(dn_id)
+        if not dn:
+            raise ValueError("Delivery note not found")
+        charges = dn.charges
+        if charges.payment_voucher_id:
+            raise ValueError("Delivery partner payment already recorded")
+        if not charges.expense_voucher_id:
+            self._post_delivery_charges_if_needed(dn_id)
+            dn = self._dn_repo.find_by_id(dn_id)
+            charges = dn.charges
+        partner_account = self._accounting.get_delivery_partner_account(
+            dn.delivery_partner_id
+        )
+        if not partner_account:
+            raise ValueError("Delivery partner account not found")
+        paying = self._accounting.get_account(paid_from_account_id)
+        if not paying:
+            raise ValueError("Paid-from account not found")
+        pay_amount = round(float(amount if amount is not None else charges.partner_payable_amount or charges.amount), 2)
+        if pay_amount <= 0:
+            raise ValueError("Payment amount must be positive")
+        voucher = self._accounting.create_journal_entry(
+            description=f"Delivery partner payment for {dn.dn_number}",
+            lines=[
+                {
+                    "account_id": partner_account.id,
+                    "account_name": partner_account.account_name,
+                    "debit_amount": pay_amount,
+                    "credit_amount": 0,
+                    "description": "Settle delivery partner payable",
+                },
+                {
+                    "account_id": paying.id,
+                    "account_name": paying.account_name,
+                    "debit_amount": 0,
+                    "credit_amount": pay_amount,
+                    "description": payment_reference or "Payment",
+                },
+            ],
+            voucher_date=payment_date or date.today(),
+        )
+        charges.payment_voucher_id = voucher.id
+        charges.paid_from_account_id = paid_from_account_id
+        charges.payment_reference = payment_reference
+        charges.payment_mode = payment_mode
+        charges.payment_date = payment_date or date.today()
+        charges.payment_status = DeliveryChargePaymentStatus.PAID
+        charges.partner_payable_amount = round(
+            max((charges.partner_payable_amount or pay_amount) - pay_amount, 0.0), 2
+        )
+        dn.charges = charges
+        return self._dn_repo.save(dn)
 
     def _invoice_numbering_settings(self) -> tuple[str, str, int]:
         """Return (mode, prefix, fy_start_month).
@@ -997,29 +1460,57 @@ class SalesAppService:
         document_content: Optional[DocumentContentSnapshot] = None,
         credit_applied: float = 0.0,
         advance_applied: float = 0.0,
+        commission: Optional[dict] = None,
+        location_id: str = "",
     ) -> Voucher:
         sales_lines = None
         note = line_items_note
+        normalized_commission = None
         if document_content is None:
             document_content = self.build_document_content("sales_invoice")
         credit_applied = round(max(float(credit_applied or 0), 0.0), 2)
         advance_applied = round(max(float(advance_applied or 0), 0.0), 2)
         if line_items:
-            sales_lines, note, grand_total = self._prepare_sales_invoice(
-                customer_account_id,
-                line_items,
-                invoice_discount=invoice_discount,
-                document_content=document_content,
+            sales_lines, note, grand_total, normalized_commission = (
+                self._prepare_sales_invoice(
+                    customer_account_id,
+                    line_items,
+                    invoice_discount=invoice_discount,
+                    document_content=document_content,
+                    commission=commission,
+                )
             )
             gross_amount = grand_total
             discount_amount = 0.0
             amount_received = round(max(float(amount_received or 0), 0.0), 2)
+            if not location_id:
+                for raw in line_items:
+                    lid = str(raw.get("location_id") or "").strip()
+                    if lid:
+                        location_id = lid
+                        break
 
         resolved_number, financial_year = self._resolve_store_invoice_number(
             store_invoice_number,
             voucher_date=voucher_date,
             assign_new=True,
         )
+        agent_account_id = None
+        commission_amount = 0.0
+        commission_paid = False
+        commission_pay_account_id = None
+        if normalized_commission:
+            agent = self._accounting.get_agent_account(
+                normalized_commission["agent_id"]
+            )
+            if not agent:
+                raise ValueError("Commission agent account not found")
+            agent_account_id = agent.id
+            commission_amount = float(normalized_commission["commission_amount"])
+            commission_paid = bool(normalized_commission.get("commission_paid"))
+            commission_pay_account_id = (
+                normalized_commission.get("pay_account_id") or None
+            )
         voucher = self._accounting.create_cash_sales_invoice(
             customer_account_id=customer_account_id,
             store_account_id=store_account_id,
@@ -1035,6 +1526,12 @@ class SalesAppService:
             financial_year=financial_year,
             credit_applied=credit_applied,
             advance_applied=advance_applied,
+            commission_amount=commission_amount,
+            agent_account_id=agent_account_id,
+            commission_paid=commission_paid,
+            commission_pay_account_id=commission_pay_account_id,
+            location_id=location_id,
+            location_name=self._location_name(location_id),
         )
         if reference_dn_id:
             dn = self._dn_repo.find_by_id(reference_dn_id)
@@ -1082,6 +1579,7 @@ class SalesAppService:
         invoice_discount: float = 0.0,
         credit_applied: float = 0.0,
         advance_applied: float = 0.0,
+        commission: Optional[dict] = None,
     ) -> Voucher:
         line_discount_total = round(discount_amount - invoice_discount, 2)
         if line_discount_total < 0:
@@ -1099,6 +1597,7 @@ class SalesAppService:
             invoice_discount=invoice_discount,
             credit_applied=credit_applied,
             advance_applied=advance_applied,
+            commission=commission,
         )
 
     def convert_sales_order_to_invoice(
@@ -1198,54 +1697,95 @@ class SalesAppService:
         amount_received: float = 0.0,
         voucher_date: Optional[date] = None,
         line_items_note: str = "",
+        extra_dn_ids: Optional[List[str]] = None,
+        include_delivery_charges: bool = True,
     ) -> Voucher:
-        dn = self._dn_repo.find_by_id(dn_id)
-        if not dn:
-            raise ValueError("Delivery note not found")
-        if dn.status != DeliveryNoteStatus.DELIVERED:
-            raise ValueError("Invoice can only be created from a delivered note")
-        if dn.voucher_id:
-            raise ValueError("This delivery note is already invoiced")
-        customer_account = self._accounting.get_customer_account(dn.customer_id)
+        dn_ids = [dn_id] + list(extra_dn_ids or [])
+        dns: List[DeliveryNote] = []
+        for did in dn_ids:
+            dn = self._dn_repo.find_by_id(did)
+            if not dn:
+                raise ValueError(f"Delivery note not found: {did}")
+            if dn.status not in (
+                DeliveryNoteStatus.DELIVERED,
+                DeliveryNoteStatus.PARTIALLY_DELIVERED,
+                DeliveryNoteStatus.DISPATCHED,
+                DeliveryNoteStatus.CONFIRMED,
+            ):
+                raise ValueError(
+                    f"Invoice can only be created from confirmed/dispatched/delivered notes ({dn.dn_number})"
+                )
+            if dn.voucher_id:
+                raise ValueError(f"Delivery note {dn.dn_number} is already invoiced")
+            dns.append(dn)
+        primary = dns[0]
+        if any(d.customer_id != primary.customer_id for d in dns):
+            raise ValueError("All delivery notes must belong to the same customer")
+        customer_account = self._accounting.get_customer_account(primary.customer_id)
         if not customer_account:
             raise ValueError("Customer account not found")
-        raw_lines = [
-            {
-                "product_id": line.product_id,
-                "qty": line.qty_delivered,
-                "rate": line.rate,
-                "description": line.product_name,
-            }
-            for line in dn.lines
-        ]
+        raw_lines: list[dict] = []
+        for dn in dns:
+            for line in dn.lines:
+                raw_lines.append(
+                    {
+                        "product_id": line.product_id,
+                        "qty": line.qty_delivered,
+                        "rate": line.rate,
+                        "description": line.product_name,
+                    }
+                )
+            if (
+                include_delivery_charges
+                and dn.charges.recoverable_from_customer
+                and dn.charges.customer_recoverable_amount > 0
+            ):
+                raw_lines.append(
+                    {
+                        "product_id": "",
+                        "qty": 1,
+                        "rate": dn.charges.customer_recoverable_amount,
+                        "description": "Delivery Charges",
+                    }
+                )
         if not line_items_note:
             line_items_note = "\n".join(
                 f"{line.product_name or line.product_id}: {line.qty_delivered:g} @ {line.rate:g}"
+                for dn in dns
                 for line in dn.lines
             )
         source_values = {
-            item.key: item.value for item in dn.document_content.custom_fields
+            item.key: item.value for item in primary.document_content.custom_fields
         }
-        return self.create_sales_invoice(
+        voucher = self.create_sales_invoice(
             customer_account_id=customer_account.id,
             store_account_id=store_account_id,
-            gross_amount=dn.total_amount,
+            gross_amount=sum(dn.total_amount for dn in dns)
+            + sum(
+                dn.charges.customer_recoverable_amount
+                for dn in dns
+                if include_delivery_charges and dn.charges.recoverable_from_customer
+            ),
             discount_amount=discount_amount,
             amount_received=amount_received,
             store_invoice_number=store_invoice_number,
             line_items_note=line_items_note,
-            voucher_date=voucher_date or dn.delivery_date,
-            reference_so_id=dn.sales_order_id,
-            reference_dn_id=dn.id,
+            voucher_date=voucher_date or primary.delivery_date,
+            reference_so_id=primary.sales_order_id,
+            reference_dn_id=primary.id,
             line_items=raw_lines,
             invoice_discount=discount_amount,
             document_content=self.build_document_content(
                 "sales_invoice", custom_values=source_values
             ),
         )
+        for dn in dns:
+            dn.voucher_id = voucher.id
+            self._dn_repo.save(dn)
+        return voucher
 
-    def list_sales_returns(self) -> List[SalesReturn]:
-        return self._return_repo.list_all()
+    def list_sales_returns(self, *, location_filter: dict | None = None) -> List[SalesReturn]:
+        return self._return_repo.list_all(location_filter=location_filter)
 
     def get_sales_return(self, return_id: str) -> Optional[SalesReturn]:
         return self._return_repo.find_by_id(return_id)
@@ -1390,6 +1930,80 @@ class SalesAppService:
         detail = sales_return.return_reason or sales_return.notes
         if detail.strip():
             description = f"{description} — {detail.strip()}"
+
+        commission_reversal = 0.0
+        agent_account_id = None
+        commission_meta = None
+        if source_invoice is not None:
+            from vaybooks.bms.domain.sales.commission import (
+                compute_commission_reversal_for_return,
+                parse_sales_commission,
+                serialize_return_commission_note,
+            )
+
+            commission = parse_sales_commission(source_invoice.description or "")
+            if commission and float(commission.get("commission_amount") or 0) > 0:
+                items, _, tax_summary = parse_sales_line_items_note(
+                    source_invoice.description or ""
+                )
+                invoice_taxable = float(
+                    (tax_summary or {}).get("taxable")
+                    or sum(float(i.get("taxable_amount") or 0) for i in items)
+                )
+                invoice_gross = float(
+                    (tax_summary or {}).get("grand_total")
+                    or sum(
+                        float(getattr(line, "debit_amount", 0) or 0)
+                        for line in (source_invoice.lines or [])
+                        if float(getattr(line, "debit_amount", 0) or 0) > 0
+                        and (getattr(line, "description", "") or "")
+                        not in (
+                            "Discount allowed",
+                            "Cash/Bank received",
+                            "Advance applied",
+                            "Commission payable settled",
+                        )
+                    )
+                )
+                # Prefer customer debit as gross when tax_summary missing.
+                if invoice_gross <= 0:
+                    for line in source_invoice.lines or []:
+                        if line.account_id == customer_account.id and line.debit_amount > 0:
+                            invoice_gross = float(line.debit_amount)
+                            break
+                commission_reversal = compute_commission_reversal_for_return(
+                    commission_amount=float(commission.get("commission_amount") or 0),
+                    invoice_taxable=invoice_taxable,
+                    invoice_items=items,
+                    return_lines=sales_return.lines,
+                    return_amount=return_amount,
+                    invoice_gross=invoice_gross,
+                )
+                if commission_reversal > 0:
+                    agent_id = str(commission.get("agent_id") or "").strip()
+                    agent_account = (
+                        self._accounting.get_agent_account(agent_id)
+                        if agent_id
+                        else None
+                    )
+                    if not agent_account:
+                        raise ValueError(
+                            "Commission agent account not found for return reversal"
+                        )
+                    agent_account_id = agent_account.id
+                    commission_meta = {
+                        "agent_id": agent_id,
+                        "agent_name": str(commission.get("agent_name") or "").strip(),
+                        "commission_amount": commission_reversal,
+                        "commission_type": commission.get("commission_type"),
+                        "commission_rate": commission.get("commission_rate"),
+                        "source_invoice_id": sales_return.source_invoice_id or "",
+                        "reversed": True,
+                    }
+                    description = serialize_return_commission_note(
+                        description, commission_meta
+                    )
+
         voucher = self._accounting.create_sales_return_voucher(
             customer_account_id=customer_account.id,
             return_amount=return_amount,
@@ -1399,6 +2013,8 @@ class SalesAppService:
             voucher_date=sales_return.return_date,
             reference_dn_id=sales_return.source_dn_id,
             source_invoice_id=sales_return.source_invoice_id,
+            commission_reversal=commission_reversal,
+            agent_account_id=agent_account_id,
         )
         sales_return.voucher_id = voucher.id
         sales_return.status = SalesReturnStatus.REFUND_PROCESSED
@@ -1413,6 +2029,395 @@ class SalesAppService:
                 ],
             )
         return sales_return
+
+    def get_commission_agent_metrics(self, agent_id: str) -> dict:
+        """Aggregate sales/return/commission KPIs for a commission agent."""
+        agent_id = str(agent_id or "").strip()
+        if not agent_id:
+            return self._empty_commission_agent_metrics()
+        return self.list_commission_agent_metrics().get(
+            agent_id, self._empty_commission_agent_metrics()
+        )
+
+    @staticmethod
+    def _empty_commission_agent_metrics() -> dict:
+        return {
+            "invoice_count": 0,
+            "sales_volume": 0.0,
+            "taxable_volume": 0.0,
+            "return_count": 0,
+            "return_volume": 0.0,
+            "net_sales_volume": 0.0,
+            "commission_accrued": 0.0,
+            "commission_reversed": 0.0,
+            "commission_net": 0.0,
+            "commission_paid": 0.0,
+            "commission_outstanding": 0.0,
+            "commission_unpaid": 0.0,
+            "unpaid_invoice_count": 0,
+            "payable_balance": 0.0,
+            "payment_count": 0,
+        }
+
+    def list_commission_agent_metrics(self) -> dict:
+        """Build commission KPIs for all agents in one voucher/return pass."""
+        from vaybooks.bms.domain.sales.commission import (
+            compute_commission_reversal_for_return,
+            parse_sales_commission,
+        )
+
+        by_agent: dict[str, dict] = {}
+        invoice_agent: dict[str, str] = {}
+        invoice_by_id: dict = {}
+
+        def bucket(agent_id: str) -> dict:
+            if agent_id not in by_agent:
+                by_agent[agent_id] = self._empty_commission_agent_metrics()
+            return by_agent[agent_id]
+
+        for voucher in self._accounting.list_vouchers_by_type(VoucherType.SALES_INVOICE):
+            commission = parse_sales_commission(voucher.description or "")
+            if not commission:
+                continue
+            agent_id = str(commission.get("agent_id") or "").strip()
+            if not agent_id:
+                continue
+            metrics = bucket(agent_id)
+            metrics["invoice_count"] += 1
+            invoice_agent[voucher.id] = agent_id
+            invoice_by_id[voucher.id] = voucher
+            items, _, tax_summary = parse_sales_line_items_note(
+                voucher.description or ""
+            )
+            taxable = float(
+                (tax_summary or {}).get("taxable")
+                or sum(float(i.get("taxable_amount") or 0) for i in items)
+            )
+            gross = float((tax_summary or {}).get("grand_total") or 0)
+            if gross <= 0:
+                first_line = (voucher.description or "").split("\n", 1)[0].strip()
+                for line in voucher.lines or []:
+                    desc = (line.description or "").strip()
+                    if line.debit_amount > 0 and (
+                        desc == first_line or desc.startswith("Store invoice")
+                    ):
+                        gross = float(line.debit_amount)
+                        break
+                if gross <= 0:
+                    gross = taxable
+            metrics["sales_volume"] = round(metrics["sales_volume"] + gross, 2)
+            metrics["taxable_volume"] = round(metrics["taxable_volume"] + taxable, 2)
+            amount = round(float(commission.get("commission_amount") or 0), 2)
+            metrics["commission_accrued"] = round(
+                metrics["commission_accrued"] + amount, 2
+            )
+            if commission.get("commission_paid"):
+                metrics["commission_paid"] = round(
+                    metrics["commission_paid"] + amount, 2
+                )
+
+        for sales_return in self._return_repo.list_all():
+            if sales_return.status == SalesReturnStatus.REJECTED:
+                continue
+            source_id = sales_return.source_invoice_id or ""
+            agent_id = invoice_agent.get(source_id)
+            if not agent_id:
+                continue
+            metrics = bucket(agent_id)
+            metrics["return_count"] += 1
+            metrics["return_volume"] = round(
+                metrics["return_volume"] + sales_return.total_amount, 2
+            )
+
+            reversed_amount = 0.0
+            if sales_return.voucher_id:
+                rv = self._accounting.get_voucher(sales_return.voucher_id)
+                if rv:
+                    note_comm = parse_sales_commission(rv.description or "")
+                    if note_comm and note_comm.get("reversed"):
+                        reversed_amount = round(
+                            float(note_comm.get("commission_amount") or 0), 2
+                        )
+                    else:
+                        for line in rv.lines or []:
+                            if (
+                                (line.description or "").strip()
+                                == "Commission reversed"
+                                and line.debit_amount > 0
+                            ):
+                                reversed_amount = round(float(line.debit_amount), 2)
+                                break
+            if reversed_amount <= 0:
+                source = invoice_by_id.get(source_id)
+                if source is not None:
+                    commission = parse_sales_commission(source.description or "") or {}
+                    items, _, tax_summary = parse_sales_line_items_note(
+                        source.description or ""
+                    )
+                    invoice_taxable = float(
+                        (tax_summary or {}).get("taxable")
+                        or sum(float(i.get("taxable_amount") or 0) for i in items)
+                    )
+                    invoice_gross = float(
+                        (tax_summary or {}).get("grand_total") or 0
+                    )
+                    reversed_amount = compute_commission_reversal_for_return(
+                        commission_amount=float(
+                            commission.get("commission_amount") or 0
+                        ),
+                        invoice_taxable=invoice_taxable,
+                        invoice_items=items,
+                        return_lines=sales_return.lines,
+                        return_amount=sales_return.total_amount,
+                        invoice_gross=invoice_gross,
+                    )
+            metrics["commission_reversed"] = round(
+                metrics["commission_reversed"] + reversed_amount, 2
+            )
+
+        agent_accounts = {}
+        for agent_id in list(by_agent.keys()):
+            account = self._accounting.get_agent_account(agent_id)
+            if account:
+                agent_accounts[account.id] = agent_id
+                by_agent[agent_id]["payable_balance"] = round(
+                    float(account.current_balance), 2
+                )
+
+        for voucher in self._accounting.list_vouchers_by_type(
+            VoucherType.COMMISSION_PAYMENT
+        ):
+            for line in voucher.lines or []:
+                agent_id = agent_accounts.get(line.account_id)
+                if not agent_id or line.debit_amount <= 0:
+                    continue
+                metrics = bucket(agent_id)
+                metrics["payment_count"] += 1
+                metrics["commission_paid"] = round(
+                    metrics["commission_paid"] + float(line.debit_amount), 2
+                )
+                break
+
+        for metrics in by_agent.values():
+            metrics["net_sales_volume"] = round(
+                metrics["sales_volume"] - metrics["return_volume"], 2
+            )
+            metrics["commission_net"] = round(
+                metrics["commission_accrued"] - metrics["commission_reversed"], 2
+            )
+            metrics["commission_outstanding"] = round(
+                max(metrics["commission_net"] - metrics["commission_paid"], 0.0), 2
+            )
+            metrics["commission_unpaid"] = metrics["commission_outstanding"]
+            metrics["unpaid_invoice_count"] = 0
+        return by_agent
+
+    def list_agent_commission_invoices(
+        self, agent_id: str, *, unpaid_only: bool = False
+    ) -> list[dict]:
+        """List sales invoices with commission for an agent, including unpaid balance.
+
+        Unpaid per invoice = accrued − return clawback − paid-with-invoice −
+        settlements linked to that invoice. Unlinked commission payments are
+        applied FIFO (oldest unpaid invoice first).
+        """
+        from vaybooks.bms.domain.finance.accounting.sales_parsing import (
+            parse_store_invoice_number,
+        )
+        from vaybooks.bms.domain.sales.commission import (
+            compute_commission_reversal_for_return,
+            parse_sales_commission,
+        )
+
+        agent_id = str(agent_id or "").strip()
+        if not agent_id:
+            return []
+
+        rows: list[dict] = []
+        invoices = []
+        for voucher in self._accounting.list_vouchers_by_type(VoucherType.SALES_INVOICE):
+            commission = parse_sales_commission(voucher.description or "")
+            if not commission or str(commission.get("agent_id") or "") != agent_id:
+                continue
+            invoices.append((voucher, commission))
+
+        invoices.sort(
+            key=lambda item: getattr(item[0], "voucher_date", None) or date.min
+        )
+
+        reversed_by_invoice: dict[str, float] = {}
+        invoice_ids = {v.id for v, _ in invoices}
+        invoice_map = {v.id: (v, c) for v, c in invoices}
+        for sales_return in self._return_repo.list_all():
+            if sales_return.status == SalesReturnStatus.REJECTED:
+                continue
+            source_id = sales_return.source_invoice_id or ""
+            if source_id not in invoice_ids:
+                continue
+            reversed_amount = 0.0
+            if sales_return.voucher_id:
+                rv = self._accounting.get_voucher(sales_return.voucher_id)
+                if rv:
+                    note_comm = parse_sales_commission(rv.description or "")
+                    if note_comm and note_comm.get("reversed"):
+                        reversed_amount = round(
+                            float(note_comm.get("commission_amount") or 0), 2
+                        )
+                    else:
+                        for line in rv.lines or []:
+                            if (
+                                (line.description or "").strip()
+                                == "Commission reversed"
+                                and line.debit_amount > 0
+                            ):
+                                reversed_amount = round(float(line.debit_amount), 2)
+                                break
+            if reversed_amount <= 0:
+                source, commission = invoice_map[source_id]
+                items, _, tax_summary = parse_sales_line_items_note(
+                    source.description or ""
+                )
+                invoice_taxable = float(
+                    (tax_summary or {}).get("taxable")
+                    or sum(float(i.get("taxable_amount") or 0) for i in items)
+                )
+                invoice_gross = float((tax_summary or {}).get("grand_total") or 0)
+                reversed_amount = compute_commission_reversal_for_return(
+                    commission_amount=float(commission.get("commission_amount") or 0),
+                    invoice_taxable=invoice_taxable,
+                    invoice_items=items,
+                    return_lines=sales_return.lines,
+                    return_amount=sales_return.total_amount,
+                    invoice_gross=invoice_gross,
+                )
+            reversed_by_invoice[source_id] = round(
+                reversed_by_invoice.get(source_id, 0.0) + reversed_amount, 2
+            )
+
+        agent_account = self._accounting.get_agent_account(agent_id)
+        paid_linked: dict[str, float] = {}
+        unlinked_payments = 0.0
+        if agent_account:
+            for payment in self._accounting.list_vouchers_by_type(
+                VoucherType.COMMISSION_PAYMENT
+            ):
+                paid_amt = next(
+                    (
+                        float(line.debit_amount)
+                        for line in (payment.lines or [])
+                        if line.account_id == agent_account.id and line.debit_amount > 0
+                    ),
+                    0.0,
+                )
+                if paid_amt <= 0:
+                    continue
+                ref = (getattr(payment, "reference_invoice_id", None) or "").strip()
+                if ref and ref in invoice_ids:
+                    paid_linked[ref] = round(paid_linked.get(ref, 0.0) + paid_amt, 2)
+                else:
+                    unlinked_payments = round(unlinked_payments + paid_amt, 2)
+
+        discount = self._accounting.get_discount_account()
+        discount_id = discount.id if discount else None
+        try:
+            settlement_map = self._accounting.invoice_settlement_map()
+        except Exception:
+            settlement_map = {}
+
+        for voucher, commission in invoices:
+            items, _, tax_summary = parse_sales_line_items_note(
+                voucher.description or ""
+            )
+            taxable = float(
+                (tax_summary or {}).get("taxable")
+                or sum(float(i.get("taxable_amount") or 0) for i in items)
+            )
+            sales_amount = float((tax_summary or {}).get("grand_total") or 0)
+            if sales_amount <= 0:
+                sales_amount = taxable
+            accrued = round(float(commission.get("commission_amount") or 0), 2)
+            reversed_amt = round(reversed_by_invoice.get(voucher.id, 0.0), 2)
+            paid_with_invoice = accrued if commission.get("commission_paid") else 0.0
+            settled_linked = round(paid_linked.get(voucher.id, 0.0), 2)
+            unpaid = round(
+                max(accrued - reversed_amt - paid_with_invoice - settled_linked, 0.0),
+                2,
+            )
+            sale_date = voucher.voucher_date
+            if hasattr(sale_date, "date") and callable(sale_date.date):
+                sale_date = sale_date.date()
+
+            try:
+                invoice_row = self._accounting.enrich_sales_invoice_row(
+                    voucher,
+                    discount_account_id=discount_id,
+                    settlement_map=settlement_map,
+                )
+            except Exception:
+                invoice_row = {}
+            payment_status = str(invoice_row.get("payment_status") or "unpaid")
+            payment_status_label = str(
+                invoice_row.get("payment_status_label") or "Unpaid"
+            )
+            collected = round(float(invoice_row.get("collected") or 0), 2)
+            outstanding = round(float(invoice_row.get("outstanding") or 0), 2)
+            net = round(float(invoice_row.get("net") or sales_amount or 0), 2)
+            if net > 0:
+                sales_amount = net
+
+            rows.append(
+                {
+                    "invoice_id": voucher.id,
+                    "voucher_number": voucher.voucher_number,
+                    "store_invoice_number": parse_store_invoice_number(
+                        voucher.description or ""
+                    )
+                    or voucher.voucher_number,
+                    "sale_date": sale_date,
+                    "sales_amount": round(sales_amount, 2),
+                    "taxable_amount": round(taxable, 2),
+                    "collected": collected,
+                    "outstanding": outstanding,
+                    "payment_status": payment_status,
+                    "payment_status_label": payment_status_label,
+                    "party_name": invoice_row.get("party_name") or "",
+                    "commission_amount": accrued,
+                    "commission_reversed": reversed_amt,
+                    "commission_paid_with_invoice": bool(
+                        commission.get("commission_paid")
+                    ),
+                    "commission_settled": round(
+                        paid_with_invoice + settled_linked, 2
+                    ),
+                    "unpaid_amount": unpaid,
+                    "commission_type": commission.get("commission_type") or "",
+                    "commission_rate": commission.get("commission_rate"),
+                }
+            )
+
+        # Apply unlinked settlements FIFO against remaining unpaid invoices.
+        remaining_pool = unlinked_payments
+        for row in rows:
+            if remaining_pool <= 0.01:
+                break
+            unpaid = float(row["unpaid_amount"] or 0)
+            if unpaid <= 0:
+                continue
+            applied = round(min(unpaid, remaining_pool), 2)
+            row["unpaid_amount"] = round(unpaid - applied, 2)
+            row["commission_settled"] = round(
+                float(row["commission_settled"] or 0) + applied, 2
+            )
+            remaining_pool = round(remaining_pool - applied, 2)
+
+        rows.sort(
+            key=lambda row: row.get("sale_date") or date.min,
+            reverse=True,
+        )
+        if unpaid_only:
+            rows = [row for row in rows if float(row.get("unpaid_amount") or 0) > 0.009]
+        return rows
+
 
     def approve_sales_return(self, return_id: str) -> SalesReturn:
         sales_return = self.get_sales_return(return_id)
@@ -1606,12 +2611,14 @@ class SalesAppService:
         )
         return self._return_repo.save(sales_return)
 
-    def list_sales_invoices(self) -> list[dict]:
+    def list_sales_invoices(self, *, location_filter: dict | None = None) -> list[dict]:
         discount = self._accounting.get_discount_account()
         discount_id = discount.id if discount else None
         settlement_map = self._accounting.invoice_settlement_map()
         rows = []
-        for voucher in self._accounting.list_vouchers_by_type(VoucherType.SALES_INVOICE):
+        for voucher in self._accounting.list_vouchers_by_type(
+            VoucherType.SALES_INVOICE, location_filter=location_filter
+        ):
             row = self._accounting.enrich_sales_invoice_row(
                 voucher,
                 discount_account_id=discount_id,
@@ -1707,11 +2714,27 @@ class SalesAppService:
         terms_and_conditions: Optional[str] = None,
         credit_applied: float = 0.0,
         advance_applied: float = 0.0,
+        commission: Optional[dict] = None,
     ) -> Voucher:
+        from vaybooks.bms.domain.sales.commission import parse_sales_commission
+
         old = self._accounting.get_voucher(voucher_id)
         if not old or old.voucher_type != VoucherType.SALES_INVOICE:
             raise ValueError("Sales invoice not found")
+        # Later settlement locks commission changes.
+        if any(
+            v.voucher_type == VoucherType.COMMISSION_PAYMENT
+            and v.reference_invoice_id == voucher_id
+            for v in self._accounting.list_vouchers_by_type(
+                VoucherType.COMMISSION_PAYMENT
+            )
+        ):
+            raise ValueError(
+                "Commission was settled by a separate payment; reverse that payment first"
+            )
         old_items, _, _ = parse_sales_line_items_note(old.description)
+        if commission is None:
+            commission = parse_sales_commission(old.description or "")
         if old.reference_dn_id:
             dn = self._dn_repo.find_by_id(old.reference_dn_id)
             expected = {
@@ -1733,11 +2756,14 @@ class SalesAppService:
             bank_account_id,
             terms_and_conditions,
         )
-        sales_lines, note, grand_total = self._prepare_sales_invoice(
-            customer_account_id,
-            line_items,
-            invoice_discount=invoice_discount,
-            document_content=content,
+        sales_lines, note, grand_total, normalized_commission = (
+            self._prepare_sales_invoice(
+                customer_account_id,
+                line_items,
+                invoice_discount=invoice_discount,
+                document_content=content,
+                commission=commission,
+            )
         )
         if old.reference_so_id:
             order = self._so_repo.find_by_id(old.reference_so_id)
@@ -1775,6 +2801,22 @@ class SalesAppService:
             existing_number=existing_number,
             assign_new=False,
         )
+        agent_account_id = None
+        commission_amount = 0.0
+        commission_paid = False
+        commission_pay_account_id = None
+        if normalized_commission:
+            agent = self._accounting.get_agent_account(
+                normalized_commission["agent_id"]
+            )
+            if not agent:
+                raise ValueError("Commission agent account not found")
+            agent_account_id = agent.id
+            commission_amount = float(normalized_commission["commission_amount"])
+            commission_paid = bool(normalized_commission.get("commission_paid"))
+            commission_pay_account_id = (
+                normalized_commission.get("pay_account_id") or None
+            )
         voucher = self._accounting.update_cash_sales_invoice(
             voucher_id=voucher_id,
             customer_account_id=customer_account_id,
@@ -1790,6 +2832,10 @@ class SalesAppService:
             financial_year=financial_year,
             credit_applied=round(max(float(credit_applied or 0), 0.0), 2),
             advance_applied=round(max(float(advance_applied or 0), 0.0), 2),
+            commission_amount=commission_amount,
+            agent_account_id=agent_account_id,
+            commission_paid=commission_paid,
+            commission_pay_account_id=commission_pay_account_id,
         )
         if not old.reference_dn_id:
             self._inventory.reverse_movements_by_reference(voucher_id)

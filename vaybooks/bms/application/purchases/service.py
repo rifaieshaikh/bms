@@ -200,6 +200,8 @@ class PurchaseAppService:
         reference_po_id: Optional[str] = None,
         reference_grn_id: Optional[str] = None,
         apply_stock: bool = False,
+        location_id: str = "",
+        location_name: str = "",
     ) -> Voucher:
         resolved = self.resolve_purchase_lines(raw_lines, vendor_id)
         vendor_account = self._accounting.get_vendor_account(vendor_id)
@@ -220,11 +222,13 @@ class PurchaseAppService:
             apply_stock=apply_stock,
             vendor_id=vendor_id,
             resolved_lines=resolved,
+            location_id=location_id,
+            location_name=location_name,
         )
         return voucher
 
-    def list_purchase_orders(self) -> List[PurchaseOrder]:
-        return self._po_repo.list_all()
+    def list_purchase_orders(self, *, location_filter: dict | None = None) -> List[PurchaseOrder]:
+        return self._po_repo.list_all(location_filter=location_filter)
 
     def get_purchase_order(self, order_id: str) -> Optional[PurchaseOrder]:
         return self._po_repo.find_by_id(order_id)
@@ -352,10 +356,14 @@ class PurchaseAppService:
         notes: str = "",
         status: PurchaseOrderStatus = PurchaseOrderStatus.DRAFT,
         project_id: str = "",
+        location_id: str = "",
     ) -> PurchaseOrder:
         self._assert_po_products_orderable(lines)
         vendor_name = self._vendor_name(vendor_id)
         po_number = self._counter_repo.next("po_number")
+        location_id = (location_id or "").strip()
+        location = self._inventory.get_location(location_id) if location_id else None
+        location_name = location.name if location else ""
         return self._domain.create_purchase_order(
             po_number=po_number,
             vendor_id=vendor_id,
@@ -366,6 +374,8 @@ class PurchaseAppService:
             notes=notes,
             status=PurchaseOrderStatus.SENT,
             project_id=project_id,
+            location_id=location_id,
+            location_name=location_name,
         )
 
     def update_purchase_order(
@@ -396,8 +406,8 @@ class PurchaseAppService:
     def close_purchase_order(self, order_id: str) -> PurchaseOrder:
         return self._domain.close_purchase_order(order_id)
 
-    def list_goods_receipts(self) -> List[GoodsReceipt]:
-        return self._grn_repo.list_all()
+    def list_goods_receipts(self, *, location_filter: dict | None = None) -> List[GoodsReceipt]:
+        return self._grn_repo.list_all(location_filter=location_filter)
 
     def get_goods_receipt(self, grn_id: str) -> Optional[GoodsReceipt]:
         return self._grn_repo.find_by_id(grn_id)
@@ -477,8 +487,8 @@ class PurchaseAppService:
         self._inventory.apply_landed_cost(landed_lines)
         return self._domain.confirm_grn_received(grn_id)
 
-    def list_purchase_returns(self) -> List[PurchaseReturn]:
-        return self._return_repo.list_all()
+    def list_purchase_returns(self, *, location_filter: dict | None = None) -> List[PurchaseReturn]:
+        return self._return_repo.list_all(location_filter=location_filter)
 
     def get_purchase_return(self, return_id: str) -> Optional[PurchaseReturn]:
         return self._return_repo.find_by_id(return_id)
@@ -517,6 +527,8 @@ class PurchaseAppService:
         apply_stock: bool = False,
         vendor_id: Optional[str] = None,
         resolved_lines=None,
+        location_id: str = "",
+        location_name: str = "",
     ) -> Voucher:
         financial_year = self.resolve_voucher_financial_year(voucher_date)
         voucher = self._accounting.create_purchase_bill(
@@ -531,6 +543,8 @@ class PurchaseAppService:
             reference_po_id=reference_po_id,
             reference_grn_id=reference_grn_id,
             financial_year=financial_year,
+            location_id=location_id,
+            location_name=location_name,
         )
         if vendor_id and resolved_lines:
             self._record_price_history(
@@ -689,11 +703,15 @@ class PurchaseAppService:
         amount_refunded: float = 0.0,
         refund_account_id: Optional[str] = None,
         notes: str = "",
+        location_id: str = "",
     ) -> PurchaseReturn:
         vendor_account = self._accounting.get_vendor_account(vendor_id)
         if not vendor_account:
             raise ValueError("Vendor account not found")
         return_number = self._counter_repo.next("purchase_return_number")
+        location_id = (location_id or "").strip()
+        location = self._inventory.get_location(location_id) if location_id else None
+        location_name = location.name if location else ""
         purchase_return = self._domain.create_purchase_return(
             return_number=return_number,
             vendor_id=vendor_id,
@@ -703,6 +721,8 @@ class PurchaseAppService:
             source_bill_id=source_bill_id,
             source_grn_id=source_grn_id,
             notes=notes,
+            location_id=location_id,
+            location_name=location_name,
         )
         expense_lines = []
         stock_lines = []
@@ -719,6 +739,7 @@ class PurchaseAppService:
                     "product_id": line.product_id,
                     "qty": line.qty,
                     "description": line.product_name or "Return",
+                    "location_id": location_id or None,
                 }
             )
         description = f"Purchase return {return_number}"
@@ -732,6 +753,8 @@ class PurchaseAppService:
             refund_account_id=refund_account_id,
             voucher_date=return_date,
             reference_grn_id=source_grn_id,
+            location_id=location_id,
+            location_name=location_name,
         )
         purchase_return.voucher_id = voucher.id
         self._return_repo.save(purchase_return)

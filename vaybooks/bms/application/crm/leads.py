@@ -219,15 +219,20 @@ class CrmLeadAppService:
         next_follow_up_at=None,
         notes: str = "",
         branch: str = "",
+        location_id: str = "",
+        location_name: str = "",
         import_batch_id: str = "",
         import_row_fingerprint: str = "",
         actor_id: str = "",
         actor_name: str = "",
         allow_duplicate: bool = False,
     ) -> CrmLead:
+        from vaybooks.bms.domain.shared.party_location import require_location_id
+
         name = (name or "").strip()
         if not name:
             raise ValidationError("Lead name is required")
+        location_id = require_location_id(location_id)
         self._validate_catalogs(
             source=(source or "").strip(),
             status=status or LeadStatus.NEW.value,
@@ -266,6 +271,8 @@ class CrmLeadAppService:
             next_follow_up_at=next_follow_up_at,
             notes=notes or "",
             branch=branch or "",
+            location_id=location_id,
+            location_name=(location_name or "").strip(),
             import_batch_id=import_batch_id or "",
             import_row_fingerprint=import_row_fingerprint or "",
         )
@@ -307,6 +314,8 @@ class CrmLeadAppService:
             "next_follow_up_at",
             "notes",
             "branch",
+            "location_id",
+            "location_name",
         }
         for key, value in fields.items():
             if key in allowed and value is not None:
@@ -569,6 +578,7 @@ class CrmLeadAppService:
                     gstin=lead.gstin,
                     notes=lead.notes,
                     registration_type=PartyRegistrationType.UNREGISTERED,
+                    location_ids=[lead.location_id] if lead.location_id else [],
                 )
                 # Phone required by party validation â€” use placeholder only if empty after normalize fails
                 if not lead.phone and not lead.phone_normalized:
@@ -748,6 +758,8 @@ class CrmLeadAppService:
         actor_id: str = "",
         actor_name: str = "",
         branch: str = "",
+        location_id: str = "",
+        location_name: str = "",
     ) -> Dict[str, Any]:
         """Import one mapped row. Returns outcome dict for batch tracking."""
         from vaybooks.bms.domain.crm.enums import LeadImportDuplicatePolicy
@@ -760,6 +772,8 @@ class CrmLeadAppService:
         email = (row.get("email") or "").strip()
         gstin = (row.get("gstin") or "").strip()
         name = (row.get("name") or row.get("lead_name") or "").strip()
+        loc_id = (location_id or row.get("location_id") or "").strip()
+        loc_name = (location_name or row.get("location_name") or "").strip()
         dup = self.detect_duplicates(
             phone=phone, email=email, gstin=gstin, name=name
         )
@@ -767,6 +781,30 @@ class CrmLeadAppService:
         policy_val = policy
         if isinstance(policy, LeadImportDuplicatePolicy):
             policy_val = policy.value
+
+        create_kwargs = dict(
+            name=name,
+            phone=phone,
+            email=email,
+            gstin=gstin,
+            source=row.get("source") or "Imported",
+            notes=row.get("notes") or "",
+            city=row.get("city") or "",
+            area=row.get("area") or "",
+            contact_person=row.get("contact_person") or "",
+            address_line1=row.get("address_line1") or "",
+            state_code=row.get("state_code") or "",
+            pincode=row.get("pincode") or "",
+            interested_products=row.get("interested_products") or "",
+            estimated_value=optional_float(row.get("estimated_value")),
+            branch=branch,
+            location_id=loc_id,
+            location_name=loc_name,
+            import_batch_id=batch_id,
+            import_row_fingerprint=fingerprint,
+            actor_id=actor_id,
+            actor_name=actor_name,
+        )
 
         if dup.lead:
             if policy_val in (LeadImportDuplicatePolicy.SKIP.value, "skip"):
@@ -800,26 +838,8 @@ class CrmLeadAppService:
             ):
                 if dup.customer_id:
                     lead = self.create_lead(
-                        name=name,
-                        phone=phone,
-                        email=email,
-                        gstin=gstin,
-                        source=row.get("source") or "Imported",
-                        notes=row.get("notes") or "",
-                        city=row.get("city") or "",
-                        area=row.get("area") or "",
-                        contact_person=row.get("contact_person") or "",
-                        address_line1=row.get("address_line1") or "",
-                        state_code=row.get("state_code") or "",
-                        pincode=row.get("pincode") or "",
-                        interested_products=row.get("interested_products") or "",
-                        estimated_value=optional_float(row.get("estimated_value")),
+                        **create_kwargs,
                         status=row.get("status") or LeadStatus.NEW.value,
-                        branch=branch,
-                        import_batch_id=batch_id,
-                        import_row_fingerprint=fingerprint,
-                        actor_id=actor_id,
-                        actor_name=actor_name,
                         allow_duplicate=True,
                     )
                     self.link_to_customer(
@@ -834,56 +854,17 @@ class CrmLeadAppService:
             LeadImportDuplicatePolicy.LINK_TO_CUSTOMER.value,
             "link_to_customer",
         ):
-            lead = self.create_lead(
-                name=name,
-                phone=phone,
-                email=email,
-                gstin=gstin,
-                source=row.get("source") or "Imported",
-                notes=row.get("notes") or "",
-                city=row.get("city") or "",
-                area=row.get("area") or "",
-                contact_person=row.get("contact_person") or "",
-                address_line1=row.get("address_line1") or "",
-                state_code=row.get("state_code") or "",
-                pincode=row.get("pincode") or "",
-                interested_products=row.get("interested_products") or "",
-                estimated_value=optional_float(row.get("estimated_value")),
-                branch=branch,
-                import_batch_id=batch_id,
-                import_row_fingerprint=fingerprint,
-                actor_id=actor_id,
-                actor_name=actor_name,
-                allow_duplicate=True,
-            )
+            lead = self.create_lead(**create_kwargs, allow_duplicate=True)
             self.link_to_customer(
                 lead.id, dup.customer_id, actor_id=actor_id, actor_name=actor_name
             )
             return {"outcome": "linked", "lead_id": lead.id, "customer_id": dup.customer_id}
 
         lead = self.create_lead(
-            name=name,
-            phone=phone,
-            email=email,
-            gstin=gstin,
-            source=row.get("source") or "Imported",
-            notes=row.get("notes") or "",
-            city=row.get("city") or "",
-            area=row.get("area") or "",
-            contact_person=row.get("contact_person") or "",
-            address_line1=row.get("address_line1") or "",
+            **create_kwargs,
             alternate_phone=row.get("alternate_phone") or row.get("alternate_phone_number") or "",
-            state_code=row.get("state_code") or "",
-            pincode=row.get("pincode") or "",
-            interested_products=row.get("interested_products") or "",
-            estimated_value=optional_float(row.get("estimated_value")),
             status=row.get("status") or LeadStatus.NEW.value,
             priority=row.get("priority") or "Medium",
-            branch=branch,
-            import_batch_id=batch_id,
-            import_row_fingerprint=fingerprint,
-            actor_id=actor_id,
-            actor_name=actor_name,
             allow_duplicate=policy_val
             in (LeadImportDuplicatePolicy.IMPORT_AS_SEPARATE.value, "import_as_separate"),
         )

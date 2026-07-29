@@ -46,10 +46,10 @@ class InMemoryVendorRepository:
                 return vendor
         return None
 
-    def search(self, query: str) -> List[Vendor]:
+    def search(self, query: str, location_filter: dict | None = None) -> List[Vendor]:
         return list(self._store.values())
 
-    def list_all(self) -> List[Vendor]:
+    def list_all(self, location_filter: dict | None = None) -> List[Vendor]:
         return list(self._store.values())
 
 
@@ -61,6 +61,7 @@ def _vendor_input(**kwargs) -> VendorInput:
         "city": "Mumbai",
         "state_code": "27",
         "pincode": "400001",
+        "location_ids": ["loc-main"],
     }
     defaults.update(kwargs)
     return VendorInput(**defaults)
@@ -144,7 +145,11 @@ def test_minimal_vendor_name_phone_only_succeeds():
     repo = InMemoryVendorRepository()
     service = VendorDomainService(repo)
     vendor = service.create(
-        VendorInput(vendor_name="Quick Vendor", phone_number="9876543210")
+        VendorInput(
+            vendor_name="Quick Vendor",
+            phone_number="9876543210",
+            location_ids=["loc-main"],
+        )
     )
     assert vendor.vendor_name == "Quick Vendor"
     assert vendor.phone_number == "9876543210"

@@ -159,7 +159,10 @@ def build_completed_filter(filters: dict) -> CompletedFilter:
 
 
 def build_period_summary_filter(filters: dict) -> PeriodSummaryFilter:
-    return PeriodSummaryFilter(date_range=_date_range(filters))
+    return PeriodSummaryFilter(
+        date_range=_date_range(filters),
+        location_id=_report_location_id(filters),
+    )
 
 
 def build_top_customers_filter(filters: dict) -> TopCustomersFilter:
@@ -186,17 +189,41 @@ def _as_of_date(filters: dict, key: str = "as_of") -> date:
     return today
 
 
+def _report_location_id(filters: dict) -> str:
+    """Concrete working location, or empty string for ALL aggregate.
+
+    If ``location_id`` is absent from committed filters, inject from the
+    session working location when a specific location is selected.
+    """
+    if "location_id" in filters:
+        return str(_single(filters.get("location_id")) or "").strip()
+    try:
+        from vaybooks.bms.domain.identity.location_access import ALL_LOCATIONS
+        from vaybooks.bms.ui.auth.session import get_working_location_id
+
+        working = (get_working_location_id() or "").strip()
+        if working and working != ALL_LOCATIONS:
+            return working
+    except Exception:
+        pass
+    return ""
+
+
 def build_outstanding_filter(filters: dict) -> OutstandingFilter:
     return OutstandingFilter(
         min_balance=_optional_min(filters.get("min_balance")),
         search=_text(filters.get("search")),
         as_of_date=_as_of_date(filters),
         bucket_days=_parse_bucket_days(filters.get("bucket_days")),
+        location_id=_report_location_id(filters),
     )
 
 
 def build_cash_movement_filter(filters: dict) -> CashMovementFilter:
-    return CashMovementFilter(date_range=_date_range(filters))
+    return CashMovementFilter(
+        date_range=_date_range(filters),
+        location_id=_report_location_id(filters),
+    )
 
 
 def build_expense_by_source_filter(filters: dict) -> ExpenseBySourceFilter:

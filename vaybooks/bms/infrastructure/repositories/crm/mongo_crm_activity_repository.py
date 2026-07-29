@@ -60,7 +60,10 @@ class MongoCrmActivityRepository:
         scheduled_to: Optional[datetime] = None,
         include_deleted: bool = False,
         limit: int = 500,
+        location_filter: dict | None = None,
     ) -> List[CrmActivity]:
+        from vaybooks.bms.domain.identity.location_access import merge_mongo_filters
+
         query: dict = dict(not_deleted_filter(include_deleted))
         if lead_id:
             query["lead_id"] = lead_id
@@ -83,6 +86,7 @@ class MongoCrmActivityRepository:
             if scheduled_to:
                 sched["$lte"] = scheduled_to
             query["scheduled_at"] = sched
+        query = merge_mongo_filters(query, location_filter or {})
         docs = (
             self._collection.find(query)
             .sort([("scheduled_at", 1), ("created_at", -1)])

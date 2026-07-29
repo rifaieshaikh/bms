@@ -190,6 +190,8 @@ class MongoOrderRepository:
             ],
             "delivery_date": to_bson_value(order.delivery_date),
             "delivery_notes": order.delivery_notes,
+            "location_id": order.location_id,
+            "location_name": order.location_name,
             "created_at": order.created_at,
             "updated_at": order.updated_at,
         }
@@ -215,6 +217,8 @@ class MongoOrderRepository:
             ],
             delivery_date=from_bson_date(doc.get("delivery_date")),
             delivery_notes=doc.get("delivery_notes"),
+            location_id=str(doc.get("location_id") or ""),
+            location_name=str(doc.get("location_name") or ""),
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
         )
@@ -245,7 +249,9 @@ class MongoOrderRepository:
         )
         return self._from_doc(doc) if doc else None
 
-    def search(self, query: str) -> List[CustomizationOrder]:
+    def search(self, query: str, location_filter: dict | None = None) -> List[CustomizationOrder]:
+        from vaybooks.bms.domain.identity.location_access import merge_mongo_filters
+
         patterns = order_ref_search_variants(query) or [query.strip()]
         or_clauses = []
         for pattern in patterns:
@@ -260,11 +266,15 @@ class MongoOrderRepository:
                     {"customization_items.bill_number": regex},
                 ]
             )
-        docs = self._collection.find({"$or": or_clauses})
+        query_doc = merge_mongo_filters({"$or": or_clauses}, location_filter or {})
+        docs = self._collection.find(query_doc)
         return [self._from_doc(d) for d in docs]
 
-    def list_all(self) -> List[CustomizationOrder]:
-        return [self._from_doc(d) for d in self._collection.find()]
+    def list_all(self, location_filter: dict | None = None) -> List[CustomizationOrder]:
+        from vaybooks.bms.domain.identity.location_access import merge_mongo_filters
+
+        query = merge_mongo_filters(location_filter or {})
+        return [self._from_doc(d) for d in self._collection.find(query)]
 
     def list_by_status(self, status: str) -> List[CustomizationOrder]:
         docs = self._collection.find({"order_status": status})

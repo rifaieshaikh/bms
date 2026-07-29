@@ -57,7 +57,9 @@ def test_find_or_create_trusts_existing_phone_over_name():
         Customer(id="c1", customer_name="Aysha", phone_number="9876543210")
     )
 
-    resolved = service.find_or_create_customer("Different Name", "9876543210")
+    resolved = service.find_or_create_customer(
+        "Different Name", "9876543210", location_ids=["loc-test"]
+    )
 
     assert resolved.id == existing.id
     assert resolved.customer_name == "Aysha"
@@ -67,7 +69,9 @@ def test_find_or_create_trusts_existing_phone_over_name():
 def test_find_or_create_creates_customer_when_phone_new():
     service, customer_repo, account_repo = _service()
 
-    resolved = service.find_or_create_customer("New Buyer", "9000000001")
+    resolved = service.find_or_create_customer(
+        "New Buyer", "9000000001", location_ids=["loc-test"]
+    )
 
     assert resolved.customer_name == "New Buyer"
     assert resolved.phone_number == "9000000001"
@@ -78,7 +82,9 @@ def test_find_or_create_creates_customer_when_phone_new():
 def test_find_or_create_phone_only_when_name_optional():
     service, customer_repo, account_repo = _service(require_name=False)
 
-    resolved = service.find_or_create_customer("", "9000000003")
+    resolved = service.find_or_create_customer(
+        "", "9000000003", location_ids=["loc-test"]
+    )
 
     assert resolved.customer_name == ""
     assert resolved.phone_number == "9000000003"
@@ -116,6 +122,7 @@ def test_customer_identity_creates_new_customer_and_account():
             customer_name="New Buyer",
             phone_number="9000000001",
         ),
+        location_ids=["loc-test"],
     )
 
     assert resolved.customer_name == "New Buyer"
@@ -133,6 +140,7 @@ def test_customer_identity_creates_phone_only_when_name_optional():
             customer_name="",
             phone_number="9000000004",
         ),
+        location_ids=["loc-test"],
     )
 
     assert resolved.customer_name == ""
@@ -150,6 +158,7 @@ def test_customer_identity_creates_name_only_when_phone_optional():
             customer_name="Walk-in",
             phone_number="",
         ),
+        location_ids=["loc-test"],
     )
 
     assert resolved.customer_name == "Walk-in"
@@ -169,6 +178,7 @@ def test_customer_identity_allows_blank_when_both_optional():
             customer_name="",
             phone_number="",
         ),
+        location_ids=["loc-test"],
     )
 
     assert resolved.customer_name == ""

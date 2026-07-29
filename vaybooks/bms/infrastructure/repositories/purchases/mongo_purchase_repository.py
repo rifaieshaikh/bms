@@ -5,6 +5,8 @@ from typing import List, Optional
 
 from pymongo.database import Database
 
+from vaybooks.bms.domain.identity.location_access import merge_mongo_filters
+
 from vaybooks.bms.domain.purchases.entities import (
     GoodsReceipt,
     GoodsReceiptLine,
@@ -60,6 +62,8 @@ class MongoPurchaseOrderRepository:
             "lines": [self._line_to_doc(line) for line in order.lines],
             "notes": order.notes,
             "project_id": order.project_id,
+            "location_id": order.location_id,
+            "location_name": order.location_name,
             "created_at": order.created_at,
             "updated_at": order.updated_at,
         }
@@ -82,6 +86,8 @@ class MongoPurchaseOrderRepository:
             lines=[self._line_from_doc(line) for line in doc.get("lines", [])],
             notes=doc.get("notes", ""),
             project_id=doc.get("project_id", ""),
+            location_id=str(doc.get("location_id") or ""),
+            location_name=str(doc.get("location_name") or ""),
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
         )
@@ -98,8 +104,9 @@ class MongoPurchaseOrderRepository:
         doc = self._collection.find_one({"po_number": po_number})
         return self._from_doc(doc) if doc else None
 
-    def list_all(self) -> List[PurchaseOrder]:
-        return [self._from_doc(d) for d in self._collection.find()]
+    def list_all(self, location_filter: dict | None = None) -> List[PurchaseOrder]:
+        query = merge_mongo_filters(location_filter or {})
+        return [self._from_doc(d) for d in self._collection.find(query)]
 
     def count_by_vendor(self, vendor_id: str) -> int:
         if not vendor_id:
@@ -255,8 +262,9 @@ class MongoGoodsReceiptRepository:
         doc = self._collection.find_one({"grn_number": grn_number})
         return self._from_doc(doc) if doc else None
 
-    def list_all(self) -> List[GoodsReceipt]:
-        return [self._from_doc(d) for d in self._collection.find()]
+    def list_all(self, location_filter: dict | None = None) -> List[GoodsReceipt]:
+        query = merge_mongo_filters(location_filter or {})
+        return [self._from_doc(d) for d in self._collection.find(query)]
 
     def list_by_po(self, purchase_order_id: str) -> List[GoodsReceipt]:
         docs = self._collection.find({"purchase_order_id": purchase_order_id})
@@ -308,6 +316,8 @@ class MongoPurchaseReturnRepository:
             "source_grn_id": purchase_return.source_grn_id,
             "voucher_id": purchase_return.voucher_id,
             "notes": purchase_return.notes,
+            "location_id": purchase_return.location_id,
+            "location_name": purchase_return.location_name,
             "created_at": purchase_return.created_at,
             "updated_at": purchase_return.updated_at,
         }
@@ -327,6 +337,8 @@ class MongoPurchaseReturnRepository:
             source_grn_id=doc.get("source_grn_id"),
             voucher_id=doc.get("voucher_id"),
             notes=doc.get("notes", ""),
+            location_id=str(doc.get("location_id") or ""),
+            location_name=str(doc.get("location_name") or ""),
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
         )
@@ -341,8 +353,9 @@ class MongoPurchaseReturnRepository:
         doc = self._collection.find_one({"_id": return_id})
         return self._from_doc(doc) if doc else None
 
-    def list_all(self) -> List[PurchaseReturn]:
-        return [self._from_doc(d) for d in self._collection.find()]
+    def list_all(self, location_filter: dict | None = None) -> List[PurchaseReturn]:
+        query = merge_mongo_filters(location_filter or {})
+        return [self._from_doc(d) for d in self._collection.find(query)]
 
     def count_by_vendor(self, vendor_id: str) -> int:
         if not vendor_id:

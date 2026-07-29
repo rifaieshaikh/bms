@@ -1,7 +1,10 @@
 import streamlit as st
 
 from vaybooks.bms.ui import navigation
-from vaybooks.bms.ui.styles import metric_grid
+from vaybooks.bms.ui.components.shared.dashboard_card import (
+    DashboardCardSpec,
+    dashboard_card_grid,
+)
 
 
 def render(services: dict) -> None:
@@ -11,13 +14,49 @@ def render(services: dict) -> None:
         st.error("Production service is unavailable.")
         return
     summary = service.dashboard_summary()
-    metric_grid(
+    dashboard_card_grid(
         [
-            ("Open batches", summary["open_batches"]),
-            ("Posted batches", summary["posted_batches"]),
-            ("WIP value", f"₹{summary['wip_value']:,.2f}"),
-            ("Output value", f"₹{summary['output_value']:,.2f}"),
-            ("Batch margin", f"₹{summary['margin']:,.2f}"),
+            DashboardCardSpec(
+                title="Open batches",
+                value=str(summary["open_batches"]),
+                icon="chef-hat",
+                footer_text="View batches",
+                on_click=lambda: navigation.go_to_list("production_batches"),
+                key="production_open_batches",
+            ),
+            DashboardCardSpec(
+                title="Posted batches",
+                value=str(summary["posted_batches"]),
+                icon="check",
+                tone="success",
+                footer_text="View batches",
+                on_click=lambda: navigation.go_to_list("production_batches"),
+                key="production_posted_batches",
+            ),
+            DashboardCardSpec(
+                title="WIP value",
+                value=f"₹{summary['wip_value']:,.2f}",
+                icon="clock-hour-4",
+                footer_text="View day book",
+                on_click=lambda: navigation.go_to_list("production_day_book"),
+                key="production_wip_value",
+            ),
+            DashboardCardSpec(
+                title="Output value",
+                value=f"₹{summary['output_value']:,.2f}",
+                icon="package",
+                footer_text="View day book",
+                on_click=lambda: navigation.go_to_list("production_day_book"),
+                key="production_output_value",
+            ),
+            DashboardCardSpec(
+                title="Batch margin",
+                value=f"₹{summary['margin']:,.2f}",
+                icon="chart-line",
+                footer_text="View reports",
+                on_click=lambda: navigation.go_to_list("production_reports"),
+                key="production_batch_margin",
+            ),
         ],
         suffix="production_dashboard",
     )
