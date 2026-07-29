@@ -8,6 +8,10 @@ from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.components.common.overview_action_cards import (
     overview_action_cards,
 )
+from vaybooks.bms.ui.components.shared.dashboard_card import (
+    DashboardCardSpec,
+    dashboard_card_grid,
+)
 from vaybooks.bms.ui.styles import metric_grid
 
 DASH_VIEW_MODE = "projects_dashboard_view_mode"
@@ -176,17 +180,25 @@ def render(services: dict) -> None:
         revenue_caption = "Billed minus outstanding (portfolio estimate)"
 
     st.markdown("#### Attention")
-    metric_grid(
+    dashboard_card_grid(
         [
-            (
-                "Books need attention",
-                books_attention,
-                _tone_if(books_attention > 0, "warn"),
+            DashboardCardSpec(
+                title="Books need attention",
+                value=str(books_attention),
+                icon="alert-triangle",
+                tone=_tone_if(books_attention > 0, "warning"),
+                footer_text="View all projects",
+                on_click=lambda: navigation.go_to_list("projects_list"),
+                key="projects_books_attention",
             ),
-            (
-                "Unbilled cost",
-                _fmt_currency(unbilled),
-                _tone_if(unbilled > 0, "warn"),
+            DashboardCardSpec(
+                title="Unbilled cost",
+                value=_fmt_currency(unbilled),
+                icon="file-invoice",
+                tone=_tone_if(unbilled > 0, "warning"),
+                footer_text="View all projects",
+                on_click=lambda: navigation.go_to_list("projects_list"),
+                key="projects_unbilled_cost",
             ),
         ],
         suffix="projects_dashboard_attention",

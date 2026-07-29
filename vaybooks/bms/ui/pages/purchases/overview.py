@@ -17,6 +17,10 @@ from vaybooks.bms.ui.components.common.filter_sort_bar import (
 from vaybooks.bms.ui.components.common.overview_action_cards import (
     overview_action_cards,
 )
+from vaybooks.bms.ui.components.shared.dashboard_card import (
+    DashboardCardSpec,
+    dashboard_card_grid,
+)
 from vaybooks.bms.ui.purchase_list_schemas import PURCHASES_OVERVIEW
 from vaybooks.bms.ui.styles import metric_grid
 
@@ -244,23 +248,42 @@ def render(services: dict) -> None:
     payables = _vendor_payables_total(services)
 
     st.markdown("#### Attention")
-    metric_grid(
+    dashboard_card_grid(
         [
-            ("Open POs", open_po),
-            (
-                "Overdue POs",
-                overdue_count,
-                _tone_if(overdue_count > 0, "danger"),
+            DashboardCardSpec(
+                title="Open POs",
+                value=str(open_po),
+                icon="file-text",
+                footer_text="View purchase orders",
+                on_click=lambda: navigation.go_to_list("purchase_orders_list"),
+                key="purchases_open_po",
             ),
-            (
-                "Pending GRN qty",
-                f"{pending_grn:g}",
-                _tone_if(pending_grn > 0, "warn"),
+            DashboardCardSpec(
+                title="Overdue POs",
+                value=str(overdue_count),
+                icon="alert-triangle",
+                tone=_tone_if(overdue_count > 0, "danger"),
+                footer_text="View purchase orders",
+                on_click=lambda: navigation.go_to_list("purchase_orders_list"),
+                key="purchases_overdue_po",
             ),
-            (
-                "Vendor payables",
-                _fmt_currency(payables),
-                _tone_if(payables > 0, "warn"),
+            DashboardCardSpec(
+                title="Pending GRN qty",
+                value=f"{pending_grn:g}",
+                icon="package",
+                tone=_tone_if(pending_grn > 0, "warning"),
+                footer_text="View goods receipt",
+                on_click=lambda: navigation.go_to_list("goods_receipt_list"),
+                key="purchases_pending_grn",
+            ),
+            DashboardCardSpec(
+                title="Vendor payables",
+                value=_fmt_currency(payables),
+                icon="cash-banknote",
+                tone=_tone_if(payables > 0, "warning"),
+                footer_text="View purchases reports",
+                on_click=lambda: navigation.go_to_list("purchases_reports"),
+                key="purchases_payables",
             ),
         ],
         suffix="purchases_overview_attention",

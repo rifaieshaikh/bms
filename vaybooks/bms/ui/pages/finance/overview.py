@@ -23,6 +23,10 @@ from vaybooks.bms.ui.components.common.filter_sort_bar import (
 from vaybooks.bms.ui.components.common.overview_action_cards import (
     overview_action_cards,
 )
+from vaybooks.bms.ui.components.shared.dashboard_card import (
+    DashboardCardSpec,
+    dashboard_card_grid,
+)
 from vaybooks.bms.ui.finance_list_schemas import FINANCE_OVERVIEW
 from vaybooks.bms.ui.styles import metric_grid
 
@@ -205,22 +209,34 @@ def render(services: dict) -> None:
     net_cash = sum(float(r.get("amount") or 0) for r in cash_rows)
 
     st.markdown("#### Attention")
-    metric_grid(
+    dashboard_card_grid(
         [
-            (
-                "Customer receivables",
-                _fmt_currency(ar_total),
-                _tone_if(ar_total > 0, "warn"),
+            DashboardCardSpec(
+                title="Customer receivables",
+                value=_fmt_currency(ar_total),
+                icon="wallet",
+                tone=_tone_if(ar_total > 0, "warning"),
+                footer_text="View accounts",
+                on_click=lambda: navigation.go_to_list("accounts_list"),
+                key="finance_ar_total",
             ),
-            (
-                "Vendor payables",
-                _fmt_currency(ap_total),
-                _tone_if(ap_total > 0, "warn"),
+            DashboardCardSpec(
+                title="Vendor payables",
+                value=_fmt_currency(ap_total),
+                icon="cash-banknote",
+                tone=_tone_if(ap_total > 0, "warning"),
+                footer_text="View accounts",
+                on_click=lambda: navigation.go_to_list("accounts_list"),
+                key="finance_ap_total",
             ),
-            (
-                "Net cash movement",
-                _fmt_currency(net_cash),
-                "good" if net_cash > 0 else ("danger" if net_cash < 0 else "neutral"),
+            DashboardCardSpec(
+                title="Net cash movement",
+                value=_fmt_currency(net_cash),
+                icon="chart-line",
+                tone="success" if net_cash > 0 else ("danger" if net_cash < 0 else "primary"),
+                footer_text="View journal",
+                on_click=lambda: navigation.go_to_list("journal_list"),
+                key="finance_net_cash",
             ),
         ],
         suffix="finance_overview_attention",

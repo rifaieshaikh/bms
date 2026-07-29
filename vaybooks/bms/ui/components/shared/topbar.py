@@ -44,6 +44,13 @@ def _render_export(services: dict, *, migration_pages: list) -> None:
             app_header._render_menu_section("Migration", pages)
 
 
+_ACCOUNT_MENU_HTML = """
+<div class="z-topbar-menu-item"><i class="ti ti-user"></i><span>My Profile</span></div>
+<div class="z-topbar-menu-item"><i class="ti ti-settings"></i><span>Account Settings</span></div>
+<div class="z-topbar-menu-item"><i class="ti ti-lock"></i><span>Change Password</span></div>
+"""
+
+
 def _render_account_chip(services: dict) -> None:
     from vaybooks.bms.ui.auth.dialogs import sign_out_dialog
 
@@ -59,6 +66,8 @@ def _render_account_chip(services: dict) -> None:
                 f"</div>",
                 unsafe_allow_html=True,
             )
+            st.divider()
+            st.markdown(_ACCOUNT_MENU_HTML, unsafe_allow_html=True)
             st.divider()
             if st.button(
                 "Sign out",

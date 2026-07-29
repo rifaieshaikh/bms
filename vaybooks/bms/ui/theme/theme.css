@@ -304,7 +304,7 @@ section[data-testid="stSidebar"]>div {
 [data-testid="stSidebarHeader"] {
   display: flex;
   align-items: center;
-  min-height: 60px;
+  height: 60px;
   flex-shrink: 0;
   padding: var(--space-6);
   border-bottom: 1px solid var(--color-sidebar-border);
@@ -523,6 +523,7 @@ div[data-testid="stDateInput"] input,
 div[data-testid="stTimeInput"] input {
   border-radius: var(--radius-md) !important;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  border: 1px solid var(--color-border);
 }
 
 div[data-testid="stTextInput"] input:focus,
@@ -668,9 +669,9 @@ div[class*="st-key-ztopbar"] div[data-testid="stPopover"] button {
   border-radius: var(--radius-md);
   border-color: var(--color-border);
   background: var(--color-surface);
-  min-height: 2.1rem;
-  height: 2.1rem;
-  min-width: 2.1rem;
+  min-height: 32px;
+  height: 32px;
+  min-width: 32px;
   padding: 0.2rem 0.45rem;
   white-space: nowrap;
   pointer-events: auto !important;
@@ -679,8 +680,29 @@ div[class*="st-key-ztopbar"] div[data-testid="stPopover"] button {
 }
 
 div[class*="st-key-ztopbar"] div[data-testid="stPopover"]>div>button:hover {
+  background: var(--color-primary-hover-bg);
   border-color: var(--color-primary);
   color: var(--color-primary);
+}
+
+/* Utility icon buttons (location, notifications, schedulers, access, settings):
+   default #696969 glyph at 18px — New/Export/Account override color elsewhere. */
+div[class*="st-key-ztopbar_loc"] div[data-testid="stPopover"]>div>button,
+div[class*="st-key-ztopbar_notif"] div[data-testid="stPopover"]>div>button,
+div[class*="st-key-ztopbar_sched"] div[data-testid="stPopover"]>div>button,
+div[class*="st-key-ztopbar_access"] div[data-testid="stPopover"]>div>button,
+div[class*="st-key-ztopbar_settings"] div[data-testid="stPopover"]>div>button {
+  color: var(--color-nav-text);
+}
+
+div[class*="st-key-ztopbar_loc"] [data-testid="stIconMaterial"],
+div[class*="st-key-ztopbar_notif"] [data-testid="stIconMaterial"],
+div[class*="st-key-ztopbar_sched"] [data-testid="stIconMaterial"],
+div[class*="st-key-ztopbar_access"] [data-testid="stIconMaterial"],
+div[class*="st-key-ztopbar_settings"] [data-testid="stIconMaterial"] {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
 }
 
 div[class*="st-key-ztopbar_new"] div[data-testid="stPopover"]>div>button,
@@ -731,6 +753,28 @@ div[class*="st-key-ztopbar_account"] div[data-testid="stPopover"] button:hover {
   background: var(--color-surface-hover) !important;
   border-color: transparent !important;
   color: var(--color-text) !important;
+}
+
+.z-topbar-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: 0.4rem var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  cursor: default;
+  transition: background var(--transition-fast);
+}
+
+.z-topbar-menu-item:hover {
+  background: var(--color-surface-hover);
+}
+
+.z-topbar-menu-item i {
+  font-size: 16px;
+  color: var(--color-nav-text);
+  flex-shrink: 0;
 }
 
 .z-topbar-account-head {
@@ -830,5 +874,326 @@ div[class*="st-key-ztopbar"]:not([class*="ztopbar_"])>div>div[data-testid="stHor
 
   div[class*="st-key-ztopbar"]:not([class*="ztopbar_"]) {
     left: 0;
+  }
+}
+
+/* Dashboard summary cards (vaybooks.bms.ui.components.shared.dashboard_card).
+   Layout/spacing values below are the reference design's exact spec (48px
+   icon, 16px radius, 20px padding) rather than the closest existing --space-*
+   step; colors still come only from the semantic tokens above. */
+:root {
+  --dcard-radius: 16px;
+  --dcard-padding: 20px;
+  --dcard-icon-size: 48px;
+  --dcard-icon-radius: 12px;
+  --dcard-icon-glyph: 22px;
+  --dcard-value-size: 1.85rem;
+}
+
+div[class*="st-key-dcard_grid"] div[data-testid="stHorizontalBlock"] {
+  align-items: stretch;
+}
+
+div[class*="st-key-dcard_grid"] div[data-testid="stVerticalBlockBorderWrapper"] {
+  height: 100%;
+  box-sizing: border-box;
+  padding: var(--dcard-padding);
+  border: 1px solid var(--color-sidebar-border);
+  border-radius: var(--dcard-radius);
+  background: var(--color-surface);
+  box-shadow: none;
+  transition: box-shadow var(--transition-base);
+}
+
+div[class*="st-key-dcard_grid"] div[data-testid="stVerticalBlockBorderWrapper"]:hover {
+  box-shadow: var(--shadow-hover);
+}
+
+div[class*="st-key-dcard_grid"] div[data-testid="stVerticalBlockBorderWrapper"]>div[data-testid="stVerticalBlock"] {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.z-dcard-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  margin-bottom: var(--space-7);
+}
+
+.z-dcard-icon {
+  width: var(--dcard-icon-size);
+  height: var(--dcard-icon-size);
+  min-width: var(--dcard-icon-size);
+  border-radius: var(--dcard-icon-radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--dcard-icon-glyph);
+  flex-shrink: 0;
+}
+
+.z-dcard-icon.primary {
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
+}
+
+.z-dcard-icon.success {
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+}
+
+.z-dcard-icon.danger {
+  background: var(--color-danger-bg);
+  color: var(--color-danger-text);
+}
+
+.z-dcard-icon.warning {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+}
+
+.z-dcard-icon.info {
+  background: var(--color-info-bg);
+  color: var(--color-info-text);
+}
+
+.z-dcard-icon.neutral {
+  background: var(--color-neutral-bg);
+  color: var(--color-neutral-text);
+}
+
+.z-dcard-title {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+  line-height: var(--line-height-tight);
+}
+
+.z-dcard-middle {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  margin-bottom: var(--space-7);
+}
+
+.z-dcard-value {
+  font-size: var(--dcard-value-size);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+  line-height: 1.1;
+}
+
+.z-dcard-growth {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.z-dcard-growth.up {
+  color: var(--color-success-text);
+}
+
+.z-dcard-growth.down {
+  color: var(--color-danger-text);
+}
+
+div[class*="st-key-dcard_grid"] div[data-testid="stElementContainer"]:has(div[class*="st-key-dcard_footer_"]) {
+  margin-top: auto !important;
+}
+
+div[class*="st-key-dcard_grid"] div[class*="st-key-dcard_footer_"] {
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--color-border);
+}
+
+div[class*="st-key-dcard_grid"] div[class*="st-key-dcard_footer_"] button {
+  width: 100%;
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  min-height: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-regular);
+  box-shadow: none !important;
+  transition: color var(--transition-fast);
+}
+
+div[class*="st-key-dcard_grid"] div[class*="st-key-dcard_footer_"] button:hover {
+  color: var(--color-primary);
+}
+
+div[class*="st-key-dcard_grid"] div[class*="st-key-dcard_footer_"] button::after {
+  content: "\2192";
+  font-size: 1rem;
+  margin-left: var(--space-4);
+}
+
+/* Login page (vaybooks.bms.ui.auth.login_page) — full-screen split-screen
+   sign-in. Structure is st.container(key=...) + st.columns (widgets can't
+   nest inside raw HTML), styled here via the st-key-* scopes; only the
+   banner/logo images are raw <img> tags for object-fit control. */
+div[class*="st-key-zlogin_page"] {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 999996;
+  display: flex;
+  background: var(--color-surface);
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+
+/* Edge-to-edge: the card IS the viewport, not a floating panel on a visible
+   backdrop — no max-width, radius, or shadow, or the page reads as "a card
+   centered on a page" instead of "a full-screen login route". */
+div[class*="st-key-zlogin_card"] {
+  width: 100%;
+  min-height: 100vh;
+  background: var(--color-surface);
+}
+
+div[class*="st-key-zlogin_card"]>div[data-testid="stHorizontalBlock"] {
+  gap: 0 !important;
+  align-items: stretch;
+}
+
+div[class*="st-key-zlogin_card"] div[data-testid="stColumn"]:has(div[class*="st-key-zlogin_form_col"]) {
+  padding: 3rem 10rem;
+  display: flex;
+  align-items: center;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+div[class*="st-key-zlogin_card"] div[data-testid="stColumn"]:has(div[class*="st-key-zlogin_form_col"]) .stVerticalBlock {
+  height: auto;
+}
+
+div[class*="st-key-zlogin_card"] div[data-testid="stColumn"]:has(div[class*="st-key-zlogin_banner"]) {
+  padding: 0;
+  position: relative;
+  min-height: 100vh;
+}
+
+/* Streamlit sets position:relative on every stElementContainer by default, so
+   that div — not our positioned stColumn above — becomes the banner <img>'s
+   actual containing block, and it collapses to 0 height (its only child is
+   absolutely positioned). Neutralize it so the img anchors to the stColumn,
+   which already gets a real height from align-items:stretch on the row. */
+div[class*="st-key-zlogin_banner"] [data-testid="stElementContainer"] {
+  position: static !important;
+}
+
+div[class*="st-key-zlogin_form_col"] {
+  width: 100%;
+}
+
+/* The login form is the single input container: every field lives inside
+   this st.form, and overflow:hidden keeps it that way — nothing (rogue
+   absolutely-positioned elements, overflowing focus rings) can render
+   outside its bounds. */
+div[class*="st-key-zlogin_form_col"] div[data-testid="stForm"] {
+  overflow: hidden;
+  width: 100%;
+}
+
+.z-login-logo {
+  margin-bottom: var(--space-8);
+}
+
+.z-login-logo img {
+  max-height: 32px;
+  width: auto;
+}
+
+.z-login-title {
+  font-size: 1.6rem;
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+  margin: 0 0 var(--space-3) 0;
+}
+
+.z-login-subtitle {
+  font-size: var(--font-size-base);
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-8) 0;
+}
+
+div[class*="st-key-zlogin_form_col"] div[data-testid="stTextInput"] {
+  width: 100%;
+}
+
+/* Streamlit's native "Press Enter to submit form" hint under form text
+   inputs — not part of this design, so hide it on the login form only. */
+div[class*="st-key-zlogin_form_col"] div[data-testid="InputInstructions"] {
+  display: none !important;
+}
+
+div[class*="st-key-zlogin_form_col"] div[data-testid="stTextInput"] input {
+  height: 44px !important;
+  width: 100%;
+  border-radius: 10px !important;
+}
+
+div[class*="st-key-zlogin_form_col"] div[data-testid="stFormSubmitButton"] button {
+  height: 44px;
+  border-radius: 10px;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+}
+
+.z-login-forgot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  padding-top: 0.4rem;
+}
+
+.z-login-forgot span {
+  font-size: var(--font-size-sm);
+  color: var(--color-primary);
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.z-login-forgot span:hover {
+  color: var(--color-primary-hover);
+  text-decoration: underline;
+}
+
+div[class*="st-key-zlogin_form_col"] div[data-testid="stCheckbox"] {
+  padding-top: 0.15rem;
+}
+
+.z-login-banner-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover !important;
+  display: block;
+}
+
+@media (max-width: 640px) {
+  div[class*="st-key-zlogin_card"] div[data-testid="stColumn"]:has(div[class*="st-key-zlogin_banner"]) {
+    display: none;
+  }
+
+  div[class*="st-key-zlogin_card"] div[data-testid="stColumn"]:has(div[class*="st-key-zlogin_form_col"]) {
+    width: 100% !important;
+    flex: 1 1 100% !important;
+    padding: 2.5rem 1.5rem;
   }
 }

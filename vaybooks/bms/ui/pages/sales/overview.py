@@ -17,6 +17,10 @@ from vaybooks.bms.ui.components.common.filter_sort_bar import (
 from vaybooks.bms.ui.components.common.overview_action_cards import (
     overview_action_cards,
 )
+from vaybooks.bms.ui.components.shared.dashboard_card import (
+    DashboardCardSpec,
+    dashboard_card_grid,
+)
 from vaybooks.bms.ui.sales_list_schemas import SALES_OVERVIEW
 from vaybooks.bms.ui.styles import metric_grid
 
@@ -244,23 +248,42 @@ def render(services: dict) -> None:
     receivables = _customer_receivables_total(services)
 
     st.markdown("#### Attention")
-    metric_grid(
+    dashboard_card_grid(
         [
-            ("Open SOs", open_so),
-            (
-                "Overdue SOs",
-                overdue_count,
-                _tone_if(overdue_count > 0, "danger"),
+            DashboardCardSpec(
+                title="Open SOs",
+                value=str(open_so),
+                icon="file-text",
+                footer_text="View sales orders",
+                on_click=lambda: navigation.go_to_list("sales_orders_list"),
+                key="sales_open_so",
             ),
-            (
-                "Pending DN qty",
-                f"{pending_dn:g}",
-                _tone_if(pending_dn > 0, "warn"),
+            DashboardCardSpec(
+                title="Overdue SOs",
+                value=str(overdue_count),
+                icon="alert-triangle",
+                tone=_tone_if(overdue_count > 0, "danger"),
+                footer_text="View sales orders",
+                on_click=lambda: navigation.go_to_list("sales_orders_list"),
+                key="sales_overdue_so",
             ),
-            (
-                "Customer receivables",
-                _fmt_currency(receivables),
-                _tone_if(receivables > 0, "warn"),
+            DashboardCardSpec(
+                title="Pending DN qty",
+                value=f"{pending_dn:g}",
+                icon="truck",
+                tone=_tone_if(pending_dn > 0, "warning"),
+                footer_text="View delivery notes",
+                on_click=lambda: navigation.go_to_list("delivery_notes_list"),
+                key="sales_pending_dn",
+            ),
+            DashboardCardSpec(
+                title="Customer receivables",
+                value=_fmt_currency(receivables),
+                icon="wallet",
+                tone=_tone_if(receivables > 0, "warning"),
+                footer_text="View sales reports",
+                on_click=lambda: navigation.go_to_list("sales_reports"),
+                key="sales_receivables",
             ),
         ],
         suffix="sales_overview_attention",
