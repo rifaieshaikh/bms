@@ -141,6 +141,7 @@ class CustomerDomainService:
             msme_number=normalized.msme_number,
             notes=customer_input.notes,
             segment_ids=list(customer_input.segment_ids or []),
+            is_commission_agent=bool(customer_input.is_commission_agent),
         )
 
     def _check_duplicates(

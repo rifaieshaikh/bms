@@ -937,8 +937,75 @@ class AccountingAppService:
         voucher.id = old.id
         return self._update_voucher(voucher)
 
+    def create_commission_payment(
+        self,
+        agent_account_id: str,
+        paying_account_id: str,
+        amount: float,
+        description: str,
+        voucher_date: Optional[date] = None,
+        reference_invoice_id: Optional[str] = None,
+    ) -> Voucher:
+        agent = self._account_repo.find_by_id(agent_account_id)
+        paying = self._account_repo.find_by_id(paying_account_id)
+        if not agent or not agent.linked_agent_id:
+            raise ValueError("Commission agent account not found")
+        if not paying:
+            raise ValueError("Paying account not found")
+        voucher_number = self._counter_repo.next("voucher_number")
+        v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
+        voucher = self._domain.build_commission_payment_voucher(
+            voucher_number=voucher_number,
+            voucher_date=v_date,
+            description=description or "Commission payment",
+            agent_account_id=agent.id,
+            agent_account_name=agent.account_name,
+            paying_account_id=paying.id,
+            paying_account_name=paying.account_name,
+            amount=amount,
+            reference_invoice_id=reference_invoice_id,
+        )
+        return self._save_voucher(voucher)
+
+    def update_commission_payment(
+        self,
+        voucher_id: str,
+        agent_account_id: str,
+        paying_account_id: str,
+        amount: float,
+        description: str,
+        voucher_date: Optional[date] = None,
+        reference_invoice_id: Optional[str] = None,
+    ) -> Voucher:
+        old = self._voucher_repo.find_by_id(voucher_id)
+        if not old or old.voucher_type != VoucherType.COMMISSION_PAYMENT:
+            raise ValueError("Commission payment not found")
+        agent = self._account_repo.find_by_id(agent_account_id)
+        paying = self._account_repo.find_by_id(paying_account_id)
+        if not agent or not agent.linked_agent_id:
+            raise ValueError("Commission agent account not found")
+        if not paying:
+            raise ValueError("Paying account not found")
+        v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
+        voucher = self._domain.build_commission_payment_voucher(
+            voucher_number=old.voucher_number,
+            voucher_date=v_date,
+            description=description or "Commission payment",
+            agent_account_id=agent.id,
+            agent_account_name=agent.account_name,
+            paying_account_id=paying.id,
+            paying_account_name=paying.account_name,
+            amount=amount,
+            reference_invoice_id=reference_invoice_id,
+        )
+        voucher.id = old.id
+        return self._update_voucher(voucher)
+
     def get_vendor_account(self, vendor_id: str) -> Optional[Account]:
         return self._account_repo.find_vendor_account(vendor_id)
+
+    def get_agent_account(self, agent_id: str) -> Optional[Account]:
+        return self._account_repo.find_agent_account(agent_id)
 
     def list_vendor_payments(self, vendor_account_id: str) -> List[Voucher]:
         return [
@@ -1838,6 +1905,10 @@ class AccountingAppService:
         financial_year: str = "",
         credit_applied: float = 0.0,
         advance_applied: float = 0.0,
+        commission_amount: float = 0.0,
+        agent_account_id: Optional[str] = None,
+        commission_paid: bool = False,
+        commission_pay_account_id: Optional[str] = None,
     ) -> Voucher:
         customer = self._account_repo.find_by_id(customer_account_id)
         store = self._account_repo.find_by_id(store_account_id)
@@ -1859,6 +1930,7 @@ class AccountingAppService:
             description = f"{description}\n{line_items_note.strip()}"
         credit_applied = round(max(float(credit_applied or 0), 0.0), 2)
         advance_applied = round(max(float(advance_applied or 0), 0.0), 2)
+        commission_amount = round(float(commission_amount or 0), 2)
         net_for_settlement = round(
             float(gross_amount or 0) - float(discount_amount or 0), 2
         )
@@ -1893,6 +1965,22 @@ class AccountingAppService:
                     f"(₹{available_adv:,.2f})"
                 )
             advance = self.get_advance_from_customers_account()
+        agent = None
+        commission_pay = None
+        if commission_amount > 0:
+            if not agent_account_id:
+                raise ValueError("Agent account is required for commission")
+            agent = self._account_repo.find_by_id(agent_account_id)
+            if not agent or not agent.linked_agent_id:
+                raise ValueError("Commission agent account not found")
+            if commission_paid:
+                if not commission_pay_account_id:
+                    raise ValueError(
+                        "Cash/bank account is required when commission is paid"
+                    )
+                commission_pay = self._account_repo.find_by_id(commission_pay_account_id)
+                if not commission_pay:
+                    raise ValueError("Commission payment account not found")
         voucher_number = self._counter_repo.next("voucher_number")
         v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
         if sales_lines and not gst_output_accounts:
@@ -1921,6 +2009,14 @@ class AccountingAppService:
             advance_account_id=advance.id if advance else None,
             advance_account_name=advance.account_name if advance else None,
             advance_applied=advance_applied,
+            commission_amount=commission_amount,
+            agent_account_id=agent.id if agent else None,
+            agent_account_name=agent.account_name if agent else None,
+            commission_paid=bool(commission_paid and commission_amount > 0),
+            commission_pay_account_id=commission_pay.id if commission_pay else None,
+            commission_pay_account_name=(
+                commission_pay.account_name if commission_pay else None
+            ),
         )
         voucher.financial_year = (financial_year or "").strip()
         return self._save_voucher(voucher)
@@ -1941,6 +2037,10 @@ class AccountingAppService:
         financial_year: str = "",
         credit_applied: float = 0.0,
         advance_applied: float = 0.0,
+        commission_amount: float = 0.0,
+        agent_account_id: Optional[str] = None,
+        commission_paid: bool = False,
+        commission_pay_account_id: Optional[str] = None,
     ) -> Voucher:
         old = self._voucher_repo.find_by_id(voucher_id)
         if not old or old.voucher_type != VoucherType.SALES_INVOICE:
@@ -1973,6 +2073,7 @@ class AccountingAppService:
             description = f"{description}\n{line_items_note.strip()}"
         credit_applied = round(max(float(credit_applied or 0), 0.0), 2)
         advance_applied = round(max(float(advance_applied or 0), 0.0), 2)
+        commission_amount = round(float(commission_amount or 0), 2)
         net_for_settlement = round(
             float(gross_amount or 0) - float(discount_amount or 0), 2
         )
@@ -2018,6 +2119,22 @@ class AccountingAppService:
                     f"(₹{available_adv:,.2f})"
                 )
             advance = self.get_advance_from_customers_account()
+        agent = None
+        commission_pay = None
+        if commission_amount > 0:
+            if not agent_account_id:
+                raise ValueError("Agent account is required for commission")
+            agent = self._account_repo.find_by_id(agent_account_id)
+            if not agent or not agent.linked_agent_id:
+                raise ValueError("Commission agent account not found")
+            if commission_paid:
+                if not commission_pay_account_id:
+                    raise ValueError(
+                        "Cash/bank account is required when commission is paid"
+                    )
+                commission_pay = self._account_repo.find_by_id(commission_pay_account_id)
+                if not commission_pay:
+                    raise ValueError("Commission payment account not found")
         v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
         voucher = self._domain.build_cash_sales_invoice_voucher(
             voucher_number=old.voucher_number,
@@ -2043,6 +2160,14 @@ class AccountingAppService:
             advance_account_id=advance.id if advance else None,
             advance_account_name=advance.account_name if advance else None,
             advance_applied=advance_applied,
+            commission_amount=commission_amount,
+            agent_account_id=agent.id if agent else None,
+            agent_account_name=agent.account_name if agent else None,
+            commission_paid=bool(commission_paid and commission_amount > 0),
+            commission_pay_account_id=commission_pay.id if commission_pay else None,
+            commission_pay_account_name=(
+                commission_pay.account_name if commission_pay else None
+            ),
         )
         voucher.id = old.id
         voucher.financial_year = (financial_year or "").strip() or (
@@ -2600,6 +2725,8 @@ class AccountingAppService:
         voucher_date: Optional[date] = None,
         reference_dn_id: Optional[str] = None,
         source_invoice_id: Optional[str] = None,
+        commission_reversal: float = 0.0,
+        agent_account_id: Optional[str] = None,
     ) -> Voucher:
         customer = self._account_repo.find_by_id(customer_account_id)
         if not customer:
@@ -2614,6 +2741,16 @@ class AccountingAppService:
             refund = self._account_repo.find_by_id(refund_account_id)
             if not refund:
                 raise ValueError("Refund account not found")
+        agent = None
+        commission_reversal = round(float(commission_reversal or 0), 2)
+        if commission_reversal > 0:
+            if not agent_account_id:
+                raise ValueError(
+                    "An agent account is required to reverse commission on a return"
+                )
+            agent = self._account_repo.find_by_id(agent_account_id)
+            if not agent or not agent.linked_agent_id:
+                raise ValueError("Commission agent account not found")
         voucher_number = self._counter_repo.next("voucher_number")
         v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
         voucher = self._domain.build_sales_return_voucher(
@@ -2630,6 +2767,9 @@ class AccountingAppService:
             refund_account_name=refund.account_name if refund else None,
             reference_dn_id=reference_dn_id,
             source_invoice_id=source_invoice_id,
+            commission_reversal=commission_reversal,
+            agent_account_id=agent.id if agent else None,
+            agent_account_name=agent.account_name if agent else None,
         )
         return self._save_voucher(voucher)
 

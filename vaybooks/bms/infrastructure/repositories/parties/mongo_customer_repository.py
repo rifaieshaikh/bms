@@ -44,6 +44,8 @@ class MongoCustomerRepository:
             "segment_names": list(customer.segment_names or []),
             "assigned_user_id": customer.assigned_user_id or "",
             "assigned_user_name": customer.assigned_user_name or "",
+            "is_commission_agent": bool(customer.is_commission_agent),
+            "commission_agent_id": customer.commission_agent_id or "",
             "created_at": customer.created_at,
             "updated_at": customer.updated_at,
         }
@@ -83,6 +85,8 @@ class MongoCustomerRepository:
             segment_names=list(doc.get("segment_names") or []),
             assigned_user_id=doc.get("assigned_user_id", "") or "",
             assigned_user_name=doc.get("assigned_user_name", "") or "",
+            is_commission_agent=bool(doc.get("is_commission_agent", False)),
+            commission_agent_id=doc.get("commission_agent_id", "") or "",
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
         )

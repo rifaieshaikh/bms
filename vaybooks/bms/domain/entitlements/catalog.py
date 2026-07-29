@@ -86,6 +86,7 @@ PERMISSIONS: Tuple[str, ...] = tuple(
         # Parties
         *_expand("parties.customers", ("view", "create", "edit")),
         *_expand("parties.vendors", ("view", "create", "edit")),
+        *_expand("parties.commission_agents", ("view", "create", "edit")),
         *_expand("parties.employees", ("view", "create", "edit")),
         *_expand("parties.store_tasks", ("view", "edit")),
         *_expand("parties.segments", ("view", "edit")),
@@ -264,6 +265,8 @@ PAGE_PERMISSIONS: Dict[str, str] = {
     "customer-detail": "parties.customers.view",
     "vendors": "parties.vendors.view",
     "vendor-detail": "parties.vendors.view",
+    "commission-agents": "parties.commission_agents.view",
+    "commission-agent-detail": "parties.commission_agents.view",
     "employees": "parties.employees.view",
     "store-time": "parties.store_tasks.view",
     "party-segments": "parties.segments.view",
@@ -671,6 +674,7 @@ SYSTEM_ROLE_DEFINITIONS: Dict[str, Dict] = {
             "finance.*",
             "parties.customers.view",
             "parties.vendors.view",
+            "parties.commission_agents.*",
             "sales.invoices.view",
             "sales.returns.view",
             "purchases.bills.view",
@@ -770,6 +774,7 @@ SYSTEM_ROLE_DEFINITIONS: Dict[str, Dict] = {
         "permission_keys": _role_perms(
             "core.*",
             "parties.customers.*",
+            "parties.commission_agents.*",
             "parties.segments.view",
             "parties.employees.view",
             "parties.store_tasks.*",
@@ -781,6 +786,7 @@ SYSTEM_ROLE_DEFINITIONS: Dict[str, Dict] = {
             "inventory.reports.view",
             "finance.overview.view",
             "finance.receipts.*",
+            "finance.payments.*",
         ),
     },
     ROLE_STORE_ASSOCIATE: {

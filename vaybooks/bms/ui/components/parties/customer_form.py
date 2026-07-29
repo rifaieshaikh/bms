@@ -81,6 +81,15 @@ def render_customer_form(
     else:
         st.caption("No party segments defined yet. Add them under Parties → Segments.")
 
+    is_commission_agent = st.checkbox(
+        "Is commission agent",
+        value=bool(customer.is_commission_agent) if customer else False,
+        key=f"{key_prefix}_is_commission_agent",
+        help="Creates / links a Commission Agent party with a payable ledger account.",
+    )
+    if customer and customer.commission_agent_id:
+        st.caption(f"Linked commission agent id: `{customer.commission_agent_id}`")
+
     with st.expander("Notes", expanded=bool(customer and customer.notes)):
         notes = st.text_area(
             "Notes",
@@ -107,4 +116,5 @@ def render_customer_form(
         msme_number=tax_fields["msme_number"],
         notes=notes,
         segment_ids=segment_ids,
+        is_commission_agent=is_commission_agent,
     )

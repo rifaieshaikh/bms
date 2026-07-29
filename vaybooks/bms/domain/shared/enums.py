@@ -67,6 +67,7 @@ class VoucherType(str, Enum):
     REFUND = "Refund"
     VENDOR_PAYMENT = "Vendor Payment"
     SALARY_PAYMENT = "Salary Payment"
+    COMMISSION_PAYMENT = "Commission Payment"
     SALES_RETURN = "Sales Return"
     CREDIT_NOTE = "Credit Note"
     DEBIT_NOTE = "Debit Note"

@@ -27,6 +27,7 @@ class CustomerInput:
     msme_number: str = ""
     notes: str = ""
     segment_ids: List[str] = field(default_factory=list)
+    is_commission_agent: bool = False
 
 
 @dataclass
@@ -56,6 +57,8 @@ class Customer:
     segment_names: List[str] = field(default_factory=list)
     assigned_user_id: str = ""
     assigned_user_name: str = ""
+    is_commission_agent: bool = False
+    commission_agent_id: str = ""
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
 
@@ -105,6 +108,7 @@ class Customer:
             msme_number=customer_input.msme_number.strip(),
             notes=customer_input.notes,
             segment_ids=list(customer_input.segment_ids or []),
+            is_commission_agent=bool(customer_input.is_commission_agent),
         )
 
     def apply_input(self, customer_input: CustomerInput) -> None:
@@ -126,4 +130,5 @@ class Customer:
             msme_number=customer_input.msme_number.strip(),
             notes=customer_input.notes,
             segment_ids=list(customer_input.segment_ids or []),
+            is_commission_agent=bool(customer_input.is_commission_agent),
         )

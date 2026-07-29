@@ -33,6 +33,7 @@ RCPT_PRESELECT_ACCOUNT = "acc_receipt_preselect_customer_account_id"
 RCPT_PRESELECT_INVOICE = "acc_receipt_preselect_invoice_id"
 PAY = "acc_payment_dialog"
 SAL = "acc_salary_dialog"
+COMM = "acc_commission_dialog"
 INV_CUST = "acc_cust_inv_dialog"
 JOURNAL = "acc_journal_dialog"
 CREDIT_NOTE = "acc_credit_note_dialog"
@@ -45,7 +46,7 @@ def _clear_other_invoice_dialog_flags(keep: str) -> None:
 
 
 def _clear_other_payment_dialog_flags(keep: str) -> None:
-    clear_dialog_flags(*(k for k in (PAY, SAL) if k != keep))
+    clear_dialog_flags(*(k for k in (PAY, SAL, COMM) if k != keep))
 
 
 def _format_balance(balance: float) -> str:
@@ -480,6 +481,99 @@ def _salary_dialog(accounting_service):
             st.error(str(exc))
     if cols[1].button("Cancel", width="stretch"):
         st.session_state.pop(SAL, None)
+        st.rerun()
+
+
+@st.dialog(
+    "Record Commission",
+    on_dismiss=make_dismiss_handler(COMM),
+)
+def _commission_dialog(services):
+    accounting_service = services["accounting"]
+    agent_service = services.get("commission_agents")
+    target = st.session_state.get(COMM)
+    voucher = None if target in (None, "new") else accounting_service.get_voucher(target)
+
+    store_accounts = accounting_service.get_store_accounts()
+    agents = agent_service.list_all_agents() if agent_service else []
+    if not store_accounts or not agents:
+        st.error(
+            "Need at least one commission agent and one store (cash/bank) account."
+        )
+        if st.button("Close"):
+            st.session_state.pop(COMM, None)
+            st.rerun()
+        return
+
+    agent_opts = {}
+    for a in agents:
+        acc = accounting_service.get_agent_account(a.id)
+        if acc:
+            agent_opts[a.agent_name] = acc.id
+    if not agent_opts:
+        st.error("No commission agent ledger accounts found.")
+        if st.button("Close"):
+            st.session_state.pop(COMM, None)
+            st.rerun()
+        return
+
+    pay_opts = {a.account_name: a.id for a in store_accounts}
+    existing_agent = voucher.lines[0].account_id if voucher else None
+    existing_pay = voucher.lines[1].account_id if voucher and len(voucher.lines) > 1 else None
+    existing_amt = voucher.lines[0].debit_amount if voucher else 0.0
+    existing_invoice = getattr(voucher, "reference_invoice_id", None) if voucher else None
+
+    agent_name = st.selectbox(
+        "Commission Agent",
+        list(agent_opts.keys()),
+        index=_index_of(agent_opts, existing_agent),
+    )
+    pay = st.selectbox(
+        "Paying Account (Store)",
+        list(pay_opts.keys()),
+        index=_index_of(pay_opts, existing_pay),
+    )
+    amount = st.number_input("Amount", min_value=0.0, value=float(existing_amt))
+    v_date = st.date_input("Date", value=date.today())
+    desc = st.text_input(
+        "Description",
+        value=voucher.description if voucher else "Commission payment",
+    )
+    invoice_ref = st.text_input(
+        "Sales invoice voucher id (optional)",
+        value=existing_invoice or "",
+        help="Link this settlement to a sales invoice voucher id.",
+    )
+
+    cols = st.columns(2)
+    if cols[0].button("Save", type="primary", width="stretch"):
+        try:
+            ref = (invoice_ref or "").strip() or None
+            if voucher:
+                accounting_service.update_commission_payment(
+                    voucher.id,
+                    agent_opts[agent_name],
+                    pay_opts[pay],
+                    amount,
+                    desc,
+                    v_date,
+                    reference_invoice_id=ref,
+                )
+            else:
+                accounting_service.create_commission_payment(
+                    agent_opts[agent_name],
+                    pay_opts[pay],
+                    amount,
+                    desc,
+                    v_date,
+                    reference_invoice_id=ref,
+                )
+            st.session_state.pop(COMM, None)
+            st.rerun()
+        except Exception as exc:
+            st.error(str(exc))
+    if cols[1].button("Cancel", width="stretch"):
+        st.session_state.pop(COMM, None)
         st.rerun()
 
 
@@ -1024,6 +1118,8 @@ def open_pending_dialogs(services: dict) -> None:
         _payment_dialog(services)
     elif st.session_state.get(SAL):
         _salary_dialog(accounting_service)
+    elif st.session_state.get(COMM):
+        _commission_dialog(services)
     elif st.session_state.get(INV_CUST):
         _customization_invoice_dialog(accounting_service)
     elif st.session_state.get(JOURNAL):

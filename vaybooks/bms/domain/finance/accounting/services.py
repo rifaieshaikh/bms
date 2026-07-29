@@ -4,6 +4,7 @@ from vaybooks.bms.domain.finance.accounting.entities import Account, Voucher, Vo
 from vaybooks.bms.domain.finance.accounting.repository import AccountRepository, VoucherRepository
 from vaybooks.bms.domain.shared.enums import AccountType, VoucherType
 from vaybooks.bms.domain.shared.exceptions import (
+    DuplicateAgentAccountError,
     DuplicateCustomerAccountError,
     DuplicateVendorAccountError,
     DuplicateWorkerAccountError,
@@ -117,6 +118,44 @@ class AccountingDomainService:
         if existing:
             return existing
         return self.create_vendor_account(vendor_id, account_name)
+
+    def create_agent_account(
+        self,
+        agent_id: str,
+        account_name: str,
+    ) -> Account:
+        existing = self._account_repo.find_agent_account(agent_id)
+        if existing:
+            raise DuplicateAgentAccountError(
+                f"Agent account already exists for agent {agent_id}"
+            )
+        account = Account(
+            account_name=account_name,
+            account_type=AccountType.LIABILITY,
+            linked_agent_id=agent_id,
+        )
+        return self._account_repo.save(account)
+
+    def ensure_agent_account(
+        self,
+        agent_id: str,
+        account_name: str,
+    ) -> Account:
+        existing = self._account_repo.find_agent_account(agent_id)
+        if existing:
+            return existing
+        return self.create_agent_account(agent_id, account_name)
+
+    def sync_agent_account(
+        self,
+        agent_id: str,
+        account_name: str,
+    ) -> Account:
+        account = self.ensure_agent_account(agent_id, account_name)
+        if account.account_name != account_name:
+            account.account_name = account_name
+            return self._account_repo.save(account)
+        return account
 
     def create_worker_salary_account(
         self,
@@ -676,6 +715,49 @@ class AccountingDomainService:
             lines=lines,
         )
 
+    def build_commission_payment_voucher(
+        self,
+        voucher_number: str,
+        voucher_date,
+        description: str,
+        agent_account_id: str,
+        agent_account_name: str,
+        paying_account_id: str,
+        paying_account_name: str,
+        amount: float,
+        reference_invoice_id: Optional[str] = None,
+    ) -> Voucher:
+        """Settle commission payable against cash/bank.
+
+        Dr Agent Liability (payable settled)   Cr Cash/Bank (cash out)
+        """
+        if amount <= 0:
+            raise ValidationError("Commission payment amount must be positive")
+        lines = [
+            VoucherLine(
+                account_id=agent_account_id,
+                account_name=agent_account_name,
+                debit_amount=amount,
+                credit_amount=0,
+                description="Commission payable settled",
+            ),
+            VoucherLine(
+                account_id=paying_account_id,
+                account_name=paying_account_name,
+                debit_amount=0,
+                credit_amount=amount,
+                description="Commission paid",
+            ),
+        ]
+        return Voucher(
+            voucher_number=voucher_number,
+            voucher_type=VoucherType.COMMISSION_PAYMENT,
+            voucher_date=voucher_date,
+            description=description,
+            lines=lines,
+            reference_invoice_id=reference_invoice_id,
+        )
+
     def build_sales_invoice_voucher(
         self,
         voucher_number: str,
@@ -923,17 +1005,32 @@ class AccountingDomainService:
         advance_account_id: Optional[str] = None,
         advance_account_name: Optional[str] = None,
         advance_applied: float = 0.0,
+        commission_amount: float = 0.0,
+        agent_account_id: Optional[str] = None,
+        agent_account_name: Optional[str] = None,
+        commission_paid: bool = False,
+        commission_pay_account_id: Optional[str] = None,
+        commission_pay_account_name: Optional[str] = None,
     ) -> Voucher:
-        """Cash sale: book revenue, optional GST output, discount, advance, and payment."""
+        """Cash sale: book revenue, optional GST output, discount, advance, commission, and payment."""
         from vaybooks.bms.domain.shared.enums import VoucherType
 
         discount_amount = round(discount_amount or 0.0, 2)
         amount_received = round(amount_received, 2)
         advance_applied = round(max(advance_applied or 0.0, 0.0), 2)
+        commission_amount = round(float(commission_amount or 0.0), 2)
         if amount_received < 0:
             raise ValidationError("Amount received cannot be negative")
         if discount_amount > 0 and not discount_account_id:
             raise ValidationError("A discount account is required to post a discount")
+        if commission_amount < 0:
+            raise ValidationError("Commission amount cannot be negative")
+        if commission_amount > 0 and not agent_account_id:
+            raise ValidationError("An agent account is required to post commission")
+        if commission_amount > 0 and commission_paid and not commission_pay_account_id:
+            raise ValidationError(
+                "A cash/bank account is required when commission is paid with the invoice"
+            )
 
         if sales_lines:
             taxable_total = round(
@@ -960,7 +1057,12 @@ class AccountingDomainService:
                 raise ValidationError(
                     "Invoice discount must be applied to line taxable before posting"
                 )
+            if commission_amount > 0 and commission_amount >= taxable_total:
+                raise ValidationError(
+                    "Commission amount must be less than taxable sales"
+                )
             net_amount = grand_total
+            sales_credit = round(taxable_total - commission_amount, 2)
             # Overpay is allowed: excess remains as customer credit on the ledger.
 
             lines = [
@@ -975,7 +1077,7 @@ class AccountingDomainService:
                     account_id=sales_account_id,
                     account_name=sales_account_name,
                     debit_amount=0,
-                    credit_amount=taxable_total,
+                    credit_amount=sales_credit,
                     description="Sales invoice",
                 ),
             ]
@@ -1014,6 +1116,11 @@ class AccountingDomainService:
             if discount_amount >= gross_amount:
                 raise ValidationError("Discount cannot equal or exceed the invoice amount")
             net_amount = round(gross_amount - discount_amount, 2)
+            if commission_amount > 0 and commission_amount >= gross_amount:
+                raise ValidationError(
+                    "Commission amount must be less than invoice amount"
+                )
+            sales_credit = round(gross_amount - commission_amount, 2)
             # Overpay is allowed: excess remains as customer credit on the ledger.
 
             lines = [
@@ -1028,7 +1135,7 @@ class AccountingDomainService:
                     account_id=sales_account_id,
                     account_name=sales_account_name,
                     debit_amount=0,
-                    credit_amount=gross_amount,
+                    credit_amount=sales_credit,
                     description="Sales invoice",
                 ),
             ]
@@ -1048,6 +1155,36 @@ class AccountingDomainService:
                             debit_amount=0,
                             credit_amount=discount_amount,
                             description="Discount allowed",
+                        ),
+                    ]
+                )
+
+        if commission_amount > 0:
+            lines.append(
+                VoucherLine(
+                    account_id=agent_account_id,
+                    account_name=agent_account_name or "Commission Agent",
+                    debit_amount=0,
+                    credit_amount=commission_amount,
+                    description="Commission payable",
+                )
+            )
+            if commission_paid:
+                lines.extend(
+                    [
+                        VoucherLine(
+                            account_id=agent_account_id,
+                            account_name=agent_account_name or "Commission Agent",
+                            debit_amount=commission_amount,
+                            credit_amount=0,
+                            description="Commission payable settled",
+                        ),
+                        VoucherLine(
+                            account_id=commission_pay_account_id,
+                            account_name=commission_pay_account_name or "Cash/Bank",
+                            debit_amount=0,
+                            credit_amount=commission_amount,
+                            description="Commission paid",
                         ),
                     ]
                 )
@@ -1122,6 +1259,9 @@ class AccountingDomainService:
         refund_account_name: Optional[str] = None,
         reference_dn_id: Optional[str] = None,
         source_invoice_id: Optional[str] = None,
+        commission_reversal: float = 0.0,
+        agent_account_id: Optional[str] = None,
+        agent_account_name: Optional[str] = None,
     ) -> Voucher:
         return_amount = round(return_amount, 2)
         if return_amount <= 0:
@@ -1129,6 +1269,13 @@ class AccountingDomainService:
         amount_refunded = round(max(amount_refunded, 0.0), 2)
         if amount_refunded > return_amount + 0.01:
             raise ValidationError("Refund cannot exceed return total")
+        commission_reversal = round(float(commission_reversal or 0.0), 2)
+        if commission_reversal < 0:
+            raise ValidationError("Commission reversal cannot be negative")
+        if commission_reversal > 0 and not agent_account_id:
+            raise ValidationError(
+                "An agent account is required to reverse commission on a return"
+            )
         lines = [
             VoucherLine(
                 account_id=sales_account_id,
@@ -1145,6 +1292,26 @@ class AccountingDomainService:
                 description="Customer credit note",
             ),
         ]
+        if commission_reversal > 0:
+            # Claw back agent payable and restore sales credit reduced at invoice time.
+            lines.extend(
+                [
+                    VoucherLine(
+                        account_id=agent_account_id,
+                        account_name=agent_account_name or "Commission Agent",
+                        debit_amount=commission_reversal,
+                        credit_amount=0,
+                        description="Commission reversed",
+                    ),
+                    VoucherLine(
+                        account_id=sales_account_id,
+                        account_name=sales_account_name,
+                        debit_amount=0,
+                        credit_amount=commission_reversal,
+                        description="Commission reversed",
+                    ),
+                ]
+            )
         if amount_refunded > 0:
             if not refund_account_id:
                 raise ValidationError("Refund account is required when refunding cash")

@@ -15,6 +15,7 @@ class Account:
     linked_customer_id: Optional[str] = None
     linked_vendor_id: Optional[str] = None
     linked_worker_id: Optional[str] = None
+    linked_agent_id: Optional[str] = None
     opening_balance: float = 0.0
     current_balance: float = 0.0
     is_store_account: bool = False
@@ -87,12 +88,15 @@ class Voucher:
             VoucherType.REFUND,
             VoucherType.VENDOR_PAYMENT,
             VoucherType.SALARY_PAYMENT,
+            VoucherType.COMMISSION_PAYMENT,
             VoucherType.PURCHASE_BILL,
         )
         if self.voucher_type == VoucherType.PURCHASE_BILL:
             for line in self.lines:
                 if line.credit_amount > 0 and line.description == "Payment made":
                     return line.credit_amount
+        if self.voucher_type == VoucherType.COMMISSION_PAYMENT and self.lines:
+            return self.lines[-1].credit_amount if self.lines[-1].credit_amount else 0.0
         if self.voucher_type in routed and self.lines and self.lines[0].debit_amount > 0:
             return self.lines[0].debit_amount
         if self.voucher_type == VoucherType.RECEIPT and self.lines:

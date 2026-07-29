@@ -202,6 +202,7 @@ def serialize_sales_line_items(
     invoice_discount: float = 0.0,
     tax_summary: dict | None = None,
     document_content: dict | None = None,
+    commission: dict | None = None,
 ) -> str:
     payload: dict = {
         "items": line_items,
@@ -211,6 +212,8 @@ def serialize_sales_line_items(
         payload["tax_summary"] = tax_summary
     if document_content:
         payload["document_content"] = document_content
+    if commission:
+        payload["commission"] = commission
     return json.dumps(payload, ensure_ascii=False)
 
 
@@ -242,3 +245,9 @@ def parse_sales_document_content(description: str) -> dict:
         return content if isinstance(content, dict) else {}
     except (json.JSONDecodeError, TypeError, ValueError):
         return {}
+
+
+def parse_sales_commission_from_note(description: str) -> dict | None:
+    from vaybooks.bms.domain.sales.commission import parse_sales_commission
+
+    return parse_sales_commission(description)

@@ -29,6 +29,10 @@ def ensure_indexes(db):
     _create_index(db.vendors, "phone_number", unique=True, sparse=True)
     _create_index(db.vendors, "gstin", unique=True, sparse=True)
     _create_index(db.vendors, "segment_ids")
+    _create_index(db.commission_agents, "phone_number", unique=True, sparse=True)
+    _create_index(db.commission_agents, "gstin", unique=True, sparse=True)
+    _create_index(db.commission_agents, "segment_ids")
+    _create_index(db.commission_agents, "source_customer_id", sparse=True)
     _create_index(db.party_segments, "name", unique=True)
     _create_index(db.party_segments, "applies_to")
     _create_index(db.party_segments, "is_active")
@@ -51,6 +55,12 @@ def ensure_indexes(db):
         [("linked_worker_id", 1)],
         unique=True,
         partialFilterExpression={"linked_worker_id": {"$type": "string"}},
+    )
+    _create_index(
+        db.accounts,
+        [("linked_agent_id", 1)],
+        unique=True,
+        partialFilterExpression={"linked_agent_id": {"$type": "string"}},
     )
 
     _create_index(db.customization_orders, "order_number", unique=True)

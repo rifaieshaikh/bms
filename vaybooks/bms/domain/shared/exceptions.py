@@ -50,6 +50,18 @@ class DuplicateVendorError(DomainError):
         self.existing_vendor_id = existing_vendor_id
 
 
+class DuplicateCommissionAgentError(DomainError):
+    """Commission agent already exists (phone or GSTIN)."""
+
+    def __init__(self, message: str, existing_agent_id: str):
+        super().__init__(message)
+        self.existing_agent_id = existing_agent_id
+
+
+class DuplicateAgentAccountError(DomainError):
+    """Commission agent account already exists."""
+
+
 class DuplicateCustomerError(DomainError):
     """Customer already exists (phone or GSTIN)."""
 

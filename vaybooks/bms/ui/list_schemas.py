@@ -48,6 +48,13 @@ def _vendors(services):
     return [(v.id, v.vendor_name) for v in services["vendors"].list_all_vendors()]
 
 
+def _commission_agents(services):
+    agents = services.get("commission_agents")
+    if not agents:
+        return []
+    return [(a.id, a.agent_name) for a in agents.list_all_agents()]
+
+
 def _accounts(services):
     return [(a.id, a.account_name)
             for a in services["accounting"].list_accounts(active_only=False)]
@@ -67,6 +74,12 @@ def _vendor_accounts(services):
     return [(a.id, a.account_name)
             for a in services["accounting"].list_accounts(active_only=False)
             if a.linked_vendor_id]
+
+
+def _agent_accounts(services):
+    return [(a.id, a.account_name)
+            for a in services["accounting"].list_accounts(active_only=False)
+            if a.linked_agent_id]
 
 
 def _expense_accounts(services):
@@ -163,10 +176,12 @@ def _vendor_segments(services):
 OPTION_LOADERS = {
     "customers": _customers,
     "vendors": _vendors,
+    "commission_agents": _commission_agents,
     "accounts": _accounts,
     "store_accounts": _store_accounts,
     "customer_accounts": _customer_accounts,
     "vendor_accounts": _vendor_accounts,
+    "agent_accounts": _agent_accounts,
     "expense_accounts": _expense_accounts,
     "activity_names": _activity_names,
     "store_activity_names": _store_activity_names,
@@ -212,6 +227,17 @@ def _match_vendor_balance(vendor, value) -> bool:
     return bal == 0
 
 
+def _match_agent_balance(agent, value) -> bool:
+    bal = getattr(agent, "current_balance", 0.0) or 0.0
+    # Liability: credit balance means payable (stored as negative with BMS convention
+    # matching vendor: payable shows as negative current_balance from Cr postings).
+    if value == "payable":
+        return bal < 0
+    if value == "advance":
+        return bal > 0
+    return abs(bal) < 0.01
+
+
 def _match_has_segment(party, value) -> bool:
     ids = getattr(party, "segment_ids", None) or []
     return value in ids
@@ -229,11 +255,14 @@ def _match_account_store(account, value) -> bool:
 def _match_account_linked(account, value) -> bool:
     cust = getattr(account, "linked_customer_id", None)
     vend = getattr(account, "linked_vendor_id", None)
+    agent = getattr(account, "linked_agent_id", None)
     if value == "customer":
         return bool(cust)
     if value == "vendor":
         return bool(vend)
-    return not cust and not vend
+    if value == "agent":
+        return bool(agent)
+    return not cust and not vend and not agent
 
 
 def _match_activity_active(activity, _value) -> bool:
@@ -426,6 +455,41 @@ VENDORS = ListSchema(
     sort_options=[
         SortOption("created_at", "Created"),
         SortOption("vendor_name", "Vendor name"),
+        SortOption("current_balance", "Payable balance"),
+    ],
+    default_sort="created_at",
+    page_size=CARD_PAGE_SIZE,
+)
+
+COMMISSION_AGENTS = ListSchema(
+    entity_key="commission_agents",
+    title="Commission Agents",
+    filter_fields=[
+        FilterField(
+            "agent_id",
+            "Agent name",
+            F.ENTITY_SELECT,
+            record_attr="id",
+            options_loader="commission_agents",
+        ),
+        FilterField("phone_number", "Phone", F.REGEX),
+        FilterField("alternate_phone_number", "Alternate phone", F.REGEX),
+        FilterField(
+            "balance_state",
+            "Payable balance",
+            F.SELECT,
+            options=[
+                ("settled", "Settled"),
+                ("payable", "Amount Payable"),
+                ("advance", "Agent Advance"),
+            ],
+            all_label="All Balances",
+            match=_match_agent_balance,
+        ),
+    ],
+    sort_options=[
+        SortOption("created_at", "Created"),
+        SortOption("agent_name", "Agent name"),
         SortOption("current_balance", "Payable balance"),
     ],
     default_sort="created_at",

@@ -120,6 +120,19 @@ def render(services: dict) -> None:
         store_account.account_name if store_account else (receiving or "—")
     )
 
+    from vaybooks.bms.domain.sales.commission import parse_sales_commission
+
+    commission = parse_sales_commission(voucher.description or "")
+    if commission:
+        paid_label = "Paid with invoice" if commission.get("commission_paid") else "Payable"
+        right_facts.append(
+            (
+                "Commission",
+                f"{commission.get('agent_name') or 'Agent'} · "
+                f"₹{float(commission.get('commission_amount') or 0):,.2f} ({paid_label})",
+            )
+        )
+
     left_facts = [("Customer", customer_name)]
     if customer_mobile:
         left_facts.append(("Mobile", customer_mobile))
