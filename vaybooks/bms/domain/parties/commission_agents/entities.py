@@ -3,6 +3,11 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import uuid4
 
+from vaybooks.bms.domain.sales.commission_rules import (
+    CommissionProfile,
+    empty_commission_profile,
+    validate_commission_profile,
+)
 from vaybooks.bms.domain.shared.date_utils import utc_now
 from vaybooks.bms.domain.shared.enums import PartyRegistrationType
 from vaybooks.bms.domain.shared.india import format_address, state_name_for_code
@@ -30,8 +35,7 @@ class CommissionAgentInput:
     bank_ifsc: str = ""
     bank_name: str = ""
     notes: str = ""
-    default_commission_type: str = "percentage"
-    default_commission_rate: float = 0.0
+    commission_profile: Optional[CommissionProfile] = None
     segment_ids: List[str] = field(default_factory=list)
     location_ids: List[str] = field(default_factory=list)
     source_customer_id: str = ""
@@ -60,8 +64,9 @@ class CommissionAgent:
     bank_ifsc: str = ""
     bank_name: str = ""
     notes: str = ""
-    default_commission_type: str = "percentage"
-    default_commission_rate: float = 0.0
+    commission_profile: CommissionProfile = field(
+        default_factory=empty_commission_profile
+    )
     segment_ids: List[str] = field(default_factory=list)
     segment_names: List[str] = field(default_factory=list)
     location_ids: List[str] = field(default_factory=list)
@@ -92,6 +97,9 @@ class CommissionAgent:
 
     @classmethod
     def from_input(cls, agent_input: CommissionAgentInput) -> "CommissionAgent":
+        profile = validate_commission_profile(
+            agent_input.commission_profile or empty_commission_profile()
+        )
         return cls(
             agent_name=agent_input.agent_name.strip(),
             phone_number=agent_input.phone_number,
@@ -113,16 +121,16 @@ class CommissionAgent:
             bank_ifsc=agent_input.bank_ifsc,
             bank_name=agent_input.bank_name.strip(),
             notes=agent_input.notes,
-            default_commission_type=(
-                agent_input.default_commission_type or "percentage"
-            ).strip().lower(),
-            default_commission_rate=float(agent_input.default_commission_rate or 0),
+            commission_profile=profile,
             segment_ids=list(agent_input.segment_ids or []),
             location_ids=list(agent_input.location_ids or []),
             source_customer_id=(agent_input.source_customer_id or "").strip(),
         )
 
     def apply_input(self, agent_input: CommissionAgentInput) -> None:
+        profile = validate_commission_profile(
+            agent_input.commission_profile or empty_commission_profile()
+        )
         self.update(
             agent_name=agent_input.agent_name.strip(),
             phone_number=agent_input.phone_number,
@@ -144,10 +152,7 @@ class CommissionAgent:
             bank_ifsc=agent_input.bank_ifsc,
             bank_name=agent_input.bank_name.strip(),
             notes=agent_input.notes,
-            default_commission_type=(
-                agent_input.default_commission_type or "percentage"
-            ).strip().lower(),
-            default_commission_rate=float(agent_input.default_commission_rate or 0),
+            commission_profile=profile,
             segment_ids=list(agent_input.segment_ids or []),
             location_ids=list(agent_input.location_ids or []),
             source_customer_id=(

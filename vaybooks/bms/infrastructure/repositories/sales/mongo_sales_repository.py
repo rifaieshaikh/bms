@@ -110,6 +110,8 @@ class MongoSalesOrderRepository:
             "supply_type": order.supply_type,
             "location_id": order.location_id,
             "location_name": order.location_name,
+            "commission_agent_ids": list(order.commission_agent_ids or []),
+            "sales_rep_ids": list(order.sales_rep_ids or []),
             "document_content": dataclass_to_dict(order.document_content),
             "created_at": order.created_at,
             "updated_at": order.updated_at,
@@ -135,6 +137,16 @@ class MongoSalesOrderRepository:
             supply_type=doc.get("supply_type", ""),
             location_id=str(doc.get("location_id") or ""),
             location_name=str(doc.get("location_name") or ""),
+            commission_agent_ids=[
+                str(i).strip()
+                for i in (doc.get("commission_agent_ids") or [])
+                if str(i).strip()
+            ],
+            sales_rep_ids=[
+                str(i).strip()
+                for i in (doc.get("sales_rep_ids") or [])
+                if str(i).strip()
+            ],
             document_content=snapshot_from_dict(doc.get("document_content")),
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),

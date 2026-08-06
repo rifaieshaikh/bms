@@ -6,6 +6,11 @@ from pymongo.database import Database
 
 from vaybooks.bms.domain.identity.location_access import merge_mongo_filters
 from vaybooks.bms.domain.parties.commission_agents.entities import CommissionAgent
+from vaybooks.bms.domain.sales.commission_rules import (
+    empty_commission_profile,
+    profile_from_dict,
+    profile_to_dict,
+)
 from vaybooks.bms.domain.shared.enums import PartyRegistrationType
 
 
@@ -35,8 +40,9 @@ class MongoCommissionAgentRepository:
             "bank_ifsc": agent.bank_ifsc,
             "bank_name": agent.bank_name,
             "notes": agent.notes,
-            "default_commission_type": agent.default_commission_type,
-            "default_commission_rate": agent.default_commission_rate,
+            "commission_profile": profile_to_dict(
+                agent.commission_profile or empty_commission_profile()
+            ),
             "segment_ids": list(agent.segment_ids or []),
             "segment_names": list(agent.segment_names or []),
             "source_customer_id": agent.source_customer_id or "",
@@ -55,6 +61,37 @@ class MongoCommissionAgentRepository:
             return PartyRegistrationType(value)
         except ValueError:
             return PartyRegistrationType.UNREGISTERED
+
+    def _profile_from_doc(self, doc: dict):
+        if isinstance(doc.get("commission_profile"), dict):
+            return profile_from_dict(doc.get("commission_profile"))
+        # Legacy flat defaults → catch-all sales percentage rule.
+        rate = float(doc.get("default_commission_rate") or 0)
+        ctype = (doc.get("default_commission_type") or "percentage").strip().lower()
+        if rate <= 0:
+            return empty_commission_profile()
+        from vaybooks.bms.domain.sales.commission_rules import (
+            COMMISSION_TYPE_FLAT,
+            COMMISSION_TYPE_PERCENTAGE,
+            CommissionProfile,
+            CommissionRule,
+            GRAIN_INVOICE,
+            SCOPE_ALL,
+        )
+
+        rule_type = (
+            COMMISSION_TYPE_FLAT if ctype == "flat" else COMMISSION_TYPE_PERCENTAGE
+        )
+        return CommissionProfile(
+            sales_rules=[
+                CommissionRule(
+                    scope_type=SCOPE_ALL,
+                    grain=GRAIN_INVOICE,
+                    commission_type=rule_type,
+                    commission_rate=rate,
+                )
+            ]
+        )
 
     def _from_doc(self, doc: dict) -> CommissionAgent:
         return CommissionAgent(
@@ -79,9 +116,7 @@ class MongoCommissionAgentRepository:
             bank_ifsc=doc.get("bank_ifsc", ""),
             bank_name=doc.get("bank_name", ""),
             notes=doc.get("notes", ""),
-            default_commission_type=doc.get("default_commission_type", "percentage")
-            or "percentage",
-            default_commission_rate=float(doc.get("default_commission_rate") or 0),
+            commission_profile=self._profile_from_doc(doc),
             segment_ids=list(doc.get("segment_ids") or []),
             segment_names=list(doc.get("segment_names") or []),
             source_customer_id=doc.get("source_customer_id", "") or "",

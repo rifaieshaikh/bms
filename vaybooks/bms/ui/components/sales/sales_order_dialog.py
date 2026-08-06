@@ -124,6 +124,22 @@ def sales_order_dialog(services: dict) -> None:
     )
     notes = st.text_input("Notes", key=f"{SO_DIALOG}_notes")
 
+    from vaybooks.bms.ui.components.sales.commission_profile_editor import (
+        render_commission_party_multiselect,
+    )
+
+    agent_service = services.get("commission_agents")
+    worker_service = services.get("workers")
+    commission_tags = render_commission_party_multiselect(
+        f"{SO_DIALOG}_tags",
+        agents=agent_service.list_all_agents() if agent_service else [],
+        sales_reps=(
+            worker_service.list_commission_enabled_workers()
+            if worker_service
+            else []
+        ),
+    )
+
     lines, gst_errors = render_sales_lines_entry_table(
         key_prefix=SO_DIALOG,
         products=products,
@@ -205,6 +221,8 @@ def sales_order_dialog(services: dict) -> None:
                 notes=notes,
                 status=SalesOrderStatus.CONFIRMED,
                 location_id=location_id,
+                commission_agent_ids=commission_tags.get("commission_agent_ids"),
+                sales_rep_ids=commission_tags.get("sales_rep_ids"),
             )
             _clear()
             st.rerun()

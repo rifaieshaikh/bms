@@ -98,7 +98,7 @@ def _login_caption(services: dict, linked_user_id: str) -> str:
     return f"Login: {user.username} ({status})"
 
 
-@st.dialog("Add Employee")
+@st.dialog("Add Employee", width="large")
 def _add_worker_dialog(worker_service, services: dict):
     name = st.text_input("Employee Name", key="add_worker_name")
     hourly_rate = st.number_input(
@@ -118,6 +118,25 @@ def _add_worker_dialog(worker_service, services: dict):
     )
     location_ids = render_party_location_multiselect("add_worker", services)
     st.divider()
+    commission_enabled = st.checkbox(
+        "Enable sales commission",
+        value=False,
+        key="add_worker_comm_enabled",
+    )
+    commission_profile = None
+    if commission_enabled:
+        from vaybooks.bms.domain.sales.commission_rules import (
+            validate_commission_profile,
+        )
+        from vaybooks.bms.ui.components.sales.commission_profile_editor import (
+            render_commission_profile_editor,
+        )
+
+        with st.expander("Commission settings", expanded=True):
+            commission_profile = render_commission_profile_editor(
+                "add_worker_profile"
+            )
+    st.divider()
     login = _login_fields(services, key_prefix="add_worker")
 
     if st.button("Create Employee", type="primary"):
@@ -125,6 +144,8 @@ def _add_worker_dialog(worker_service, services: dict):
             st.error("Employee name is required")
             return
         try:
+            if commission_enabled and commission_profile is not None:
+                commission_profile = validate_commission_profile(commission_profile)
             if login.get("create_login"):
                 _validate_location_assignment(
                     login.get("role_ids") or [],
@@ -135,6 +156,8 @@ def _add_worker_dialog(worker_service, services: dict):
                 refs_from_keys(selected),
                 default_hourly_rate=hourly_rate,
                 location_ids=location_ids,
+                commission_enabled=commission_enabled,
+                commission_profile=commission_profile,
                 **login,
             )
             if login.get("create_login"):
@@ -146,7 +169,7 @@ def _add_worker_dialog(worker_service, services: dict):
             st.error(str(exc))
 
 
-@st.dialog("Edit Employee")
+@st.dialog("Edit Employee", width="large")
 def _edit_worker_dialog(worker_service, services: dict, worker_id: str):
     worker = worker_service.get_worker(worker_id)
     if not worker:
@@ -182,6 +205,26 @@ def _edit_worker_dialog(worker_service, services: dict, worker_id: str):
     )
 
     st.divider()
+    commission_enabled = st.checkbox(
+        "Enable sales commission",
+        value=bool(worker.commission_enabled),
+        key="edit_worker_comm_enabled",
+    )
+    commission_profile = None
+    if commission_enabled:
+        from vaybooks.bms.domain.sales.commission_rules import (
+            validate_commission_profile,
+        )
+        from vaybooks.bms.ui.components.sales.commission_profile_editor import (
+            render_commission_profile_editor,
+        )
+
+        with st.expander("Commission settings", expanded=True):
+            commission_profile = render_commission_profile_editor(
+                "edit_worker_profile", worker.commission_profile
+            )
+
+    st.divider()
     st.caption(_login_caption(services, worker.linked_user_id or ""))
     login = {"create_login": False}
     if not worker.linked_user_id:
@@ -197,6 +240,8 @@ def _edit_worker_dialog(worker_service, services: dict, worker_id: str):
             st.error("Employee name is required")
             return
         try:
+            if commission_enabled and commission_profile is not None:
+                commission_profile = validate_commission_profile(commission_profile)
             if login.get("create_login"):
                 _validate_location_assignment(
                     login.get("role_ids") or [],
@@ -209,6 +254,8 @@ def _edit_worker_dialog(worker_service, services: dict, worker_id: str):
                 is_active,
                 default_hourly_rate=hourly_rate,
                 location_ids=location_ids,
+                commission_enabled=commission_enabled,
+                commission_profile=commission_profile,
                 **login,
             )
             st.success("Employee updated")

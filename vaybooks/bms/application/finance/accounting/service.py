@@ -65,6 +65,7 @@ class AccountingAppService:
         self._counter_repo = counter_repo
         self._crm_event_sink = crm_event_sink
         self._business_service = business_service
+        self._commission_service = None
         self._domain = AccountingDomainService(account_repo, voucher_repo)
 
     def set_crm_event_sink(self, sink) -> None:
@@ -74,6 +75,10 @@ class AccountingAppService:
     def set_business_service(self, business_service) -> None:
         """Attach business settings after bootstrap (FY start month, etc.)."""
         self._business_service = business_service
+
+    def set_commission_service(self, commission_service) -> None:
+        """Attach rule-based commission engine after bootstrap."""
+        self._commission_service = commission_service
 
     def _fy_start_month(self) -> int:
         if not self._business_service:
@@ -714,6 +719,30 @@ class AccountingAppService:
             location_name=location_name,
             require_location=True,
         )
+        # Collection-basis commission accrual (rule engine).
+        commission_svc = getattr(self, "_commission_service", None)
+        if commission_svc:
+            try:
+                from vaybooks.bms.domain.finance.accounting.settlement import (
+                    allocation_rows_from_meta,
+                )
+
+                allocs = allocation_rows_from_meta(final_description)
+                if allocs:
+                    commission_svc.accrue_from_receipt_allocations(
+                        voucher,
+                        allocs,
+                        get_invoice=self.get_voucher,
+                        location_id=location_id,
+                        location_name=location_name,
+                    )
+            except Exception:
+                import logging
+
+                logging.getLogger(__name__).exception(
+                    "Collection commission accrual failed for receipt %s",
+                    voucher.id,
+                )
         self._emit_crm_event(
             "payment_received",
             source_module="finance",
@@ -930,12 +959,22 @@ class AccountingAppService:
         amount: float,
         description: str,
         voucher_date: Optional[date] = None,
+        *,
+        include_commission: bool = False,
+        commission_amount: float = 0.0,
     ) -> Voucher:
         salary = self._account_repo.find_by_id(salary_account_id)
         paying = self._account_repo.find_by_id(paying_account_id)
         expense = self.get_salary_expense_account()
         if not expense:
             raise ValueError("Salary Expense account not found")
+        commission_amount = round(float(commission_amount or 0), 2)
+        if include_commission and commission_amount > 0:
+            amount = round(float(amount or 0) + commission_amount, 2)
+            description = (
+                f"{description or 'Salary payment'} "
+                f"(incl. commission ₹{commission_amount:,.2f})"
+            ).strip()
         voucher_number = self._counter_repo.next("voucher_number")
         v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
 
@@ -951,7 +990,27 @@ class AccountingAppService:
             paying_account_name=paying.account_name,
             amount=amount,
         )
-        return self._save_voucher(voucher)
+        voucher = self._save_voucher(voucher)
+        if (
+            include_commission
+            and commission_amount > 0
+            and self._commission_service
+            and getattr(salary, "linked_worker_id", None)
+        ):
+            unpaid = self._commission_service.list_unpaid_for_party(
+                "sales_rep", salary.linked_worker_id
+            )
+            # Mark oldest accruals paid up to commission_amount (FIFO).
+            remaining = commission_amount
+            to_mark = []
+            for entry in unpaid:
+                if remaining <= 0.009:
+                    break
+                to_mark.append(entry.id)
+                remaining = round(remaining - float(entry.amount), 2)
+            if to_mark:
+                self._commission_service.mark_paid(to_mark, voucher.id)
+        return voucher
 
     def update_salary_payment(
         self,
@@ -1014,7 +1073,27 @@ class AccountingAppService:
             amount=amount,
             reference_invoice_id=reference_invoice_id,
         )
-        return self._save_voucher(voucher)
+        voucher = self._save_voucher(voucher)
+        if self._commission_service and agent.linked_agent_id:
+            unpaid = self._commission_service.list_unpaid_for_party(
+                "agent", agent.linked_agent_id
+            )
+            if reference_invoice_id:
+                unpaid = [
+                    e
+                    for e in unpaid
+                    if e.source_invoice_id == reference_invoice_id
+                ]
+            remaining = round(float(amount or 0), 2)
+            to_mark = []
+            for entry in unpaid:
+                if remaining <= 0.009:
+                    break
+                to_mark.append(entry.id)
+                remaining = round(remaining - float(entry.amount), 2)
+            if to_mark:
+                self._commission_service.mark_paid(to_mark, voucher.id)
+        return voucher
 
     def update_commission_payment(
         self,
@@ -1056,6 +1135,9 @@ class AccountingAppService:
     def get_agent_account(self, agent_id: str) -> Optional[Account]:
         return self._account_repo.find_agent_account(agent_id)
 
+    def get_worker_account(self, worker_id: str) -> Optional[Account]:
+        return self._account_repo.find_worker_account(worker_id)
+
     def list_vendor_payments(self, vendor_account_id: str) -> List[Voucher]:
         return [
             v
@@ -1078,6 +1160,9 @@ class AccountingAppService:
 
     def ensure_delivery_expense_account(self):
         return self._domain.ensure_delivery_expense_account()
+
+    def ensure_commission_expense_account(self):
+        return self._domain.ensure_commission_expense_account()
 
     def get_delivery_partner_account(self, partner_id: str):
         return self._domain.get_delivery_partner_account(partner_id)

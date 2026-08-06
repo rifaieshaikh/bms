@@ -72,6 +72,8 @@ class SalesOrder:
     supply_type: str = ""
     location_id: str = ""
     location_name: str = ""
+    commission_agent_ids: List[str] = field(default_factory=list)
+    sales_rep_ids: List[str] = field(default_factory=list)
     document_content: DocumentContentSnapshot = field(
         default_factory=DocumentContentSnapshot
     )

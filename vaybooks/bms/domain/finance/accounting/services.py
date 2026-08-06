@@ -155,6 +155,17 @@ class AccountingDomainService:
         )
         return self._account_repo.save(account)
 
+    def ensure_commission_expense_account(self) -> Account:
+        for name in ("Commission Expense", "Sales Commission", "Commission"):
+            existing = self._account_repo.find_by_name(name)
+            if existing:
+                return existing
+        account = Account(
+            account_name="Commission Expense",
+            account_type=AccountType.EXPENSE,
+        )
+        return self._account_repo.save(account)
+
     def create_agent_account(
         self,
         agent_id: str,

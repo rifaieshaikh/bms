@@ -47,6 +47,24 @@ class WorkerAppService:
     def get_worker(self, worker_id: str) -> Optional[Worker]:
         return self._repo.find_by_id(worker_id)
 
+    def list_commission_enabled_workers(
+        self,
+        active_only: bool = True,
+        *,
+        location_filter: dict | None = None,
+    ) -> List[Worker]:
+        if hasattr(self._repo, "list_commission_enabled"):
+            return self._repo.list_commission_enabled(
+                active_only=active_only, location_filter=location_filter
+            )
+        return [
+            w
+            for w in self.list_workers(
+                active_only=active_only, location_filter=location_filter
+            )
+            if getattr(w, "commission_enabled", False)
+        ]
+
     def create_worker(
         self,
         worker_name: str,
@@ -58,6 +76,8 @@ class WorkerAppService:
         password: str = "",
         role_ids: Optional[List[str]] = None,
         location_ids: Optional[List[str]] = None,
+        commission_enabled: bool = False,
+        commission_profile=None,
     ) -> Worker:
         name = (worker_name or "").strip()
         if not name:
@@ -80,6 +100,8 @@ class WorkerAppService:
             default_hourly_rate=float(default_hourly_rate or 0.0),
             linked_user_id=linked_user_id,
             location_ids=party_location_ids,
+            commission_enabled=bool(commission_enabled),
+            commission_profile=commission_profile,
         )
         saved = self._repo.save(worker)
         account_name = WorkerDomainService.build_salary_account_name(saved)
@@ -99,6 +121,8 @@ class WorkerAppService:
         password: str = "",
         role_ids: Optional[List[str]] = None,
         location_ids: Optional[List[str]] = None,
+        commission_enabled: bool | None = None,
+        commission_profile=None,
     ) -> Worker:
         worker = self._repo.find_by_id(worker_id)
         if not worker:
@@ -134,6 +158,8 @@ class WorkerAppService:
             default_hourly_rate=rate,
             linked_user_id=linked_user_id,
             location_ids=party_location_ids,
+            commission_enabled=commission_enabled,
+            commission_profile=commission_profile,
         )
         saved = self._repo.save(worker)
         self._accounting_domain.sync_worker_salary_account(

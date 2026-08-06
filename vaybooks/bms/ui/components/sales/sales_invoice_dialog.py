@@ -351,83 +351,39 @@ def sales_record_dialog(services: dict) -> None:
     elif balance > 0.01:
         st.caption(f"Balance due after this payment: ₹{balance:,.2f}")
 
-    # --- Commission agent ---
-    agent_service = services.get("commission_agents")
-    agents = agent_service.list_all_agents() if agent_service else []
-    commission_payload = None
-    taxable_for_commission = float(
-        (tax_summary or {}).get("taxable") or taxable_sub or max(gross - total_discount, 0)
+    # --- Commission parties (agents + sales reps) ---
+    from vaybooks.bms.ui.components.sales.commission_profile_editor import (
+        render_commission_party_multiselect,
     )
-    with st.expander("Commission agent", expanded=False):
-        if not agents:
-            st.caption("No commission agents yet. Add under Parties → Commission Agents.")
-        else:
-            agent_opts = {"— None —": ""}
-            agent_opts.update({a.agent_name: a.id for a in agents})
-            agent_by_id = {a.id: a for a in agents}
-            agent_label = st.selectbox(
-                "Agent",
-                list(agent_opts.keys()),
-                key=f"{SALES_RECORD_DIALOG}_agent",
+
+    agent_service = services.get("commission_agents")
+    worker_service = services.get("workers")
+    agents = agent_service.list_all_agents() if agent_service else []
+    sales_reps = (
+        worker_service.list_commission_enabled_workers()
+        if worker_service
+        else []
+    )
+    commission_tags = render_commission_party_multiselect(
+        f"{SALES_RECORD_DIALOG}_tags",
+        agents=agents,
+        sales_reps=sales_reps,
+    )
+    if commission_tags.get("commission_agent_ids") or commission_tags.get(
+        "sales_rep_ids"
+    ):
+        preview_bits = []
+        if commission_tags.get("commission_agent_ids"):
+            preview_bits.append(
+                f"{len(commission_tags['commission_agent_ids'])} agent(s)"
             )
-            agent_id = agent_opts[agent_label]
-            if agent_id:
-                agent = agent_by_id[agent_id]
-                type_opts = ["percentage", "flat"]
-                default_type = agent.default_commission_type or "percentage"
-                type_idx = (
-                    type_opts.index(default_type) if default_type in type_opts else 0
-                )
-                c_type = st.selectbox(
-                    "Commission type",
-                    type_opts,
-                    index=type_idx,
-                    key=f"{SALES_RECORD_DIALOG}_comm_type",
-                    format_func=lambda v: "Percentage" if v == "percentage" else "Flat",
-                )
-                default_rate = float(agent.default_commission_rate or 0)
-                if c_type == "percentage":
-                    c_rate = st.number_input(
-                        "Commission %",
-                        min_value=0.0,
-                        max_value=100.0,
-                        value=default_rate if default_type == "percentage" else 0.0,
-                        key=f"{SALES_RECORD_DIALOG}_comm_rate",
-                    )
-                    c_amount = round(taxable_for_commission * float(c_rate) / 100.0, 2)
-                    st.caption(
-                        f"On taxable ₹{taxable_for_commission:,.2f} → "
-                        f"commission ₹{c_amount:,.2f}"
-                    )
-                else:
-                    c_rate = st.number_input(
-                        "Commission amount (flat)",
-                        min_value=0.0,
-                        value=default_rate if default_type == "flat" else 0.0,
-                        key=f"{SALES_RECORD_DIALOG}_comm_flat",
-                    )
-                    c_amount = round(float(c_rate), 2)
-                c_paid = st.checkbox(
-                    "Pay commission now",
-                    value=False,
-                    key=f"{SALES_RECORD_DIALOG}_comm_paid",
-                )
-                pay_account_id = ""
-                if c_paid:
-                    pay_account_id = store_opts[store_name]
-                    st.caption(
-                        f"Will pay from **{store_name}** with this invoice."
-                    )
-                if c_amount > 0:
-                    commission_payload = {
-                        "agent_id": agent_id,
-                        "agent_name": agent.agent_name,
-                        "commission_type": c_type,
-                        "commission_rate": float(c_rate),
-                        "commission_amount": c_amount,
-                        "commission_paid": bool(c_paid),
-                        "pay_account_id": pay_account_id,
-                    }
+        if commission_tags.get("sales_rep_ids"):
+            preview_bits.append(
+                f"{len(commission_tags['sales_rep_ids'])} sales rep(s)"
+            )
+        st.caption(
+            "Commission rules will accrue for: " + ", ".join(preview_bits)
+        )
 
     with st.container(border=True):
         st.markdown("**Summary**")
@@ -454,27 +410,12 @@ def sales_record_dialog(services: dict) -> None:
             m[-1].metric("Net due", f"₹{net_due:,.0f}")
             if total_discount > 0:
                 st.caption(f"Discount (line + invoice): ₹{total_discount:,.0f}")
-            if commission_payload:
-                st.caption(
-                    f"Commission to {commission_payload['agent_name']}: "
-                    f"₹{commission_payload['commission_amount']:,.2f}"
-                    + (
-                        " (paid with invoice)"
-                        if commission_payload["commission_paid"]
-                        else " (payable)"
-                    )
-                )
         else:
             m = st.columns(4)
             m[0].metric("Subtotal", f"₹{gross:,.0f}")
             m[1].metric("Total discount", f"₹{total_discount:,.0f}")
             m[2].metric("Net due", f"₹{net_due:,.0f}")
             m[3].metric("Customer balance", f"₹{balance:,.0f}")
-            if commission_payload:
-                st.caption(
-                    f"Commission to {commission_payload['agent_name']}: "
-                    f"₹{commission_payload['commission_amount']:,.2f}"
-                )
 
     if total_discount > 0 and not discount_account and not show_gst:
         st.warning('No "Discount Allowed" account found. Create one to post discounts.')
@@ -554,7 +495,7 @@ def sales_record_dialog(services: dict) -> None:
                     invoice_discount=invoice_discount,
                     credit_applied=float(credit_applied or 0),
                     advance_applied=float(advance_applied or 0),
-                    commission=commission_payload,
+                    commission_tags=commission_tags,
                 )
             else:
                 from vaybooks.bms.ui.components.sales.sales_invoice_form import serialize_line_items

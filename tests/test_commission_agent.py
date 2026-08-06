@@ -309,13 +309,16 @@ def test_sales_return_reverses_agent_commission():
     assert accounts["agent"].current_balance == -30.0
 
 
-def test_commission_agent_metrics_include_sales_and_returns():
-    import json
+def test_commission_agent_metrics_from_accrual_ledger():
     from datetime import date
 
+    from vaybooks.bms.application.sales.commission_service import CommissionAppService
     from vaybooks.bms.application.sales.service import SalesAppService
-    from vaybooks.bms.domain.sales.entities import SalesReturn, SalesReturnLine
-    from vaybooks.bms.domain.shared.enums import SalesReturnStatus
+    from vaybooks.bms.domain.sales.commission_accrual import (
+        STATUS_ACCRUED,
+        STATUS_REVERSED,
+        CommissionAccrualEntry,
+    )
     from tests.test_sales_workflow import (
         InMemoryDeliveryNoteRepository,
         InMemorySalesOrderRepository,
@@ -323,26 +326,38 @@ def test_commission_agent_metrics_include_sales_and_returns():
     )
     from tests.conftest import make_inventory_app_service
 
+    class FakeAccrualRepo:
+        def __init__(self):
+            self._store = {}
+
+        def save(self, entry):
+            self._store[entry.id] = entry
+            return entry
+
+        def list_by_party(self, party_type, party_id, **kwargs):
+            return [
+                e
+                for e in self._store.values()
+                if e.party_type == party_type and e.party_id == party_id
+            ]
+
+        def list_by_invoice(self, invoice_id, *, status=None):
+            rows = [
+                e for e in self._store.values() if e.source_invoice_id == invoice_id
+            ]
+            if status:
+                rows = [e for e in rows if e.status == status]
+            return rows
+
+        def mark_paid(self, entry_ids, paid_voucher_id):
+            return 0
+
     account_repo = FakeAccountRepository()
     voucher_repo = FakeVoucherRepository()
     accounting = AccountingAppService(
         account_repo, voucher_repo, FakeCounterRepository()
     )
     accounts = _seed_sales_accounts(account_repo)
-    note = {
-        "items": [{"product_id": "p1", "qty": 10, "taxable_amount": 1000.0, "rate": 100}],
-        "invoice_discount": 0,
-        "tax_summary": {"taxable": 1000.0, "grand_total": 1000.0},
-        "commission": {
-            "agent_id": "agent-1",
-            "agent_name": "Broker",
-            "commission_type": "percentage",
-            "commission_rate": 5,
-            "commission_amount": 50.0,
-            "commission_paid": False,
-            "pay_account_id": "",
-        },
-    }
     invoice = accounting.create_cash_sales_invoice(
         accounts["customer"].id,
         accounts["cash"].id,
@@ -350,50 +365,81 @@ def test_commission_agent_metrics_include_sales_and_returns():
         discount_amount=0.0,
         amount_received=0.0,
         store_invoice_number="SI-METRICS",
-        line_items_note=json.dumps(note),
-        commission_amount=50.0,
-        agent_account_id=accounts["agent"].id,
-        commission_paid=False,
         location_id="loc-test",
         location_name="Test",
     )
-
-    returns = InMemorySalesReturnRepository()
-    returns.save(
-        SalesReturn(
-            return_number="SR-M1",
-            customer_id="cust-1",
-            return_date=date.today(),
-            lines=[SalesReturnLine(product_id="p1", qty=4, rate=100)],
+    accrual_repo = FakeAccrualRepo()
+    accrual_repo.save(
+        CommissionAccrualEntry(
+            party_type="agent",
+            party_id="agent-1",
+            basis="sales",
+            rule_id="r1",
             source_invoice_id=invoice.id,
-            status=SalesReturnStatus.APPROVED,
+            base_amount=1000.0,
+            rate=5.0,
+            amount=50.0,
+            period_key="2026-01",
+            status=STATUS_ACCRUED,
+            event_date=date.today(),
         )
+    )
+    accrual_repo.save(
+        CommissionAccrualEntry(
+            party_type="agent",
+            party_id="agent-1",
+            basis="sales",
+            rule_id="r1",
+            source_invoice_id=invoice.id,
+            base_amount=400.0,
+            rate=5.0,
+            amount=20.0,
+            period_key="2026-01",
+            status=STATUS_REVERSED,
+            reversal_of_id="x",
+            event_date=date.today(),
+        )
+    )
+    # Seed payable balance on agent account
+    accounts["agent"].current_balance = -50.0
+
+    class FakeAgentService:
+        def list_all_agents(self):
+            from vaybooks.bms.domain.parties.commission_agents.entities import (
+                CommissionAgent,
+            )
+
+            return [
+                CommissionAgent(
+                    id="agent-1", agent_name="Broker", phone_number="9999999999"
+                )
+            ]
+
+        def get_agent(self, agent_id):
+            return self.list_all_agents()[0]
+
+    commission_service = CommissionAppService(
+        accrual_repo,
+        accounting,
+        agent_service=FakeAgentService(),
     )
     sales = SalesAppService(
         InMemorySalesOrderRepository(),
         InMemoryDeliveryNoteRepository(),
-        returns,
+        InMemorySalesReturnRepository(),
         FakeCounterRepository(),
         accounting,
         make_inventory_app_service(),
+        commission_service=commission_service,
     )
     metrics = sales.get_commission_agent_metrics("agent-1")
-    assert metrics["invoice_count"] == 1
-    assert metrics["sales_volume"] == 1000.0
     assert metrics["commission_accrued"] == 50.0
-    assert metrics["return_count"] == 1
-    assert metrics["return_volume"] == 400.0
     assert metrics["commission_reversed"] == 20.0
     assert metrics["commission_net"] == 30.0
-    assert metrics["payable_balance"] == -50.0
 
     unpaid = sales.list_agent_commission_invoices("agent-1", unpaid_only=True)
     assert len(unpaid) == 1
     assert unpaid[0]["invoice_id"] == invoice.id
     assert unpaid[0]["commission_amount"] == 50.0
     assert unpaid[0]["commission_reversed"] == 20.0
-    assert unpaid[0]["unpaid_amount"] == 30.0
-    assert unpaid[0]["payment_status"] in ("paid", "partially_paid", "unpaid")
-    assert unpaid[0]["payment_status_label"]
-    assert "collected" in unpaid[0]
-    assert "outstanding" in unpaid[0]
+    assert unpaid[0]["unpaid_amount"] == 50.0

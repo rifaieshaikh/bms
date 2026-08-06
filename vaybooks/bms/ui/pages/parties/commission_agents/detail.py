@@ -136,20 +136,11 @@ def _info_card(agent, account) -> None:
                 f"**Ledger:** {account.account_name if account else '—'}"
             )
             row2 = st.columns(3)
-            default_comm = (
-                f"{agent.default_commission_rate:g}%"
-                if agent.default_commission_type == "percentage"
-                else _money(agent.default_commission_rate)
-            )
-            row2[0].write(f"**Default commission:** {default_comm}")
-            row2[1].write(
-                "**Type:** "
-                + (
-                    "Percentage"
-                    if agent.default_commission_type == "percentage"
-                    else "Flat"
-                )
-            )
+            profile = agent.commission_profile
+            sales_n = len(getattr(profile, "sales_rules", None) or [])
+            coll_n = len(getattr(profile, "collection_rules", None) or [])
+            row2[0].write(f"**Sales rules:** {sales_n}")
+            row2[1].write(f"**Collection rules:** {coll_n}")
             row2[2].write(f"**Email:** {agent.email or '—'}")
             if agent.formatted_address:
                 st.caption(f"Address: {agent.formatted_address}")

@@ -9,6 +9,11 @@ from vaybooks.bms.domain.parties.workers.entities import (
     Worker,
     normalize_activity_refs,
 )
+from vaybooks.bms.domain.sales.commission_rules import (
+    empty_commission_profile,
+    profile_from_dict,
+    profile_to_dict,
+)
 
 
 class MongoWorkerRepository:
@@ -16,6 +21,11 @@ class MongoWorkerRepository:
         self._collection = db.workers
 
     def _to_doc(self, worker: Worker) -> dict:
+        profile = None
+        if worker.commission_enabled:
+            profile = profile_to_dict(
+                worker.commission_profile or empty_commission_profile()
+            )
         return {
             "_id": worker.id,
             "worker_name": worker.worker_name,
@@ -29,6 +39,8 @@ class MongoWorkerRepository:
             "default_hourly_rate": float(worker.default_hourly_rate or 0.0),
             "linked_user_id": worker.linked_user_id or "",
             "location_ids": list(worker.location_ids or []),
+            "commission_enabled": bool(worker.commission_enabled),
+            "commission_profile": profile,
             "created_at": worker.created_at,
             "updated_at": worker.updated_at,
         }
@@ -38,6 +50,15 @@ class MongoWorkerRepository:
         if refs is None:
             # Pre-migration document: plain ids are customization activities.
             refs = list(doc.get("activity_ids") or [])
+        enabled = bool(doc.get("commission_enabled"))
+        raw_profile = doc.get("commission_profile")
+        profile = None
+        if enabled:
+            profile = (
+                profile_from_dict(raw_profile)
+                if isinstance(raw_profile, dict)
+                else empty_commission_profile()
+            )
         return Worker(
             id=doc["_id"],
             worker_name=doc.get("worker_name", ""),
@@ -46,6 +67,8 @@ class MongoWorkerRepository:
             default_hourly_rate=float(doc.get("default_hourly_rate") or 0.0),
             linked_user_id=doc.get("linked_user_id", "") or "",
             location_ids=list(doc.get("location_ids") or []),
+            commission_enabled=enabled,
+            commission_profile=profile,
             created_at=doc.get("created_at", datetime.utcnow()),
             updated_at=doc.get("updated_at", datetime.utcnow()),
         )
@@ -64,6 +87,17 @@ class MongoWorkerRepository:
         location_filter: dict | None = None,
     ) -> List[Worker]:
         base = {"is_active": True} if active_only else {}
+        query = merge_mongo_filters(base, location_filter or {})
+        return [self._from_doc(d) for d in self._collection.find(query)]
+
+    def list_commission_enabled(
+        self,
+        active_only: bool = True,
+        location_filter: dict | None = None,
+    ) -> List[Worker]:
+        base = {"commission_enabled": True}
+        if active_only:
+            base["is_active"] = True
         query = merge_mongo_filters(base, location_filter or {})
         return [self._from_doc(d) for d in self._collection.find(query)]
 

@@ -172,6 +172,10 @@ from vaybooks.bms.infrastructure.repositories.sales.mongo_sales_repository impor
     MongoSalesOrderRepository,
     MongoSalesReturnRepository,
 )
+from vaybooks.bms.infrastructure.repositories.sales.mongo_commission_accrual_repository import (
+    MongoCommissionAccrualRepository,
+)
+from vaybooks.bms.application.sales.commission_service import CommissionAppService
 from vaybooks.bms.infrastructure.repositories.boutique.mongo_time_tracking_repository import (
     MongoTimeTrackingRepository,
 )
@@ -641,6 +645,18 @@ def get_services():
         business_service=business_service,
         price_history_repo=price_history_repo,
     )
+    worker_service = WorkerAppService(
+        worker_repo, account_repo, user_service=user_service
+    )
+    commission_accrual_repo = MongoCommissionAccrualRepository(db)
+    commission_service = CommissionAppService(
+        commission_accrual_repo,
+        accounting_service,
+        agent_service=commission_agent_service,
+        worker_service=worker_service,
+        inventory=inventory_service,
+    )
+    accounting_service.set_commission_service(commission_service)
     sales_service = SalesAppService(
         so_repo,
         dn_repo,
@@ -654,6 +670,7 @@ def get_services():
         quotation_repo=quotation_repo,
         customer_price_repo=customer_price_repo,
         crm_event_sink=crm_auto_activity_service,
+        commission_service=commission_service,
     )
     crm_enquiry_service.set_sales_service(sales_service)
     crm_dashboard_service = CrmDashboardAppService(
@@ -903,7 +920,8 @@ def get_services():
         "activities": boutique_activity_service,
         "store_activities": store_activity_service,
         "employee_activity_options": employee_activity_options,
-        "workers": WorkerAppService(worker_repo, account_repo, user_service=user_service),
+        "workers": worker_service,
+        "commission": commission_service,
         "time_tracking": TimeTrackingAppService(time_repo, order_repo),
         "store_time_tracking": StoreTimeTrackingAppService(
             store_time_repo, store_activity_repo, worker_repo

@@ -69,23 +69,15 @@ def render_commission_agent_form(
         registration_type_enum=PartyRegistrationType,
     )
 
-    col_type, col_rate = st.columns(2)
-    type_opts = ["percentage", "flat"]
-    default_type = (agent.default_commission_type if agent else "percentage") or "percentage"
-    type_idx = type_opts.index(default_type) if default_type in type_opts else 0
-    commission_type = col_type.selectbox(
-        "Default commission type",
-        type_opts,
-        index=type_idx,
-        key=f"{key_prefix}_comm_type",
-        format_func=lambda v: "Percentage" if v == "percentage" else "Flat",
+    from vaybooks.bms.ui.components.sales.commission_profile_editor import (
+        render_commission_profile_editor,
     )
-    commission_rate = col_rate.number_input(
-        "Default rate / amount",
-        min_value=0.0,
-        value=float(agent.default_commission_rate if agent else 0.0),
-        key=f"{key_prefix}_comm_rate",
-    )
+
+    with st.expander("Commission settings", expanded=True):
+        commission_profile = render_commission_profile_editor(
+            f"{key_prefix}_profile",
+            agent.commission_profile if agent else None,
+        )
 
     with st.expander("Banking", expanded=_agent_has_banking(agent)):
         col_holder, col_bank = st.columns(2)
@@ -152,8 +144,7 @@ def render_commission_agent_form(
         bank_ifsc=bank_ifsc,
         bank_name=bank_name,
         notes=notes,
-        default_commission_type=commission_type,
-        default_commission_rate=commission_rate,
+        commission_profile=commission_profile,
         segment_ids=list(agent.segment_ids or []) if agent else [],
         source_customer_id=agent.source_customer_id if agent else "",
         location_ids=location_ids,

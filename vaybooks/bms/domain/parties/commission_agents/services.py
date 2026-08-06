@@ -10,6 +10,10 @@ from vaybooks.bms.domain.parties.commission_agents.repository import (
 from vaybooks.bms.domain.parties.commission_agents.value_objects import (
     CommissionAgentAccountName,
 )
+from vaybooks.bms.domain.sales.commission_rules import (
+    empty_commission_profile,
+    validate_commission_profile,
+)
 from vaybooks.bms.domain.shared.exceptions import (
     DuplicateCommissionAgentError,
     ValidationError,
@@ -19,8 +23,6 @@ from vaybooks.bms.domain.shared.party_validation import (
     normalize_banking_fields,
     normalize_party_fields,
 )
-
-_COMMISSION_TYPES = {"percentage", "flat"}
 
 
 class CommissionAgentDomainService:
@@ -70,18 +72,9 @@ class CommissionAgentDomainService:
             bank_ifsc=agent_input.bank_ifsc,
             bank_name=agent_input.bank_name,
         )
-        commission_type = (
-            agent_input.default_commission_type or "percentage"
-        ).strip().lower()
-        if commission_type not in _COMMISSION_TYPES:
-            raise ValidationError(
-                "Default commission type must be percentage or flat"
-            )
-        rate = round(float(agent_input.default_commission_rate or 0), 2)
-        if rate < 0:
-            raise ValidationError("Default commission rate cannot be negative")
-        if commission_type == "percentage" and rate > 100:
-            raise ValidationError("Default commission percentage cannot exceed 100")
+        profile = validate_commission_profile(
+            agent_input.commission_profile or empty_commission_profile()
+        )
 
         return CommissionAgentInput(
             agent_name=party.name,
@@ -104,8 +97,7 @@ class CommissionAgentDomainService:
             bank_ifsc=banking.bank_ifsc,
             bank_name=banking.bank_name,
             notes=agent_input.notes,
-            default_commission_type=commission_type,
-            default_commission_rate=rate,
+            commission_profile=profile,
             segment_ids=list(agent_input.segment_ids or []),
             location_ids=require_location_ids(agent_input.location_ids),
             source_customer_id=(agent_input.source_customer_id or "").strip(),

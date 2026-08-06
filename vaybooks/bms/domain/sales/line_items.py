@@ -203,6 +203,7 @@ def serialize_sales_line_items(
     tax_summary: dict | None = None,
     document_content: dict | None = None,
     commission: dict | None = None,
+    commission_tags: dict | None = None,
 ) -> str:
     payload: dict = {
         "items": line_items,
@@ -212,8 +213,25 @@ def serialize_sales_line_items(
         payload["tax_summary"] = tax_summary
     if document_content:
         payload["document_content"] = document_content
-    if commission:
-        payload["commission"] = commission
+    tags = commission_tags
+    if not tags and commission:
+        # Legacy single-agent payload → tags only (amount computed by engine).
+        agent_id = str(commission.get("agent_id") or "").strip()
+        if agent_id:
+            tags = {"commission_agent_ids": [agent_id], "sales_rep_ids": []}
+    if tags:
+        payload["commission_tags"] = {
+            "commission_agent_ids": [
+                str(i).strip()
+                for i in (tags.get("commission_agent_ids") or [])
+                if str(i).strip()
+            ],
+            "sales_rep_ids": [
+                str(i).strip()
+                for i in (tags.get("sales_rep_ids") or [])
+                if str(i).strip()
+            ],
+        }
     return json.dumps(payload, ensure_ascii=False)
 
 
@@ -247,7 +265,14 @@ def parse_sales_document_content(description: str) -> dict:
         return {}
 
 
+def parse_commission_tags_from_note(description: str) -> dict:
+    from vaybooks.bms.application.sales.commission_service import parse_commission_tags
+
+    return parse_commission_tags(description)
+
+
 def parse_sales_commission_from_note(description: str) -> dict | None:
+    """Deprecated: old flat commission blob. Prefer parse_commission_tags_from_note."""
     from vaybooks.bms.domain.sales.commission import parse_sales_commission
 
     return parse_sales_commission(description)

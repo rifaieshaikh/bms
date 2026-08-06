@@ -86,6 +86,7 @@ class SalesAppService:
         quotation_repo: Optional[QuotationRepository] = None,
         customer_price_repo=None,
         crm_event_sink=None,
+        commission_service=None,
     ):
         self._so_repo = so_repo
         self._dn_repo = dn_repo
@@ -99,6 +100,7 @@ class SalesAppService:
         self._quotation_repo = quotation_repo
         self._customer_price_repo = customer_price_repo
         self._crm_event_sink = crm_event_sink
+        self._commission_service = commission_service
         self._domain = SalesDomainService(
             so_repo, dn_repo, return_repo, estimate_repo, quotation_repo
         )
@@ -146,9 +148,8 @@ class SalesAppService:
         invoice_discount: float = 0.0,
         document_content: Optional[DocumentContentSnapshot] = None,
         commission: Optional[dict] = None,
+        commission_tags: Optional[dict] = None,
     ) -> tuple[list[dict], str, float, Optional[dict]]:
-        from vaybooks.bms.domain.sales.commission import normalize_commission_payload
-
         customer = self._customer_from_account(customer_account_id)
         business = (
             self._business_service.get_profile()
@@ -168,9 +169,14 @@ class SalesAppService:
             )
         sales_lines = [line.to_line_dict() for line in resolved]
         summary = tax_summary_from_lines(resolved)
-        normalized_commission = normalize_commission_payload(
-            commission, taxable_amount=summary["taxable"]
-        )
+        tags = commission_tags
+        if not tags and commission:
+            agent_id = str(commission.get("agent_id") or "").strip()
+            if agent_id:
+                tags = {
+                    "commission_agent_ids": [agent_id],
+                    "sales_rep_ids": list(commission.get("sales_rep_ids") or []),
+                }
         note = serialize_sales_line_items(
             sales_lines,
             invoice_discount=invoice_discount,
@@ -178,9 +184,9 @@ class SalesAppService:
             document_content=(
                 dataclass_to_dict(document_content) if document_content else None
             ),
-            commission=normalized_commission,
+            commission_tags=tags,
         )
-        return sales_lines, note, summary["grand_total"], normalized_commission
+        return sales_lines, note, summary["grand_total"], tags
 
     @staticmethod
     def _customer_is_registered(customer: Optional[Customer]) -> bool:
@@ -742,6 +748,8 @@ class SalesAppService:
         bank_account_id: Optional[str] = None,
         terms_and_conditions: Optional[str] = None,
         location_id: str = "",
+        commission_agent_ids: Optional[list] = None,
+        sales_rep_ids: Optional[list] = None,
     ) -> SalesOrder:
         enriched, supply_type = self._enrich_so_lines(customer_id, lines)
         so_number = self._counter_repo.next("so_number")
@@ -759,6 +767,12 @@ class SalesAppService:
             location_id=location_id,
             location_name=location_name,
         )
+        order.commission_agent_ids = [
+            str(i).strip() for i in (commission_agent_ids or []) if str(i).strip()
+        ]
+        order.sales_rep_ids = [
+            str(i).strip() for i in (sales_rep_ids or []) if str(i).strip()
+        ]
         order.document_content = self.build_document_content(
             "sales_order",
             custom_values,
@@ -1461,23 +1475,33 @@ class SalesAppService:
         credit_applied: float = 0.0,
         advance_applied: float = 0.0,
         commission: Optional[dict] = None,
+        commission_tags: Optional[dict] = None,
         location_id: str = "",
     ) -> Voucher:
         sales_lines = None
         note = line_items_note
-        normalized_commission = None
+        tags = commission_tags
         if document_content is None:
             document_content = self.build_document_content("sales_invoice")
         credit_applied = round(max(float(credit_applied or 0), 0.0), 2)
         advance_applied = round(max(float(advance_applied or 0), 0.0), 2)
+        # Inherit tags from linked sales order when not provided.
+        if not tags and reference_so_id:
+            so = self._so_repo.find_by_id(reference_so_id)
+            if so:
+                tags = {
+                    "commission_agent_ids": list(so.commission_agent_ids or []),
+                    "sales_rep_ids": list(so.sales_rep_ids or []),
+                }
         if line_items:
-            sales_lines, note, grand_total, normalized_commission = (
+            sales_lines, note, grand_total, tags = (
                 self._prepare_sales_invoice(
                     customer_account_id,
                     line_items,
                     invoice_discount=invoice_discount,
                     document_content=document_content,
                     commission=commission,
+                    commission_tags=tags,
                 )
             )
             gross_amount = grand_total
@@ -1495,22 +1519,6 @@ class SalesAppService:
             voucher_date=voucher_date,
             assign_new=True,
         )
-        agent_account_id = None
-        commission_amount = 0.0
-        commission_paid = False
-        commission_pay_account_id = None
-        if normalized_commission:
-            agent = self._accounting.get_agent_account(
-                normalized_commission["agent_id"]
-            )
-            if not agent:
-                raise ValueError("Commission agent account not found")
-            agent_account_id = agent.id
-            commission_amount = float(normalized_commission["commission_amount"])
-            commission_paid = bool(normalized_commission.get("commission_paid"))
-            commission_pay_account_id = (
-                normalized_commission.get("pay_account_id") or None
-            )
         voucher = self._accounting.create_cash_sales_invoice(
             customer_account_id=customer_account_id,
             store_account_id=store_account_id,
@@ -1526,13 +1534,24 @@ class SalesAppService:
             financial_year=financial_year,
             credit_applied=credit_applied,
             advance_applied=advance_applied,
-            commission_amount=commission_amount,
-            agent_account_id=agent_account_id,
-            commission_paid=commission_paid,
-            commission_pay_account_id=commission_pay_account_id,
             location_id=location_id,
             location_name=self._location_name(location_id),
         )
+        if self._commission_service and tags:
+            try:
+                self._commission_service.accrue_from_invoice_voucher(
+                    voucher,
+                    sales_lines=sales_lines,
+                    commission_agent_ids=(tags or {}).get("commission_agent_ids"),
+                    sales_rep_ids=(tags or {}).get("sales_rep_ids"),
+                    amount_received=amount_received,
+                    location_id=location_id,
+                    location_name=self._location_name(location_id),
+                )
+            except Exception:
+                logger.exception(
+                    "Commission accrual failed for invoice %s", voucher.id
+                )
         if reference_dn_id:
             dn = self._dn_repo.find_by_id(reference_dn_id)
             if dn:
@@ -1580,6 +1599,7 @@ class SalesAppService:
         credit_applied: float = 0.0,
         advance_applied: float = 0.0,
         commission: Optional[dict] = None,
+        commission_tags: Optional[dict] = None,
     ) -> Voucher:
         line_discount_total = round(discount_amount - invoice_discount, 2)
         if line_discount_total < 0:
@@ -1598,6 +1618,7 @@ class SalesAppService:
             credit_applied=credit_applied,
             advance_applied=advance_applied,
             commission=commission,
+            commission_tags=commission_tags,
         )
 
     def convert_sales_order_to_invoice(
@@ -1932,77 +1953,49 @@ class SalesAppService:
             description = f"{description} — {detail.strip()}"
 
         commission_reversal = 0.0
-        agent_account_id = None
-        commission_meta = None
-        if source_invoice is not None:
-            from vaybooks.bms.domain.sales.commission import (
-                compute_commission_reversal_for_return,
-                parse_sales_commission,
-                serialize_return_commission_note,
+        if source_invoice is not None and self._commission_service:
+            items, _, tax_summary = parse_sales_line_items_note(
+                source_invoice.description or ""
             )
-
-            commission = parse_sales_commission(source_invoice.description or "")
-            if commission and float(commission.get("commission_amount") or 0) > 0:
-                items, _, tax_summary = parse_sales_line_items_note(
-                    source_invoice.description or ""
+            invoice_taxable = float(
+                (tax_summary or {}).get("taxable")
+                or sum(float(i.get("taxable_amount") or 0) for i in items)
+            )
+            returned_taxable = 0.0
+            invoiced = {
+                str(i.get("product_id") or ""): {
+                    "qty": float(i.get("qty") or 0),
+                    "taxable": float(i.get("taxable_amount") or 0),
+                }
+                for i in items
+                if str(i.get("product_id") or "").strip()
+            }
+            for line in sales_return.lines or []:
+                pid = str(getattr(line, "product_id", "") or "")
+                qty = float(getattr(line, "qty", 0) or 0)
+                if pid not in invoiced or invoiced[pid]["qty"] <= 0:
+                    continue
+                share = min(qty / invoiced[pid]["qty"], 1.0)
+                returned_taxable = round(
+                    returned_taxable + invoiced[pid]["taxable"] * share, 2
                 )
-                invoice_taxable = float(
-                    (tax_summary or {}).get("taxable")
-                    or sum(float(i.get("taxable_amount") or 0) for i in items)
+            ratio = 0.0
+            if returned_taxable > 0 and invoice_taxable > 0:
+                ratio = min(returned_taxable / invoice_taxable, 1.0)
+            elif return_amount > 0 and invoice_taxable > 0:
+                ratio = min(return_amount / invoice_taxable, 1.0)
+            if ratio > 0:
+                event_date = sales_return.return_date
+                if hasattr(event_date, "date"):
+                    event_date = event_date.date()
+                reversed_entries = self._commission_service.reverse_for_return(
+                    source_invoice_id=source_invoice.id,
+                    return_ratio=ratio,
+                    event_date=event_date,
                 )
-                invoice_gross = float(
-                    (tax_summary or {}).get("grand_total")
-                    or sum(
-                        float(getattr(line, "debit_amount", 0) or 0)
-                        for line in (source_invoice.lines or [])
-                        if float(getattr(line, "debit_amount", 0) or 0) > 0
-                        and (getattr(line, "description", "") or "")
-                        not in (
-                            "Discount allowed",
-                            "Cash/Bank received",
-                            "Advance applied",
-                            "Commission payable settled",
-                        )
-                    )
+                commission_reversal = round(
+                    sum(float(e.amount) for e in reversed_entries), 2
                 )
-                # Prefer customer debit as gross when tax_summary missing.
-                if invoice_gross <= 0:
-                    for line in source_invoice.lines or []:
-                        if line.account_id == customer_account.id and line.debit_amount > 0:
-                            invoice_gross = float(line.debit_amount)
-                            break
-                commission_reversal = compute_commission_reversal_for_return(
-                    commission_amount=float(commission.get("commission_amount") or 0),
-                    invoice_taxable=invoice_taxable,
-                    invoice_items=items,
-                    return_lines=sales_return.lines,
-                    return_amount=return_amount,
-                    invoice_gross=invoice_gross,
-                )
-                if commission_reversal > 0:
-                    agent_id = str(commission.get("agent_id") or "").strip()
-                    agent_account = (
-                        self._accounting.get_agent_account(agent_id)
-                        if agent_id
-                        else None
-                    )
-                    if not agent_account:
-                        raise ValueError(
-                            "Commission agent account not found for return reversal"
-                        )
-                    agent_account_id = agent_account.id
-                    commission_meta = {
-                        "agent_id": agent_id,
-                        "agent_name": str(commission.get("agent_name") or "").strip(),
-                        "commission_amount": commission_reversal,
-                        "commission_type": commission.get("commission_type"),
-                        "commission_rate": commission.get("commission_rate"),
-                        "source_invoice_id": sales_return.source_invoice_id or "",
-                        "reversed": True,
-                    }
-                    description = serialize_return_commission_note(
-                        description, commission_meta
-                    )
 
         voucher = self._accounting.create_sales_return_voucher(
             customer_account_id=customer_account.id,
@@ -2013,8 +2006,8 @@ class SalesAppService:
             voucher_date=sales_return.return_date,
             reference_dn_id=sales_return.source_dn_id,
             source_invoice_id=sales_return.source_invoice_id,
-            commission_reversal=commission_reversal,
-            agent_account_id=agent_account_id,
+            commission_reversal=0.0,
+            agent_account_id=None,
         )
         sales_return.voucher_id = voucher.id
         sales_return.status = SalesReturnStatus.REFUND_PROCESSED
@@ -2033,11 +2026,14 @@ class SalesAppService:
     def get_commission_agent_metrics(self, agent_id: str) -> dict:
         """Aggregate sales/return/commission KPIs for a commission agent."""
         agent_id = str(agent_id or "").strip()
+        empty = self._empty_commission_agent_metrics()
         if not agent_id:
-            return self._empty_commission_agent_metrics()
-        return self.list_commission_agent_metrics().get(
-            agent_id, self._empty_commission_agent_metrics()
-        )
+            return empty
+        if self._commission_service:
+            metrics = self._commission_service.metrics_for_party("agent", agent_id)
+            empty.update(metrics)
+            return empty
+        return self.list_commission_agent_metrics().get(agent_id, empty)
 
     @staticmethod
     def _empty_commission_agent_metrics() -> dict:
@@ -2054,368 +2050,90 @@ class SalesAppService:
             "commission_paid": 0.0,
             "commission_outstanding": 0.0,
             "commission_unpaid": 0.0,
-            "unpaid_invoice_count": 0,
             "payable_balance": 0.0,
-            "payment_count": 0,
         }
 
     def list_commission_agent_metrics(self) -> dict:
-        """Build commission KPIs for all agents in one voucher/return pass."""
-        from vaybooks.bms.domain.sales.commission import (
-            compute_commission_reversal_for_return,
-            parse_sales_commission,
-        )
-
-        by_agent: dict[str, dict] = {}
-        invoice_agent: dict[str, str] = {}
-        invoice_by_id: dict = {}
-
-        def bucket(agent_id: str) -> dict:
-            if agent_id not in by_agent:
-                by_agent[agent_id] = self._empty_commission_agent_metrics()
-            return by_agent[agent_id]
-
-        for voucher in self._accounting.list_vouchers_by_type(VoucherType.SALES_INVOICE):
-            commission = parse_sales_commission(voucher.description or "")
-            if not commission:
-                continue
-            agent_id = str(commission.get("agent_id") or "").strip()
-            if not agent_id:
-                continue
-            metrics = bucket(agent_id)
-            metrics["invoice_count"] += 1
-            invoice_agent[voucher.id] = agent_id
-            invoice_by_id[voucher.id] = voucher
-            items, _, tax_summary = parse_sales_line_items_note(
-                voucher.description or ""
+        """Build commission KPIs for all agents from the accrual ledger."""
+        if not self._commission_service or not self._commission_service._agent_service:
+            return {}
+        agents = []
+        svc = self._commission_service._agent_service
+        if hasattr(svc, "list_all_agents"):
+            agents = svc.list_all_agents()
+        elif hasattr(svc, "list_agents"):
+            agents = svc.list_agents()
+        by_agent = {}
+        for agent in agents:
+            metrics = self._empty_commission_agent_metrics()
+            metrics.update(
+                self._commission_service.metrics_for_party("agent", agent.id)
             )
-            taxable = float(
-                (tax_summary or {}).get("taxable")
-                or sum(float(i.get("taxable_amount") or 0) for i in items)
-            )
-            gross = float((tax_summary or {}).get("grand_total") or 0)
-            if gross <= 0:
-                first_line = (voucher.description or "").split("\n", 1)[0].strip()
-                for line in voucher.lines or []:
-                    desc = (line.description or "").strip()
-                    if line.debit_amount > 0 and (
-                        desc == first_line or desc.startswith("Store invoice")
-                    ):
-                        gross = float(line.debit_amount)
-                        break
-                if gross <= 0:
-                    gross = taxable
-            metrics["sales_volume"] = round(metrics["sales_volume"] + gross, 2)
-            metrics["taxable_volume"] = round(metrics["taxable_volume"] + taxable, 2)
-            amount = round(float(commission.get("commission_amount") or 0), 2)
-            metrics["commission_accrued"] = round(
-                metrics["commission_accrued"] + amount, 2
-            )
-            if commission.get("commission_paid"):
-                metrics["commission_paid"] = round(
-                    metrics["commission_paid"] + amount, 2
-                )
-
-        for sales_return in self._return_repo.list_all():
-            if sales_return.status == SalesReturnStatus.REJECTED:
-                continue
-            source_id = sales_return.source_invoice_id or ""
-            agent_id = invoice_agent.get(source_id)
-            if not agent_id:
-                continue
-            metrics = bucket(agent_id)
-            metrics["return_count"] += 1
-            metrics["return_volume"] = round(
-                metrics["return_volume"] + sales_return.total_amount, 2
-            )
-
-            reversed_amount = 0.0
-            if sales_return.voucher_id:
-                rv = self._accounting.get_voucher(sales_return.voucher_id)
-                if rv:
-                    note_comm = parse_sales_commission(rv.description or "")
-                    if note_comm and note_comm.get("reversed"):
-                        reversed_amount = round(
-                            float(note_comm.get("commission_amount") or 0), 2
-                        )
-                    else:
-                        for line in rv.lines or []:
-                            if (
-                                (line.description or "").strip()
-                                == "Commission reversed"
-                                and line.debit_amount > 0
-                            ):
-                                reversed_amount = round(float(line.debit_amount), 2)
-                                break
-            if reversed_amount <= 0:
-                source = invoice_by_id.get(source_id)
-                if source is not None:
-                    commission = parse_sales_commission(source.description or "") or {}
-                    items, _, tax_summary = parse_sales_line_items_note(
-                        source.description or ""
-                    )
-                    invoice_taxable = float(
-                        (tax_summary or {}).get("taxable")
-                        or sum(float(i.get("taxable_amount") or 0) for i in items)
-                    )
-                    invoice_gross = float(
-                        (tax_summary or {}).get("grand_total") or 0
-                    )
-                    reversed_amount = compute_commission_reversal_for_return(
-                        commission_amount=float(
-                            commission.get("commission_amount") or 0
-                        ),
-                        invoice_taxable=invoice_taxable,
-                        invoice_items=items,
-                        return_lines=sales_return.lines,
-                        return_amount=sales_return.total_amount,
-                        invoice_gross=invoice_gross,
-                    )
-            metrics["commission_reversed"] = round(
-                metrics["commission_reversed"] + reversed_amount, 2
-            )
-
-        agent_accounts = {}
-        for agent_id in list(by_agent.keys()):
-            account = self._accounting.get_agent_account(agent_id)
+            account = self._accounting.get_agent_account(agent.id)
             if account:
-                agent_accounts[account.id] = agent_id
-                by_agent[agent_id]["payable_balance"] = round(
-                    float(account.current_balance), 2
+                metrics["payable_balance"] = round(
+                    float(getattr(account, "current_balance", 0) or 0), 2
                 )
-
-        for voucher in self._accounting.list_vouchers_by_type(
-            VoucherType.COMMISSION_PAYMENT
-        ):
-            for line in voucher.lines or []:
-                agent_id = agent_accounts.get(line.account_id)
-                if not agent_id or line.debit_amount <= 0:
-                    continue
-                metrics = bucket(agent_id)
-                metrics["payment_count"] += 1
-                metrics["commission_paid"] = round(
-                    metrics["commission_paid"] + float(line.debit_amount), 2
-                )
-                break
-
-        for metrics in by_agent.values():
-            metrics["net_sales_volume"] = round(
-                metrics["sales_volume"] - metrics["return_volume"], 2
-            )
-            metrics["commission_net"] = round(
-                metrics["commission_accrued"] - metrics["commission_reversed"], 2
-            )
-            metrics["commission_outstanding"] = round(
-                max(metrics["commission_net"] - metrics["commission_paid"], 0.0), 2
-            )
-            metrics["commission_unpaid"] = metrics["commission_outstanding"]
-            metrics["unpaid_invoice_count"] = 0
+            by_agent[agent.id] = metrics
         return by_agent
 
     def list_agent_commission_invoices(
         self, agent_id: str, *, unpaid_only: bool = False
     ) -> list[dict]:
-        """List sales invoices with commission for an agent, including unpaid balance.
-
-        Unpaid per invoice = accrued − return clawback − paid-with-invoice −
-        settlements linked to that invoice. Unlinked commission payments are
-        applied FIFO (oldest unpaid invoice first).
-        """
+        """List commission accruals for an agent, grouped by invoice."""
         from vaybooks.bms.domain.finance.accounting.sales_parsing import (
             parse_store_invoice_number,
         )
-        from vaybooks.bms.domain.sales.commission import (
-            compute_commission_reversal_for_return,
-            parse_sales_commission,
-        )
 
         agent_id = str(agent_id or "").strip()
-        if not agent_id:
+        if not agent_id or not self._commission_service:
             return []
-
-        rows: list[dict] = []
-        invoices = []
-        for voucher in self._accounting.list_vouchers_by_type(VoucherType.SALES_INVOICE):
-            commission = parse_sales_commission(voucher.description or "")
-            if not commission or str(commission.get("agent_id") or "") != agent_id:
-                continue
-            invoices.append((voucher, commission))
-
-        invoices.sort(
-            key=lambda item: getattr(item[0], "voucher_date", None) or date.min
+        entries = self._commission_service._accrual_repo.list_by_party(
+            "agent", agent_id
         )
-
-        reversed_by_invoice: dict[str, float] = {}
-        invoice_ids = {v.id for v, _ in invoices}
-        invoice_map = {v.id: (v, c) for v, c in invoices}
-        for sales_return in self._return_repo.list_all():
-            if sales_return.status == SalesReturnStatus.REJECTED:
-                continue
-            source_id = sales_return.source_invoice_id or ""
-            if source_id not in invoice_ids:
-                continue
-            reversed_amount = 0.0
-            if sales_return.voucher_id:
-                rv = self._accounting.get_voucher(sales_return.voucher_id)
-                if rv:
-                    note_comm = parse_sales_commission(rv.description or "")
-                    if note_comm and note_comm.get("reversed"):
-                        reversed_amount = round(
-                            float(note_comm.get("commission_amount") or 0), 2
-                        )
-                    else:
-                        for line in rv.lines or []:
-                            if (
-                                (line.description or "").strip()
-                                == "Commission reversed"
-                                and line.debit_amount > 0
-                            ):
-                                reversed_amount = round(float(line.debit_amount), 2)
-                                break
-            if reversed_amount <= 0:
-                source, commission = invoice_map[source_id]
-                items, _, tax_summary = parse_sales_line_items_note(
-                    source.description or ""
-                )
-                invoice_taxable = float(
-                    (tax_summary or {}).get("taxable")
-                    or sum(float(i.get("taxable_amount") or 0) for i in items)
-                )
-                invoice_gross = float((tax_summary or {}).get("grand_total") or 0)
-                reversed_amount = compute_commission_reversal_for_return(
-                    commission_amount=float(commission.get("commission_amount") or 0),
-                    invoice_taxable=invoice_taxable,
-                    invoice_items=items,
-                    return_lines=sales_return.lines,
-                    return_amount=sales_return.total_amount,
-                    invoice_gross=invoice_gross,
-                )
-            reversed_by_invoice[source_id] = round(
-                reversed_by_invoice.get(source_id, 0.0) + reversed_amount, 2
-            )
-
-        agent_account = self._accounting.get_agent_account(agent_id)
-        paid_linked: dict[str, float] = {}
-        unlinked_payments = 0.0
-        if agent_account:
-            for payment in self._accounting.list_vouchers_by_type(
-                VoucherType.COMMISSION_PAYMENT
-            ):
-                paid_amt = next(
-                    (
-                        float(line.debit_amount)
-                        for line in (payment.lines or [])
-                        if line.account_id == agent_account.id and line.debit_amount > 0
-                    ),
-                    0.0,
-                )
-                if paid_amt <= 0:
-                    continue
-                ref = (getattr(payment, "reference_invoice_id", None) or "").strip()
-                if ref and ref in invoice_ids:
-                    paid_linked[ref] = round(paid_linked.get(ref, 0.0) + paid_amt, 2)
-                else:
-                    unlinked_payments = round(unlinked_payments + paid_amt, 2)
-
-        discount = self._accounting.get_discount_account()
-        discount_id = discount.id if discount else None
-        try:
-            settlement_map = self._accounting.invoice_settlement_map()
-        except Exception:
-            settlement_map = {}
-
-        for voucher, commission in invoices:
-            items, _, tax_summary = parse_sales_line_items_note(
-                voucher.description or ""
-            )
-            taxable = float(
-                (tax_summary or {}).get("taxable")
-                or sum(float(i.get("taxable_amount") or 0) for i in items)
-            )
-            sales_amount = float((tax_summary or {}).get("grand_total") or 0)
-            if sales_amount <= 0:
-                sales_amount = taxable
-            accrued = round(float(commission.get("commission_amount") or 0), 2)
-            reversed_amt = round(reversed_by_invoice.get(voucher.id, 0.0), 2)
-            paid_with_invoice = accrued if commission.get("commission_paid") else 0.0
-            settled_linked = round(paid_linked.get(voucher.id, 0.0), 2)
-            unpaid = round(
-                max(accrued - reversed_amt - paid_with_invoice - settled_linked, 0.0),
-                2,
-            )
-            sale_date = voucher.voucher_date
-            if hasattr(sale_date, "date") and callable(sale_date.date):
-                sale_date = sale_date.date()
-
-            try:
-                invoice_row = self._accounting.enrich_sales_invoice_row(
-                    voucher,
-                    discount_account_id=discount_id,
-                    settlement_map=settlement_map,
-                )
-            except Exception:
-                invoice_row = {}
-            payment_status = str(invoice_row.get("payment_status") or "unpaid")
-            payment_status_label = str(
-                invoice_row.get("payment_status_label") or "Unpaid"
-            )
-            collected = round(float(invoice_row.get("collected") or 0), 2)
-            outstanding = round(float(invoice_row.get("outstanding") or 0), 2)
-            net = round(float(invoice_row.get("net") or sales_amount or 0), 2)
-            if net > 0:
-                sales_amount = net
-
-            rows.append(
+        by_invoice: dict[str, dict] = {}
+        for entry in entries:
+            inv_id = entry.source_invoice_id
+            row = by_invoice.setdefault(
+                inv_id,
                 {
-                    "invoice_id": voucher.id,
-                    "voucher_number": voucher.voucher_number,
-                    "store_invoice_number": parse_store_invoice_number(
-                        voucher.description or ""
-                    )
-                    or voucher.voucher_number,
-                    "sale_date": sale_date,
-                    "sales_amount": round(sales_amount, 2),
-                    "taxable_amount": round(taxable, 2),
-                    "collected": collected,
-                    "outstanding": outstanding,
-                    "payment_status": payment_status,
-                    "payment_status_label": payment_status_label,
-                    "party_name": invoice_row.get("party_name") or "",
-                    "commission_amount": accrued,
-                    "commission_reversed": reversed_amt,
-                    "commission_paid_with_invoice": bool(
-                        commission.get("commission_paid")
-                    ),
-                    "commission_settled": round(
-                        paid_with_invoice + settled_linked, 2
-                    ),
-                    "unpaid_amount": unpaid,
-                    "commission_type": commission.get("commission_type") or "",
-                    "commission_rate": commission.get("commission_rate"),
-                }
+                    "invoice_id": inv_id,
+                    "invoice_number": "",
+                    "sale_date": entry.event_date,
+                    "commission_amount": 0.0,
+                    "commission_reversed": 0.0,
+                    "commission_settled": 0.0,
+                    "unpaid_amount": 0.0,
+                    "basis": entry.basis,
+                },
             )
-
-        # Apply unlinked settlements FIFO against remaining unpaid invoices.
-        remaining_pool = unlinked_payments
-        for row in rows:
-            if remaining_pool <= 0.01:
-                break
-            unpaid = float(row["unpaid_amount"] or 0)
-            if unpaid <= 0:
-                continue
-            applied = round(min(unpaid, remaining_pool), 2)
-            row["unpaid_amount"] = round(unpaid - applied, 2)
-            row["commission_settled"] = round(
-                float(row["commission_settled"] or 0) + applied, 2
-            )
-            remaining_pool = round(remaining_pool - applied, 2)
-
-        rows.sort(
-            key=lambda row: row.get("sale_date") or date.min,
-            reverse=True,
-        )
+            amt = float(entry.amount or 0)
+            if entry.reversal_of_id or entry.status == "reversed":
+                row["commission_reversed"] = round(
+                    row["commission_reversed"] + amt, 2
+                )
+            elif entry.status == "paid":
+                row["commission_amount"] = round(row["commission_amount"] + amt, 2)
+                row["commission_settled"] = round(row["commission_settled"] + amt, 2)
+            else:
+                row["commission_amount"] = round(row["commission_amount"] + amt, 2)
+                row["unpaid_amount"] = round(row["unpaid_amount"] + amt, 2)
+            if entry.event_date and (
+                not row["sale_date"] or entry.event_date < row["sale_date"]
+            ):
+                row["sale_date"] = entry.event_date
+        rows = []
+        for inv_id, row in by_invoice.items():
+            voucher = self._accounting.get_voucher(inv_id)
+            if voucher:
+                row["invoice_number"] = (
+                    parse_store_invoice_number(voucher.description or "")
+                    or voucher.voucher_number
+                )
+            rows.append(row)
+        rows.sort(key=lambda r: r.get("sale_date") or date.min, reverse=True)
         if unpaid_only:
-            rows = [row for row in rows if float(row.get("unpaid_amount") or 0) > 0.009]
+            rows = [r for r in rows if float(r.get("unpaid_amount") or 0) > 0.009]
         return rows
 
 
@@ -2715,8 +2433,9 @@ class SalesAppService:
         credit_applied: float = 0.0,
         advance_applied: float = 0.0,
         commission: Optional[dict] = None,
+        commission_tags: Optional[dict] = None,
     ) -> Voucher:
-        from vaybooks.bms.domain.sales.commission import parse_sales_commission
+        from vaybooks.bms.application.sales.commission_service import parse_commission_tags
 
         old = self._accounting.get_voucher(voucher_id)
         if not old or old.voucher_type != VoucherType.SALES_INVOICE:
@@ -2733,8 +2452,20 @@ class SalesAppService:
                 "Commission was settled by a separate payment; reverse that payment first"
             )
         old_items, _, _ = parse_sales_line_items_note(old.description)
-        if commission is None:
-            commission = parse_sales_commission(old.description or "")
+        tags = commission_tags
+        if tags is None:
+            tags = parse_commission_tags(old.description or "")
+            if commission:
+                agent_id = str(commission.get("agent_id") or "").strip()
+                if agent_id:
+                    tags = {
+                        "commission_agent_ids": [agent_id],
+                        "sales_rep_ids": list(
+                            commission.get("sales_rep_ids")
+                            or tags.get("sales_rep_ids")
+                            or []
+                        ),
+                    }
         if old.reference_dn_id:
             dn = self._dn_repo.find_by_id(old.reference_dn_id)
             expected = {
@@ -2756,13 +2487,14 @@ class SalesAppService:
             bank_account_id,
             terms_and_conditions,
         )
-        sales_lines, note, grand_total, normalized_commission = (
+        sales_lines, note, grand_total, tags = (
             self._prepare_sales_invoice(
                 customer_account_id,
                 line_items,
                 invoice_discount=invoice_discount,
                 document_content=content,
                 commission=commission,
+                commission_tags=tags,
             )
         )
         if old.reference_so_id:
@@ -2801,22 +2533,6 @@ class SalesAppService:
             existing_number=existing_number,
             assign_new=False,
         )
-        agent_account_id = None
-        commission_amount = 0.0
-        commission_paid = False
-        commission_pay_account_id = None
-        if normalized_commission:
-            agent = self._accounting.get_agent_account(
-                normalized_commission["agent_id"]
-            )
-            if not agent:
-                raise ValueError("Commission agent account not found")
-            agent_account_id = agent.id
-            commission_amount = float(normalized_commission["commission_amount"])
-            commission_paid = bool(normalized_commission.get("commission_paid"))
-            commission_pay_account_id = (
-                normalized_commission.get("pay_account_id") or None
-            )
         voucher = self._accounting.update_cash_sales_invoice(
             voucher_id=voucher_id,
             customer_account_id=customer_account_id,
@@ -2832,11 +2548,30 @@ class SalesAppService:
             financial_year=financial_year,
             credit_applied=round(max(float(credit_applied or 0), 0.0), 2),
             advance_applied=round(max(float(advance_applied or 0), 0.0), 2),
-            commission_amount=commission_amount,
-            agent_account_id=agent_account_id,
-            commission_paid=commission_paid,
-            commission_pay_account_id=commission_pay_account_id,
         )
+        if self._commission_service:
+            # Reverse prior accruals for this invoice, then re-accrue from tags.
+            try:
+                prior = self._commission_service._accrual_repo.list_by_invoice(
+                    voucher_id, status="accrued"
+                )
+                if prior:
+                    self._commission_service.reverse_for_return(
+                        source_invoice_id=voucher_id,
+                        return_ratio=1.0,
+                        event_date=voucher_date,
+                    )
+                self._commission_service.accrue_from_invoice_voucher(
+                    voucher,
+                    sales_lines=sales_lines,
+                    commission_agent_ids=(tags or {}).get("commission_agent_ids"),
+                    sales_rep_ids=(tags or {}).get("sales_rep_ids"),
+                    amount_received=round(max(float(amount_received or 0), 0.0), 2),
+                )
+            except Exception:
+                logger.exception(
+                    "Commission re-accrual failed for invoice %s", voucher_id
+                )
         if not old.reference_dn_id:
             self._inventory.reverse_movements_by_reference(voucher_id)
             self._inventory.apply_sales_movements(voucher_id, line_items, voucher_date)

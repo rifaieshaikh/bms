@@ -1,8 +1,13 @@
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Iterable, List
+from typing import Iterable, List, Optional
 from uuid import uuid4
 
+from vaybooks.bms.domain.sales.commission_rules import (
+    CommissionProfile,
+    empty_commission_profile,
+    validate_commission_profile,
+)
 from vaybooks.bms.domain.shared.date_utils import utc_now
 
 # Activity catalogs an employee assignment can point at.
@@ -64,12 +69,16 @@ class Worker:
     # Optional link to identity User for system login.
     linked_user_id: str = ""
     location_ids: List[str] = field(default_factory=list)
+    commission_enabled: bool = False
+    commission_profile: Optional[CommissionProfile] = None
     id: str = field(default_factory=lambda: uuid4().hex)
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
 
     def __post_init__(self) -> None:
         self.activity_refs = normalize_activity_refs(self.activity_refs)
+        if self.commission_enabled and self.commission_profile is None:
+            self.commission_profile = empty_commission_profile()
 
     @property
     def activity_ids(self) -> List[str]:
@@ -96,6 +105,8 @@ class Worker:
         default_hourly_rate: float = 0.0,
         linked_user_id: str | None = None,
         location_ids: Iterable[str] | None = None,
+        commission_enabled: bool | None = None,
+        commission_profile: CommissionProfile | None = None,
     ) -> None:
         self.worker_name = (worker_name or "").strip()
         self.activity_refs = normalize_activity_refs(activity_refs)
@@ -107,4 +118,12 @@ class Worker:
             self.location_ids = [
                 str(i).strip() for i in location_ids if str(i).strip()
             ]
+        if commission_enabled is not None:
+            self.commission_enabled = bool(commission_enabled)
+        if commission_profile is not None:
+            self.commission_profile = validate_commission_profile(commission_profile)
+        elif self.commission_enabled and self.commission_profile is None:
+            self.commission_profile = empty_commission_profile()
+        if not self.commission_enabled:
+            self.commission_profile = None
         self.updated_at = utc_now()

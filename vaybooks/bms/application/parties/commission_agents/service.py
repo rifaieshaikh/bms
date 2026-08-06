@@ -48,6 +48,9 @@ class CommissionAgentAppService:
             return None
         return self._agent_repo.find_by_id(str(agent_id))
 
+    def get_agent(self, agent_id: str) -> Optional[CommissionAgent]:
+        return self.get_agent_detail(agent_id)
+
     def update_agent(
         self, agent_id: str, agent_input: CommissionAgentInput
     ) -> CommissionAgent:
