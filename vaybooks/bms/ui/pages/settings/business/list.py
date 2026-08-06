@@ -6,6 +6,87 @@ from vaybooks.bms.domain.shared.enums import VendorRegistrationType
 from vaybooks.bms.domain.shared.india import INDIAN_STATES
 
 
+def _render_fy_year_end_actions(services: dict) -> None:
+    fy = services.get("fy_year_end")
+    if fy is None:
+        return
+    st.divider()
+    st.subheader("Run year-end migration")
+    last = fy.last_close()
+    if last:
+        st.caption(
+            f"Last close: {last.from_fy} → {last.to_fy} "
+            f"({last.mode}, {last.status})"
+        )
+    pending = fy.detect_pending_close()
+    current = fy.current_fy()
+    if pending:
+        st.info(
+            f"Current FY is **{current}**. Prior year **{pending['from_fy']}** "
+            "has not been closed yet (optional)."
+        )
+    else:
+        st.success(f"No pending FY close for current year **{current}**.")
+
+    mode_opts = ["balances_only", "full_pending"]
+    profile = services["business"].get_profile()
+    default_mode = (
+        getattr(profile, "fy_year_end_mode", None) or "balances_only"
+    ).strip().lower()
+    if default_mode not in mode_opts:
+        default_mode = "balances_only"
+    run_mode = st.selectbox(
+        "Migration mode for this run",
+        mode_opts,
+        index=mode_opts.index(default_mode),
+        key="fy_run_mode",
+        format_func=lambda m: (
+            "Balances only"
+            if m == "balances_only"
+            else "Parties + pending AR/AP (original dates)"
+        ),
+    )
+    col_p, col_r = st.columns(2)
+    if col_p.button("Preview", width="stretch"):
+        try:
+            preview = fy.preview(run_mode)
+            st.session_state["fy_preview"] = preview
+        except Exception as exc:
+            st.error(str(exc))
+    preview = st.session_state.get("fy_preview")
+    if preview:
+        st.write(
+            f"**{preview['from_fy']} → {preview['to_fy']}** · "
+            f"{preview['account_count']} accounts · "
+            f"AR open docs: {preview['receivable_count']} "
+            f"(₹{preview['receivable_total']:,.2f}) · "
+            f"AP parties: {preview['payable_count']} "
+            f"(₹{preview['payable_total']:,.2f})"
+        )
+        if preview.get("already_closed"):
+            st.warning("This FY pair is already closed.")
+    confirm = st.checkbox(
+        "I understand this soft-locks the prior FY and snapshots opening balances",
+        key="fy_confirm",
+    )
+    if col_r.button(
+        "Run year-end migration",
+        type="primary",
+        width="stretch",
+        disabled=not confirm,
+    ):
+        try:
+            record = fy.migrate(run_mode, backup_first=True)
+            st.success(
+                f"Closed {record.from_fy} → {record.to_fy} ({record.mode}). "
+                f"Backup: {record.backup_path or 'n/a'}"
+            )
+            st.session_state.pop("fy_preview", None)
+            st.rerun()
+        except Exception as exc:
+            st.error(str(exc))
+
+
 def render(services: dict):
     from vaybooks.bms.ui.keyboard.context import set_current_page
     from vaybooks.bms.ui.keyboard.wired import mark_wired
@@ -130,6 +211,33 @@ def render(services: dict):
         )
         fy_start_month = fy_choice[0]
 
+        st.subheader("Financial year end")
+        st.caption(
+            "Optional year-end close. Skip to keep the continuous ledger. "
+            "Balances only snapshots opening balances; full pending also "
+            "carries open receivables/payables with original dates."
+        )
+        mode_opts = ["balances_only", "full_pending"]
+        current_ye = (
+            getattr(business, "fy_year_end_mode", None) or "balances_only"
+        ).strip().lower()
+        if current_ye not in mode_opts:
+            current_ye = "balances_only"
+        fy_year_end_mode = st.selectbox(
+            "Preferred year-end mode",
+            mode_opts,
+            index=mode_opts.index(current_ye),
+            format_func=lambda m: (
+                "Balances only"
+                if m == "balances_only"
+                else "Parties + pending AR/AP (original dates)"
+            ),
+        )
+        fy_ask_at_start = st.checkbox(
+            "Ask at start of new financial year",
+            value=bool(getattr(business, "fy_ask_at_start", True)),
+        )
+
         if st.form_submit_button("Save business settings", type="primary"):
             try:
                 services["business"].update_profile(
@@ -152,11 +260,15 @@ def render(services: dict):
                     invoice_numbering_mode=invoice_numbering_mode,
                     invoice_number_prefix=invoice_number_prefix,
                     fy_start_month=fy_start_month,
+                    fy_year_end_mode=fy_year_end_mode,
+                    fy_ask_at_start=fy_ask_at_start,
                 )
                 st.success("Business settings saved.")
                 st.rerun()
             except Exception as exc:
                 st.error(str(exc))
+
+    _render_fy_year_end_actions(services)
 
     st.divider()
     st.subheader("Enabled modules")

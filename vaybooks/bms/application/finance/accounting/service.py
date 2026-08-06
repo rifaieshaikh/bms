@@ -18,6 +18,7 @@ from vaybooks.bms.domain.finance.accounting.services import (
     SETTLEMENT_EXPENSE_ACCOUNT_NAME,
     AccountingDomainService,
 )
+from vaybooks.bms.domain.finance.fy_close import FY_CARRY_FORWARD_TAG
 from vaybooks.bms.domain.finance.accounting.settlement import (
     ALLOC_INVOICE_TAG,
     CREDIT_APPLIED_TAG,
@@ -66,6 +67,8 @@ class AccountingAppService:
         self._crm_event_sink = crm_event_sink
         self._business_service = business_service
         self._commission_service = None
+        self._fy_close_repo = None
+        self._fy_lock_bypass = False
         self._domain = AccountingDomainService(account_repo, voucher_repo)
 
     def set_crm_event_sink(self, sink) -> None:
@@ -75,6 +78,14 @@ class AccountingAppService:
     def set_business_service(self, business_service) -> None:
         """Attach business settings after bootstrap (FY start month, etc.)."""
         self._business_service = business_service
+
+    def set_fy_close_repo(self, fy_close_repo) -> None:
+        """Attach FY close repository for soft-locking closed years."""
+        self._fy_close_repo = fy_close_repo
+
+    def set_fy_lock_bypass(self, enabled: bool) -> None:
+        """Allow posting into a closed FY during year-end migrate."""
+        self._fy_lock_bypass = bool(enabled)
 
     def set_commission_service(self, commission_service) -> None:
         """Attach rule-based commission engine after bootstrap."""
@@ -113,6 +124,19 @@ class AccountingAppService:
                     pass
             fy = self.resolve_voucher_financial_year(v_date)
         voucher.financial_year = fy
+        self._assert_fy_not_closed(fy)
+
+    def _assert_fy_not_closed(self, fy: str) -> None:
+        if self._fy_lock_bypass:
+            return
+        repo = self._fy_close_repo
+        if repo is None or not fy:
+            return
+        if repo.is_fy_closed(fy):
+            raise ValueError(
+                f"Financial year {fy} is closed. New vouchers cannot be posted "
+                "into a closed year."
+            )
 
     def _stamp_voucher_location(
         self,
@@ -493,6 +517,15 @@ class AccountingAppService:
         for voucher in self.list_vouchers_by_type(VoucherType.JOURNAL):
             meta = parse_meta(voucher.description or "", CUSTOMER_SETTLEMENT_TAG)
             if (meta.get("phase") or "").strip().lower() != "park":
+                continue
+            for row in allocation_rows_from_meta(voucher.description or ""):
+                _bump(row["invoice_id"], "settlement_allocated", row["amount"])
+
+        # FY year-end settle journals close prior-year open invoices.
+        for voucher in self.list_vouchers_by_type(VoucherType.JOURNAL):
+            fy_meta = parse_meta(voucher.description or "", FY_CARRY_FORWARD_TAG)
+            phase = (fy_meta.get("phase") or "").strip().lower()
+            if phase != "settle":
                 continue
             for row in allocation_rows_from_meta(voucher.description or ""):
                 _bump(row["invoice_id"], "settlement_allocated", row["amount"])
@@ -2556,6 +2589,17 @@ class AccountingAppService:
         voucher = self._voucher_repo.find_by_id(voucher_id)
         if voucher and voucher.voucher_type == VoucherType.SALES_INVOICE:
             assert_invoice_editable(voucher.voucher_date)
+        if voucher and not self._fy_lock_bypass:
+            fy = (getattr(voucher, "financial_year", None) or "").strip()
+            if not fy and getattr(voucher, "voucher_date", None) is not None:
+                v_date = voucher.voucher_date
+                if hasattr(v_date, "date") and callable(getattr(v_date, "date", None)):
+                    try:
+                        v_date = v_date.date()
+                    except Exception:
+                        pass
+                fy = self.resolve_voucher_financial_year(v_date)
+            self._assert_fy_not_closed(fy)
         self._domain.reverse_and_delete_voucher(voucher_id)
         if voucher and voucher.voucher_type in (
             VoucherType.RECEIPT,
@@ -2608,6 +2652,74 @@ class AccountingAppService:
             location_id=location_id,
             location_name=location_name,
             require_location=True,
+        )
+
+    def create_fy_system_journal(
+        self,
+        description: str,
+        lines: List[dict],
+        voucher_date: Optional[date] = None,
+        financial_year: str = "",
+    ) -> Voucher:
+        """Journal used by FY year-end (no location required)."""
+        voucher_number = self._counter_repo.next("voucher_number")
+        v_date = datetime.combine(voucher_date or date.today(), datetime.min.time())
+        voucher_lines = [
+            VoucherLine(
+                account_id=l["account_id"],
+                account_name=l["account_name"],
+                debit_amount=l.get("debit_amount", 0),
+                credit_amount=l.get("credit_amount", 0),
+                description=l.get("description", ""),
+            )
+            for l in lines
+        ]
+        voucher = self._domain.build_journal_voucher(
+            voucher_number=voucher_number,
+            voucher_date=v_date,
+            description=description,
+            lines=voucher_lines,
+        )
+        return self._save_voucher(
+            voucher,
+            financial_year=financial_year,
+            require_location=False,
+        )
+
+    def create_fy_carry_sales_invoice(
+        self,
+        *,
+        customer_account_id: str,
+        customer_account_name: str,
+        clearing_account_id: str,
+        clearing_account_name: str,
+        amount: float,
+        voucher_date: date,
+        description: str,
+        financial_year: str,
+        carried_from_voucher_id: str = "",
+    ) -> Voucher:
+        """Re-open AR as a sales invoice against FY clearing (net-zero with settle)."""
+        amount = round(float(amount or 0), 2)
+        if amount <= 0:
+            raise ValueError("Carry-forward amount must be positive")
+        voucher_number = self._counter_repo.next("voucher_number")
+        v_date = datetime.combine(voucher_date, datetime.min.time())
+        voucher = self._domain.build_sales_invoice_voucher(
+            voucher_number=voucher_number,
+            voucher_date=v_date,
+            description=description,
+            customer_account_id=customer_account_id,
+            customer_account_name=customer_account_name,
+            income_account_id=clearing_account_id,
+            income_account_name=clearing_account_name,
+            amount=amount,
+            reference_invoice_id=carried_from_voucher_id or None,
+        )
+        return self._save_voucher(
+            voucher,
+            financial_year=financial_year,
+            require_location=False,
         )
 
     @staticmethod

@@ -348,6 +348,13 @@ class AppSettings:
     update_check_url: str = DEFAULT_UPDATE_URL
     backup_schedule: str = "off"
     backup_retention_days: int = 30
+    backup_mode: str = "complete"
+    backup_retention: str = "keep_one"
+    backup_google_drive_enabled: bool = False
+    backup_google_drive_folder_id: str = ""
+    google_oauth_client_id: str = ""
+    google_oauth_client_secret: str = ""
+    google_oauth_refresh_token: str = ""
     auto_update_enabled: bool = False
     seed_config: bool = True
     seed_qa_fixtures: bool = False
@@ -427,10 +434,43 @@ def _load_toml_settings() -> AppSettings:
         update_check_url=str(raw.get("UPDATE_CHECK_URL", DEFAULT_UPDATE_URL)),
         backup_schedule=str(raw.get("BACKUP_SCHEDULE", "off")),
         backup_retention_days=int(raw.get("BACKUP_RETENTION_DAYS", 30)),
+        backup_mode=_normalize_backup_mode(raw.get("BACKUP_MODE", "complete")),
+        backup_retention=_normalize_backup_retention(
+            raw.get("BACKUP_RETENTION"),
+            int(raw.get("BACKUP_RETENTION_DAYS", 30)),
+        ),
+        backup_google_drive_enabled=bool(
+            raw.get("BACKUP_GOOGLE_DRIVE_ENABLED", False)
+        ),
+        backup_google_drive_folder_id=str(
+            raw.get("BACKUP_GOOGLE_DRIVE_FOLDER_ID", "") or ""
+        ),
+        google_oauth_client_id=str(raw.get("GOOGLE_OAUTH_CLIENT_ID", "") or ""),
+        google_oauth_client_secret=str(
+            raw.get("GOOGLE_OAUTH_CLIENT_SECRET", "") or ""
+        ),
+        google_oauth_refresh_token=str(
+            raw.get("GOOGLE_OAUTH_REFRESH_TOKEN", "") or ""
+        ),
         auto_update_enabled=bool(raw.get("AUTO_UPDATE_ENABLED", False)),
         **seed_flags,
         extra={k: v for k, v in raw.items() if k not in _KNOWN_KEYS},
     )
+
+
+def _normalize_backup_mode(value: Any) -> str:
+    mode = str(value or "complete").strip().lower()
+    return "balances" if mode == "balances" else "complete"
+
+
+def _normalize_backup_retention(value: Any, legacy_days: int = 30) -> str:
+    if value is not None and str(value).strip():
+        mode = str(value).strip().lower()
+        return "keep_all" if mode == "keep_all" else "keep_one"
+    try:
+        return "keep_one" if int(legacy_days) <= 1 else "keep_all"
+    except (TypeError, ValueError):
+        return "keep_one"
 
 
 _KNOWN_KEYS = {
@@ -442,6 +482,13 @@ _KNOWN_KEYS = {
     "UPDATE_CHECK_URL",
     "BACKUP_SCHEDULE",
     "BACKUP_RETENTION_DAYS",
+    "BACKUP_MODE",
+    "BACKUP_RETENTION",
+    "BACKUP_GOOGLE_DRIVE_ENABLED",
+    "BACKUP_GOOGLE_DRIVE_FOLDER_ID",
+    "GOOGLE_OAUTH_CLIENT_ID",
+    "GOOGLE_OAUTH_CLIENT_SECRET",
+    "GOOGLE_OAUTH_REFRESH_TOKEN",
     "AUTO_UPDATE_ENABLED",
     "business",
     *_SEED_SETTING_KEYS,
@@ -551,6 +598,13 @@ def save_settings(settings: AppSettings, encrypt_uri: bool = True) -> None:
         "UPDATE_CHECK_URL": settings.update_check_url,
         "BACKUP_SCHEDULE": settings.backup_schedule,
         "BACKUP_RETENTION_DAYS": settings.backup_retention_days,
+        "BACKUP_MODE": settings.backup_mode,
+        "BACKUP_RETENTION": settings.backup_retention,
+        "BACKUP_GOOGLE_DRIVE_ENABLED": settings.backup_google_drive_enabled,
+        "BACKUP_GOOGLE_DRIVE_FOLDER_ID": settings.backup_google_drive_folder_id,
+        "GOOGLE_OAUTH_CLIENT_ID": settings.google_oauth_client_id,
+        "GOOGLE_OAUTH_CLIENT_SECRET": settings.google_oauth_client_secret,
+        "GOOGLE_OAUTH_REFRESH_TOKEN": settings.google_oauth_refresh_token,
         "AUTO_UPDATE_ENABLED": settings.auto_update_enabled,
         "SEED_CONFIG": settings.seed_config,
         "SEED_QA_FIXTURES": settings.seed_qa_fixtures,

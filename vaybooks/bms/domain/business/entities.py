@@ -33,6 +33,8 @@ class BusinessProfile:
     invoice_numbering_mode: str = "app"
     invoice_number_prefix: str = "INV/{FY}/"
     fy_start_month: int = 4
+    fy_year_end_mode: str = "balances_only"
+    fy_ask_at_start: bool = True
     bank_accounts: list[BankAccount] = field(default_factory=list)
     document_templates: dict[str, DocumentTemplateSettings] = field(
         default_factory=default_document_templates

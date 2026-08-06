@@ -17,21 +17,49 @@ Contains `config.toml` and `data/uploads/`.
 3. Verify config at `C:\ProgramData\VayBooks-BMS\config\config.toml`
 4. Start the service or use the desktop shortcut
 
-## Restore Data from Backup ZIP
+## Database Backup (VayBooks-BMS)
 
-### Via the application
+### Modes
 
-1. Open **Export / Backup**
-2. Under **Restore from backup**, upload a backup ZIP
-3. Run a **dry run** first to validate
-4. Uncheck dry run and click **Restore**
+- **Complete** — all user MongoDB collections (excludes `system.*`)
+- **Balances** — parties (`customers`, `vendors`, …) + `accounts`, plus an AR/AP outstanding summary for audit
 
-### Via CLI
+Configure under **System Settings** (desktop): schedule (`off` / `daily` / `weekly`), mode, retention (`keep_one` / `keep_all`), and optional Google Drive upload.
+
+### Desktop
+
+- Local ZIPs: `{VAYBOOKS_DATA_DIR}/data/backups/`
+- **Backup now** on System Settings or Export / Backup
+- Scheduled via in-app scheduler job `system.db_backup` (login-triggered)
+- Google Drive: set OAuth client id/secret/refresh token in System Settings; uploads use the Drive File API
+
+### Web / cloud
+
+- Download Complete or Balances ZIP from **Export / Backup**
+- No local scheduled files or Drive upload from the browser
+
+### Retention
+
+- `keep_one` — only the latest **managed** backup (`backup_*` / `balances_*`) is kept
+- `keep_all` — never auto-delete
+- `pre_upgrade_*` and `pre_fy_close_*` archives are never removed by retention
+
+### CLI
 
 ```powershell
-cd "C:\Program Files\VayBooks-BMS\app"
-..\python\python.exe -m vaybooks.bms.infrastructure.backup.cli backup
+..\python\python.exe -m vaybooks.bms.infrastructure.backup.cli backup --mode complete
+..\python\python.exe -m vaybooks.bms.infrastructure.backup.cli prune
+..\python\python.exe -m vaybooks.bms.infrastructure.backup.cli run
 ```
+
+### Financial year close
+
+Optional year-end migration lives under **Business Settings**:
+
+- **Balances only** — snapshot `opening_balance` from closing balances; soft-lock the prior FY
+- **Full pending** — same, plus settle/reopen open receivables and vendor payables with **original dates** (net-zero on party ledgers)
+
+A desktop complete backup is taken before migrate when possible. Closed FYs reject new voucher posts tagged with that FY.
 
 ## MongoDB Recovery (Local Install)
 

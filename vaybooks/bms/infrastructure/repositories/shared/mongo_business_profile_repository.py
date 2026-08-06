@@ -40,6 +40,8 @@ class MongoBusinessProfileRepository:
             "invoice_numbering_mode": profile.invoice_numbering_mode or "app",
             "invoice_number_prefix": profile.invoice_number_prefix or "INV/{FY}/",
             "fy_start_month": int(profile.fy_start_month or 4),
+            "fy_year_end_mode": (profile.fy_year_end_mode or "balances_only"),
+            "fy_ask_at_start": bool(getattr(profile, "fy_ask_at_start", True)),
             "bank_accounts": [
                 dataclass_to_dict(account) for account in profile.bank_accounts
             ],
@@ -88,6 +90,8 @@ class MongoBusinessProfileRepository:
             ),
             invoice_number_prefix=doc.get("invoice_number_prefix") or "INV/{FY}/",
             fy_start_month=int(doc.get("fy_start_month", 4) or 4),
+            fy_year_end_mode=str(doc.get("fy_year_end_mode") or "balances_only"),
+            fy_ask_at_start=bool(doc.get("fy_ask_at_start", True)),
             bank_accounts=[
                 account
                 for account in (

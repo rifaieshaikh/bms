@@ -534,6 +534,18 @@ def get_services():
     party_segment_service = PartySegmentAppService(party_segment_repo)
     business_service = BusinessAppService(business_profile_repo)
     accounting_service.set_business_service(business_service)
+    from vaybooks.bms.application.finance.fy_year_end import FyYearEndService
+    from vaybooks.bms.infrastructure.repositories.finance.mongo_fy_close_repository import (
+        MongoFyCloseRepository,
+    )
+
+    fy_close_repo = MongoFyCloseRepository(db)
+    accounting_service.set_fy_close_repo(fy_close_repo)
+    fy_year_end_service = FyYearEndService(
+        accounting_service,
+        business_service,
+        fy_close_repo,
+    )
     commission_agent_service = CommissionAgentAppService(
         commission_agent_repo, account_repo, segment_service=party_segment_service
     )
@@ -939,6 +951,7 @@ def get_services():
             delivery_repo, order_repo, invoice_repo, expense_repo, time_repo
         ),
         "accounting": accounting_service,
+        "fy_year_end": fy_year_end_service,
         "measurements": measurement_service,
         "attachments": attachment_service,
         "projects": project_service,

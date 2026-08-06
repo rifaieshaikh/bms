@@ -22,6 +22,7 @@ DOMAIN_INVENTORY = "inventory"
 DOMAIN_PRODUCTION = "production"
 DOMAIN_BOUTIQUE = "boutique"
 DOMAIN_PROJECTS = "projects"
+DOMAIN_SYSTEM = "system"
 
 # Execution order is fixed so a wave always runs upstream domains first.
 DOMAIN_ORDER: tuple[str, ...] = (
@@ -32,6 +33,7 @@ DOMAIN_ORDER: tuple[str, ...] = (
     DOMAIN_PRODUCTION,
     DOMAIN_BOUTIQUE,
     DOMAIN_PROJECTS,
+    DOMAIN_SYSTEM,
 )
 
 DOMAIN_LABELS: Dict[str, str] = {
@@ -42,6 +44,7 @@ DOMAIN_LABELS: Dict[str, str] = {
     DOMAIN_PRODUCTION: "Production",
     DOMAIN_BOUTIQUE: "Boutique",
     DOMAIN_PROJECTS: "Projects",
+    DOMAIN_SYSTEM: "System",
 }
 
 STATUS_QUEUED = "queued"

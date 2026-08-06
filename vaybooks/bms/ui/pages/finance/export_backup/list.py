@@ -2,7 +2,10 @@ import json
 
 import streamlit as st
 
-from vaybooks.bms.infrastructure.backup.service import BackupService
+from vaybooks.bms.infrastructure.backup.service import (
+    BackupService,
+    normalize_backup_mode,
+)
 from vaybooks.bms.infrastructure.config.runtime import is_desktop
 from vaybooks.bms.infrastructure.config.settings import get_settings
 from vaybooks.bms.infrastructure.db.connection import get_database
@@ -63,7 +66,6 @@ def render(services: dict):
         "export.backup.save_disk",
         "export.backup.restore",
     )
-    # Queued export shortcuts surface a caption (download buttons remain mouse/keyboard-focus)
     for aid, label in (
         ("export.csv.customers", "Customers CSV"),
         ("export.csv.orders", "Orders CSV"),
@@ -76,6 +78,8 @@ def render(services: dict):
     st.title("Export / Backup")
     export_service = services["export"]
     settings = get_settings()
+    backup_service = BackupService(get_database())
+    backup_mode = normalize_backup_mode(getattr(settings, "backup_mode", "complete"))
 
     st.write(
         "Export data for backup and reporting. "
@@ -100,8 +104,37 @@ def render(services: dict):
 
     st.divider()
     with panel("backup"):
-        st.subheader("Full backup")
-        st.caption("JSON snapshot of exportable collections.")
+        st.subheader("Database backup")
+        st.caption(
+            "Complete = all collections. Balances = parties + accounts (+ AR/AP summary). "
+            f"Configured mode: **{backup_mode}**. Retention: "
+            f"**{getattr(settings, 'backup_retention', 'keep_one')}**."
+        )
+
+        col_a, col_b = st.columns(2)
+        with col_a:
+            complete_zip = backup_service.create_backup_zip("complete")
+            st.download_button(
+                "Download Complete Backup (ZIP)",
+                complete_zip,
+                file_name="vaybooks_backup_complete.zip",
+                mime="application/zip",
+                key="export_complete_backup_zip",
+                width="stretch",
+            )
+        with col_b:
+            balances_zip = backup_service.create_backup_zip("balances")
+            st.download_button(
+                "Download Balances Backup (ZIP)",
+                balances_zip,
+                file_name="vaybooks_backup_balances.zip",
+                mime="application/zip",
+                key="export_balances_backup_zip",
+                width="stretch",
+            )
+
+        st.subheader("Legacy JSON snapshot")
+        st.caption("Partial boutique-era JSON export (download only).")
         backup_json = _cached_backup_json_v2(export_service)
         try:
             json.loads(backup_json)
@@ -109,7 +142,7 @@ def render(services: dict):
         except json.JSONDecodeError:
             st.error("Backup JSON could not be parsed")
         st.download_button(
-            "Download Full Backup (JSON)",
+            "Download Legacy Backup (JSON)",
             backup_json,
             file_name="zahcci_backup.json",
             mime="application/json",
@@ -118,42 +151,56 @@ def render(services: dict):
         )
 
         if is_desktop():
-            backup_service = BackupService(get_database())
-            zip_bytes = backup_service.create_backup_zip()
-            st.download_button(
-                "Download Full Backup (ZIP — all collections)",
-                zip_bytes,
-                file_name="vaybooks_backup.zip",
-                mime="application/zip",
-                key="export_full_backup_zip",
-                width="stretch",
+            st.caption(
+                f"Scheduled backup: **{settings.backup_schedule}** · "
+                f"Drive: **{'on' if settings.backup_google_drive_enabled else 'off'}**"
             )
-
-            if st.button("Save Backup to Disk", width="stretch"):
-                path = backup_service.save_backup_to_disk()
+            if st.button("Save Backup to Disk (configured mode)", width="stretch"):
+                path = backup_service.save_backup_to_disk(mode=backup_mode)
                 if path:
                     st.success(f"Backup saved to {path}")
+                    if settings.backup_google_drive_enabled:
+                        try:
+                            from vaybooks.bms.infrastructure.backup.google_drive import (
+                                upload_backup_and_prune,
+                            )
+
+                            file_id = upload_backup_and_prune(
+                                path,
+                                retention=settings.backup_retention,
+                            )
+                            st.success(f"Uploaded to Google Drive ({file_id})")
+                        except Exception as exc:
+                            st.warning(f"Local save OK; Drive upload failed: {exc}")
                 else:
                     st.error("Could not save backup")
 
-            st.caption(f"Scheduled backup: **{settings.backup_schedule}**")
             local_backups = backup_service.list_local_backups()
             if local_backups:
                 st.write("Recent local backups:")
                 for path in local_backups[:5]:
                     st.text(str(path.name))
+        else:
+            st.caption(
+                "Web deployment: download ZIP above. Scheduled local/Drive backups "
+                "run only on the desktop app."
+            )
 
     if is_desktop():
         st.divider()
         with panel("restore"):
             st.subheader("Restore from backup")
-            st.warning("Restore replaces existing data in all backed-up collections.")
+            st.warning(
+                "Complete restore replaces existing data in collections present in the ZIP. "
+                "Balances-only ZIPs cannot fully restore."
+            )
             uploaded = st.file_uploader("Upload backup ZIP", type=["zip"])
             dry_run = st.checkbox("Dry run (validate only)", value=True)
             if uploaded and st.button("Restore", type="primary"):
-                backup_service = BackupService(get_database())
                 try:
-                    stats = backup_service.restore_from_zip(uploaded.read(), dry_run=dry_run)
+                    stats = backup_service.restore_from_zip(
+                        uploaded.read(), dry_run=dry_run
+                    )
                     if dry_run:
                         st.info(f"Dry run OK — would restore: {stats}")
                     else:

@@ -53,6 +53,8 @@ class BusinessAppService:
         invoice_numbering_mode: str = "app",
         invoice_number_prefix: str = "INV/{FY}/",
         fy_start_month: int = 4,
+        fy_year_end_mode: str = "balances_only",
+        fy_ask_at_start: bool = True,
     ) -> BusinessProfile:
         legal_name = legal_name.strip()
         trade_name = trade_name.strip()
@@ -91,6 +93,11 @@ class BusinessAppService:
         fy_month = int(fy_start_month or 4)
         if fy_month < 1 or fy_month > 12:
             raise ValidationError("Financial year start month must be between 1 and 12")
+        year_end_mode = (fy_year_end_mode or "balances_only").strip().lower()
+        if year_end_mode not in {"balances_only", "full_pending"}:
+            raise ValidationError(
+                "Year-end mode must be 'balances_only' or 'full_pending'"
+            )
 
         profile = self.get_profile()
         profile.update(
@@ -113,6 +120,8 @@ class BusinessAppService:
             invoice_numbering_mode=mode,
             invoice_number_prefix=prefix,
             fy_start_month=fy_month,
+            fy_year_end_mode=year_end_mode,
+            fy_ask_at_start=bool(fy_ask_at_start),
         )
         return self._repo.save(profile)
 

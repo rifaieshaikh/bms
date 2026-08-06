@@ -33,6 +33,24 @@ from vaybooks.bms.ui.styles import metric_grid
 QUEUE_LIMIT = 8
 
 
+def _render_fy_banner(services: dict) -> None:
+    fy = services.get("fy_year_end")
+    business = services.get("business")
+    if fy is None or business is None:
+        return
+    profile = business.get_profile()
+    if not bool(getattr(profile, "fy_ask_at_start", True)):
+        return
+    pending = fy.detect_pending_close()
+    if not pending:
+        return
+    st.info(
+        f"New financial year **{pending['to_fy']}** has started. "
+        f"Prior year **{pending['from_fy']}** has not been closed yet "
+        "(optional). Open **Business Settings** to preview or run year-end migration."
+    )
+
+
 def _fmt_currency(value: float) -> str:
     return f"₹{float(value or 0):,.0f}"
 
@@ -203,6 +221,8 @@ def _render_queues(reports, *, location_id: str = "") -> None:
 
 def render(services: dict) -> None:
     st.header("Finance Overview")
+
+    _render_fy_banner(services)
 
     reports = services.get("reports_business")
     if reports is None:
