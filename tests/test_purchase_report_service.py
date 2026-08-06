@@ -198,3 +198,117 @@ def test_purchases_vs_returns_series():
     assert by_period["2026-06"]["returns"] == 0.0
     assert by_period["2026-07"]["purchases"] == 1000.0
     assert by_period["2026-07"]["returns"] == 100.0
+
+
+class _FakePurchasesWithGst(_FakePurchases):
+    def party_gst_facts(self, vendor_id: str) -> dict:
+        if vendor_id == "v1":
+            return {
+                "gstin": "29BBBBB0000B1Z5",
+                "place_of_supply": "Karnataka",
+                "state_code": "29",
+            }
+        return {"gstin": "", "place_of_supply": "", "state_code": ""}
+
+
+def test_purchase_gst_line_items_flattens_and_derives_rate():
+    purchases = _FakePurchasesWithGst(
+        bills=[
+            {
+                "bill_date": date(2026, 7, 12),
+                "total": 1180.0,
+                "vendor_name": "Vendor A",
+                "vendor_id": "v1",
+                "vendor_bill_number": "VB-9",
+                "voucher_number": "PB-1",
+                "line_items": [
+                    {
+                        "item_name": "Fabric",
+                        "hsn_sac": "5208",
+                        "qty": 10,
+                        "rate": 100,
+                        "taxable_amount": 1000.0,
+                        "cgst_amount": 90.0,
+                        "sgst_amount": 90.0,
+                        "igst_amount": 0.0,
+                        "utgst_amount": 0.0,
+                        "line_total": 1180.0,
+                    }
+                ],
+            },
+            {
+                "bill_date": date(2026, 7, 12),
+                "total": 50.0,
+                "vendor_name": "Legacy",
+                "vendor_id": "v2",
+                "line_items": [],
+            },
+        ]
+    )
+    service = PurchaseReportService(purchases)
+    rows = service.purchase_gst_line_items()
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["document_type"] == "Purchase Bill"
+    assert row["document_number"] == "VB-9"
+    assert row["party_name"] == "Vendor A"
+    assert row["party_gstin"] == "29BBBBB0000B1Z5"
+    assert row["place_of_supply"] == "Karnataka"
+    assert row["supply_type"] == "B2B"
+    assert row["hsn_sac"] == "5208"
+    assert row["gst_rate"] == 18.0
+    assert row["taxable_amount"] == 1000.0
+    assert row["cgst_amount"] == 90.0
+    assert row["line_total"] == 1180.0
+
+
+def test_purchase_gst_line_items_respects_date_range():
+    purchases = _FakePurchasesWithGst(
+        bills=[
+            {
+                "bill_date": date(2026, 6, 10),
+                "vendor_name": "Vendor A",
+                "vendor_id": "v1",
+                "vendor_bill_number": "OLD",
+                "line_items": [
+                    {
+                        "item_name": "Old",
+                        "taxable_amount": 100.0,
+                        "cgst_amount": 9.0,
+                        "sgst_amount": 9.0,
+                        "igst_amount": 0.0,
+                        "utgst_amount": 0.0,
+                        "line_total": 118.0,
+                        "qty": 1,
+                        "rate": 100,
+                        "hsn_sac": "1",
+                    }
+                ],
+            },
+            {
+                "bill_date": date(2026, 7, 10),
+                "vendor_name": "Vendor A",
+                "vendor_id": "v1",
+                "vendor_bill_number": "NEW",
+                "line_items": [
+                    {
+                        "item_name": "New",
+                        "taxable_amount": 200.0,
+                        "cgst_amount": 18.0,
+                        "sgst_amount": 18.0,
+                        "igst_amount": 0.0,
+                        "utgst_amount": 0.0,
+                        "line_total": 236.0,
+                        "qty": 1,
+                        "rate": 200,
+                        "hsn_sac": "2",
+                    }
+                ],
+            },
+        ]
+    )
+    service = PurchaseReportService(purchases)
+    rows = service.purchase_gst_line_items(date(2026, 7, 1), date(2026, 7, 31))
+    assert len(rows) == 1
+    assert rows[0]["document_number"] == "NEW"

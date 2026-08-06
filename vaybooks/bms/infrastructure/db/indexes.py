@@ -228,6 +228,13 @@ def ensure_indexes(db):
     _create_index(db.sales_orders, "status")
     _create_index(db.sales_orders, "location_id")
 
+    _create_index(db.discount_rules, "is_active")
+    _create_index(db.discount_rules, "scope")
+    _create_index(db.discount_rules, "priority")
+    _create_index(db.discount_rules, "valid_from")
+    _create_index(db.discount_rules, "valid_to")
+    _create_index(db.discount_rules, [("scope", 1), ("is_active", 1), ("priority", 1)])
+
     _create_index(db.delivery_notes, "dn_number", unique=True)
     _create_index(db.delivery_notes, "sales_order_id")
     _create_index(db.delivery_notes, "sales_invoice_id")

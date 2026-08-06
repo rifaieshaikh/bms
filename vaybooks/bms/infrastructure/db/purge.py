@@ -35,6 +35,7 @@ BUSINESS_COLLECTIONS = (
     "sales_orders",
     "delivery_notes",
     "sales_returns",
+    "discount_rules",
 )
 
 DEFAULT_ACCOUNT_NAMES = {name for name, _, _ in DEFAULT_ACCOUNTS}

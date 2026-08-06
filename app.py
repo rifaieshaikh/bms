@@ -267,6 +267,7 @@ def _run_authenticated_app(services: dict) -> None:
     from vaybooks.bms.ui.pages.parties.commission_agents import detail as commission_agent_detail
     from vaybooks.bms.ui.pages.parties.workers import list as workers
     from vaybooks.bms.ui.pages.parties.segments import list as party_segments
+    from vaybooks.bms.ui.pages.settings.discounts import list as discounts_settings
     from vaybooks.bms.ui.pages.settings.customization_activities import list as activities
     from vaybooks.bms.ui.pages.settings.project_activities import list as project_activities_mod
     from vaybooks.bms.ui.pages.settings.store_activities import list as store_activities_mod
@@ -908,6 +909,12 @@ def _run_authenticated_app(services: dict) -> None:
         _page(crm_settings_mod, url_path="crm-settings"), title="CRM Settings",
         icon=":material/settings:", url_path="crm-settings",
     )
+    discounts_page = st.Page(
+        _page(discounts_settings, url_path="discounts"),
+        title="Discounts",
+        icon=":material/percent:",
+        url_path="discounts",
+    )
 
     # --- Hidden detail routes (deep-linkable, not in sidebar) --------------------
     order_detail_page = st.Page(
@@ -1102,6 +1109,7 @@ def _run_authenticated_app(services: dict) -> None:
     navigation.register("crm_calendar", crm_calendar_page)
     navigation.register("crm_reports", crm_reports_page)
     navigation.register("crm_settings", crm_settings_page)
+    navigation.register("discounts_list", discounts_page)
 
     page_groups = {
         "": [dashboard_page, mtd_page],
@@ -1231,6 +1239,7 @@ def _run_authenticated_app(services: dict) -> None:
             store_activities_page,
             measurement_specs_page,
             services_page,
+            discounts_page,
             crm_settings_page,
             production_settings_page,
         ],

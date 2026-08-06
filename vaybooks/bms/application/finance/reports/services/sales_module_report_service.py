@@ -425,3 +425,17 @@ class SalesModuleReportService:
             start = filters.date_range.start
             end = filters.date_range.end
         return self.sales_returns_summary(start, end)
+
+    def sales_gst_line_items(
+        self, start: date | None = None, end: date | None = None
+    ) -> list[dict]:
+        return self._sales.list_sales_gst_line_items(start, end)
+
+    def sales_gst_line_items_report(
+        self, filters: PurchasesByVendorFilter | None = None
+    ) -> list[dict]:
+        start = end = None
+        if filters and filters.date_range:
+            start = filters.date_range.start
+            end = filters.date_range.end
+        return self.sales_gst_line_items(start, end)

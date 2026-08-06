@@ -7,8 +7,12 @@ import streamlit as st
 from vaybooks.bms.domain.sales.line_items import parse_sales_document_content
 from vaybooks.bms.domain.sales.sales_line_resolver import business_is_registered
 from vaybooks.bms.domain.shared.enums import PartyRegistrationType
+from vaybooks.bms.domain.sales.discount_entities import APPLY_SALES_INVOICE
 from vaybooks.bms.ui.components.common.document_custom_fields import (
     render_document_custom_fields,
+)
+from vaybooks.bms.ui.components.sales.apply_discount_rules import (
+    render_apply_discount_rules_button,
 )
 from vaybooks.bms.ui.components.sales.discount_controls import (
     eligible_invoice_discount_base,
@@ -150,6 +154,15 @@ def _invoice_edit_dialog(
         qty_field="qty",
         focus_restore_key=INVOICE_EDIT_FOCUS_KEY,
     )
+    if customer:
+        render_apply_discount_rules_button(
+            key_prefix=INVOICE_EDIT_DIALOG,
+            services=services,
+            customer=customer,
+            apply_to=APPLY_SALES_INVOICE,
+            on_date=edit_date,
+            qty_field="qty",
+        )
     inv_disc_value_key = f"{INVOICE_EDIT_DIALOG}_inv_disc_flat"
     if inv_disc_value_key not in st.session_state:
         st.session_state[inv_disc_value_key] = float(invoice_discount or 0)

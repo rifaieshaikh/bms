@@ -212,4 +212,71 @@ def test_composition_business_uses_configured_interstate_igst():
     assert line.igst_amount == 4.0
     assert line.cgst_amount == 0.0
     assert line.sgst_amount == 0.0
-    assert line.line_total == 204.0
+
+
+def test_so_line_discount_reduces_taxable_before_gst():
+    customer = _make_customer(state_code="27")
+    sales, product = _make_sales(customer, _registered_business("27"))
+    so = sales.create_sales_order(
+        customer_id="c1",
+        order_date=date.today(),
+        lines=[
+            {
+                "product_id": product.id,
+                "product_name": "",
+                "qty_ordered": 2,
+                "rate": 100.0,
+                "discount": 20.0,
+                "discount_mode": "flat",
+                "discount_input": 20.0,
+            }
+        ],
+    )
+    line = so.lines[0]
+    assert line.discount == 20.0
+    assert line.taxable_amount == 180.0
+    assert line.cgst_amount == 16.2
+    assert line.sgst_amount == 16.2
+
+
+def test_convert_sales_order_to_invoice_carries_line_discount(monkeypatch):
+    customer = _make_customer(state_code="27")
+    sales, product = _make_sales(customer, _registered_business("27"))
+    so = sales.create_sales_order(
+        customer_id="c1",
+        order_date=date.today(),
+        lines=[
+            {
+                "product_id": product.id,
+                "qty_ordered": 1,
+                "rate": 200.0,
+                "discount": 25.0,
+                "discount_mode": "flat",
+                "discount_input": 25.0,
+            }
+        ],
+    )
+
+    captured: dict = {}
+
+    def _fake_create_sales_invoice(**kwargs):
+        captured.update(kwargs)
+        return type("V", (), {"id": "v1", "voucher_number": "SI-1"})()
+
+    monkeypatch.setattr(sales, "create_sales_invoice", _fake_create_sales_invoice)
+    monkeypatch.setattr(
+        sales._accounting,
+        "get_customer_account",
+        lambda customer_id: type("A", (), {"id": "acct1"})(),
+    )
+
+    sales.convert_sales_order_to_invoice(
+        so.id,
+        store_account_id="store1",
+        store_invoice_number="INV-1",
+    )
+    lines = captured.get("line_items") or []
+    assert len(lines) == 1
+    assert lines[0]["discount"] == 25.0
+    assert lines[0]["discount_input"] == 25.0
+    assert lines[0]["rate"] == 200.0

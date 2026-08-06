@@ -6,9 +6,13 @@ import streamlit as st
 
 from vaybooks.bms.domain.sales.sales_line_resolver import business_is_registered
 from vaybooks.bms.domain.shared.enums import PartyRegistrationType
+from vaybooks.bms.domain.sales.discount_entities import APPLY_SALES_ORDER
 from vaybooks.bms.ui import navigation
 from vaybooks.bms.ui.components.common.document_custom_fields import (
     render_document_custom_fields,
+)
+from vaybooks.bms.ui.components.sales.apply_discount_rules import (
+    render_apply_discount_rules_button,
 )
 from vaybooks.bms.ui.components.sales.invoice_number_field import (
     render_store_invoice_number_field,
@@ -134,6 +138,15 @@ def _so_edit_dialog(services: dict) -> None:
         qty_field="qty_ordered",
         focus_restore_key=SO_EDIT_FOCUS_KEY,
     )
+    if customer:
+        render_apply_discount_rules_button(
+            key_prefix=SO_EDIT_DIALOG,
+            services=services,
+            customer=customer,
+            apply_to=APPLY_SALES_ORDER,
+            on_date=edit_date,
+            qty_field="qty_ordered",
+        )
     initial_custom = {
         item.key: item.value for item in order.document_content.custom_fields
     }

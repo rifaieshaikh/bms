@@ -838,3 +838,23 @@ class PurchaseAppService:
             return ""
         vendor = self._vendor_service.get_vendor_detail(vendor_id)
         return vendor.vendor_name if vendor else ""
+
+    def party_gst_facts(self, vendor_id: str) -> dict:
+        """Return vendor GSTIN and place of supply for GST line reports."""
+        if not self._vendor_service or not vendor_id:
+            return {"gstin": "", "place_of_supply": "", "state_code": ""}
+        vendor = self._vendor_service.get_vendor_detail(vendor_id)
+        if not vendor:
+            return {"gstin": "", "place_of_supply": "", "state_code": ""}
+        gstin = (getattr(vendor, "gstin", None) or "").strip()
+        state_code = (getattr(vendor, "state_code", None) or "").strip()
+        place = ""
+        if state_code:
+            from vaybooks.bms.domain.shared.india import state_name_for_code
+
+            place = state_name_for_code(state_code)
+        return {
+            "gstin": gstin,
+            "place_of_supply": place,
+            "state_code": state_code,
+        }

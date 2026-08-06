@@ -30,6 +30,10 @@ from vaybooks.bms.ui.components.sales.discount_controls import (
     eligible_invoice_discount_base,
     render_invoice_level_discount,
 )
+from vaybooks.bms.ui.components.sales.apply_discount_rules import (
+    render_apply_discount_rules_button,
+)
+from vaybooks.bms.domain.sales.discount_entities import APPLY_SALES_INVOICE
 from vaybooks.bms.ui.components.sales.invoice_number_field import (
     render_store_invoice_number_field,
 )
@@ -183,6 +187,16 @@ def sales_record_dialog(services: dict) -> None:
         qty_field="qty",
         focus_restore_key=SALES_RECORD_FOCUS_KEY,
     )
+
+    if matched_customer:
+        render_apply_discount_rules_button(
+            key_prefix=SALES_RECORD_DIALOG,
+            services=services,
+            customer=matched_customer,
+            apply_to=APPLY_SALES_INVOICE,
+            on_date=inv_date,
+            qty_field="qty",
+        )
 
     line_items = [
         {

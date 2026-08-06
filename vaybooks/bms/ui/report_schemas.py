@@ -1009,6 +1009,72 @@ SALES_RETURNS_SUMMARY = ListSchema(
     page_size=REPORT_PAGE_SIZE,
 )
 
+SALES_GST_LINE_ITEMS = ListSchema(
+    entity_key="report_sales_gst_line_items",
+    title="Sales GST Line Items",
+    filter_fields=[
+        FilterField(
+            "date_range",
+            "Period",
+            F.DATE_RANGE,
+            default=_mtd,
+            help="Filter by sales invoice date.",
+        ),
+        FilterField(
+            "party_name",
+            "Customer",
+            F.REGEX,
+            placeholder="Name contains…",
+        ),
+        FilterField(
+            "hsn_sac",
+            "HSN/SAC",
+            F.REGEX,
+            placeholder="HSN contains…",
+        ),
+    ],
+    sort_options=[
+        SortOption("document_date", "Date"),
+        SortOption("party_name", "Customer"),
+        SortOption("taxable_amount", "Taxable"),
+    ],
+    default_sort="document_date",
+    page_size=REPORT_PAGE_SIZE,
+)
+
+PURCHASE_GST_LINE_ITEMS = ListSchema(
+    entity_key="report_purchase_gst_line_items",
+    title="Purchase GST Line Items",
+    filter_fields=[
+        FilterField(
+            "date_range",
+            "Period",
+            F.DATE_RANGE,
+            default=_mtd,
+            help="Filter by purchase bill date.",
+        ),
+        FilterField(
+            "party_name",
+            "Vendor",
+            F.REGEX,
+            placeholder="Name contains…",
+        ),
+        FilterField(
+            "hsn_sac",
+            "HSN/SAC",
+            F.REGEX,
+            placeholder="HSN contains…",
+        ),
+    ],
+    sort_options=[
+        SortOption("document_date", "Date"),
+        SortOption("party_name", "Vendor"),
+        SortOption("taxable_amount", "Taxable"),
+    ],
+    default_sort="document_date",
+    page_size=REPORT_PAGE_SIZE,
+)
+
 INVENTORY_VALUATION = ListSchema(
     entity_key="report_inventory_valuation",
     title="Inventory Valuation",
@@ -1491,6 +1557,7 @@ SALES_MODULE_REPORT_TYPES = [
     "Vehicle-wise Delivery History",
     "Sales by Customer",
     "Sales Returns Summary",
+    "Sales GST Line Items",
 ]
 
 # Purchases → Reports.
@@ -1499,6 +1566,7 @@ PURCHASE_MODULE_REPORT_TYPES = [
     "GRN Pending",
     "Purchases by Vendor",
     "Purchase Returns Summary",
+    "Purchase GST Line Items",
 ]
 
 # Inventory reports live only under Inventory → Reports (not Finance).
@@ -1593,6 +1661,7 @@ SCHEMA_BY_REPORT_TYPE = {
     "GRN Pending": GRN_PENDING,
     "Purchases by Vendor": PURCHASES_BY_VENDOR,
     "Purchase Returns Summary": PURCHASE_RETURNS_SUMMARY,
+    "Purchase GST Line Items": PURCHASE_GST_LINE_ITEMS,
     "Sales Orders Pipeline": SO_PIPELINE,
     "Delivery Pending": DN_PENDING,
     "Delivery Note Register": DN_REGISTER,
@@ -1605,6 +1674,7 @@ SCHEMA_BY_REPORT_TYPE = {
     "Vehicle-wise Delivery History": DN_REGISTER,
     "Sales by Customer": SALES_BY_CUSTOMER,
     "Sales Returns Summary": SALES_RETURNS_SUMMARY,
+    "Sales GST Line Items": SALES_GST_LINE_ITEMS,
     **{title: PRODUCTION_REPORT for title in PRODUCTION_REPORT_TYPES},
 }
 

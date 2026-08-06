@@ -9,6 +9,7 @@ from vaybooks.bms.domain.boutique.invoices.entities import (
 )
 from vaybooks.bms.domain.boutique.invoices.services import InvoiceDomainService
 from vaybooks.bms.domain.boutique.orders.order_refs import compact_order_ref
+from vaybooks.bms.domain.sales.discount_entities import APPLY_BOUTIQUE_INVOICE
 from vaybooks.bms.domain.sales.sales_line_resolver import business_is_registered
 from vaybooks.bms.domain.shared.enums import OrderStatus, VoucherType
 from vaybooks.bms.domain.shared.india import state_name_for_code
@@ -598,6 +599,61 @@ def _invoice_dialog_content(services: dict, order_id: str, *, generate: bool):
                 on_change=_on_inv_item_discount_change,
                 args=(order.id, bill_ids),
             )
+
+    discounts_svc = services.get("discounts")
+    if bill_ids and discounts_svc and customer:
+        if st.button(
+            "Re-apply discounts",
+            key=f"boutique_apply_disc_{order.id}",
+            help=(
+                "Fill item discounts from customer/seasonal/global rules "
+                "(overwrites current item discounts)."
+            ),
+            width="stretch",
+        ):
+            lines = [
+                {
+                    "product_id": "",
+                    "category_ids": [],
+                    "qty": 1.0,
+                    "rate": float(
+                        st.session_state.get(_inv_amt_key(order.id, bill_id), 0.0) or 0.0
+                    ),
+                }
+                for bill_id in bill_ids
+            ]
+            results = discounts_svc.suggest_line_discounts(
+                lines,
+                customer_id=customer.id,
+                customer_segment_ids=list(getattr(customer, "segment_ids", None) or []),
+                apply_to=APPLY_BOUTIQUE_INVOICE,
+                on_date=inv_date,
+                boutique=True,
+                qty_field="qty",
+            )
+            applied = 0
+            for bill_id, result in zip(bill_ids, results):
+                amount = float(result.amount) if result else 0.0
+                gross = float(
+                    st.session_state.get(_inv_amt_key(order.id, bill_id), 0.0) or 0.0
+                )
+                amount = round(min(amount, gross), 2)
+                st.session_state[_inv_idisc_key(order.id, bill_id)] = amount
+                if result and amount > 0:
+                    applied += 1
+            total = round(
+                sum(
+                    float(st.session_state.get(_inv_idisc_key(order.id, b), 0.0) or 0.0)
+                    for b in bill_ids
+                ),
+                2,
+            )
+            st.session_state[_inv_odisc_key(order.id)] = total
+            if applied:
+                st.success(f"Applied discounts to {applied} item(s).")
+            else:
+                st.info("No matching discount rules for these items.")
+            st.rerun()
 
     amount = round(sum(item_amounts.values()), 2)
     item_discounts = {

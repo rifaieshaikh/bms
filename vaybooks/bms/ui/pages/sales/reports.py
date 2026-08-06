@@ -31,6 +31,7 @@ SALES_REPORT_TYPES = [
     "Vehicle-wise Delivery History",
     "Sales by Customer",
     "Sales Returns Summary",
+    "Sales GST Line Items",
 ]
 
 _DATE_FIELD_BY_REPORT = {
@@ -47,6 +48,7 @@ _DATE_CAPTION = {
     "Delivery Pending": "Filtered by linked SO order date.",
     "Sales by Customer": "Filtered by sales invoice date.",
     "Sales Returns Summary": "Filtered by return date.",
+    "Sales GST Line Items": "Filtered by sales invoice date.",
 }
 
 
@@ -109,6 +111,8 @@ def _load_all(reports_svc, report_type: str) -> list:
         return reports_svc.sales_by_customer()
     if report_type == "Sales Returns Summary":
         return reports_svc.sales_returns_summary()
+    if report_type == "Sales GST Line Items":
+        return reports_svc.sales_gst_line_items()
     return []
 
 
@@ -117,6 +121,8 @@ def _load_dated(reports_svc, report_type: str, start: date, end: date) -> list:
         return reports_svc.sales_by_customer(start, end)
     if report_type == "Sales Returns Summary":
         return reports_svc.sales_returns_summary(start, end)
+    if report_type == "Sales GST Line Items":
+        return reports_svc.sales_gst_line_items(start, end)
     return _filter_by_date(_load_all(reports_svc, report_type), report_type, start, end)
 
 
@@ -209,7 +215,7 @@ def render(services: dict) -> None:
     token = report_filter_token(report_type, committed, sort)
 
     st.caption(
-        f"{_DATE_CAPTION[report_type]} "
+        f"{_DATE_CAPTION.get(report_type, 'Filtered by period.')} "
         f"**{start:%d %b %Y}** → **{end:%d %b %Y}**"
     )
 

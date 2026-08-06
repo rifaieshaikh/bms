@@ -238,6 +238,7 @@ def _register_sales(registry: ReportRegistry, services: Dict[str, Any]) -> None:
             "Delivery Pending": "delivery_pending_report",
             "Sales by Customer": "sales_by_customer_report",
             "Sales Returns Summary": "sales_returns_summary_report",
+            "Sales GST Line Items": "sales_gst_line_items_report",
         },
         service_label="Sales reports service",
     )
@@ -257,6 +258,7 @@ def _register_purchases(registry: ReportRegistry, services: Dict[str, Any]) -> N
             "GRN Pending": "grn_pending_report",
             "Purchases by Vendor": "purchases_by_vendor_report",
             "Purchase Returns Summary": "purchase_returns_summary_report",
+            "Purchase GST Line Items": "purchase_gst_line_items_report",
         },
         service_label="Purchase reports service",
     )

@@ -9,8 +9,10 @@ from vaybooks.bms.application.finance.accounting.service import AccountingAppSer
 from vaybooks.bms.application.inventory.service import InventoryAppService
 from vaybooks.bms.domain.finance.accounting.entities import Voucher
 from vaybooks.bms.domain.finance.accounting.sales_parsing import (
+    parse_store_invoice_number,
     sales_amounts_from_lines,
 )
+from vaybooks.bms.domain.shared.india import state_name_for_code
 from vaybooks.bms.domain.parties.customers.entities import Customer
 from vaybooks.bms.domain.sales.customer_prices import CustomerPriceEntry
 from vaybooks.bms.domain.sales.entities import (
@@ -2350,6 +2352,103 @@ class SalesAppService:
             key=lambda r: (r.get("sale_date") or date.min, r.get("voucher_number") or ""),
             reverse=True,
         )
+        return rows
+
+    def list_sales_gst_line_items(
+        self,
+        start: date | None = None,
+        end: date | None = None,
+        *,
+        location_filter: dict | None = None,
+    ) -> list[dict]:
+        """Flatten sales invoice lines for GST calculation / CSV export."""
+        party_cache: dict[str, tuple[str, str]] = {}
+
+        def _party_facts(customer_account_id: str | None) -> tuple[str, str]:
+            key = customer_account_id or ""
+            if key in party_cache:
+                return party_cache[key]
+            gstin = ""
+            place = ""
+            if key:
+                try:
+                    customer = self._customer_from_account(key)
+                except Exception:
+                    customer = None
+                if customer:
+                    gstin = (getattr(customer, "gstin", None) or "").strip()
+                    state_code = (getattr(customer, "state_code", None) or "").strip()
+                    place = state_name_for_code(state_code) if state_code else ""
+            party_cache[key] = (gstin, place)
+            return party_cache[key]
+
+        rows: list[dict] = []
+        for voucher in self._accounting.list_vouchers_by_type(
+            VoucherType.SALES_INVOICE, location_filter=location_filter
+        ):
+            sale_date = voucher.voucher_date
+            if hasattr(sale_date, "date") and callable(sale_date.date):
+                sale_date = sale_date.date()
+            if start and sale_date and sale_date < start:
+                continue
+            if end and sale_date and sale_date > end:
+                continue
+
+            description = voucher.description or ""
+            items, _, _ = parse_sales_line_items_note(description)
+            if not items:
+                continue
+
+            amounts = sales_amounts_from_lines(voucher.lines)
+            party_name = amounts.get("party_name") or ""
+            customer_account_id = amounts.get("customer_account_id")
+            gstin, place_of_supply = _party_facts(customer_account_id)
+            supply_type = "B2B" if gstin else "B2C"
+            store_number = parse_store_invoice_number(description)
+            document_number = (
+                store_number
+                or getattr(voucher, "voucher_number", None)
+                or ""
+            )
+
+            for item in items:
+                taxable = round(float(item.get("taxable_amount") or 0), 2)
+                cgst = round(float(item.get("cgst_amount") or 0), 2)
+                sgst = round(float(item.get("sgst_amount") or 0), 2)
+                igst = round(float(item.get("igst_amount") or 0), 2)
+                utgst = round(float(item.get("utgst_amount") or 0), 2)
+                gst_rate = round(float(item.get("gst_rate") or 0), 2)
+                line_total = round(
+                    float(
+                        item.get("line_total")
+                        or (taxable + cgst + sgst + igst + utgst)
+                    ),
+                    2,
+                )
+                rows.append(
+                    {
+                        "document_type": "Sales Invoice",
+                        "document_number": document_number,
+                        "document_date": sale_date,
+                        "party_name": party_name,
+                        "party_gstin": gstin,
+                        "place_of_supply": place_of_supply,
+                        "supply_type": supply_type,
+                        "item_name": item.get("item_name")
+                        or item.get("description")
+                        or "",
+                        "hsn_sac": item.get("hsn_sac") or "",
+                        "qty": float(item.get("qty") or 0),
+                        "rate": float(item.get("rate") or 0),
+                        "taxable_amount": taxable,
+                        "gst_rate": gst_rate,
+                        "cgst_amount": cgst,
+                        "sgst_amount": sgst,
+                        "igst_amount": igst,
+                        "utgst_amount": utgst,
+                        "line_total": line_total,
+                    }
+                )
         return rows
 
     def related_document_counts(

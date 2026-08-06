@@ -220,6 +220,7 @@ PERMISSIONS: Tuple[str, ...] = tuple(
         *_expand("settings.store_activities", ("view", "edit")),
         *_expand("settings.measurement_specs", ("view", "edit")),
         *_expand("settings.services", ("view", "edit")),
+        *_expand("settings.discounts", ("view", "edit")),
         *_expand("settings.users", ("view", "manage")),
         *_expand("settings.roles", ("view", "manage")),
         "settings.permissions.view",
@@ -338,6 +339,7 @@ PAGE_PERMISSIONS: Dict[str, str] = {
     "sales-detail": "sales.invoices.view",
     "sales-returns": "sales.returns.view",
     "sales-return-detail": "sales.returns.view",
+    "discounts": "settings.discounts.view",
     "sales-reports": "sales.reports.view",
     "sales-scheduled-reports": "schedulers.view",
     "purchases-overview": "purchases.overview.view",
@@ -962,7 +964,11 @@ SYSTEM_ROLE_DEFINITIONS: Dict[str, Dict] = {
         "permission_keys": sorted(
             p
             for p in resolve_permission_patterns(
-                ["core.*", "settings.*", "schedulers.*"]
+                [
+                    "core.*",
+                    "settings.*",
+                    "schedulers.*",
+                ]
             )
             if p
             not in (

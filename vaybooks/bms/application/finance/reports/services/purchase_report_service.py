@@ -286,3 +286,101 @@ class PurchaseReportService:
             start = filters.date_range.start
             end = filters.date_range.end
         return self.purchase_returns_summary(start, end)
+
+    def purchase_gst_line_items(
+        self, start: date | None = None, end: date | None = None
+    ) -> list[dict]:
+        """Flatten purchase bill lines for GST calculation / CSV export."""
+        party_cache: dict[str, dict] = {}
+
+        def _party_facts(vendor_id: str | None) -> dict:
+            key = vendor_id or ""
+            if key in party_cache:
+                return party_cache[key]
+            facts_fn = getattr(self._purchases, "party_gst_facts", None)
+            if callable(facts_fn) and key:
+                facts = facts_fn(key) or {}
+            else:
+                facts = {"gstin": "", "place_of_supply": ""}
+            party_cache[key] = {
+                "gstin": (facts.get("gstin") or "").strip(),
+                "place_of_supply": facts.get("place_of_supply") or "",
+            }
+            return party_cache[key]
+
+        rows: list[dict] = []
+        for bill in self._purchases.list_purchase_bills():
+            line_items = bill.get("line_items") or []
+            if not line_items:
+                continue
+            bd = _as_date(bill.get("bill_date"))
+            if start and bd and bd < start:
+                continue
+            if end and bd and bd > end:
+                continue
+
+            party = _party_facts(bill.get("vendor_id"))
+            gstin = party["gstin"]
+            supply_type = "B2B" if gstin else "B2C"
+            document_number = (
+                bill.get("vendor_bill_number")
+                or bill.get("voucher_number")
+                or ""
+            )
+            party_name = bill.get("vendor_name") or ""
+
+            for item in line_items:
+                taxable = round(float(item.get("taxable_amount") or 0), 2)
+                cgst = round(float(item.get("cgst_amount") or 0), 2)
+                sgst = round(float(item.get("sgst_amount") or 0), 2)
+                igst = round(float(item.get("igst_amount") or 0), 2)
+                utgst = round(float(item.get("utgst_amount") or 0), 2)
+                tax_total = round(cgst + sgst + igst + utgst, 2)
+                if item.get("gst_rate") is not None and float(item.get("gst_rate") or 0):
+                    gst_rate = round(float(item.get("gst_rate") or 0), 2)
+                elif taxable > 0 and tax_total > 0:
+                    gst_rate = round(tax_total / taxable * 100.0, 2)
+                else:
+                    gst_rate = 0.0
+                line_total = round(
+                    float(
+                        item.get("line_total")
+                        or item.get("amount")
+                        or (taxable + tax_total)
+                    ),
+                    2,
+                )
+                rows.append(
+                    {
+                        "document_type": "Purchase Bill",
+                        "document_number": document_number,
+                        "document_date": bd,
+                        "party_name": party_name,
+                        "party_gstin": gstin,
+                        "place_of_supply": party["place_of_supply"],
+                        "supply_type": supply_type,
+                        "item_name": item.get("item_name")
+                        or item.get("description")
+                        or "",
+                        "hsn_sac": item.get("hsn_sac") or "",
+                        "qty": float(item.get("qty") or 0),
+                        "rate": float(item.get("rate") or 0),
+                        "taxable_amount": taxable,
+                        "gst_rate": gst_rate,
+                        "cgst_amount": cgst,
+                        "sgst_amount": sgst,
+                        "igst_amount": igst,
+                        "utgst_amount": utgst,
+                        "line_total": line_total,
+                    }
+                )
+        return rows
+
+    def purchase_gst_line_items_report(
+        self, filters: PurchasesByVendorFilter | None = None
+    ) -> list[dict]:
+        start = end = None
+        if filters and filters.date_range:
+            start = filters.date_range.start
+            end = filters.date_range.end
+        return self.purchase_gst_line_items(start, end)

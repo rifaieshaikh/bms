@@ -176,6 +176,10 @@ from vaybooks.bms.infrastructure.repositories.sales.mongo_commission_accrual_rep
     MongoCommissionAccrualRepository,
 )
 from vaybooks.bms.application.sales.commission_service import CommissionAppService
+from vaybooks.bms.application.sales.discounts import DiscountAppService
+from vaybooks.bms.infrastructure.repositories.sales.mongo_discount_rule_repository import (
+    MongoDiscountRuleRepository,
+)
 from vaybooks.bms.infrastructure.repositories.boutique.mongo_time_tracking_repository import (
     MongoTimeTrackingRepository,
 )
@@ -657,6 +661,8 @@ def get_services():
         inventory=inventory_service,
     )
     accounting_service.set_commission_service(commission_service)
+    discount_rule_repo = MongoDiscountRuleRepository(db)
+    discount_service = DiscountAppService(discount_rule_repo)
     sales_service = SalesAppService(
         so_repo,
         dn_repo,
@@ -922,6 +928,7 @@ def get_services():
         "employee_activity_options": employee_activity_options,
         "workers": worker_service,
         "commission": commission_service,
+        "discounts": discount_service,
         "time_tracking": TimeTrackingAppService(time_repo, order_repo),
         "store_time_tracking": StoreTimeTrackingAppService(
             store_time_repo, store_activity_repo, worker_repo

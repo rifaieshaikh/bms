@@ -14,6 +14,10 @@ from vaybooks.bms.ui.components.common.customer_identity_selector import (
 )
 from vaybooks.bms.ui.components.common.dialog_state import reset_dialog_state
 from vaybooks.bms.ui.auth.session import require_specific_location
+from vaybooks.bms.domain.sales.discount_entities import APPLY_SALES_ORDER
+from vaybooks.bms.ui.components.sales.apply_discount_rules import (
+    render_apply_discount_rules_button,
+)
 from vaybooks.bms.ui.components.sales.sales_lines_entry_table import (
     entry_table_focus_chain,
     entry_table_focus_columns,
@@ -156,6 +160,16 @@ def sales_order_dialog(services: dict) -> None:
         qty_field="qty_ordered",
         focus_restore_key=SO_FOCUS_KEY,
     )
+
+    if selected_customer:
+        render_apply_discount_rules_button(
+            key_prefix=SO_DIALOG,
+            services=services,
+            customer=selected_customer,
+            apply_to=APPLY_SALES_ORDER,
+            on_date=order_date,
+            qty_field="qty_ordered",
+        )
 
     row_chain = entry_table_focus_chain(SO_DIALOG)
     row_columns = entry_table_focus_columns(SO_DIALOG)

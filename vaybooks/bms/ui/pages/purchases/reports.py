@@ -23,6 +23,7 @@ PURCHASE_REPORT_TYPES = [
     "GRN Pending",
     "Purchases by Vendor",
     "Purchase Returns Summary",
+    "Purchase GST Line Items",
 ]
 
 _DATE_FIELD_BY_REPORT = {
@@ -36,6 +37,7 @@ _DATE_CAPTION = {
     "GRN Pending": "Filtered by linked PO order date.",
     "Purchases by Vendor": "Filtered by purchase bill date.",
     "Purchase Returns Summary": "Filtered by return date.",
+    "Purchase GST Line Items": "Filtered by purchase bill date.",
 }
 
 
@@ -82,6 +84,8 @@ def _load_all(reports_svc, report_type: str) -> list:
         return reports_svc.purchases_by_vendor()
     if report_type == "Purchase Returns Summary":
         return reports_svc.purchase_returns_summary()
+    if report_type == "Purchase GST Line Items":
+        return reports_svc.purchase_gst_line_items()
     return []
 
 
@@ -90,6 +94,8 @@ def _load_dated(reports_svc, report_type: str, start: date, end: date) -> list:
         return reports_svc.purchases_by_vendor(start, end)
     if report_type == "Purchase Returns Summary":
         return reports_svc.purchase_returns_summary(start, end)
+    if report_type == "Purchase GST Line Items":
+        return reports_svc.purchase_gst_line_items(start, end)
     return _filter_by_date(_load_all(reports_svc, report_type), report_type, start, end)
 
 
@@ -182,7 +188,7 @@ def render(services: dict) -> None:
     token = report_filter_token(report_type, committed, sort)
 
     st.caption(
-        f"{_DATE_CAPTION[report_type]} "
+        f"{_DATE_CAPTION.get(report_type, 'Filtered by period.')} "
         f"**{start:%d %b %Y}** → **{end:%d %b %Y}**"
     )
 
